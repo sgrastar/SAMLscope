@@ -705,6 +705,10 @@ final class M1Runtime {
         return access.prepareIssue(run.id());
     }
 
+    URI workspaceUrl(String runId) {
+        return config.publicBaseUrl().resolve("/manage/" + requireRun(runId).id());
+    }
+
     private TestRun requireRun(String runId) {
         return runs.find(runId).orElseThrow(() -> new IllegalArgumentException("Unknown Run"));
     }

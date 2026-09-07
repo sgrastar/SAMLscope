@@ -35,6 +35,12 @@ class SamlScopeApplicationTest {
             assertTrue(health.headers().firstValue("Content-Security-Policy").orElseThrow()
                     .contains("form-action 'self'"));
 
+            var completionStyle = client.send(HttpRequest.newBuilder(
+                    base.resolve("/p/plan_test/ui/completion.css")).build(), HttpResponse.BodyHandlers.ofString());
+            assertEquals(200, completionStyle.statusCode());
+            assertTrue(completionStyle.headers().firstValue("Content-Type").orElseThrow().startsWith("text/css"));
+            assertTrue(completionStyle.body().contains("prefers-color-scheme"));
+
             var requestBody = """
                     {
                       "name":"Example IdP",
