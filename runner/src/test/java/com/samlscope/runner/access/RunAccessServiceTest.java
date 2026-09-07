@@ -1,6 +1,7 @@
 package com.samlscope.runner.access;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -55,6 +56,14 @@ class RunAccessServiceTest {
         assertTrue(service.authorizeSession(first.sessionToken()).equals(run.id()));
         service.authorize(run.id(), first.sessionToken());
         service.authorizeMutation(run.id(), first.sessionToken(), first.csrfToken());
+        var resumed = service.resume(run.id(), first.sessionToken());
+        assertEquals(resumed.csrfToken(), service.resume(run.id(), first.sessionToken()).csrfToken());
+        assertNotEquals(first.sessionToken(), resumed.csrfToken());
+        service.authorizeMutation(run.id(), first.sessionToken(), resumed.csrfToken());
+        // Resuming in another tab does not invalidate the original tab's CSRF token.
+        service.authorizeMutation(run.id(), first.sessionToken(), first.csrfToken());
+        assertThrows(SecurityException.class, () -> service.resume(run.id(), null));
+        assertThrows(SecurityException.class, () -> service.resume("run_other", first.sessionToken()));
         assertThrows(SecurityException.class, () ->
                 service.authorizeMutation(run.id(), first.sessionToken(), "x".repeat(43)));
 
@@ -62,9 +71,13 @@ class RunAccessServiceTest {
         assertNotEquals(first.sessionToken(), second.sessionToken());
         assertThrows(SecurityException.class, () -> service.authorizeSession(first.sessionToken()));
         assertThrows(SecurityException.class, () -> service.authorize(run.id(), first.sessionToken()));
+        assertThrows(SecurityException.class, () -> service.resume(run.id(), first.sessionToken()));
+        assertThrows(SecurityException.class, () ->
+                service.authorizeMutation(run.id(), second.sessionToken(), resumed.csrfToken()));
         service.revoke(run.id());
         assertThrows(SecurityException.class, () -> service.exchange(run.id(), accessToken));
         assertThrows(SecurityException.class, () -> service.authorize(run.id(), second.sessionToken()));
+        assertThrows(SecurityException.class, () -> service.resume(run.id(), second.sessionToken()));
     }
 
     private TestPlan plan() {

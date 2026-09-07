@@ -1,6 +1,7 @@
 import { cleanup, render, screen } from '@testing-library/react'
 import { afterEach, expect, test, vi } from 'vitest'
 import { ManagementBootstrap } from './ManagementBootstrap'
+import { api } from './api'
 
 afterEach(() => {
   cleanup()
@@ -65,3 +66,49 @@ test('opens a self-hosted management page without a fragment secret', async () =
 function json(value: unknown) {
   return new Response(JSON.stringify(value), { status: 200, headers: { 'content-type': 'application/json' } })
 }
+
+test('resumes a hosted cookie session without the original fragment or tab storage', async () => {
+  const runId = 'run_0123456789ABCDEFGHJKMNPQRS'
+  vi.spyOn(api, 'health').mockResolvedValue({ status: 'ok', version: 'test', mode: 'hosted', oidcEnabled: false })
+  vi.spyOn(api, 'run').mockResolvedValue({ id: runId, planId: 'plan', status: 'CREATED',
+    targetToSuiteReachability: 'UNKNOWN', context: {} })
+  const resume = vi.spyOn(api, 'resumeManagementSession').mockResolvedValue({ runId, csrfToken: 'resumed-csrf' })
+  vi.stubGlobal('fetch', vi.fn(async () => json([])))
+
+  render(<ManagementBootstrap runId={runId} />)
+
+  expect(await screen.findByText('Run unlocked')).toBeTruthy()
+  expect(resume).toHaveBeenCalledWith(runId)
+  expect(window.sessionStorage.getItem(`samlscope.csrf.${runId}`)).toBe('resumed-csrf')
+  expect(screen.queryByRole('link', { name: 'Start IdP round trip' })).toBeNull()
+})
+
+test('does not unlock a hosted Run using stale tab storage when the server denies access', async () => {
+    const runId = 'run_0123456789ABCDEFGHJKMNPQRS'
+    window.sessionStorage.setItem(`samlscope.csrf.${runId}`, 'stale-csrf')
+    vi.spyOn(api, 'health').mockResolvedValue({ status: 'ok', version: 'test', mode: 'hosted', oidcEnabled: false })
+    vi.spyOn(api, 'run').mockRejectedValue(new Error('Management access denied'))
+    const resume = vi.spyOn(api, 'resumeManagementSession')
+
+    render(<ManagementBootstrap runId={runId} />)
+
+    expect(await screen.findByText('Access denied')).toBeTruthy()
+    expect(resume).not.toHaveBeenCalled()
+    expect(screen.queryByText('Run unlocked')).toBeNull()
+})
+
+test('keeps OIDC account access without requiring a legacy Run cookie', async () => {
+  const runId = 'run_0123456789ABCDEFGHJKMNPQRS'
+  vi.spyOn(api, 'health').mockResolvedValue({ status: 'ok', version: 'test', mode: 'hosted', oidcEnabled: true })
+  vi.spyOn(api, 'run').mockResolvedValue({ id: runId, planId: 'plan', status: 'CREATED',
+    targetToSuiteReachability: 'UNKNOWN', context: {} })
+  vi.spyOn(api, 'authSession').mockResolvedValue({ enabled: true, authenticated: true,
+    accessPolicy: 'required', displayName: 'Owner', csrfToken: 'oidc-csrf' })
+  const resume = vi.spyOn(api, 'resumeManagementSession')
+  vi.stubGlobal('fetch', vi.fn(async () => json([])))
+
+  render(<ManagementBootstrap runId={runId} />)
+
+  expect(await screen.findByText('Run unlocked')).toBeTruthy()
+  expect(resume).not.toHaveBeenCalled()
+})

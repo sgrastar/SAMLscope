@@ -498,7 +498,9 @@ test('offers the server-generated active probe launch URL and explains fresh-ses
       expiresAt: '2026-09-05T00:00:00Z', answerValues: ['completed'], completionMode: 'OPERATOR',
     }])
     if (url === '/api/health') return json({ status: 'ok', version: 'test', mode: 'selfhosted' })
-    if (url.includes('/api/runs/')) return json({ id: 'run_0123456789ABCDEFGHJKMNPQRS', planId: 'plan' })
+    if (url.includes('/api/runs/')) return json({ id: 'run_0123456789ABCDEFGHJKMNPQRS', planId: 'plan', context: {
+      preflight: { checks: [{ code: 'target_metadata', status: 'PASS' }] },
+    } })
     if (url === '/api/plans') return json([{
       plan: { id: 'plan', name: 'Target IdP', profile: 'IDP_CORE', target: { kind: 'IDP', entityId: 'https://idp.example' } },
       entityId: 'https://suite.example/p/plan', metadataUrl: 'https://suite.example/p/plan/metadata',
