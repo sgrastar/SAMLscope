@@ -19,8 +19,8 @@ approved levels, variants or applicability.
 
 ## Entry and review sequence
 
-Close or explicitly disposition Phase 1 acceptance findings first, including the
-database reliability issue and hosted retention/deletion gaps. Record the release
+Close or explicitly disposition Phase 1 acceptance findings first, including hosted retention/deletion gaps. The earlier local database I/O failure
+no longer reproduces after host space recovery; retain capacity monitoring. Record the release
 baseline and compatible result format. Then inventory exact source clauses and
 open interpretation questions for each proposed package, without modifying the
 current signed catalog in place.

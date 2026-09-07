@@ -246,3 +246,40 @@ and corrected acceptance images, containers and evidence volumes were retained.
 This did not materially increase host free space. No unrelated Docker caches,
 volumes or user files were pruned. Restore sufficient host space, then rerun the
 unanchored reproduction and full release verification before claiming recovery.
+
+
+### Verification after host space recovery
+
+After the user requested removal of Xcode DerivedData, host free space recovered.
+The standalone store tests passed without changing database runtime behavior.
+The report-freshness regression's test-only idle connection has now been removed;
+the API tests and full `releaseCheck` passed, including pinned G1/G2 signature
+verification and fresh source reconciliation (`complete=true`).
+
+These observations support storage pressure as the cause of the earlier failures;
+they do not establish a production connection-lifecycle defect. The earlier failed
+experiments and logs remain historical evidence. No signed-boundary lifecycle
+change or new approval is needed on the evidence currently available. Monitor
+host capacity before additional image builds and acceptance runs.
+
+
+### Current-image Keycloak report acceptance
+
+Image `sha256:e8a106cc1ac4bed01e80fcdc7419d4908a1f78264c7ff28a71622fa17d468e4a`
+contains runtime commit `9830e28`; build-time uncommitted changes were the test-only
+anchor removal and documentation. The isolated `samlscope-report-refresh`
+container uses its own data volume and loopback port 8084.
+
+Run `run_VJ64KTA7KAFD8GQ20XF49QEBT0` completed baseline SSO and the bounded
+error-response sequence with a fresh-cookie protocol client. Immediately after
+that case finished, with ALG01 AWAITING_RESPONSE, JSON showed NOT_VERIFIED with
+`idp.error-response.inconclusive` and correlated evidence. The standalone HTML's
+embedded requirement results matched JSON. No M2 start or other report-refresh
+workaround was used. This verifies both observation handling and report freshness
+against Keycloak; it is not complete IdP Core acceptance or a new browser pass.
+
+Evidence and the credential-free reproduction script are under
+`build/acceptance/report-refresh/`. The next algorithm case remains awaiting
+response; its automatically generated form was outside this bounded execution.
+Do not treat that unexecuted exchange as target evidence. Historical containers
+and results remain separate.

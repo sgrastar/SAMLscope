@@ -21,7 +21,7 @@ infer support or applicability from this planning table.
 
 | Work | Required observation | Current limitation |
 |---|---|---|
-| Current candidate rerun | Build revision and image digest, fresh Run, JSON/HTML agreement after each completed active case | Running containers predate report-refresh correction |
+| Current candidate rerun | New image and fresh Run verified immediate JSON/HTML agreement for the error-response case | Bounded protocol-client run; remaining chain and browser campaigns outstanding |
 | Active probe chain | Correlated positive/negative controls and explicit unavailable-response outcomes | Bounded corrected rerun stopped at the next algorithm case |
 | Conditional features | Configuration or observed protocol evidence for each predicate | Undetermined inputs remain; do not submit blanket answers |
 | Metadata campaigns | Actual target import/refresh, changed metadata and subsequent correlated flow | Target refresh setup remains unestablished |
