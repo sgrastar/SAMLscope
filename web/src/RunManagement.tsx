@@ -4,7 +4,7 @@ import {
   api, type ActiveProbeStatus, type BootstrapContract, type MetadataLab, type PendingInteraction, type Plan,
   type ProtocolEvidenceStatus, type CampaignReport, type Run,
 } from './api'
-import { humanize } from './format'
+import { formatDate, humanize } from './format'
 
 export function RunManagement({ runId, csrfToken, focusCaseId, navigateTo }: {
   runId: string
@@ -536,7 +536,7 @@ export function RunManagement({ runId, csrfToken, focusCaseId, navigateTo }: {
         <button type="submit">Continue case</button>
       </fieldset>
     </form>}
-    <small>Expires {new Date(interaction.expiresAt).toLocaleString()}</small>
+    <small>Expires {formatDate(interaction.expiresAt, 'Unknown')}</small>
   </article>
 
   const activeProbePanel = activeProbe?.state === 'READY' && activeProbe.startUrl

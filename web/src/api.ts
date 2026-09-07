@@ -20,8 +20,8 @@ export interface Run {
   status: string
   targetToSuiteReachability: string
   context: Record<string, unknown>
-  createdAt?: string
-  updatedAt?: string
+  createdAt?: string | number
+  updatedAt?: string | number
 }
 
 export interface RunCreated {
@@ -130,7 +130,7 @@ export interface PendingInteraction {
   promptKey: string | null
   promptEn: string | null
   startUrl: string | null
-  expiresAt: string
+  expiresAt: string | number
   answerValues: string[]
   completionMode?: 'OPERATOR' | 'TRANSCRIPT' | 'TRANSCRIPT_OR_OPERATOR'
 }

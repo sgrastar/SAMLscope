@@ -448,8 +448,15 @@ final class M1Runtime {
             byte[] decodedSaml,
             com.samlscope.core.evaluation.EvidenceRef evidence) {
         var status = activeProbes.accept(runId, actionId, decodedSaml, evidence);
-        if (status.state() == ActiveProbeCoordinator.State.FINISHED && results != null) {
-            results.generate(runId);
+        if (results != null) {
+            // The coordinator may already be reporting the next case in the chain.
+            // Publish the outcome of the case that received this response instead
+            // of waiting for every queued scenario to finish.
+            var completedCase = caseExecutions.findOutbox(actionId)
+                    .flatMap(action -> caseExecutions.find(runId, action.caseId()))
+                    .filter(execution -> execution.status()
+                            == com.samlscope.core.caseexec.CaseExecutionStatus.FINISHED);
+            if (completedCase.isPresent()) results.generate(runId);
         }
         return status;
     }

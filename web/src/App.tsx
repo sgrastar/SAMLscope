@@ -4,7 +4,7 @@ import { api, type Plan, type PlanInput, type Profile, type Run } from './api'
 import { ResultReport } from './ResultReport'
 import { ManagementBootstrap } from './ManagementBootstrap'
 import { RunManagement } from './RunManagement'
-import { humanize } from './format'
+import { formatDate, humanize } from './format'
 
 const initialInput: PlanInput = {
   name: '',
@@ -310,9 +310,4 @@ function planLocation(): { view: 'list' | 'new' | 'detail'; planId?: string } {
   if (query.has('new')) return { view: 'new' }
   const planId = query.get('plan') ?? undefined
   return planId ? { view: 'detail', planId } : { view: 'list' }
-}
-
-function formatDate(value: string) {
-  const date = new Date(value)
-  return Number.isNaN(date.valueOf()) ? 'Updated recently' : date.toLocaleString()
 }

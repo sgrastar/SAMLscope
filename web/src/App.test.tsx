@@ -63,7 +63,7 @@ test('shows Run count and latest status in the Test Plan overview', async () => 
           }]
         : url.includes('/api/plans/plan_0123456789ABCDEFGHJKMNPQRS/runs')
           ? [
-              { id: 'run_1', planId: 'plan_0123456789ABCDEFGHJKMNPQRS', status: 'RUNNING', targetToSuiteReachability: 'CONFIRMED', context: {}, updatedAt: '2026-09-02T01:00:00Z' },
+              { id: 'run_1', planId: 'plan_0123456789ABCDEFGHJKMNPQRS', status: 'RUNNING', targetToSuiteReachability: 'CONFIRMED', context: {}, updatedAt: 1788750216.704 },
               { id: 'run_2', planId: 'plan_0123456789ABCDEFGHJKMNPQRS', status: 'COMPLETED', targetToSuiteReachability: 'CONFIRMED', context: {}, updatedAt: '2026-09-01T01:00:00Z' },
             ]
           : []
@@ -74,6 +74,7 @@ test('shows Run count and latest status in the Test Plan overview', async () => 
 
   expect(await screen.findByText('2 Runs')).toBeTruthy()
   expect(screen.getByText(/Running/)).toBeTruthy()
+  expect(screen.getByText(`Running · ${new Date('2026-09-07T03:03:36.704Z').toLocaleString()}`)).toBeTruthy()
 })
 
 test('does not misreport a failed Run history request as zero Runs', async () => {

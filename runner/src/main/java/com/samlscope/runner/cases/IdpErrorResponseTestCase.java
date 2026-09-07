@@ -132,6 +132,12 @@ public final class IdpErrorResponseTestCase implements TestCase, BrowserFrontCha
                 if (probe == Probe.UNSATISFIABLE_AUTHN_CONTEXT) {
                     if (RESPONDER.equals(topLevel)) return FixtureObservation.SATISFIED;
                     if (SUCCESS.equals(topLevel)) {
+                        // This observer receives the wire XML, not decrypted assertions. The
+                        // requested context may be inside ciphertext, so Success alone cannot
+                        // establish that the target failed to satisfy the request.
+                        if (root.getElementsByTagNameNS(ASSERTION, "EncryptedAssertion").getLength() > 0) {
+                            return FixtureObservation.NOT_VERIFIED;
+                        }
                         var classRefs = root.getElementsByTagNameNS(ASSERTION, "AuthnContextClassRef");
                         if (classRefs.getLength() > 0 && requests.unavailableAuthnContext(requestId)
                                 .equals(classRefs.item(0).getTextContent())) {
