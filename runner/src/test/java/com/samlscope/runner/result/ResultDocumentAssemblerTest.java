@@ -56,6 +56,11 @@ class ResultDocumentAssemblerTest {
                 fixture.catalog(), fixture.plan(), fixture.run(), fixture.evaluation(), fixture.cases(), context());
         var json = new ResultJsonWriter().write(document);
         var tree = new ResultJsonWriter().mapper().readTree(json);
+        // Generated only from the Evaluator fixture; never hand-edit the golden document.
+        if ("true".equals(System.getenv("SAMLSCOPE_UPDATE_RESULT_GOLDEN"))) {
+            java.nio.file.Files.writeString(java.nio.file.Path.of("src/test/resources/golden/result-v1.json"), json);
+            return;
+        }
         try (var golden = ResultDocumentAssemblerTest.class.getResourceAsStream("/golden/result-v1.json")) {
             assertEquals(new String(golden.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8), json);
         }

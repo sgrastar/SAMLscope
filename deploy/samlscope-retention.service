@@ -1,0 +1,9 @@
+[Unit]
+Description=SAMLscope offline retention with backup
+Requires=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/bin/bash /opt/samlscope/retention.sh --apply
+UMask=0077

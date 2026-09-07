@@ -32,6 +32,8 @@ The signed G1 requirement catalog and signed G2 case design are complete. The ap
 
 External-observation coverage and reference implementation acceptance testing continue to improve. Capabilities that cannot be observed remain explicit `SELF_ATTESTED` or `NOT_VERIFIED` rather than being guessed.
 
+Current acceptance status and remaining launch work are tracked in the [release checklist](docs/13-release-readiness.md), [reference matrix](docs/14-reference-acceptance.md), and [operations preparation](docs/15-hosted-operations.md). Production hosting is not yet ready.
+
 ## Requirements
 
 - Java 21
@@ -81,7 +83,7 @@ docker run --rm -p 8080:8080 -v samlscope-data:/data \
   samlscope:0.1.0
 ```
 
-Self-hosted mode has no application authentication and must not be exposed directly to an untrusted network. Generated Test Peer private keys are test-only and must never be trusted by production systems.
+By default, self-hosted mode has no application authentication and must not be exposed directly to an untrusted network. Optional standard OIDC login is implemented with per-user Plan ownership; see [OIDC configuration and pending G2 reapproval](docs/17-oidc-authentication.md). Generated Test Peer private keys are test-only and must never be trusted by production systems.
 
 ## Deploy samlscope.com
 

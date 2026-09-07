@@ -30,7 +30,8 @@ final class ApiModels {
             String mdqUrl,
             String secondaryIdpEntityId,
             String secondaryIdpMetadataUrl) {}
-    record PlanSummary(String id, String name, PlanProfile profile, TargetSummary target) {}
+    record PlanSummary(String id, String name, PlanProfile profile, TargetSummary target,
+            TestPlan.RequestSigningMode requestSigningMode) {}
     record TargetSummary(TargetKind kind, String entityId) {}
     record PlanCreated(PlanView plan, RunCreated initialRun) {}
     record RunCreated(com.samlscope.core.run.TestRun run, String managementUrl) {}

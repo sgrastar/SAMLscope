@@ -86,6 +86,30 @@ class IdpErrorResponseTestCaseTest {
     }
 
     @Test
+    void encryptedAuthnContextRemainsUnknownButVisibleWrongContextIsDetected() {
+        for (boolean encrypted : new boolean[] {true, false}) {
+            var passive = (CaseStep.AwaitInbound) testCase.start(context());
+            var baseline = (CaseStep.AwaitInbound) testCase.resume(context(), passive.next(),
+                    inbound(error(passive.next(), "Responder", null), "passive"));
+            var nameId = (CaseStep.AwaitInbound) testCase.resume(context(), baseline.next(),
+                    inbound(error(baseline.next(), "Success", null), "baseline"));
+            var authn = (CaseStep.AwaitInbound) testCase.resume(context(), nameId.next(),
+                    inbound(error(nameId.next(), "Responder", null), "nameid"));
+            var response = encrypted
+                    ? error(authn.next(), "Success", null).replace("<saml:Assertion/>",
+                            "<saml:EncryptedAssertion xmlns:xenc=\"http://www.w3.org/2001/04/xmlenc#\">"
+                                    + "<xenc:EncryptedData><xenc:CipherData>"
+                                    + "<xenc:CipherValue>AQID</xenc:CipherValue>"
+                                    + "</xenc:CipherData></xenc:EncryptedData></saml:EncryptedAssertion>")
+                    : error(authn.next(), "Success", "urn:example:different-context");
+            var finish = (CaseStep.Finish) testCase.resume(context(), authn.next(),
+                    inbound(response, "authn-context"));
+            assertEquals(encrypted ? Outcome.NOT_VERIFIED : Outcome.VIOLATED,
+                    finish.outcome().outcome());
+        }
+    }
+
+    @Test
     void blanketRejectionFailsThePositiveControlInsteadOfPassingTheTarget() {
         var passive = (CaseStep.AwaitInbound) testCase.start(context());
         var baseline = (CaseStep.AwaitInbound) testCase.resume(

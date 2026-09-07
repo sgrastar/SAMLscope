@@ -227,10 +227,29 @@ class FileTranscriptRecorderTest {
         var runDirectory = directory.resolve("transcripts").resolve(run.id());
         assertTrue(Files.exists(runDirectory));
 
+        var artifacts = new FileRunArtifactRepository(directory);
+        artifacts.saveResult(run.id(), "result".getBytes(StandardCharsets.UTF_8));
+        artifacts.saveReport(run.id(), "report".getBytes(StandardCharsets.UTF_8));
+        var metadata = new MetadataCache(directory);
+        metadata.put(plan.id(), "plan metadata".getBytes(StandardCharsets.UTF_8));
+        metadata.putIfAbsent(run.id(), "run metadata".getBytes(StandardCharsets.UTF_8));
+        var keyDirectory = directory.resolve("keys").resolve(plan.id());
+        Files.createDirectories(keyDirectory.resolve("rollover"));
+        Files.writeString(keyDirectory.resolve("rollover/signing-key.pk8"), "test fixture");
+        var unrelated = directory.resolve("keys/unrelated/signing-key.pk8");
+        Files.createDirectories(unrelated.getParent());
+        Files.writeString(unrelated, "preserve");
+
         assertTrue(recorder.deletePlanAndEvidence(plan.id()));
 
         assertTrue(plans.find(plan.id()).isEmpty());
         assertFalse(Files.exists(runDirectory));
+        assertTrue(artifacts.findResult(run.id()).isEmpty());
+        assertTrue(artifacts.findReport(run.id()).isEmpty());
+        assertFalse(Files.exists(directory.resolve("target-metadata").resolve(run.id() + ".xml")));
+        assertFalse(Files.exists(directory.resolve("target-metadata").resolve(plan.id() + ".xml")));
+        assertFalse(Files.exists(keyDirectory));
+        assertEquals("preserve", Files.readString(unrelated));
         try (var connection = database.open();
              var usage = connection.createStatement().executeQuery(
                      "SELECT entry_count, stored_bytes FROM transcript_global_usage")) {

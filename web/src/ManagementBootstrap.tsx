@@ -14,9 +14,14 @@ export function ManagementBootstrap({ runId }: { runId: string }) {
     const token = new URLSearchParams(window.location.hash.slice(1)).get('t') ?? ''
     window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}`)
     if (!token) {
+      setCsrfToken(window.sessionStorage.getItem(`samlscope.csrf.${runId}`) ?? undefined)
       void api.health().then(health => {
         setMode(health.mode)
-        if (health.mode !== 'selfhosted') throw new Error('The management link has no access token.')
+        if (health.oidcEnabled) {
+          // The API checks Plan ownership or a valid Run capability before showing any data.
+          return api.run(runId).then(() => setState('ready'))
+        }
+        if (health.mode !== 'selfhosted') throw new Error('Sign in or open the original management link.')
         setState('ready')
       }).catch(cause => {
         setState('error')
@@ -45,7 +50,7 @@ export function ManagementBootstrap({ runId }: { runId: string }) {
     </main>}
     {state === 'ready' && <main className="shell page-main run-page">
       <div className="notice notice-success compact-notice" role="status"><strong>Run unlocked</strong>
-        The secret was removed from the address bar. Evidence inputs remain separate from Suite verdict calculation.</div>
+        Access is ready. Evidence inputs remain separate from Suite verdict calculation.</div>
       <RunManagement runId={runId} csrfToken={csrfToken} />
     </main>}
     {state === 'error' && <main className="shell gate-page"><section className="gate-card error-state">

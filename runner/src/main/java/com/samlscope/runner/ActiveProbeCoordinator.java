@@ -39,6 +39,7 @@ public final class ActiveProbeCoordinator {
     private final BiFunction<TestPlan, String, IdpErrorProbeConfiguration> configurations;
     private final TestCaseRegistry scenarioCases;
     private final Clock clock;
+    private final CaseExecutionService executionService;
 
     public ActiveProbeCoordinator(
             URI publicBase,
@@ -65,6 +66,17 @@ public final class ActiveProbeCoordinator {
             BiFunction<TestPlan, String, IdpErrorProbeConfiguration> configurations,
             TestCaseRegistry scenarioCases,
             Clock clock) {
+        this(publicBase, plans, runs, repository, dispatcher, transcript, contexts, configurations,
+                scenarioCases, clock, new CaseExecutionService(repository));
+    }
+
+    public ActiveProbeCoordinator(
+            URI publicBase, PlanRepository plans, RunRepository runs,
+            CaseExecutionRepository repository, OutboundDispatcher dispatcher,
+            TranscriptRecorder transcript, CaseContextProvider contexts,
+            BiFunction<TestPlan, String, IdpErrorProbeConfiguration> configurations,
+            TestCaseRegistry scenarioCases, Clock clock, CaseExecutionService executionService) {
+        this.executionService = Objects.requireNonNull(executionService, "executionService");
         this.publicBase = Objects.requireNonNull(publicBase, "publicBase");
         this.plans = Objects.requireNonNull(plans, "plans");
         this.runs = Objects.requireNonNull(runs, "runs");
@@ -132,7 +144,7 @@ public final class ActiveProbeCoordinator {
         var plan = plans.find(run.planId()).orElseThrow(() -> new IllegalStateException("Run has no Test Plan"));
         var waited = Duration.between(execution.updatedAt(), now);
         if (waited.isNegative()) waited = Duration.ZERO;
-        return Optional.of(new CaseExecutionService(repository).resume(
+        return Optional.of(executionService.resume(
                 runId, new IdpErrorResponseTestCase(configurations.apply(plan, runId)),
                 contexts.contextFor(runId), new CaseEvent.TimedOut(waited)));
     }
@@ -208,7 +220,7 @@ public final class ActiveProbeCoordinator {
         }
         var testCase = scenario(outbox.caseId(), run).orElseThrow();
         var router = new InboundCaseRouter(
-                repository, new TestCaseRegistry(List.of(testCase)), new CaseExecutionService(repository));
+                repository, new TestCaseRegistry(List.of(testCase)), executionService);
         router.route(
                 runId, "saml-response", Map.of("ScenarioActionId", actionId), decodedSaml,
                 evidence, contexts.contextFor(runId))
@@ -226,7 +238,7 @@ public final class ActiveProbeCoordinator {
         var current = repository.find(runId, currentStatus.caseId())
                 .orElseThrow(() -> new IllegalStateException("Browser scenario execution is missing"));
         var testCase = scenario(current.caseId(), run).orElseThrow();
-        new CaseExecutionService(repository).resume(
+        executionService.resume(
                 runId, testCase, contexts.contextFor(runId),
                 new CaseEvent.InboundUnavailable("operator-reported-no-saml-response"));
         return status(runId);
@@ -242,7 +254,7 @@ public final class ActiveProbeCoordinator {
         var current = repository.find(runId, currentStatus.caseId())
                 .orElseThrow(() -> new IllegalStateException("Browser scenario execution is missing"));
         var testCase = scenario(current.caseId(), run).orElseThrow();
-        new CaseExecutionService(repository).resume(
+        executionService.resume(
                 runId, testCase, contexts.contextFor(runId), new CaseEvent.RetryInbound());
         return status(runId);
     }

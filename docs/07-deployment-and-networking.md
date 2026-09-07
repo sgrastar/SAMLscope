@@ -149,7 +149,7 @@ The image is the same, with features enabled by `SAMLSCOPE_MODE=hosted`.
 | Rate limiting / concurrent execution limits | Abuse prevention |
 | Prohibit outbound connections to private IP addresses | SSRF protection ([08](08-suite-security.md)) |
 | Public result storage | Shared URLs |
-| Administrative access | Phase 1 uses **a per-Run secret URL** (no account login). A Hosted Plan-creation request also creates the initial Run; all subsequent Plan and Run reads or mutations require that Run session. Add OIDC login through Authrim in the future. [09 D-09](09-open-decisions.md) |
+| Administrative access | Phase 1 uses **a per-Run secret URL** (no account login). A Hosted Plan-creation request also creates the initial Run; all subsequent Plan and Run reads or mutations require that Run session. Optional standard OIDC login and account ownership are implemented, pending renewed G2 approval; see [17](17-oidc-authentication.md). [09 D-09](09-open-decisions.md) |
 | Automatic deletion after the retention period | |
 
 The bundled Caddy configuration overwrites `X-Forwarded-For` with the direct client's
@@ -170,13 +170,13 @@ self-hosted has no authentication (it is intended for use within a trusted netwo
   Manage it with plain SQL + migration files without using an ORM
 - Store large data such as Transcripts **as files under `/data` rather than in the database**, keeping only references in the database
 
-## 7. Separation of the Login SP / OIDC RP and Test Peer (In Preparation for Future Authentication)
+## 7. Separation of the Login SP / OIDC RP and Test Peer
 
 When adding login through Authrim or similar to the Hosted version, **the same process will contain both a “test SP” and a “login SP/RP.”** The Test Peer’s job is to
 “receive and observe” even invalid Assertions, so its validation is **intentionally relaxed**.
 If an administrative session is created from an Assertion that arrives there, that becomes an authentication bypass.
 
-Protect the structure from Phase 1 onward.
+Protect the structure from Phase 1 onward. The OIDC implementation additionally requires distinct app/peer hostnames because cookies are shared across ports; see [17](17-oidc-authentication.md).
 
 - Separate the session stores, Cookie names, and code paths for `peer/` (testing) and `auth/` (administration)
 - **Serve them from separate origins**: `app.<domain>` (UI + administration) and `peer.<domain>` (Test Peer endpoints)

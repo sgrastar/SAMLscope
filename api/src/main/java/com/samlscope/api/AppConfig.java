@@ -17,12 +17,20 @@ public record AppConfig(
         boolean outboundAllowInsecureTls,
         boolean publishEnabled,
         String suiteImageDigest,
-        String trustedProxyAddress) {
+        String trustedProxyAddress,
+        com.samlscope.api.auth.OidcConfig oidc) {
     private static final Logger LOG = Logger.getLogger(AppConfig.class.getName());
 
     public AppConfig {
+        Objects.requireNonNull(oidc, "oidc");
         validateBaseUrl(publicBaseUrl, "publicBaseUrl");
         validateBaseUrl(peerBaseUrl, "peerBaseUrl");
+        if (oidc.enabled()) {
+            com.samlscope.api.auth.OidcConfig.requireHttps(publicBaseUrl);
+            if (publicBaseUrl.getHost().equalsIgnoreCase(peerBaseUrl.getHost())) {
+                throw new IllegalArgumentException("OIDC requires separate app and peer hostnames; cookies are not isolated by port");
+            }
+        }
         if (httpPort < 1 || httpPort > 65535) throw new IllegalArgumentException("Invalid HTTP port");
         if (mode == Mode.HOSTED && sameOrigin(publicBaseUrl, peerBaseUrl)) {
             throw new IllegalArgumentException("Hosted mode requires separate app and peer origins");
@@ -54,6 +62,16 @@ public record AppConfig(
         }
     }
 
+    public boolean managementProtected() { return mode == Mode.HOSTED || oidc.enabled(); }
+
+    public AppConfig(Mode mode, URI publicBaseUrl, URI peerBaseUrl, Path dataDirectory, int httpPort,
+                     boolean outboundAllowPrivate, boolean outboundAllowInsecureTls, boolean publishEnabled,
+                     String suiteImageDigest, String trustedProxyAddress) {
+        this(mode, publicBaseUrl, peerBaseUrl, dataDirectory, httpPort, outboundAllowPrivate,
+                outboundAllowInsecureTls, publishEnabled, suiteImageDigest, trustedProxyAddress,
+                com.samlscope.api.auth.OidcConfig.disabled());
+    }
+
     public AppConfig(
             Mode mode, URI publicBaseUrl, URI peerBaseUrl, Path dataDirectory, int httpPort,
             boolean outboundAllowPrivate, boolean outboundAllowInsecureTls, boolean publishEnabled) {
@@ -80,7 +98,7 @@ public record AppConfig(
         var trustedProxy = resolve(environment, "TRUSTED_PROXY_ADDRESS", "");
         return new AppConfig(
                 mode, publicBase, peerBase, data, port, allowPrivate, insecureTls, publish,
-                imageDigest, trustedProxy);
+                imageDigest, trustedProxy, com.samlscope.api.auth.OidcConfig.from(environment));
     }
 
     private static String resolve(Map<String, String> environment, String suffix, String defaultValue) {

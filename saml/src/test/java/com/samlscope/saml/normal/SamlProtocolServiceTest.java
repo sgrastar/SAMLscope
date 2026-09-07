@@ -21,6 +21,39 @@ class SamlProtocolServiceTest {
     @TempDir java.nio.file.Path directory;
 
     @Test
+    void requiredPlanAdvertisesAndSignsBootstrapUsingRawRedirectBytes() {
+        var original = SamlTestFixtures.idpPlan();
+        var plan = new com.samlscope.core.plan.TestPlan(original.id(), original.name(), original.profile(),
+                original.target(), original.suiteMetadataDelivery(), original.declaredFeatures(),
+                new com.samlscope.core.plan.TestPlan.Parameters(180, 300, "",
+                        com.samlscope.core.plan.TestPlan.RequestSigningMode.REQUIRED),
+                original.interaction(), original.createdAt(), original.updatedAt());
+        var clock = Clock.fixed(Instant.parse("2026-08-29T00:00:00Z"), ZoneOffset.UTC);
+        var keys = new FilePlanKeyStore(directory, clock);
+        var service = new SamlProtocolService(URI.create("https://peer.example"), keys,
+                new XmlSigner(), new OpenSamlReader(), clock);
+        var request = service.buildAuthnRequest(plan, URI.create("https://idp.example/sso"), "a+b /\u65e5\u672c\u8a9e");
+        var verifier = new com.samlscope.saml.binding.RedirectSignatureVerifier();
+        assertTrue(verifier.isValid(request.redirect().getRawQuery(), keys.getOrCreate(plan.id()).certificate()));
+        org.junit.jupiter.api.Assertions.assertFalse(verifier.isValid(
+                request.redirect().getRawQuery().replace("RelayState=", "RelayState=tampered"),
+                keys.getOrCreate(plan.id()).certificate()));
+        var ecp = service.buildEcpAuthnRequest(plan, URI.create("https://idp.example/ecp"),
+                URI.create("https://peer.example/paos"), "relay");
+        assertTrue(new com.samlscope.saml.crypto.XmlSignatureVerifier().hasValidEnvelopedSignature(
+                SecureXml.parse(ecp.xml()).getDocumentElement(), keys.getOrCreate(plan.id()).certificate()));
+        // This named negative control must stay unsigned even in a required Plan.
+        var negative = service.buildEcpChannelBindingAuthnRequest(plan, URI.create("https://idp.example/ecp"),
+                URI.create("https://peer.example/paos"), "relay", "tls-server-end-point", "YWJj", false);
+        assertEquals(0, SecureXml.parse(negative.xml()).getElementsByTagNameNS(
+                "http://www.w3.org/2000/09/xmldsig#", "Signature").getLength());
+        var metadata = new com.samlscope.saml.metadata.MetadataService(URI.create("https://peer.example"), keys, new XmlSigner(), clock);
+        var root = SecureXml.parse(metadata.generate(plan));
+        assertEquals("true", ((org.w3c.dom.Element) root.getElementsByTagNameNS(
+                com.samlscope.saml.metadata.MetadataService.MD, "SPSSODescriptor").item(0)).getAttribute("AuthnRequestsSigned"));
+    }
+
+    @Test
     void redirectAuthnRequestRoundTripsWithoutReconstructingTheRawQuery() {
         var plan = SamlTestFixtures.idpPlan();
         var clock = Clock.fixed(Instant.parse("2026-08-29T00:00:00Z"), ZoneOffset.UTC);

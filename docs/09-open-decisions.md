@@ -193,7 +193,12 @@ Completely separate the public ID and administrative token:
 > Because `peer.<domain>` and `app.<domain>` are separated ([08 §5](08-suite-security.md)),
 > content originating from the target that reaches the Test Peer cannot access the administrative Cookie.
 
-### Future: Use Authrim as the login IdP
+### Use Authrim as the login IdP
+
+Implementation update (2026-09-07): standard OIDC login and account-owned Plans are
+implemented using a generic library, with no Authrim SDK dependency. Integration into
+the signed startup/build boundary requires renewed G2 approval. Configuration, anonymous
+access policies, and remaining deployment choices are in [17](17-oidc-authentication.md).
 
 Use Authrim (OIDC or SAML) for login to the Hosted version.
 **There are two design cautions here.**
@@ -423,7 +428,7 @@ Provide three safety measures.
 > A looser value (no judgment) would effectively leave IIP-G01 / MD04 untested.
 > Intermediate values + parameterization + recording resolve this tension.
 
-## ⏸ D-15. Operation of the Hosted Version — **On hold** (decide before starting M4)
+## ⏸ D-15. Operation of the Hosted Version — **Production launch pending**
 
 Because Level 2 was adopted, the official Hosted version is included in the Phase 1 deliverables.
 
@@ -450,7 +455,7 @@ so content arriving there must not touch the management UI's session.
 
 | Item | Options |
 |---|---|
-| Hosting | VPS + Docker / Fly.io / Cloud Run / home server + Cloudflare Tunnel |
+| Hosting | Initial deployment profile: VPS + Docker + Caddy; provider provisioning pending |
 | Cost | Personally funded / GitHub Sponsors / Open Collective |
 | Operating policy | Terms of use, deletion-request contact, retention period ([06 §5](06-results-and-publication.md)) |
 
@@ -458,3 +463,7 @@ so content arriving there must not touch the management UI's session.
 > **Testing an internal IdP requires self-hosting**, and those results cannot become shared URLs.
 > This asymmetry must be explained clearly in the README
 > (the audience that “wants to test an internal system” differs from the audience that “wants to publish results”).
+
+M4 implementation exists; this decision now gates production launch. Retention,
+complete deletion, and restore acceptance still require work. See
+[release readiness](13-release-readiness.md) and [operations](15-hosted-operations.md).

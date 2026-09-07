@@ -26,6 +26,9 @@ public record TestPlan(
         declaredFeatures = Map.copyOf(declaredFeatures == null ? Map.of() : declaredFeatures);
         parameters = parameters == null ? Parameters.defaults() : parameters;
         interaction = interaction == null ? Interaction.defaults() : interaction;
+        if (profile.role() != TargetRole.IDP && parameters.requestSigningMode() == RequestSigningMode.REQUIRED) {
+            throw new IllegalArgumentException("Required AuthnRequest signing is available only for IdP test Plans");
+        }
         Objects.requireNonNull(createdAt, "createdAt");
         Objects.requireNonNull(updatedAt, "updatedAt");
         if (profile.role() == TargetRole.IDP && target.kind() == TargetKind.SP) {
@@ -58,8 +61,14 @@ public record TestPlan(
     public record Parameters(
             int clockSkewToleranceSeconds,
             int metadataRefreshWaitSeconds,
-            String testUserHint) {
+            String testUserHint,
+            RequestSigningMode requestSigningMode) {
+        public Parameters(int clockSkewToleranceSeconds, int metadataRefreshWaitSeconds, String testUserHint) {
+            this(clockSkewToleranceSeconds, metadataRefreshWaitSeconds, testUserHint, RequestSigningMode.OPTIONAL);
+        }
+
         public Parameters {
+            requestSigningMode = requestSigningMode == null ? RequestSigningMode.OPTIONAL : requestSigningMode;
             if (clockSkewToleranceSeconds < 0 || metadataRefreshWaitSeconds < 1) {
                 throw new IllegalArgumentException("Plan timing parameters are out of range");
             }
@@ -68,6 +77,8 @@ public record TestPlan(
 
         public static Parameters defaults() { return new Parameters(180, 300, ""); }
     }
+
+    public enum RequestSigningMode { REQUIRED, OPTIONAL }
 
     public record Interaction(boolean allowBrowserSteps, boolean allowAttestation) {
         public static Interaction defaults() { return new Interaction(true, true); }

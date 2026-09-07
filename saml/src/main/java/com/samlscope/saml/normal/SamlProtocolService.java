@@ -54,7 +54,8 @@ public final class SamlProtocolService {
 
     public AuthnRequestMessage buildEcpAuthnRequest(
             TestPlan plan, URI destination, URI responseConsumer, String relayState) {
-        return buildAuthnRequest(plan, destination, relayState, responseConsumer, MetadataService.PAOS, null, false);
+        return buildAuthnRequest(plan, destination, relayState, responseConsumer, MetadataService.PAOS, null,
+                plan.parameters().requestSigningMode() == TestPlan.RequestSigningMode.REQUIRED);
     }
 
     public AuthnRequestMessage buildEcpChannelBindingAuthnRequest(
@@ -108,8 +109,19 @@ public final class SamlProtocolService {
         var xml = SecureXml.serialize(document);
         reader.read(xml);
         var encoded = url(Base64.getEncoder().encodeToString(deflate(xml)));
-        var redirect = URI.create(destination + (destination.toString().contains("?") ? "&" : "?")
-                + "SAMLRequest=" + encoded + "&RelayState=" + url(relayState));
+        var query = "SAMLRequest=" + encoded + "&RelayState=" + url(relayState);
+        if (plan.parameters().requestSigningMode() == TestPlan.RequestSigningMode.REQUIRED) {
+            query += "&SigAlg=" + url("http://www.w3.org/2001/04/xmldsig-more#rsa-sha256");
+            try {
+                var redirectSigner = java.security.Signature.getInstance("SHA256withRSA");
+                redirectSigner.initSign(keyStore.getOrCreate(plan.id()).privateKey());
+                redirectSigner.update(query.getBytes(StandardCharsets.US_ASCII));
+                query += "&Signature=" + url(Base64.getEncoder().encodeToString(redirectSigner.sign()));
+            } catch (java.security.GeneralSecurityException failure) {
+                throw new SamlException("Could not sign Redirect AuthnRequest", failure);
+            }
+        }
+        var redirect = URI.create(destination + (destination.toString().contains("?") ? "&" : "?") + query);
         return new AuthnRequestMessage(id, xml, redirect, relayState);
     }
 

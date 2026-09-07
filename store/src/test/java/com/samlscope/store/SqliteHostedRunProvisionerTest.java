@@ -94,6 +94,21 @@ class SqliteHostedRunProvisionerTest {
     }
 
     @Test
+    void signingModeRemainsFixedAfterHostedRunCompletion() {
+        var fixture = fixture();
+        var plan = plan("plan_signing", "https://first.example/idp");
+        var run = run("run_signing", plan.id(), RunStatus.CREATED);
+        assertTrue(fixture.provisioner.createPlanWithInitialRun(plan, run, grant(run.id(), 'a')));
+        fixture.runs.save(run(run.id(), plan.id(), RunStatus.COMPLETED));
+        var changed = new TestPlan(plan.id(), "Changed", plan.profile(), plan.target(), plan.suiteMetadataDelivery(),
+                plan.declaredFeatures(), new TestPlan.Parameters(180, 300, "", TestPlan.RequestSigningMode.REQUIRED),
+                plan.interaction(), plan.createdAt(), Instant.ofEpochSecond(1));
+        org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class,
+                () -> fixture.provisioner.updatePlanUnlessActiveRetarget(changed));
+        assertEquals(plan, fixture.plans.find(plan.id()).orElseThrow());
+    }
+
+    @Test
     void preventsRetargetingAPlanWithAnActiveRunButAllowsOtherEdits() {
         var fixture = fixture();
         var plan = plan("plan_active", "https://first.example/idp");

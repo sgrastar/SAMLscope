@@ -141,8 +141,8 @@ If `--structural-only` reports a blocking violation, **do not include that chang
 G1a ✅ Catalog creation
 G1b ✅ Review of obligation meaning (source-text comparison and signed approval by someone other than the author)
 M0  ✅ Skeleton implementation. 0 verdict cases.
-G2  ⏳ Test design       ← Authored and validated; signed independent review remains required.
-M1〜   Verdict case implementation   ← ★ After G2 is complete.
+G2  ✅ Test design       ← Signed independent approval verified; preserve its protected boundary.
+M1–M4 ✅ Implementation  ← Operational acceptance remains incomplete; see docs/13-release-readiness.md.
 ```
 
 **Do not begin M1 or later before G2.**

@@ -47,13 +47,17 @@ public final class SqlitePlanRepository implements PlanRepository {
         var sql = """
                 INSERT INTO plans(id, document_json, created_at, updated_at) VALUES(?, ?, ?, ?)
                 ON CONFLICT(id) DO UPDATE SET document_json=excluded.document_json, updated_at=excluded.updated_at
+                WHERE COALESCE(json_extract(plans.document_json, '$.parameters.requestSigningMode'), 'OPTIONAL')
+                    = COALESCE(json_extract(excluded.document_json, '$.parameters.requestSigningMode'), 'OPTIONAL')
                 """;
         try (var connection = database.open(); var statement = connection.prepareStatement(sql)) {
             statement.setString(1, plan.id());
             statement.setString(2, json.write(plan));
             statement.setString(3, plan.createdAt().toString());
             statement.setString(4, plan.updatedAt().toString());
-            statement.executeUpdate();
+            if (statement.executeUpdate() != 1) {
+                throw new IllegalArgumentException("Request signing mode is fixed; create a separate Test Plan");
+            }
         } catch (SQLException e) {
             throw new StoreException("Could not save plan", e);
         }

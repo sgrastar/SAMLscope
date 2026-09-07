@@ -1,0 +1,22 @@
+name: Operations tests
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  retention:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2b # v5.3.0
+        with:
+          python-version: '3.14'
+      - name: Test offline retention against the application schema
+        run: python3 -m unittest discover -s deploy -p 'test_*.py' -v
+      - name: Check maintenance shell syntax
+        run: bash -n deploy/retention.sh

@@ -118,7 +118,13 @@ public record ResultDocument(
     }
 
     /** Deliberately excludes TestPlan.Parameters.testUserHint, which must never be published. */
-    public record ParametersView(int clockSkewToleranceSeconds, int metadataRefreshWaitSeconds) {}
+    public record ParametersView(int clockSkewToleranceSeconds, int metadataRefreshWaitSeconds,
+            com.samlscope.core.plan.TestPlan.RequestSigningMode requestSigningMode) {
+        public ParametersView(int clockSkewToleranceSeconds, int metadataRefreshWaitSeconds) {
+            this(clockSkewToleranceSeconds, metadataRefreshWaitSeconds,
+                    com.samlscope.core.plan.TestPlan.RequestSigningMode.OPTIONAL);
+        }
+    }
 
     public record ApplicabilityView(
             String obligation,

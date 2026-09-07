@@ -20,9 +20,17 @@ import com.samlscope.core.plan.TestPlan;
 /** Applies pure case transitions and persists state plus outbox intents atomically. */
 public final class CaseExecutionService {
     private final CaseExecutionRepository repository;
+    private final java.util.function.BiFunction<String, OutboundAction, OutboundAction> requestSigning;
 
     public CaseExecutionService(CaseExecutionRepository repository) {
         this.repository = Objects.requireNonNull(repository, "repository");
+        this.requestSigning = null;
+    }
+
+    public CaseExecutionService(CaseExecutionRepository repository,
+            java.util.function.BiFunction<String, OutboundAction, OutboundAction> requestSigning) {
+        this.repository = Objects.requireNonNull(repository, "repository");
+        this.requestSigning = Objects.requireNonNull(requestSigning, "requestSigning");
     }
 
     public CaseExecution start(String runId, TestCase testCase, CaseContext context) {
@@ -30,7 +38,7 @@ public final class CaseExecutionService {
         var existing = repository.find(runId, testCase.id());
         if (existing.isPresent()) return existing.orElseThrow();
         return apply(runId, testCase.id(), -1, CaseState.initial(),
-                testCase.start(context), context.clock().instant(), context.interaction());
+                testCase.start(context), context.clock().instant(), context.interaction(), context.parameters().requestSigningMode());
     }
 
     public CaseExecution resume(
@@ -41,7 +49,7 @@ public final class CaseExecutionService {
         if (current.status() == CaseExecutionStatus.FINISHED) return current;
         requireExpectedEvent(current, event, context.clock().instant());
         return apply(runId, testCase.id(), current.revision(), current.state(),
-                testCase.resume(context, current.state(), event), context.clock().instant(), context.interaction());
+                testCase.resume(context, current.state(), event), context.clock().instant(), context.interaction(), context.parameters().requestSigningMode());
     }
 
     private void requireMatchingRun(String runId, TestCase testCase, CaseContext context) {
@@ -60,9 +68,24 @@ public final class CaseExecutionService {
             CaseState current,
             CaseStep step,
             Instant now,
-            TestPlan.Interaction interaction) {
+            TestPlan.Interaction interaction,
+            TestPlan.RequestSigningMode signingMode) {
         var transition = transition(current, step, now, interaction);
         validateActionIds(runId, caseId, transition.state(), transition.actions());
+        List<OutboundAction> actions;
+        try {
+            if (requestSigning == null && signingMode == TestPlan.RequestSigningMode.REQUIRED
+                    && transition.actions().stream().anyMatch(action ->
+                            action.kind() == com.samlscope.core.caseexec.OutboundKind.AUTHN_REQUEST)) {
+                throw new com.samlscope.saml.normal.SamlException("Required request signer was not configured");
+            }
+            actions = requestSigning == null ? transition.actions()
+                    : transition.actions().stream().map(action -> requestSigning.apply(runId, action)).toList();
+        } catch (com.samlscope.saml.normal.SamlException unsupportedFixture) {
+            transition = new Transition(CaseExecutionStatus.FINISHED, current, null,
+                    CaseOutcome.notVerified("request_signing_unavailable", "request.signing.unavailable"), List.of());
+            actions = List.of();
+        }
         var execution = new CaseExecution(
                 runId,
                 caseId,
@@ -72,7 +95,7 @@ public final class CaseExecutionService {
                 transition.waitCondition(),
                 transition.outcome(),
                 now);
-        if (repository.apply(expectedRevision, execution, transition.actions())) return execution;
+        if (repository.apply(expectedRevision, execution, actions)) return execution;
         return repository.find(runId, caseId)
                 .orElseThrow(() -> new IllegalStateException("Concurrent case transition was not persisted"));
     }

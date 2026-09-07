@@ -12,8 +12,14 @@ import com.samlscope.core.run.TestRun;
 public final class SqliteHostedRunProvisioner {
     private final SqliteDatabase database;
     private final JsonCodec json;
+    private final boolean enforceActiveTargetLimit;
 
     public SqliteHostedRunProvisioner(SqliteDatabase database, JsonCodec json) {
+        this(database, json, true);
+    }
+
+    public SqliteHostedRunProvisioner(SqliteDatabase database, JsonCodec json, boolean enforceActiveTargetLimit) {
+        this.enforceActiveTargetLimit = enforceActiveTargetLimit;
         this.database = Objects.requireNonNull(database, "database");
         this.json = Objects.requireNonNull(json, "json");
     }
@@ -34,7 +40,7 @@ public final class SqliteHostedRunProvisioner {
         return provision(null, run, grant, false, null);
     }
 
-    /** Returns the stable anonymous owner shared by every Run of a Hosted Plan. */
+    /** Returns the stable owner fingerprint shared by every Run of a protected Plan. */
     public String ownerForRun(String runId) {
         try (var connection = database.open();
                 var statement = connection.prepareStatement("""
@@ -96,7 +102,7 @@ public final class SqliteHostedRunProvisioner {
             try {
                 var currentPlan = insertPlan ? plan : findPlan(connection, run.planId())
                         .orElseThrow(() -> new IllegalArgumentException("Unknown Test Plan"));
-                if (hasActiveRunForTarget(connection, currentPlan.target().entityId())) {
+                if (enforceActiveTargetLimit && hasActiveRunForTarget(connection, currentPlan.target().entityId())) {
                     execute(connection, "ROLLBACK");
                     return false;
                 }
@@ -180,11 +186,14 @@ public final class SqliteHostedRunProvisioner {
 
     private void updatePlan(Connection connection, TestPlan plan) throws SQLException {
         try (var statement = connection.prepareStatement(
-                "UPDATE plans SET document_json = ?, updated_at = ? WHERE id = ?")) {
+                "UPDATE plans SET document_json = ?, updated_at = ? WHERE id = ? "
+                        + "AND COALESCE(json_extract(document_json, '$.parameters.requestSigningMode'), 'OPTIONAL') = ?")) {
             statement.setString(1, json.write(plan));
             statement.setString(2, plan.updatedAt().toString());
             statement.setString(3, plan.id());
-            if (statement.executeUpdate() != 1) throw new IllegalArgumentException("Unknown Test Plan");
+            statement.setString(4, plan.parameters().requestSigningMode().name());
+            if (statement.executeUpdate() != 1) throw new IllegalArgumentException(
+                    "Unknown Test Plan or changed request signing mode; create a separate Test Plan");
         }
     }
 

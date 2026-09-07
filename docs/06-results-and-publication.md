@@ -1,5 +1,9 @@
 # 06. Result Format and Publication
 
+The agreed next-stage product summary and badge presentation is specified in
+[20 — Functional profiles and public summaries](20-profiles-and-public-summaries.md).
+It does not replace the current result schema, trust model or Evaluator rules.
+
 ## 1. Result JSON (Schema v1)
 
 The Suite’s longest-lived artifact. Increment the version for breaking changes.

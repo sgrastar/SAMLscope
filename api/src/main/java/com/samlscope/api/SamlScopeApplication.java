@@ -64,7 +64,16 @@ public final class SamlScopeApplication {
     }
 
     public static Javalin create(AppConfig config) {
+        return create(config, null);
+    }
+
+    static Javalin create(AppConfig config, com.samlscope.api.auth.OidcClient injectedOidcClient) {
         var clock = Clock.systemUTC();
+        var oidcClient = config.oidc().enabled()
+                ? (injectedOidcClient != null ? injectedOidcClient : new com.samlscope.api.auth.OidcClient(
+                        config.oidc(), config.publicBaseUrl().resolve("/auth/callback"))) : null;
+        var oidc = new com.samlscope.api.auth.OidcRoutes(config.oidc(), config.publicBaseUrl(),
+                oidcClient, new com.samlscope.api.auth.OidcSessions(clock));
         var hostedRateLimiter = new HostedRateLimiter(clock);
         var json = new JsonCodec();
         var database = new SqliteDatabase(config.dataDirectory());
@@ -95,7 +104,7 @@ public final class SamlScopeApplication {
                 plans, runs, runService, metadataCache, metadataParser, saml, transcript, clock, true);
         var sloPeer = new SloPeerService(plans, runs, metadataCache, metadataParser, saml, transcript, clock);
         var caseExecutions = new SqliteCaseExecutionRepository(database, json);
-        var hostedRunProvisioner = new com.samlscope.store.SqliteHostedRunProvisioner(database, json);
+        var hostedRunProvisioner = new com.samlscope.store.SqliteHostedRunProvisioner(database, json, config.mode() == AppConfig.Mode.HOSTED);
         var ephemeralCredentials = new InMemoryEphemeralCredentialProvider();
         var outboundDispatcher = new OutboundDispatcher(
                 caseExecutions, HttpOutboundSender.create(transcript, clock), ephemeralCredentials,
@@ -109,6 +118,8 @@ public final class SamlScopeApplication {
                 config, database, json, plans, runs, transcript, transcript, metadataCache,
                 metadataParser, keyStore, caseExecutions, metadataLab, outboundDispatcher,
                 hostedRateLimiter, hostedRunProvisioner, clock);
+        var authorization = new ManagementAuthorization(oidc,
+                new com.samlscope.store.SqlitePlanOwnerRepository(database), plans, runs, m1);
         transcript.onRecorded(m1::reconcileTranscriptEvidenceAutomatically);
         var spPeer = new SpPeerService(
                 plans, runs, runService, metadataCache, metadataParser, saml, transcript, clock,
@@ -130,6 +141,7 @@ public final class SamlScopeApplication {
                 securityHeaders(ctx);
                 enforceConfiguredOrigin(ctx, config);
             });
+            oidc.register(javalin);
             QuickCheckRoutes.register(javalin, m1::quickCheck);
             ResultRoutes.register(javalin, m1::requireResult, m1::requireReport);
             PublicationRoutes.register(javalin, m1::publish);
@@ -152,138 +164,86 @@ public final class SamlScopeApplication {
                     ctx.json(m1.abortActiveProbe(ctx.pathParam("id"))));
             javalin.routes.post("/api/runs/{id}/active-probe/retry", ctx ->
                     ctx.json(m1.retryActiveProbe(ctx.pathParam("id"))));
-            if (config.mode() == AppConfig.Mode.HOSTED) {
+            if (config.managementProtected()) {
                 ManagementSessionRoutes.register(javalin, config.publicBaseUrl(), m1::exchange);
+                javalin.routes.before("/api/manage/session", ctx -> authorization.session(ctx));
                 javalin.routes.before("/api/plans/{id}", ctx -> {
                     if (ctx.method().name().equals("GET")) {
-                        m1.authorizePlan(
-                                ctx.pathParam("id"), ctx.cookie(ManagementSessionRoutes.COOKIE_NAME));
+                        authorization.authorizePlan(ctx, false);
                     } else {
-                        m1.authorizePlanMutation(
-                                ctx.pathParam("id"),
-                                ctx.cookie(ManagementSessionRoutes.COOKIE_NAME),
-                                ctx.header("X-CSRF-Token"));
+                        authorization.authorizePlan(ctx, true);
                     }
                 });
                 javalin.routes.before("/api/plans/{id}/runs", ctx -> {
                     if (ctx.method().name().equals("GET")) {
-                        m1.authorizePlan(
-                                ctx.pathParam("id"), ctx.cookie(ManagementSessionRoutes.COOKIE_NAME));
+                        authorization.authorizePlan(ctx, false);
                     } else {
-                        m1.authorizePlanMutation(
-                                ctx.pathParam("id"),
-                                ctx.cookie(ManagementSessionRoutes.COOKIE_NAME),
-                                ctx.header("X-CSRF-Token"));
+                        authorization.authorizePlan(ctx, true);
                     }
                 });
                 javalin.routes.before("/api/runs/{id}", ctx ->
-                        m1.authorize(ctx.pathParam("id"), ctx.cookie(ManagementSessionRoutes.COOKIE_NAME)));
+                        authorization.authorizeRun(ctx, false));
                 javalin.routes.before("/api/runs/{id}/preflight", ctx ->
-                        m1.authorizeMutation(
-                                ctx.pathParam("id"),
-                                ctx.cookie(ManagementSessionRoutes.COOKIE_NAME),
-                                ctx.header("X-CSRF-Token")));
+                        authorization.authorizeRun(ctx, true));
                 javalin.routes.before("/api/runs/{id}/events", ctx ->
-                        m1.authorize(ctx.pathParam("id"), ctx.cookie(ManagementSessionRoutes.COOKIE_NAME)));
+                        authorization.authorizeRun(ctx, false));
                 javalin.routes.before("/api/runs/{id}/quick-check", ctx ->
-                        m1.authorizeMutation(
-                                ctx.pathParam("id"),
-                                ctx.cookie(ManagementSessionRoutes.COOKIE_NAME),
-                                ctx.header("X-CSRF-Token")));
+                        authorization.authorizeRun(ctx, true));
                 javalin.routes.before("/api/runs/{id}/active-probe", ctx ->
-                        m1.authorize(ctx.pathParam("id"), ctx.cookie(ManagementSessionRoutes.COOKIE_NAME)));
+                        authorization.authorizeRun(ctx, false));
                 javalin.routes.before("/api/runs/{id}/active-probe/abort", ctx ->
-                        m1.authorizeMutation(
-                                ctx.pathParam("id"),
-                                ctx.cookie(ManagementSessionRoutes.COOKIE_NAME),
-                                ctx.header("X-CSRF-Token")));
+                        authorization.authorizeRun(ctx, true));
                 javalin.routes.before("/api/runs/{id}/active-probe/retry", ctx ->
-                        m1.authorizeMutation(
-                                ctx.pathParam("id"),
-                                ctx.cookie(ManagementSessionRoutes.COOKIE_NAME),
-                                ctx.header("X-CSRF-Token")));
+                        authorization.authorizeRun(ctx, true));
                 javalin.routes.before("/api/runs/{id}/interactions", ctx ->
-                        m1.authorize(ctx.pathParam("id"), ctx.cookie(ManagementSessionRoutes.COOKIE_NAME)));
+                        authorization.authorizeRun(ctx, false));
                 javalin.routes.before("/api/runs/{id}/campaigns", ctx ->
-                        m1.authorize(ctx.pathParam("id"), ctx.cookie(ManagementSessionRoutes.COOKIE_NAME)));
+                        authorization.authorizeRun(ctx, false));
                 javalin.routes.before("/api/runs/{id}/bootstrap-contracts", ctx ->
-                        m1.authorize(ctx.pathParam("id"), ctx.cookie(ManagementSessionRoutes.COOKIE_NAME)));
+                        authorization.authorizeRun(ctx, false));
                 javalin.routes.before("/api/runs/{id}/metadata-lab", ctx ->
-                        m1.authorize(ctx.pathParam("id"), ctx.cookie(ManagementSessionRoutes.COOKIE_NAME)));
+                        authorization.authorizeRun(ctx, false));
                 javalin.routes.before("/api/runs/{id}/metadata-lab/variant", ctx ->
-                        m1.authorizeMutation(
-                                ctx.pathParam("id"),
-                                ctx.cookie(ManagementSessionRoutes.COOKIE_NAME),
-                                ctx.header("X-CSRF-Token")));
+                        authorization.authorizeRun(ctx, true));
                 for (var path : List.of(
                         "/api/runs/{id}/metadata-lab/automatic-polling",
                         "/api/runs/{id}/metadata-lab/preloaded",
                         "/api/runs/{id}/metadata-lab/manual-refresh")) {
                     javalin.routes.before(path, ctx ->
-                            m1.authorizeMutation(
-                                    ctx.pathParam("id"),
-                                    ctx.cookie(ManagementSessionRoutes.COOKIE_NAME),
-                                    ctx.header("X-CSRF-Token")));
+                            authorization.authorizeRun(ctx, true));
                 }
                 javalin.routes.before("/api/runs/{id}/protocol-evidence", ctx ->
-                        m1.authorize(ctx.pathParam("id"), ctx.cookie(ManagementSessionRoutes.COOKIE_NAME)));
+                        authorization.authorizeRun(ctx, false));
                 javalin.routes.before("/api/runs/{id}/protocol-evidence/evaluate", ctx ->
-                        m1.authorizeMutation(
-                                ctx.pathParam("id"),
-                                ctx.cookie(ManagementSessionRoutes.COOKIE_NAME),
-                                ctx.header("X-CSRF-Token")));
+                        authorization.authorizeRun(ctx, true));
                 javalin.routes.before("/api/runs/{id}/protocol-evidence/confirm-attempts", ctx ->
-                        m1.authorizeMutation(
-                                ctx.pathParam("id"),
-                                ctx.cookie(ManagementSessionRoutes.COOKIE_NAME),
-                                ctx.header("X-CSRF-Token")));
+                        authorization.authorizeRun(ctx, true));
                 javalin.routes.before("/api/runs/{id}/cases/{caseId}/attest", ctx ->
-                        m1.authorizeMutation(
-                                ctx.pathParam("id"),
-                                ctx.cookie(ManagementSessionRoutes.COOKIE_NAME),
-                                ctx.header("X-CSRF-Token")));
+                        authorization.authorizeRun(ctx, true));
                 javalin.routes.before("/api/runs/{id}/cases/{caseId}/configure", ctx ->
-                        m1.authorizeMutation(
-                                ctx.pathParam("id"),
-                                ctx.cookie(ManagementSessionRoutes.COOKIE_NAME),
-                                ctx.header("X-CSRF-Token")));
+                        authorization.authorizeRun(ctx, true));
                 javalin.routes.before("/api/runs/{id}/cases/{caseId}/browser-complete", ctx ->
-                        m1.authorizeMutation(
-                                ctx.pathParam("id"),
-                                ctx.cookie(ManagementSessionRoutes.COOKIE_NAME),
-                                ctx.header("X-CSRF-Token")));
+                        authorization.authorizeRun(ctx, true));
                 javalin.routes.before(
                         "/api/runs/{id}/campaigns/{campaignId}/actions/{actionId}/complete", ctx ->
-                        m1.authorizeMutation(
-                                ctx.pathParam("id"),
-                                ctx.cookie(ManagementSessionRoutes.COOKIE_NAME),
-                                ctx.header("X-CSRF-Token")));
+                        authorization.authorizeRun(ctx, true));
                 javalin.routes.before("/api/runs/{id}/milestones/{milestone}/start", ctx ->
-                        m1.authorizeMutation(
-                                ctx.pathParam("id"),
-                                ctx.cookie(ManagementSessionRoutes.COOKIE_NAME),
-                                ctx.header("X-CSRF-Token")));
+                        authorization.authorizeRun(ctx, true));
                 javalin.routes.before("/api/runs/{id}/ecp-probe", ctx ->
-                        m1.authorizeMutation(
-                                ctx.pathParam("id"),
-                                ctx.cookie(ManagementSessionRoutes.COOKIE_NAME),
-                                ctx.header("X-CSRF-Token")));
+                        authorization.authorizeRun(ctx, true));
                 javalin.routes.before("/api/runs/{id}/publish", ctx ->
-                        m1.authorizeMutation(
-                                ctx.pathParam("id"),
-                                ctx.cookie(ManagementSessionRoutes.COOKIE_NAME),
-                                ctx.header("X-CSRF-Token")));
+                        authorization.authorizeRun(ctx, true));
                 for (var path : List.of(
                         "/api/runs/{id}/result.json", "/api/runs/{id}/report.html")) {
                     javalin.routes.before(path, ctx -> {
                         if (!m1.isPublished(ctx.pathParam("id"))) {
-                            m1.authorize(ctx.pathParam("id"), ctx.cookie(ManagementSessionRoutes.COOKIE_NAME));
+                            authorization.authorizeRun(ctx, false);
                         }
                     });
                 }
                 javalin.routes.before("/api/runs/{id}/transcript", ctx -> {
-                    m1.authorize(ctx.pathParam("id"), ctx.cookie(ManagementSessionRoutes.COOKIE_NAME));
-                    hostedRateLimiter.requireAllowedTogether(
+                    authorization.authorizeRun(ctx, false);
+                    if (config.mode() == AppConfig.Mode.HOSTED) hostedRateLimiter.requireAllowedTogether(
                             new HostedRateLimiter.Rule(
                                     "transcript-download-owner",
                                     hostedRunProvisioner.ownerForRun(ctx.pathParam("id")), 4,
@@ -300,7 +260,7 @@ public final class SamlScopeApplication {
                     eventBus, runService, preflight,
                     metadata, metadataLab, metadataCache, metadataParser, spPeer,
                     idpPeer, secondaryIdpPeer, sloPeer, m1,
-                    hostedRateLimiter, hostedRunProvisioner, preloadedMetadataCache, clock);
+                    hostedRateLimiter, hostedRunProvisioner, preloadedMetadataCache, authorization, clock);
             javalin.routes.exception(MisdirectedRequest.class, (error, ctx) ->
                     ctx.status(421).json(new ApiModels.ErrorView("misdirected_request", error.getMessage())));
             javalin.routes.exception(IllegalArgumentException.class, (error, ctx) -> {
@@ -347,19 +307,21 @@ public final class SamlScopeApplication {
                                M1Runtime m1, HostedRateLimiter hostedRateLimiter,
                                com.samlscope.store.SqliteHostedRunProvisioner hostedRunProvisioner,
                                BoundedByteArrayCache preloadedMetadataCache,
-                               Clock clock) {
+                               ManagementAuthorization authorization, Clock clock) {
         javalin.routes.get("/", SamlScopeApplication::serveIndex);
         javalin.routes.get("/reports/{run}", SamlScopeApplication::serveIndex);
         javalin.routes.get("/manage/{run}", SamlScopeApplication::serveIndex);
         javalin.routes.get("/browser/{run}/{caseId}", SamlScopeApplication::serveIndex);
         javalin.routes.get("/assets/{file}", SamlScopeApplication::serveAsset);
         javalin.routes.get("/api/health", ctx -> ctx.json(Map.of(
-                "status", "ok", "version", "0.1.0", "mode", config.mode().name().toLowerCase())));
-        javalin.routes.get("/api/plans", ctx -> ctx.json((config.mode() == AppConfig.Mode.HOSTED
-                        ? m1.authorizedPlans(ctx.cookie(ManagementSessionRoutes.COOKIE_NAME))
+                "status", "ok", "version", "0.1.0", "mode", config.mode().name().toLowerCase(),
+                "oidcEnabled", config.oidc().enabled())));
+        javalin.routes.get("/api/plans", ctx -> ctx.json((config.managementProtected()
+                        ? authorization.list(ctx)
                         : plans.list()).stream()
                 .map(plan -> view(config, plan)).toList()));
         javalin.routes.post("/api/plans", ctx -> {
+            var owner = authorization.creationOwner(ctx, hostedOwnerId(ctx.ip()));
             if (config.mode() == AppConfig.Mode.HOSTED) {
                 hostedRateLimiter.requireAllowed("create-plan", ctx.ip(), 10, Duration.ofHours(1));
             }
@@ -367,11 +329,11 @@ public final class SamlScopeApplication {
             var now = clock.instant();
             var plan = fromWrite(Identifiers.newId("plan"), request, now, now);
             ApiModels.RunCreated initialRun = null;
-            if (config.mode() == AppConfig.Mode.HOSTED) {
+            if (config.managementProtected()) {
                 var run = runService.prepare(plan.id());
                 var access = m1.prepareManagementAccess(run);
                 if (!hostedRunProvisioner.createPlanWithInitialRun(
-                        plan, run, access.grant(), hostedOwnerId(ctx.ip()))) {
+                        plan, run, access.grant(), owner)) {
                     throw new HostedRateLimiter.RateLimitExceeded(
                             "Another Run against this target is already active");
                 }
@@ -409,8 +371,10 @@ public final class SamlScopeApplication {
             var requestedPlan = requirePlan(plans, ctx.pathParam("id"));
             com.samlscope.core.run.TestRun run;
             String managementUrl;
-            if (config.mode() == AppConfig.Mode.HOSTED) {
-                hostedRateLimiter.requireAllowed("create-run", ctx.ip(), 20, Duration.ofHours(1));
+            if (config.managementProtected()) {
+                if (config.mode() == AppConfig.Mode.HOSTED) {
+                    hostedRateLimiter.requireAllowed("create-run", ctx.ip(), 20, Duration.ofHours(1));
+                }
                 run = runService.prepare(requestedPlan.id());
                 var access = m1.prepareManagementAccess(run);
                 if (!hostedRunProvisioner.createRun(run, access.grant())) {
@@ -1007,7 +971,8 @@ public final class SamlScopeApplication {
         var secondaryEntityId = secondaryIdpEntityId(config, plan);
         var summary = new ApiModels.PlanSummary(
                 plan.id(), plan.name(), plan.profile(),
-                new ApiModels.TargetSummary(plan.target().kind(), plan.target().entityId()));
+                new ApiModels.TargetSummary(plan.target().kind(), plan.target().entityId()),
+                plan.parameters().requestSigningMode());
         return new ApiModels.PlanView(summary, entityId, entityId + "/metadata",
                 config.peerBaseUrl().resolve("/mdq/" + java.net.URLEncoder.encode(entityId, StandardCharsets.UTF_8)).toString(),
                 secondaryEntityId, secondaryEntityId + "/metadata");
@@ -1069,7 +1034,7 @@ public final class SamlScopeApplication {
     }
 
     private static void enforceConfiguredOrigin(Context ctx, AppConfig config) {
-        if (config.mode() != AppConfig.Mode.HOSTED) return;
+        if (!config.managementProtected()) return;
         var peerRoute = ctx.path().startsWith("/p/") || ctx.path().startsWith("/mdq/");
         var expected = peerRoute ? config.peerBaseUrl() : config.publicBaseUrl();
         var host = ctx.header("Host");
