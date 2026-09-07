@@ -32,7 +32,7 @@ class SamlProtocolServiceTest {
         var keys = new FilePlanKeyStore(directory, clock);
         var service = new SamlProtocolService(URI.create("https://peer.example"), keys,
                 new XmlSigner(), new OpenSamlReader(), clock);
-        var request = service.buildAuthnRequest(plan, URI.create("https://idp.example/sso"), "a+b /日本語");
+        var request = service.buildAuthnRequest(plan, URI.create("https://idp.example/sso"), "a+b /\u65e5\u672c\u8a9e");
         var verifier = new com.samlscope.saml.binding.RedirectSignatureVerifier();
         assertTrue(verifier.isValid(request.redirect().getRawQuery(), keys.getOrCreate(plan.id()).certificate()));
         org.junit.jupiter.api.Assertions.assertFalse(verifier.isValid(
