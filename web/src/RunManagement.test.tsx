@@ -516,6 +516,8 @@ test('offers the server-generated active probe launch URL and explains fresh-ses
   expect(screen.queryByRole('button', { name: 'Browser steps completed' })).toBeNull()
   expect(screen.getByRole('link', { name: 'Open scenario' }).getAttribute('href'))
     .toContain('/probe/action_probe')
+  expect(screen.getByRole('link', { name: 'Start IdP round trip' }).getAttribute('href'))
+    .toBe('https://suite.example/p/plan/start/m0-roundtrip?run=run_0123456789ABCDEFGHJKMNPQRS')
   expect(screen.getByText('No other pending interactions. Continue the active probe above.')).toBeTruthy()
   expect(screen.queryByText('No pending interactions.')).toBeNull()
 })

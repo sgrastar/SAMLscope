@@ -75,6 +75,10 @@ test('shows Run count and latest status in the Test Plan overview', async () => 
   expect(await screen.findByText('2 Runs')).toBeTruthy()
   expect(screen.getByText(/Running/)).toBeTruthy()
   expect(screen.getByText(`Running · ${new Date('2026-09-07T03:03:36.704Z').toLocaleString()}`)).toBeTruthy()
+  vi.stubGlobal('scrollTo', vi.fn())
+  fireEvent.click(screen.getByRole('button', { name: /Production IdP/ }))
+  expect((await screen.findByRole('link', { name: 'Start IdP round trip' })).getAttribute('href'))
+    .toBe('https://suite.example/p/plan_0123456789ABCDEFGHJKMNPQRS/start/m0-roundtrip?run=run_1')
 })
 
 test('does not misreport a failed Run history request as zero Runs', async () => {

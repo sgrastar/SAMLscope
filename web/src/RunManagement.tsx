@@ -5,6 +5,7 @@ import {
   type ProtocolEvidenceStatus, type CampaignReport, type Run,
 } from './api'
 import { formatDate, humanize } from './format'
+import { idpRoundTripUrl } from './peerUrls'
 
 export function RunManagement({ runId, csrfToken, focusCaseId, navigateTo }: {
   runId: string
@@ -908,7 +909,7 @@ export function RunManagement({ runId, csrfToken, focusCaseId, navigateTo }: {
       </fieldset>
     </form>}
     {plan && profile.startsWith('IDP') && <div className="actions">
-      <a className="button" href={`/p/${plan.plan.id}/start/m0-roundtrip?run=${runId}`}>Start IdP round trip</a>
+      <a className="button" href={idpRoundTripUrl(plan, runId)}>Start IdP round trip</a>
     </div>}
     {plan && profile.startsWith('SP') && <p>Start login at the target SP after importing the Test Peer metadata.</p>}
     {focusCaseId && <div className="actions"><a className="button" href={`/manage/${runId}`}>Back to Run management</a></div>}
