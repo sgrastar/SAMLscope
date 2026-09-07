@@ -90,6 +90,11 @@ not by differences in reference-implementation results ([00 §5](00-concept.md))
 | 11 | [review-log.md](11-review-log.md) | Design review records and resulting changes |
 | 12 | [g2-test-design.md](12-g2-test-design.md) | G2 case, mutant, feasibility, and signed-approval design |
 
+| 13 | [release-readiness.md](13-release-readiness.md) | Verification history and remaining release gates |
+| 14 | [reference-acceptance.md](14-reference-acceptance.md) | Reference execution matrix and evidence requirements |
+| 15 | [hosted-operations.md](15-hosted-operations.md) | Backup, restore, deletion and launch preparation |
+| 16 | [phase2-preparation.md](16-phase2-preparation.md) | Draft scope and approval sequence |
+
 ## 30-Second Summary
 
 - **Target specification (Phase 1)**: Kantara Initiative *SAML V2.0 Implementation Profile for Federation Interoperability* **v1.1 (2019-12-18)**

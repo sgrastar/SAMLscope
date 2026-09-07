@@ -43,6 +43,10 @@ public final class SqliteDatabase {
                 statement.execute("PRAGMA foreign_keys = ON");
                 statement.execute("PRAGMA busy_timeout = 5000");
                 statement.execute("PRAGMA journal_mode = WAL");
+            } catch (SQLException error) {
+                try { connection.close(); }
+                catch (SQLException closeError) { error.addSuppressed(closeError); }
+                throw error;
             }
             return connection;
         } catch (SQLException e) {

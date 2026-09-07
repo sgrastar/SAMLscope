@@ -180,3 +180,69 @@ Use the existing GitHub repository variables for `G1_TOOLS_COMMIT` and
 `releaseCheck`. Never substitute a newly selected verifier commit just to make a
 failed gate pass. Generated reports under `build/` are local evidence; preserve the
 canonical release reports as CI artifacts.
+
+## Follow-up inventory
+
+The [reference matrix](14-reference-acceptance.md) now separates executed and
+unexecuted product/role/profile combinations. [Operations preparation](15-hosted-operations.md)
+records actual deployment rollback behavior and the remaining retention,
+unpublication and complete file-deletion gaps. The old G2-pending text in
+AGENTS.md and the pre-M4 wording in D-15 have been reconciled with signed-gate
+verification and implementation status. [Phase 2 preparation](16-phase2-preparation.md)
+is a scope draft only; its implementation gate remains closed.
+
+A follow-up SQLite experiment moved persistent WAL initialization out of ordinary
+connection acquisition. The unanchored report regression still reproduced
+SQLITE_IOERR_SHMSIZE during a repository query. This did not resolve the I/O error.
+A second experiment serialized connection attachment/detachment and also failed.
+Both experimental lifecycle changes were discarded. Connection setup now closes
+failed connections and preserves suppressed close errors; the report regression
+retains its documented test-only anchor.
+Production reliability diagnosis remains open.
+
+
+### Isolated restore rehearsal
+
+A stopped snapshot of `samlscope-observation-fixed` was copied into a separate
+private directory and the source container restarted. All copied file hashes
+matched. SQLite integrity and foreign-key checks passed, and all indexed body
+and decoded-SAML references existed in the restored tree.
+
+The snapshot's exact image was then started against the copy with Docker network
+`none`. Health, result JSON and HTML retrieval succeeded; requirement results
+matched the previously exported fixed-observation Run. The temporary restore
+container was removed. Evidence is in `build/acceptance/restore-rehearsal/summary.json`;
+private snapshot files and hashes remain ignored. This validates the local
+self-hosted fixture's recovery, not production hosted authorization, deletion
+reconciliation or the newer report-refresh image.
+
+### Current verification limit
+
+The follow-up full `releaseCheck` failed in
+`SamlScopeApplicationTest.createsPlanAndPublishesSignedMetadata` with an HTTP 500
+caused by SQLITE_IOERR_SHMSIZE. The report-freshness regression passed with its
+existing anchor. Earlier successful release verification remains historical;
+it must not be reported as a successful check of this follow-up batch.
+Generated-document, G1 structural and G2 local checks pass. Production release
+remains blocked on database reliability and the outstanding acceptance work.
+
+A proper application-owned database lifetime would touch the signed G2 boundary
+in `SamlScopeApplication.java`. That file is checked byte-for-byte against the
+approval commit by `g2_validate.py`; do not bypass that gate or patch it silently.
+Any such lifecycle change needs the corresponding independent review and renewed
+approval. Changes to approved specification interpretation remain separately gated.
+
+
+### Host storage constraint
+
+Further inspection found the macOS data volume at full reported capacity with
+approximately 126 MiB available. The standalone store tests also failed with
+SQLITE_IOERR_SHMSIZE, including sequential database initialization. Connection
+races are therefore not established as the root cause: storage exhaustion must
+be ruled out before selecting a lifecycle redesign or dependency change.
+
+The unused `samlscope:keycloak-date-fix` intermediate image was removed; baseline
+and corrected acceptance images, containers and evidence volumes were retained.
+This did not materially increase host free space. No unrelated Docker caches,
+volumes or user files were pruned. Restore sufficient host space, then rerun the
+unanchored reproduction and full release verification before claiming recovery.

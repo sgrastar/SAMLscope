@@ -32,6 +32,8 @@ The signed G1 requirement catalog and signed G2 case design are complete. The ap
 
 External-observation coverage and reference implementation acceptance testing continue to improve. Capabilities that cannot be observed remain explicit `SELF_ATTESTED` or `NOT_VERIFIED` rather than being guessed.
 
+Current acceptance status and remaining launch work are tracked in the [release checklist](docs/13-release-readiness.md), [reference matrix](docs/14-reference-acceptance.md), and [operations preparation](docs/15-hosted-operations.md). Production hosting is not yet ready.
+
 ## Requirements
 
 - Java 21
