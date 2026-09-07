@@ -157,7 +157,8 @@
           "required": ["clock_skew_tolerance_seconds", "metadata_refresh_wait_seconds"],
           "properties": {
             "clock_skew_tolerance_seconds": { "type": "integer", "minimum": 0 },
-            "metadata_refresh_wait_seconds": { "type": "integer", "minimum": 1 }
+            "metadata_refresh_wait_seconds": { "type": "integer", "minimum": 1 },
+            "request_signing_mode": { "enum": ["REQUIRED", "OPTIONAL"] }
           }
         }
       }

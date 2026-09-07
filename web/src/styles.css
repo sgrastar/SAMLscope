@@ -403,3 +403,7 @@ button.case-drawer-backdrop:hover:not(:disabled) { transform: none; border: 0; b
   html { scroll-behavior: auto; }
   *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
 }
+
+.login-status { display: flex; align-items: center; gap: .65rem; }
+.login-name { max-width: 12rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (max-width: 700px) { .login-name { display: none; } }

@@ -58,7 +58,8 @@
     },
     "parameters" : {
       "clock_skew_tolerance_seconds" : 180,
-      "metadata_refresh_wait_seconds" : 300
+      "metadata_refresh_wait_seconds" : 300,
+      "request_signing_mode" : "OPTIONAL"
     }
   },
   "applicability" : [ {

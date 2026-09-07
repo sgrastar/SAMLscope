@@ -64,6 +64,19 @@ class SamlScopeApplicationTest {
             assertEquals(201, created.statusCode(), created.body());
             var planId = created.body().replaceFirst("(?s).*\"id\":\"(plan_[0-9A-Z]+)\".*", "$1");
             assertTrue(planId.matches("plan_[0-9A-HJKMNP-TV-Z]{26}"));
+            assertTrue(created.body().contains("\"requestSigningMode\":\"OPTIONAL\""));
+            var requiredBody = requestBody.replace("\"testUserHint\":\"\"",
+                    "\"testUserHint\":\"\",\"requestSigningMode\":\"REQUIRED\"");
+            var changedMode = client.send(HttpRequest.newBuilder(base.resolve("/api/plans/" + planId))
+                    .header("Content-Type", "application/json")
+                    .PUT(HttpRequest.BodyPublishers.ofString(requiredBody)).build(), HttpResponse.BodyHandlers.ofString());
+            assertEquals(400, changedMode.statusCode());
+            var separatePlan = client.send(HttpRequest.newBuilder(base.resolve("/api/plans"))
+                    .header("Content-Type", "application/json")
+                    .POST(HttpRequest.BodyPublishers.ofString(requiredBody)).build(), HttpResponse.BodyHandlers.ofString());
+            assertEquals(201, separatePlan.statusCode());
+            assertTrue(separatePlan.body().contains("\"requestSigningMode\":\"REQUIRED\""));
+
             assertTrue(created.body().contains("\"secondaryIdpEntityId\":\"http://127.0.0.1:8080/p/"
                     + planId + "/idp/secondary\""));
 

@@ -1,4 +1,5 @@
 import { ReactNode, useEffect, useState } from 'react'
+import { api, type AuthSession } from './api'
 
 type CurrentSurface = 'plans' | 'run' | 'report' | 'access'
 
@@ -37,6 +38,7 @@ export function AppShell({
         {runId && <a className={current === 'report' ? 'current' : ''} href={`/reports/${runId}`}>Result Report</a>}
       </nav>
       <div className="app-topbar-spacer" />
+      <LoginStatus />
       <span className="mode-chip"><span className="semantic-dot status-live" />{mode === 'hosted' ? 'Hosted' : 'Self-hosted'}</span>
       <button
         className="theme-toggle"
@@ -59,4 +61,36 @@ export function preferredTheme(): 'light' | 'dark' {
 
 export function applyPreferredTheme() {
   document.documentElement.dataset.theme = preferredTheme()
+}
+
+function LoginStatus() {
+  const [session, setSession] = useState<AuthSession>()
+  const [error, setError] = useState('')
+  const [busy, setBusy] = useState(false)
+  useEffect(() => {
+    // Static exported reports have no live authentication service.
+    if (window.location.protocol === 'file:') return
+    queueMicrotask(() => { void api.authSession().then(setSession).catch(() => undefined) })
+  }, [])
+  if (!session?.enabled) return null
+  const logout = async () => {
+    setBusy(true)
+    try {
+      await api.logout()
+      for (const key of Object.keys(window.sessionStorage)) {
+        if (key.startsWith('samlscope.csrf.')) window.sessionStorage.removeItem(key)
+      }
+      window.location.assign('/')
+    } catch {
+      setError('Sign out failed. Please try again.')
+      setBusy(false)
+    }
+  }
+  return <div className="login-status">
+    {session.authenticated ? <>
+      <span className="login-name" title={session.displayName ?? undefined}>{session.displayName}</span>
+      <button className="button-secondary" onClick={() => void logout()} disabled={busy}>Sign out</button>
+    </> : <a className="button button-secondary" href="/auth/login">Sign in</a>}
+    {error && <span role="alert">{error}</span>}
+  </div>
 }

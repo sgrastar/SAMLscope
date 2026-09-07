@@ -193,7 +193,12 @@ Completely separate the public ID and administrative token:
 > Because `peer.<domain>` and `app.<domain>` are separated ([08 §5](08-suite-security.md)),
 > content originating from the target that reaches the Test Peer cannot access the administrative Cookie.
 
-### Future: Use Authrim as the login IdP
+### Use Authrim as the login IdP
+
+Implementation update (2026-09-07): standard OIDC login and account-owned Plans are
+implemented using a generic library, with no Authrim SDK dependency. Integration into
+the signed startup/build boundary requires renewed G2 approval. Configuration, anonymous
+access policies, and remaining deployment choices are in [17](17-oidc-authentication.md).
 
 Use Authrim (OIDC or SAML) for login to the Hosted version.
 **There are two design cautions here.**

@@ -128,7 +128,7 @@ public final class QuickCheckService implements QuickCheckExecutor {
                 run.id(), plan.profile().role(), clock, plan.parameters(),
                 plan.interaction(),
                 run.targetToSuiteReachability(), transcript, true);
-        var snapshot = new AutomatedCaseRunner(registry, new CaseExecutionService(caseExecutions))
+        var snapshot = new AutomatedCaseRunner(registry, new CaseExecutionService(caseExecutions, new PlanRequestSigning(plans, runs, keys)))
                 .startReady(run.id(), plan.profile(), context);
         return new QuickCheckResult(run.id(), DISCLAIMER, snapshot);
     }

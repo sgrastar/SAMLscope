@@ -321,12 +321,13 @@ final class M1Runtime {
                 m1Attested, m1Config, m1Browser,
                 m2Automated, m2Attested, m2Config, m2Browser,
                 m3Automated, m3Attested, m3Config, m3Browser);
-        var executionService = new CaseExecutionService(caseExecutions);
+        var executionService = new CaseExecutionService(caseExecutions,
+                new com.samlscope.runner.PlanRequestSigning(plans, runs, keys));
         var caseContexts = (com.samlscope.runner.CaseContextProvider) runId -> caseContext(
                 runId, plans, runs, transcript, clock);
         var activeProbes = new ActiveProbeCoordinator(
                 config.peerBaseUrl(), plans, runs, caseExecutions, outboundDispatcher,
-                transcript, caseContexts, probeConfigurations, interactiveRegistry, clock);
+                transcript, caseContexts, probeConfigurations, interactiveRegistry, clock, executionService);
         var starters = Map.of(
                 com.samlscope.core.casedef.CaseDefinitionCatalog.Milestone.M1, List.of(
                         new ApprovedCaseStarter(coverage, definitions, m1Attested, executionService, applicability),
@@ -642,34 +643,34 @@ final class M1Runtime {
     }
 
     RunAccessService.ManagementSession exchange(String runId, String token) {
-        if (config.mode() != AppConfig.Mode.HOSTED) {
-            throw new IllegalArgumentException("Management sessions are available only in hosted mode");
+        if (!config.managementProtected()) {
+            throw new IllegalArgumentException("Management sessions require Hosted mode or OIDC");
         }
         return access.exchange(runId, token);
     }
 
     void authorize(String runId, String sessionToken) {
-        if (config.mode() == AppConfig.Mode.HOSTED) access.authorize(runId, sessionToken);
+        if (config.managementProtected()) access.authorize(runId, sessionToken);
     }
 
     void authorizeMutation(String runId, String sessionToken, String csrfToken) {
-        if (config.mode() == AppConfig.Mode.HOSTED) access.authorizeMutation(runId, sessionToken, csrfToken);
+        if (config.managementProtected()) access.authorizeMutation(runId, sessionToken, csrfToken);
     }
 
     java.util.List<com.samlscope.core.plan.TestPlan> authorizedPlans(String sessionToken) {
-        if (config.mode() != AppConfig.Mode.HOSTED) return plans.list();
+        if (!config.managementProtected()) return plans.list();
         var run = requireRun(access.authorizeSession(sessionToken));
         return java.util.List.of(requirePlan(run));
     }
 
     void authorizePlan(String planId, String sessionToken) {
-        if (config.mode() != AppConfig.Mode.HOSTED) return;
+        if (!config.managementProtected()) return;
         var run = requireRun(access.authorizeSession(sessionToken));
         if (!run.planId().equals(planId)) throw new SecurityException("Access denied");
     }
 
     void authorizePlanMutation(String planId, String sessionToken, String csrfToken) {
-        if (config.mode() != AppConfig.Mode.HOSTED) return;
+        if (!config.managementProtected()) return;
         var runId = access.authorizeSession(sessionToken);
         var run = requireRun(runId);
         if (!run.planId().equals(planId)) throw new SecurityException("Access denied");
@@ -677,8 +678,8 @@ final class M1Runtime {
     }
 
     com.samlscope.runner.access.RunAccessService.PreparedAccess prepareManagementAccess(TestRun run) {
-        if (config.mode() != AppConfig.Mode.HOSTED) {
-            throw new IllegalStateException("Prepared management access is only used in Hosted mode");
+        if (!config.managementProtected()) {
+            throw new IllegalStateException("Prepared management access requires Hosted mode or OIDC");
         }
         return access.prepareIssue(run.id());
     }

@@ -5,6 +5,7 @@ export interface Plan {
     id: string
     name: string
     profile: Profile
+    requestSigningMode?: 'REQUIRED' | 'OPTIONAL'
     target: { kind: 'IDP' | 'SP' | 'TOKEN_TRANSLATION_PROXY'; entityId: string }
   }
   entityId: string
@@ -64,6 +65,7 @@ export interface PublicResult {
     role: string
     kind: string
   }
+  configuration?: { parameters?: { requestSigningMode?: 'REQUIRED' | 'OPTIONAL' } }
   advisories: Array<{ code: string; obligation: string; severity: string; messageEn: string; affectsVerdict: false }>
   suiteIncidents: Array<{ kind: string; caseId?: string; actionId?: string; note: string }>
   summary: {
@@ -114,7 +116,7 @@ export interface PlanInput {
   metadataSourceLocation: string
   suiteMetadataDelivery: 'MANUAL' | 'HTTP_URL' | 'MDQ'
   declaredFeatures: Record<string, boolean>
-  parameters: { clockSkewToleranceSeconds: number; metadataRefreshWaitSeconds: number; testUserHint: string }
+  parameters: { clockSkewToleranceSeconds: number; metadataRefreshWaitSeconds: number; testUserHint: string; requestSigningMode?: 'REQUIRED' | 'OPTIONAL' }
   interaction: { allowBrowserSteps: boolean; allowAttestation: boolean }
   authorizedTarget: boolean
 }
@@ -248,12 +250,31 @@ export interface CampaignReport {
   }>
 }
 
-export interface Health { status: string; version: string; mode: 'selfhosted' | 'hosted' }
+export interface Health { status: string; version: string; mode: 'selfhosted' | 'hosted'; oidcEnabled?: boolean }
+export interface AuthSession {
+  enabled: boolean
+  authenticated: boolean
+  accessPolicy: 'optional' | 'new_plans' | 'required'
+  displayName: string | null
+  csrfToken: string | null
+}
+let oidcCsrfToken: string | null = null
+
+async function authSession(): Promise<AuthSession> {
+  const session = await request<AuthSession>('/auth/session')
+  oidcCsrfToken = session.csrfToken ?? null
+  return session
+}
 
 async function request<T>(url: string, init?: RequestInit): Promise<T> {
   const response = await fetch(url, {
     ...init,
-    headers: { 'content-type': 'application/json', ...(init?.headers ?? {}) },
+    headers: {
+      'content-type': 'application/json',
+      ...(oidcCsrfToken && init?.method && !['GET', 'HEAD'].includes(init.method)
+        ? { 'X-OIDC-CSRF-Token': oidcCsrfToken } : {}),
+      ...(init?.headers ?? {}),
+    },
   })
   if (!response.ok) {
     const body = await response.json().catch(() => ({ message: response.statusText }))
@@ -274,7 +295,17 @@ function camelize(value: unknown): unknown {
 }
 
 export const api = {
-  health: () => request<Health>('/api/health'),
+  authSession,
+  logout: async () => {
+    await authSession()
+    await request<void>('/auth/logout', { method: 'POST' })
+    oidcCsrfToken = null
+  },
+  health: async () => {
+    const health = await request<Health>('/api/health')
+    if (health.oidcEnabled) await authSession()
+    return health
+  },
   plans: () => request<Plan[]>('/api/plans'),
   createPlan: (input: PlanInput) => request<PlanCreated>('/api/plans', { method: 'POST', body: JSON.stringify(input) }),
   deletePlan: (id: string) => request<void>(`/api/plans/${id}`, { method: 'DELETE' }),

@@ -188,7 +188,8 @@ public final class MetadataService {
 
         var sp = element(document, MD, "md:SPSSODescriptor");
         sp.setAttribute("protocolSupportEnumeration", "urn:oasis:names:tc:SAML:2.0:protocol");
-        sp.setAttribute("AuthnRequestsSigned", "false");
+        sp.setAttribute("AuthnRequestsSigned", Boolean.toString(
+                plan.parameters().requestSigningMode() == TestPlan.RequestSigningMode.REQUIRED));
         sp.setAttribute("WantAssertionsSigned", "true");
         roleKeyDescriptors(document, sp, plan, roleCredentials, variant);
         service(document, sp, "SingleLogoutService", REDIRECT, endpoint(plan, "/sp/slo", variant, runId), null, false);

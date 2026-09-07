@@ -70,6 +70,46 @@ class CaseExecutionServiceTest {
     }
 
     @Test
+    void requiredModeWithoutAnInstalledSignerCannotPersistUnsignedRequests() {
+        var requiredContext = context(new TestPlan.Parameters(180, 300, "", TestPlan.RequestSigningMode.REQUIRED),
+                context.transcript());
+        var result = service.start(RUN_ID, waitingCase("missing-signer", new AtomicInteger()), requiredContext);
+        assertEquals(Outcome.NOT_VERIFIED, result.outcome().outcome());
+        assertEquals("request_signing_unavailable", result.outcome().notVerifiedReason());
+        assertEquals(0, repository.listOutbox(RUN_ID).size());
+    }
+
+    @Test
+    void requiredModeAlsoFailsClosedWhenAResumedCaseFirstEmitsARequest() {
+        var requiredContext = context(new TestPlan.Parameters(180, 300, "", TestPlan.RequestSigningMode.REQUIRED),
+                context.transcript());
+        var outboundCase = waitingCase("resumed-missing-signer", new AtomicInteger());
+        TestCase delayed = new TestCase() {
+            public String id() { return outboundCase.id(); }
+            public TargetRole role() { return TargetRole.IDP; }
+            public CaseStep start(CaseContext c) { return new CaseStep.Continue(CaseState.initial(), List.of()); }
+            public CaseStep resume(CaseContext c, CaseState state, CaseEvent event) { return outboundCase.start(c); }
+        };
+        service.start(RUN_ID, delayed, requiredContext);
+        var result = service.resume(RUN_ID, delayed, requiredContext, new CaseEvent.Custom("ready", Map.of()));
+        assertEquals(Outcome.NOT_VERIFIED, result.outcome().outcome());
+        assertEquals("request_signing_unavailable", result.outcome().notVerifiedReason());
+        assertEquals(0, repository.listOutbox(RUN_ID).size());
+    }
+
+    @Test
+    void signingFailureCannotBecomeTargetFailureOrAnUnsignedSend() {
+        var signingService = new CaseExecutionService(repository, (runId, action) -> {
+            throw new com.samlscope.saml.normal.SamlException("Unsupported malformed fixture");
+        });
+        var result = signingService.start(RUN_ID, waitingCase("signing-unavailable", new AtomicInteger()), context);
+        assertEquals(CaseExecutionStatus.FINISHED, result.status());
+        assertEquals(Outcome.NOT_VERIFIED, result.outcome().outcome());
+        assertEquals("request_signing_unavailable", result.outcome().notVerifiedReason());
+        assertEquals(0, repository.listOutbox(RUN_ID).size());
+    }
+
+    @Test
     void persistsWaitingStateAndOutboxBeforeReturning() {
         var starts = new AtomicInteger();
         var testCase = waitingCase("case-outbox", starts);

@@ -83,7 +83,7 @@ docker run --rm -p 8080:8080 -v samlscope-data:/data \
   samlscope:0.1.0
 ```
 
-Self-hosted mode has no application authentication and must not be exposed directly to an untrusted network. Generated Test Peer private keys are test-only and must never be trusted by production systems.
+By default, self-hosted mode has no application authentication and must not be exposed directly to an untrusted network. Optional standard OIDC login is implemented with per-user Plan ownership; see [OIDC configuration and pending G2 reapproval](docs/17-oidc-authentication.md). Generated Test Peer private keys are test-only and must never be trusted by production systems.
 
 ## Deploy samlscope.com
 

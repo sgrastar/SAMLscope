@@ -15,7 +15,7 @@ It aims to be the SAML equivalent of the OIDF Conformance Suite.
 | Trust model for published results | **Level 0 (local export) + Level 2 (shared URLs only for Hosted Runs)**. Uploading self-hosted results is not adopted |
 | Backend | **Java 21 + Javalin/Jetty + OpenSAML 5 + Apache Santuario + SQLite** |
 | Frontend | **React + Vite (TypeScript)**. `report.html` is also a static build of the same application |
-| Hosted-version administrative access | **Per-Run secret URLs** (Phase 1) → OIDC login through Authrim in the future |
+| Hosted-version administrative access | **Per-Run secret URLs + optional standard OIDC**; integration pending renewed G2 approval ([17](17-oidc-authentication.md)) |
 | Reference implementation results | **Published as version-pinned samples**. Run in CI, but do not publish continuously |
 | Build / repository | **Gradle (Kotlin DSL)** / **single repository** |
 | Quoting specification source text | **ID + original summary + link to the original-text anchor**. Do not reproduce the full text (inquiry to Kantara in parallel) |
@@ -28,7 +28,7 @@ See [09-open-decisions.md](09-open-decisions.md) for the decision history.
 
 ## Status of Design Gate G1
 
-**G1 and G2 are approved by signed records. The `PENDING_REVIEW` fields inside authored catalogs remain unchanged by design; approval evidence lives outside the reviewed target commit.**
+**G1 and G2 have signed approval records. The OIDC integration changes signed boundary files and requires renewed G2 approval before release. The `PENDING_REVIEW` fields inside authored catalogs remain unchanged by design; approval evidence lives outside the reviewed target commit.**
 
 | Artifact | Contents |
 |---|---|
@@ -94,6 +94,10 @@ not by differences in reference-implementation results ([00 §5](00-concept.md))
 | 14 | [reference-acceptance.md](14-reference-acceptance.md) | Reference execution matrix and evidence requirements |
 | 15 | [hosted-operations.md](15-hosted-operations.md) | Backup, restore, deletion and launch preparation |
 | 16 | [phase2-preparation.md](16-phase2-preparation.md) | Draft scope and approval sequence |
+| 17 | [oidc-authentication.md](17-oidc-authentication.md) | Standard OIDC login, ownership, deployment settings and pending G2 review |
+| 18 | [request-signing-plans.md](18-request-signing-plans.md) | Fixed required/optional request signing, isolated results and acceptance limits |
+| 19 | [oidf-product-alignment.md](19-oidf-product-alignment.md) | OIDF usability benchmark and comparison scope |
+| 20 | [profiles-and-public-summaries.md](20-profiles-and-public-summaries.md) | Agreed functional profiles, variants, product summaries and badge presentation |
 
 ## 30-Second Summary
 

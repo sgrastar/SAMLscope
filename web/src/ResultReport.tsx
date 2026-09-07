@@ -55,6 +55,7 @@ export function ResultReport({ runId }: { runId: string }) {
           <dt>Entity ID</dt><dd><code>{result.target.entityId}</code></dd>
           <dt>Role</dt><dd>{targetRole(result.target.role, result.target.kind)}</dd>
           <dt>Profile</dt><dd>{result.profile.id}</dd>
+          <dt>Request signing</dt><dd>{humanize(result.configuration?.parameters?.requestSigningMode ?? 'Not recorded')}</dd>
           <dt>Suite</dt><dd>{result.suite.name} {result.suite.version}</dd>
           <dt>Evaluation bundle</dt><dd><code>{shortDigest(result.evaluationBundle.digest)}</code></dd>
           <dt>Run</dt><dd><code>{result.run.id}</code></dd>

@@ -1,6 +1,6 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react'
 import { AppShell } from './AppShell'
-import { api, type Plan, type PlanInput, type Profile, type Run } from './api'
+import { api, type AuthSession, type Plan, type PlanInput, type Profile, type Run } from './api'
 import { ResultReport } from './ResultReport'
 import { ManagementBootstrap } from './ManagementBootstrap'
 import { RunManagement } from './RunManagement'
@@ -15,7 +15,7 @@ const initialInput: PlanInput = {
   metadataSourceLocation: '',
   suiteMetadataDelivery: 'MANUAL',
   declaredFeatures: {},
-  parameters: { clockSkewToleranceSeconds: 180, metadataRefreshWaitSeconds: 300, testUserHint: '' },
+  parameters: { clockSkewToleranceSeconds: 180, metadataRefreshWaitSeconds: 300, testUserHint: '', requestSigningMode: 'OPTIONAL' },
   interaction: { allowBrowserSteps: true, allowAttestation: true },
   authorizedTarget: false,
 }
@@ -49,6 +49,7 @@ function PlanWorkspace() {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(true)
   const [mode, setMode] = useState<'selfhosted' | 'hosted'>('selfhosted')
+  const [auth, setAuth] = useState<AuthSession>()
   const [managementUrl, setManagementUrl] = useState<string>()
   const [view, setView] = useState<'list' | 'new' | 'detail'>(initialLocation.view)
   const selected = useMemo(() => plans.find(plan => plan.plan.id === selectedId), [plans, selectedId])
@@ -77,6 +78,7 @@ function PlanWorkspace() {
   useEffect(() => {
     void api.health().then(async health => {
       setMode(health.mode)
+      if (health.oidcEnabled) setAuth(await api.authSession())
       try { await refreshPlans() } catch (cause) {
         if (health.mode === 'selfhosted') throw cause
       }
@@ -104,6 +106,10 @@ function PlanWorkspace() {
 
   const show = (next: 'list' | 'new' | 'detail', planId?: string) => {
     setView(next)
+    if (next === 'new' && auth?.enabled && !auth.authenticated && auth.accessPolicy !== 'optional') {
+      window.location.assign('/auth/login')
+      return
+    }
     setSelectedId(planId)
     const query = next === 'new' ? '?new=1' : next === 'detail' && planId ? `?plan=${encodeURIComponent(planId)}` : '/'
     window.history.pushState(null, '', query)
@@ -161,13 +167,18 @@ function PlanWorkspace() {
     } catch (cause) { setError((cause as Error).message) }
   }
 
+  const mustSignIn = auth?.enabled && !auth.authenticated && auth.accessPolicy !== 'optional'
   return <AppShell current="plans" mode={mode}>
     <main className="shell page-main">
       {error && <div className="notice notice-error" role="alert"><strong>Unable to continue</strong>{error}</div>}
       {message && <div className="notice notice-success" role="status">{message}</div>}
       {managementUrl && <ManagementLink url={managementUrl} />}
-      {loading ? <PlanSkeleton /> : view === 'new' ? <NewPlan input={input} setInput={setInput} create={create} cancel={() => show('list')} />
-        : view === 'detail' && selected ? <PlanDetail plan={selected} runs={runs} createRun={createRun} canCreateRun={mode === 'selfhosted'} back={() => show('list')} />
+      {loading ? <PlanSkeleton /> : view === 'new' && mustSignIn ? <section className="panel">
+        <h1>Sign in to create a Test Plan</h1>
+        <p>Your Plans and Runs will be available when you return.</p>
+        <a className="button" href="/auth/login">Continue to sign in</a>
+      </section> : view === 'new' ? <NewPlan input={input} setInput={setInput} create={create} cancel={() => show('list')} />
+        : view === 'detail' && selected ? <PlanDetail plan={selected} runs={runs} createRun={createRun} canCreateRun={mode === 'selfhosted' || auth?.authenticated === true} back={() => show('list')} />
           : <PlanList plans={plans} runs={planRuns} open={id => show('detail', id)} create={() => show('new')}
             refresh={() => void refreshPlans().catch(cause => setError((cause as Error).message))} />}
       <footer className="legal">Operational quick checks remain separate from conformance results. Creating a Test Plan requires authorization to test the declared target.</footer>
@@ -199,7 +210,8 @@ function PlanList({ plans, runs, open, create, refresh }: {
       const planHistory = history?.state === 'loaded' ? history.runs : undefined
       const latest = planHistory?.[0]
       return <button className="plan-row" key={plan.plan.id} onClick={() => open(plan.plan.id)}>
-        <span><strong>{plan.plan.name}</strong><small>{plan.plan.target.entityId}</small></span>
+        <span><strong>{plan.plan.name}</strong><small>{plan.plan.target.entityId}</small>
+          {plan.plan.profile.startsWith('IDP') && <small>Request signing: {humanize(plan.plan.requestSigningMode ?? 'OPTIONAL')}</small>}</span>
         <span className={`profile-badge profile-${plan.plan.profile.toLowerCase()}`}>{humanize(plan.plan.profile)}</span>
         <span className="plan-run-summary">
           {history?.state === 'error' ? <><strong>Run history unavailable</strong><small>Refresh to retry</small></>
@@ -234,6 +246,7 @@ function NewPlan({ input, setInput, create, cancel }: {
         <div className="profile-grid">{profiles.map(profile => <label className={`profile-option${input.profile === profile.id ? ' selected' : ''}`} key={profile.id}>
           <input type="radio" name="profile" value={profile.id} checked={input.profile === profile.id} onChange={() => setInput({
             ...input, profile: profile.id, targetKind: profile.id.startsWith('IDP') ? 'IDP' : 'SP',
+            parameters: { ...input.parameters, requestSigningMode: profile.id.startsWith('IDP') ? input.parameters.requestSigningMode : 'OPTIONAL' },
           })} />
           <strong>{profile.title}</strong><span>{profile.description}</span>
         </label>)}</div>
@@ -243,6 +256,16 @@ function NewPlan({ input, setInput, create, cancel }: {
         <label>Target SAML Entity ID<input required type="url" value={input.targetEntityId} onChange={event => setInput({ ...input, targetEntityId: event.target.value })} /></label>
         <label>Target metadata URL<input required type="url" value={input.metadataSourceLocation} onChange={event => setInput({ ...input, metadataSourceLocation: event.target.value })} /></label>
       </fieldset>
+      {input.profile.startsWith('IDP') && <fieldset className="field-group"><legend>Request signing</legend>
+        <p>Keep the target's signature requirement fixed for this Plan. Use a separate Plan to test the other setting.</p>
+        <label>Target requires signed requests<select value={input.parameters.requestSigningMode ?? 'OPTIONAL'}
+          onChange={event => setInput({ ...input, parameters: { ...input.parameters,
+            requestSigningMode: event.target.value as 'REQUIRED' | 'OPTIONAL' } })}>
+          <option value="OPTIONAL">Optional — normal requests are unsigned</option>
+          <option value="REQUIRED">Required — normal requests are signed</option>
+        </select></label>
+        <p>Signature tests retain their intentionally invalid signatures in both settings.</p>
+      </fieldset>}
       <fieldset className="field-group"><legend>Suite metadata delivery</legend>
         <p>How the target retrieves SAMLscope's metadata. This never grants SAMLscope access to a vendor administration API.</p>
         <div className="choice-grid">{(['MANUAL', 'HTTP_URL', 'MDQ'] as const).map(value => <label className={`choice-option${input.suiteMetadataDelivery === value ? ' selected' : ''}`} key={value}>
@@ -268,7 +291,7 @@ function PlanDetail({ plan, runs, createRun, canCreateRun, back }: {
 }) {
   return <>
     <button className="text-button back-link" onClick={back}>Back to Test Plans</button>
-    <header className="plan-detail-head"><div><p className="eyebrow">Test Plan / {humanize(plan.plan.profile)}</p><h1>{plan.plan.name}</h1></div>
+    <header className="plan-detail-head"><div><p className="eyebrow">Test Plan / {humanize(plan.plan.profile)}</p><h1>{plan.plan.name}</h1><p>Request signing: {humanize(plan.plan.requestSigningMode ?? 'OPTIONAL')} · fixed for this Plan</p></div>
       <span className="authorization-state"><span className="semantic-dot status-live" />Authorized target</span></header>
     <section className="panel peer-panel"><p className="eyebrow">Test Peer registration</p><h2>Where the target reaches SAMLscope</h2>
       <dl className="key-values">

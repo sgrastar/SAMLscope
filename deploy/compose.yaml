@@ -4,6 +4,10 @@ services:
   samlscope:
     image: ${SAMLSCOPE_IMAGE:?Set SAMLSCOPE_IMAGE to a digest-pinned GHCR image}
     restart: unless-stopped
+    # Kept outside the checkout and outside deploy.sh's image-version .env file.
+    env_file:
+      - path: /etc/samlscope/oidc.env
+        required: false
     environment:
       JAVA_TOOL_OPTIONS: -XX:MaxRAMPercentage=75
       SAMLSCOPE_MODE: hosted

@@ -118,7 +118,7 @@ public final class ResultDocumentAssembler {
                         plan.suiteMetadataDelivery(), run.targetToSuiteReachability(), plan.declaredFeatures(),
                         new ResultDocument.ParametersView(
                                 plan.parameters().clockSkewToleranceSeconds(),
-                                plan.parameters().metadataRefreshWaitSeconds())),
+                                plan.parameters().metadataRefreshWaitSeconds(), plan.parameters().requestSigningMode())),
                 applicability,
                 context.advisories(),
                 evaluation.suiteIncidents().stream().map(value -> new ResultDocument.SuiteIncidentView(
