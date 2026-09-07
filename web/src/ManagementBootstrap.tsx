@@ -15,13 +15,24 @@ export function ManagementBootstrap({ runId }: { runId: string }) {
     window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}`)
     if (!token) {
       setCsrfToken(window.sessionStorage.getItem(`samlscope.csrf.${runId}`) ?? undefined)
-      void api.health().then(health => {
+      void api.health().then(async health => {
         setMode(health.mode)
-        if (health.oidcEnabled) {
-          // The API checks Plan ownership or a valid Run capability before showing any data.
-          return api.run(runId).then(() => setState('ready'))
+        if (health.mode === 'selfhosted' && !health.oidcEnabled) {
+          setState('ready')
+          return
         }
-        if (health.mode !== 'selfhosted') throw new Error('Sign in or open the original management link.')
+        // The server must authorize this exact Run before the workspace is displayed.
+        await api.run(runId)
+        if (health.oidcEnabled) {
+          const account = await api.authSession()
+          if (account.authenticated) {
+            setState('ready')
+            return
+          }
+        }
+        const session = await api.resumeManagementSession(runId)
+        setCsrfToken(session.csrfToken)
+        window.sessionStorage.setItem(`samlscope.csrf.${runId}`, session.csrfToken)
         setState('ready')
       }).catch(cause => {
         setState('error')

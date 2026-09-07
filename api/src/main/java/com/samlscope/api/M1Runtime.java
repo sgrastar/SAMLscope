@@ -653,6 +653,11 @@ final class M1Runtime {
         if (config.managementProtected()) access.authorize(runId, sessionToken);
     }
 
+    RunAccessService.ManagementSession resumeManagementSession(String runId, String sessionToken) {
+        if (!config.managementProtected()) throw new SecurityException("Management sessions are disabled");
+        return access.resume(runId, sessionToken);
+    }
+
     void authorizeMutation(String runId, String sessionToken, String csrfToken) {
         if (config.managementProtected()) access.authorizeMutation(runId, sessionToken, csrfToken);
     }

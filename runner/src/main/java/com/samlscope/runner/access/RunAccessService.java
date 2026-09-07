@@ -74,7 +74,26 @@ public final class RunAccessService implements ManagementSessionExecutor {
         authorize(runId, sessionToken);
         validToken(csrfToken);
         var grant = grants.find(runId).orElseThrow(RunAccessService::denied);
-        if (!constantTimeEquals(grant.csrfTokenHash(), hash(csrfToken))) throw denied();
+        if (!constantTimeEquals(grant.csrfTokenHash(), hash(csrfToken))
+                && !constantTimeEquals(resumedCsrf(sessionToken), csrfToken)) throw denied();
+    }
+
+    /** Same-session CSRF recovery; no rotation, renewed lifetime, or raw credential persistence. */
+    public ManagementSession resume(String runId, String sessionToken) {
+        authorize(runId, sessionToken);
+        return new ManagementSession(runId, sessionToken, resumedCsrf(sessionToken));
+    }
+
+    private static String resumedCsrf(String sessionToken) {
+        try {
+            var mac = javax.crypto.Mac.getInstance("HmacSHA256");
+            mac.init(new javax.crypto.spec.SecretKeySpec(
+                    sessionToken.getBytes(StandardCharsets.US_ASCII), "HmacSHA256"));
+            return Base64.getUrlEncoder().withoutPadding().encodeToString(
+                    mac.doFinal("SAMLscope management CSRF v1".getBytes(StandardCharsets.US_ASCII)));
+        } catch (java.security.GeneralSecurityException impossible) {
+            throw new IllegalStateException("HMAC-SHA256 is unavailable", impossible);
+        }
     }
 
     public void revoke(String runId) {

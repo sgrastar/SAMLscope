@@ -54,10 +54,8 @@ class SpPeerRoundTripTest {
         var plan = plan("plan_0123456789ABCDEFGHJKMNPQRS", PlanProfile.IDP_CORE, TargetKind.IDP,
                 "https://idp.example/entity", now);
         plans.save(plan);
-        cache.put(plan.id(), idpMetadata());
         var runService = new RunService(plans, runs, new RunEventBus(), clock);
         var run = runService.create(plan.id());
-        cache.putIfAbsent(run.id(), idpMetadata());
         var signer = new XmlSigner();
         var saml = new SamlProtocolService(URI.create("https://peer.example"),
                 new FilePlanKeyStore(directory, clock), signer, new OpenSamlReader(), clock);
@@ -71,6 +69,11 @@ class SpPeerRoundTripTest {
                     routedAction.set(actionId);
                 });
 
+        assertThrows(MetadataCache.MetadataUnavailable.class, () -> peer.start(plan.id(), run.id()));
+        assertEquals(RunStatus.CREATED, runs.find(run.id()).orElseThrow().status());
+        assertTrue(recorder.list(run.id()).isEmpty());
+        cache.put(plan.id(), idpMetadata());
+        cache.putIfAbsent(run.id(), idpMetadata());
         var redirect = peer.start(plan.id(), run.id());
         var request = saml.decodeRedirect(redirect.getRawQuery(), "SAMLRequest");
         var responsePlan = plan("plan_1123456789ABCDEFGHJKMNPQRS", PlanProfile.SP_CORE, TargetKind.SP,

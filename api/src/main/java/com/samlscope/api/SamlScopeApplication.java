@@ -97,7 +97,7 @@ public final class SamlScopeApplication {
         var metadataParser = new TargetMetadataParser();
         var saml = new SamlProtocolService(config.peerBaseUrl(), keyStore, signer, new OpenSamlReader(), clock);
         var metadata = new MetadataService(config.peerBaseUrl(), keyStore, signer, clock);
-        var preflight = new PreflightService(config.publicBaseUrl(), plans, runs, runService, metadataCache,
+        var preflight = new PreflightService(config.peerBaseUrl(), plans, runs, runService, metadataCache,
                 metadataParser, new OutboundPolicy(config.outboundAllowPrivate()), clock, json.mapper());
         var idpPeer = new IdpPeerService(plans, runs, runService, metadataCache, metadataParser, saml, transcript, clock);
         var secondaryIdpPeer = new IdpPeerService(
@@ -165,7 +165,8 @@ public final class SamlScopeApplication {
             javalin.routes.post("/api/runs/{id}/active-probe/retry", ctx ->
                     ctx.json(m1.retryActiveProbe(ctx.pathParam("id"))));
             if (config.managementProtected()) {
-                ManagementSessionRoutes.register(javalin, config.publicBaseUrl(), m1::exchange);
+                ManagementSessionRoutes.register(javalin, config.publicBaseUrl(), m1::exchange,
+                        m1::resumeManagementSession);
                 javalin.routes.before("/api/manage/session", ctx -> authorization.session(ctx));
                 javalin.routes.before("/api/plans/{id}", ctx -> {
                     if (ctx.method().name().equals("GET")) {
@@ -286,6 +287,9 @@ public final class SamlScopeApplication {
             javalin.routes.exception(FileTranscriptRecorder.AdmissionRateExceeded.class, (error, ctx) ->
                     ctx.status(HttpStatus.TOO_MANY_REQUESTS).json(new ApiModels.ErrorView(
                             "transcript_rate_limited", error.getMessage())));
+            javalin.routes.exception(MetadataCache.MetadataUnavailable.class, (error, ctx) ->
+                    ctx.status(HttpStatus.CONFLICT).json(new ApiModels.ErrorView("preflight_required",
+                            "Target metadata is not ready. Open Run workspace and complete Run preflight before starting SAML.")));
             javalin.routes.exception(Exception.class, (error, ctx) -> {
                 error.printStackTrace();
                 ctx.status(HttpStatus.INTERNAL_SERVER_ERROR)

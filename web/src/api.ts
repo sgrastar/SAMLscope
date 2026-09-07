@@ -295,6 +295,8 @@ function camelize(value: unknown): unknown {
 }
 
 export const api = {
+  resumeManagementSession: (runId: string) => request<{ runId: string; csrfToken: string }>(
+    '/api/manage/session', { method: 'POST', body: JSON.stringify({ runId, resume: true }) }),
   authSession,
   logout: async () => {
     await authSession()

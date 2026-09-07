@@ -96,6 +96,25 @@ class HostedPlanAccessTest {
             var cookie = exchange.headers().firstValue("Set-Cookie").orElseThrow().split(";", 2)[0];
             var csrf = json.readTree(exchange.body()).path("csrfToken").asText();
 
+            var resumeBody = "{\"runId\":\"" + runId + "\",\"resume\":true}";
+            var resumed = request(client, base, "POST", "/api/manage/session",
+                    resumeBody, cookie, null, appOrigin);
+            assertEquals(200, resumed.statusCode(), resumed.body());
+            assertTrue(resumed.headers().firstValue("Set-Cookie").isEmpty());
+            assertEquals("no-store", resumed.headers().firstValue("Cache-Control").orElseThrow());
+            var resumedCsrf = json.readTree(resumed.body()).path("csrfToken").asText();
+            assertFalse(resumedCsrf.equals(csrf));
+            assertEquals(403, request(client, base, "POST", "/api/manage/session",
+                    resumeBody, secondCookie, null, appOrigin).statusCode());
+            assertEquals(403, request(client, base, "POST", "/api/manage/session",
+                    resumeBody, null, null, appOrigin).statusCode());
+            assertEquals(403, request(client, base, "POST", "/api/manage/session",
+                    resumeBody, cookie, null, "https://peer.example").statusCode());
+            assertEquals(200, request(client, base, "PUT", "/api/plans/" + planId,
+                    planBody("Resumed", "https://first.internal.example/idp",
+                            "https://first.internal.example/metadata", "secret"),
+                    cookie, resumedCsrf, null).statusCode());
+
             var visiblePlans = request(client, base, "GET", "/api/plans", null, cookie, null, null);
             assertEquals(200, visiblePlans.statusCode(), visiblePlans.body());
             assertTrue(visiblePlans.body().contains(planId));

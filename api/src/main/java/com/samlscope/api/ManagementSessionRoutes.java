@@ -12,9 +12,18 @@ public final class ManagementSessionRoutes {
     private ManagementSessionRoutes() {}
 
     public static void register(JavalinConfig javalin, URI publicBase, ManagementSessionExecutor sessions) {
+        register(javalin, publicBase, sessions, (run, cookie) -> {
+            throw new SecurityException("Session resumption is unavailable");
+        });
+    }
+
+    public static void register(JavalinConfig javalin, URI publicBase, ManagementSessionExecutor sessions,
+            java.util.function.BiFunction<String, String,
+                    com.samlscope.runner.access.RunAccessService.ManagementSession> resume) {
         Objects.requireNonNull(javalin, "javalin");
         Objects.requireNonNull(publicBase, "publicBase");
         Objects.requireNonNull(sessions, "sessions");
+        Objects.requireNonNull(resume, "resume");
         javalin.routes.post("/api/manage/session", ctx -> {
             if (ctx.queryParam("t") != null || ctx.queryParam("token") != null) {
                 ctx.status(400).json(Map.of("error", "token_in_query"));
@@ -26,9 +35,16 @@ public final class ManagementSessionRoutes {
             }
             var request = ctx.bodyAsClass(SessionWrite.class);
             if (request == null) throw new IllegalArgumentException("JSON body is required");
-            var session = sessions.exchange(request.runId(), request.token());
-            ctx.header("Set-Cookie", COOKIE_NAME + "=" + session.sessionToken()
-                    + "; Path=/; Max-Age=28800; Secure; HttpOnly; SameSite=Strict");
+            if (request.resume() && request.token() != null) {
+                throw new IllegalArgumentException("Resume must not include an access token");
+            }
+            var session = request.resume()
+                    ? resume.apply(request.runId(), ctx.cookie(COOKIE_NAME))
+                    : sessions.exchange(request.runId(), request.token());
+            if (!request.resume()) {
+                ctx.header("Set-Cookie", COOKIE_NAME + "=" + session.sessionToken()
+                        + "; Path=/; Max-Age=28800; Secure; HttpOnly; SameSite=Strict");
+            }
             ctx.header("Cache-Control", "no-store");
             ctx.json(new SessionView(session.runId(), session.csrfToken()));
         });
@@ -39,6 +55,6 @@ public final class ManagementSessionRoutes {
         return value.getScheme() + "://" + value.getHost() + (port < 0 ? "" : ":" + port);
     }
 
-    record SessionWrite(String runId, String token) {}
+    record SessionWrite(String runId, String token, boolean resume) {}
     record SessionView(String runId, String csrfToken) {}
 }

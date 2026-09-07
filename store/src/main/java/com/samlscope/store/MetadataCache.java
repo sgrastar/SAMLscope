@@ -40,9 +40,15 @@ public final class MetadataCache {
     public byte[] get(String planId) {
         try {
             return Files.readAllBytes(path(planId));
+        } catch (java.nio.file.NoSuchFileException e) {
+            throw new MetadataUnavailable();
         } catch (IOException e) {
             throw new StoreException("Target metadata is not cached for plan " + planId, e);
         }
+    }
+
+    public static final class MetadataUnavailable extends RuntimeException {
+        public MetadataUnavailable() { super("Target metadata requires a successful preflight"); }
     }
 
     /**

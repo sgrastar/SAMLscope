@@ -88,6 +88,12 @@ class SamlScopeApplicationTest {
             assertTrue(createdRun.body().contains("\"managementUrl\":null"));
             var runId = createdRun.body().replaceFirst("(?s).*\"id\":\"(run_[0-9A-Z]+)\".*", "$1");
             assertTrue(runId.matches("run_[0-9A-HJKMNP-TV-Z]{26}"));
+            var unpreparedRoundTrip = client.send(HttpRequest.newBuilder(base.resolve(
+                            "/p/" + planId + "/start/m0-roundtrip?run=" + runId)).build(),
+                    HttpResponse.BodyHandlers.ofString());
+            assertEquals(409, unpreparedRoundTrip.statusCode(), unpreparedRoundTrip.body());
+            assertTrue(unpreparedRoundTrip.body().contains("\"error\":\"preflight_required\""));
+            assertFalse(unpreparedRoundTrip.body().contains(dataDirectory.toString()));
             var activeProbe = client.send(HttpRequest.newBuilder(base.resolve(
                             "/api/runs/" + runId + "/active-probe")).build(),
                     HttpResponse.BodyHandlers.ofString());
@@ -360,7 +366,7 @@ class SamlScopeApplicationTest {
         });
         source.start();
         var config = new AppConfig(AppConfig.Mode.SELFHOSTED,
-                URI.create("http://127.0.0.1:8080"), URI.create("http://127.0.0.1:8080"),
+                URI.create("http://127.0.0.1:8080"), URI.create("https://peer.example"),
                 dataDirectory, 8080, true, false, false);
         var app = SamlScopeApplication.create(config).start(0);
         try {
@@ -390,6 +396,8 @@ class SamlScopeApplicationTest {
                             .POST(HttpRequest.BodyPublishers.noBody()).build(),
                     HttpResponse.BodyHandlers.ofString());
             assertEquals(200, preflight.statusCode(), preflight.body());
+            assertTrue(preflight.body().contains("https://peer.example/p/" + planId
+                    + "/metadata?probe=" + runId), preflight.body());
             var snapshots = dataDirectory.resolve("target-metadata");
             assertEquals(metadata, Files.readString(snapshots.resolve(planId + ".xml")));
             assertEquals(metadata, Files.readString(snapshots.resolve(runId + ".xml")));
