@@ -2,6 +2,7 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, expect, test, vi } from 'vitest'
 import { App } from './App'
 import { applyPreferredTheme } from './AppShell'
+import { stubWorkspaceFetch } from './workspaceTestFixture'
 
 afterEach(() => {
   cleanup()
@@ -11,7 +12,7 @@ afterEach(() => {
 })
 
 test('separates operational checks from conformance results', async () => {
-  vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => new Response(JSON.stringify(
+  stubWorkspaceFetch(vi.fn(async (input: RequestInfo | URL) => new Response(JSON.stringify(
     String(input).endsWith('/api/health')
       ? { status: 'ok', version: '0.1.0', mode: 'selfhosted' }
       : [],
@@ -26,7 +27,7 @@ test('separates operational checks from conformance results', async () => {
 test('does not offer local Run creation in hosted mode', async () => {
   window.history.replaceState(null, '', '/')
   vi.stubGlobal('scrollTo', vi.fn())
-  vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
+  stubWorkspaceFetch(vi.fn(async (input: RequestInfo | URL) => {
     const url = String(input)
     const body = url.endsWith('/api/health')
       ? { status: 'ok', version: '0.1.0', mode: 'hosted' }
@@ -50,7 +51,7 @@ test('does not offer local Run creation in hosted mode', async () => {
 
 test('shows Run count and latest status in the Test Plan overview', async () => {
   window.history.replaceState(null, '', '/')
-  vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
+  stubWorkspaceFetch(vi.fn(async (input: RequestInfo | URL) => {
     const url = String(input)
     const body = url.endsWith('/api/health')
       ? { status: 'ok', version: '0.1.0', mode: 'selfhosted' }
@@ -83,7 +84,7 @@ test('shows Run count and latest status in the Test Plan overview', async () => 
 
 test('does not misreport a failed Run history request as zero Runs', async () => {
   window.history.replaceState(null, '', '/')
-  vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
+  stubWorkspaceFetch(vi.fn(async (input: RequestInfo | URL) => {
     const url = String(input)
     if (url.endsWith('/api/health')) return new Response(JSON.stringify({
       status: 'ok', version: '0.1.0', mode: 'selfhosted',
@@ -113,7 +114,7 @@ test('restores plan navigation when browser history changes', async () => {
   window.history.replaceState(null, '', '/')
   vi.stubGlobal('scrollTo', vi.fn())
   const pushState = vi.spyOn(window.history, 'pushState')
-  vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => new Response(JSON.stringify(
+  stubWorkspaceFetch(vi.fn(async (input: RequestInfo | URL) => new Response(JSON.stringify(
     String(input).endsWith('/api/health')
       ? { status: 'ok', version: '0.1.0', mode: 'selfhosted' }
       : [],

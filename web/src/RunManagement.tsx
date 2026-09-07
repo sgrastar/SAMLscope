@@ -97,12 +97,13 @@ export function RunManagement({ runId, csrfToken, focusCaseId, navigateTo }: {
   const hasActiveProbe = activeProbe?.state === 'READY' || activeProbe?.state === 'AWAITING_RESPONSE'
 
   const refresh = async () => {
-    const [nextInteractions, contracts, lab, evidence, probe, campaignReport, run, plans, health] = await Promise.all([
-      api.interactions(runId), api.bootstrapContracts(runId), api.metadataLab(runId),
-      api.protocolEvidence(runId), api.activeProbe(runId),
-      api.campaigns(runId),
+    // Hosted evidence reads share one lock and one rate-limit admission.
+    const [workspace, lab, run, plans, health] = await Promise.all([
+      api.workspaceEvidence(runId), api.metadataLab(runId),
       api.run(runId), api.plans(), api.health(),
     ])
+    const { interactions: nextInteractions, bootstrapContracts: contracts,
+      protocolEvidence: evidence, activeProbe: probe, campaigns: campaignReport } = workspace
     setInteractions(nextInteractions)
     setBootstrapContracts(contracts)
     setMetadataLab(lab)

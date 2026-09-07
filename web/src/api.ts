@@ -339,6 +339,10 @@ export const api = {
     '/api/manage/session', { method: 'POST', body: JSON.stringify({ runId, token }) },
   ),
   interactions: (runId: string) => request<PendingInteraction[]>(`/api/runs/${runId}/interactions`),
+  workspaceEvidence: (runId: string) => request<{
+    interactions: PendingInteraction[]; bootstrapContracts: BootstrapContract[];
+    protocolEvidence: ProtocolEvidenceStatus; activeProbe: ActiveProbeStatus; campaigns: CampaignReport;
+  }>(`/api/runs/${runId}/workspace-evidence`),
   campaigns: (runId: string) => request<CampaignReport>(`/api/runs/${runId}/campaigns`),
   bootstrapContracts: (runId: string) => request<BootstrapContract[]>(`/api/runs/${runId}/bootstrap-contracts`),
   metadataLab: (runId: string) => request<MetadataLab>(`/api/runs/${runId}/metadata-lab`),

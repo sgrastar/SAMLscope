@@ -146,6 +146,10 @@ public final class SamlScopeApplication {
             ResultRoutes.register(javalin, m1::requireResult, m1::requireReport);
             PublicationRoutes.register(javalin, m1::publish);
             InteractionRoutes.register(javalin, m1::pending);
+            javalin.routes.get("/api/runs/{id}/workspace-evidence", ctx -> {
+                ctx.header("Cache-Control", "no-store");
+                ctx.json(m1.workspaceEvidence(ctx.pathParam("id")));
+            });
             CampaignRoutes.register(javalin, m1::campaigns);
             CampaignActionRoutes.registerBounded(javalin, m1::completeCampaignAction);
             BootstrapContractRoutes.register(javalin, m1::bootstrapContracts);
@@ -197,6 +201,8 @@ public final class SamlScopeApplication {
                 javalin.routes.before("/api/runs/{id}/active-probe/retry", ctx ->
                         authorization.authorizeRun(ctx, true));
                 javalin.routes.before("/api/runs/{id}/interactions", ctx ->
+                        authorization.authorizeRun(ctx, false));
+                javalin.routes.before("/api/runs/{id}/workspace-evidence", ctx ->
                         authorization.authorizeRun(ctx, false));
                 javalin.routes.before("/api/runs/{id}/campaigns", ctx ->
                         authorization.authorizeRun(ctx, false));
