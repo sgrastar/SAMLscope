@@ -6,6 +6,7 @@ import {
 } from './api'
 import { formatDate, humanize } from './format'
 import { idpRoundTripReady, idpRoundTripUrl } from './peerUrls'
+import { PeerRegistration } from './PeerRegistration'
 
 export function RunManagement({ runId, csrfToken, focusCaseId, navigateTo }: {
   runId: string
@@ -626,16 +627,7 @@ export function RunManagement({ runId, csrfToken, focusCaseId, navigateTo }: {
     {activeProbePanel}
     {error && <aside className="notice notice-error" role="alert">{error}</aside>}
     {notice && <aside className="notice notice-success" role="status">{notice}</aside>}
-    {plan && <section className="peer-registration">
-      <p className="eyebrow">Test Peer registration</p>
-      <h2>{plan.plan.name}</h2>
-      <dl>
-        <dt>Entity ID</dt><dd><code>{plan.entityId}</code></dd>
-        <dt>Metadata</dt><dd><a href={plan.metadataUrl}>{plan.metadataUrl}</a></dd>
-        <dt>MDQ</dt><dd><code>{plan.mdqUrl}</code></dd>
-        <dt>Secondary IdP metadata</dt><dd><a href={plan.secondaryIdpMetadataUrl}>{plan.secondaryIdpMetadataUrl}</a></dd>
-      </dl>
-    </section>}
+    {plan && <PeerRegistration plan={plan} />}
     {!focusCaseId && bootstrapContracts.length > 0 && <section className="bootstrap-contracts">
       <p className="eyebrow">One-time environment bootstrap</p>
       <h2>Shared setup contracts</h2>

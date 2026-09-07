@@ -161,6 +161,23 @@ textarea { min-height: 96px; resize: vertical; }
 
 .plan-detail-head { margin-bottom: 28px; display: flex; align-items: end; justify-content: space-between; gap: 30px; }
 .peer-panel { margin-bottom: 34px; }
+.registration-guide .registration-steps { padding-left: 22px; line-height: 1.65; }
+.registration-steps li + li { margin-top: 8px; }
+.registration-guide h3 { margin-top: 28px; }
+.registration-guide .registration-values { display: block; margin: 22px 0; }
+.registration-value { display: grid; grid-template-columns: 190px minmax(0, 1fr); gap: 12px; margin: 14px 0; }
+.registration-copy { display: flex; align-items: start; gap: 12px; }
+.registration-copy > a, .registration-copy > code { min-width: 0; flex: 1; overflow-wrap: anywhere; user-select: text; }
+.registration-guide .registration-copy button { margin: 0; flex: none; white-space: nowrap; padding: 6px 12px; }
+.registration-feedback { display: block; font-size: .85rem; color: var(--ink-muted); }
+.registration-feedback:empty { display: none; }
+.registration-guide .registration-settings { grid-template-columns: 190px minmax(0, 1fr); gap: 16px 12px; line-height: 1.6; }
+.registration-settings code { overflow-wrap: anywhere; }
+.registration-advanced { margin-top: 24px; }
+@media (max-width: 700px) {
+  .registration-value, .registration-guide .registration-settings { grid-template-columns: 1fr; }
+  .registration-value { gap: 6px; }
+}
 .key-values, dl { display: grid; grid-template-columns: 170px minmax(0, 1fr); gap: 10px 22px; }
 dt { color: var(--ink-faint); font-size: .78rem; }
 dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }

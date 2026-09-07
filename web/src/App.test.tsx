@@ -45,7 +45,7 @@ test('does not offer local Run creation in hosted mode', async () => {
   render(<App />)
   fireEvent.click(await screen.findByRole('button', { name: /Hosted target/ }))
 
-  expect(await screen.findByRole('heading', { name: 'Where the target reaches SAMLscope' })).toBeTruthy()
+  expect(await screen.findByRole('heading', { name: 'Register SAMLscope as an SP in your IdP' })).toBeTruthy()
   expect(screen.queryByRole('button', { name: 'Create Run and preflight' })).toBeNull()
 })
 

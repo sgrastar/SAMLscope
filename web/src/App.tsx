@@ -6,6 +6,7 @@ import { ManagementBootstrap } from './ManagementBootstrap'
 import { RunManagement } from './RunManagement'
 import { formatDate, humanize } from './format'
 import { idpRoundTripReady, idpRoundTripUrl } from './peerUrls'
+import { PeerRegistration } from './PeerRegistration'
 
 const initialInput: PlanInput = {
   name: '',
@@ -294,15 +295,8 @@ function PlanDetail({ plan, runs, createRun, canCreateRun, back }: {
     <button className="text-button back-link" onClick={back}>Back to Test Plans</button>
     <header className="plan-detail-head"><div><p className="eyebrow">Test Plan / {humanize(plan.plan.profile)}</p><h1>{plan.plan.name}</h1><p>Request signing: {humanize(plan.plan.requestSigningMode ?? 'OPTIONAL')} · fixed for this Plan</p></div>
       <span className="authorization-state"><span className="semantic-dot status-live" />Authorized target</span></header>
-    <section className="panel peer-panel"><p className="eyebrow">Test Peer registration</p><h2>Where the target reaches SAMLscope</h2>
-      <dl className="key-values">
-        <dt>Entity ID</dt><dd><code>{plan.entityId}</code></dd>
-        <dt>Metadata</dt><dd><a href={plan.metadataUrl}>{plan.metadataUrl}</a></dd>
-        <dt>MDQ</dt><dd><code>{plan.mdqUrl}</code></dd>
-        <dt>Secondary IdP entity ID</dt><dd><code>{plan.secondaryIdpEntityId}</code></dd>
-        <dt>Secondary IdP metadata</dt><dd><a href={plan.secondaryIdpMetadataUrl}>{plan.secondaryIdpMetadataUrl}</a></dd>
-      </dl>{canCreateRun && <button onClick={createRun}>Create Run and preflight</button>}
-    </section>
+    <PeerRegistration plan={plan} />
+    {canCreateRun && <button onClick={createRun}>Create Run and preflight</button>}
     <section className="runs-section"><div className="section-heading"><h2>Runs</h2><span>{runs.length} total</span></div>
       {runs.length === 0 ? <div className="empty-state compact"><h3>No Runs yet</h3><p>Create the first Run after registering the Test Peer metadata.</p></div>
         : <div className="run-list">{runs.map(run => <article className="run-row" key={run.id}>
