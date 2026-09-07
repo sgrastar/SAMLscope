@@ -5,6 +5,7 @@ import { ResultReport } from './ResultReport'
 import { ManagementBootstrap } from './ManagementBootstrap'
 import { RunManagement } from './RunManagement'
 import { formatDate, humanize } from './format'
+import { idpRoundTripUrl } from './peerUrls'
 
 const initialInput: PlanInput = {
   name: '',
@@ -308,7 +309,7 @@ function PlanDetail({ plan, runs, createRun, canCreateRun, back }: {
           <div><span className={`run-status status-${run.status.toLowerCase()}`}>{humanize(run.status)}</span><code>{run.id}</code></div>
           <span>Suite to target reachability: {humanize(run.targetToSuiteReachability)}</span>
           <div className="row-actions">
-            {plan.plan.profile.startsWith('IDP') && run.status !== 'COMPLETED' && <a className="button" href={`/p/${plan.plan.id}/start/m0-roundtrip?run=${run.id}`}>Start IdP round trip</a>}
+            {plan.plan.profile.startsWith('IDP') && run.status !== 'COMPLETED' && <a className="button" href={idpRoundTripUrl(plan, run.id)}>Start IdP round trip</a>}
             <a className="button button-secondary" href={`/manage/${run.id}`}>{run.status === 'COMPLETED' ? 'Manage evidence' : 'Open Run workspace'}</a>
             {run.status === 'COMPLETED' && <a className="button" href={`/reports/${run.id}`}>Open result</a>}
           </div>
