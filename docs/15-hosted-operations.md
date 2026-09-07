@@ -93,7 +93,8 @@ python3 -m unittest discover -s deploy -p 'test_*.py' -v
 
 Application requires both `--apply` and `--service-stopped`; use these only for a
 stopped service or an isolated offline copy. All deletion paths are validated
-before mutation, and symlinks or unexpected Transcript references abort execution.
+before mutation, and unsupported schemas, symlinks or unexpected Transcript
+references abort execution.
 File deletion precedes SQL deletion so a failed attempt retains the Run/entry
 identifiers for retry. On failure, keep the service stopped, investigate and retry
 or restore the pre-maintenance snapshot; do not serve partially removed evidence.
@@ -107,7 +108,8 @@ have not been installed on a production machine. Routine maintenance briefly
 interrupts service and must be included in the operating policy.
 
 Tests cover expiry boundaries, preview immutability, preservation of published
-results and recent entries, accounting, repeated application, and unsafe paths.
+results and recent entries, accounting, repeated application, interrupted cleanup/retry, unsupported schemas
+and unsafe paths.
 A copy of the real Keycloak fixture was also expired using a simulated future
 clock; no original acceptance data was deleted. The Linux wrapper and timer have
 only undergone syntax/configuration review on this macOS workstation.

@@ -21,8 +21,8 @@ infer support or applicability from this planning table.
 
 | Work | Required observation | Current limitation |
 |---|---|---|
-| Current candidate rerun | New image and fresh Run verified immediate JSON/HTML agreement for the error-response case | Bounded protocol-client run; remaining chain and browser campaigns outstanding |
-| Active probe chain | Correlated positive/negative controls and explicit unavailable-response outcomes | Chain reached FINISHED; its export contains an AuthnContext observer bug and unreviewed target-failure candidates |
+| Current candidate rerun | Current-image independent Runs verified immediate report refresh and final JSON/HTML agreement | Registered chain and M2/M3 exports reproduced; real-browser and operator campaigns remain |
+| Active probe chain | Correlated positive/negative controls and explicit unavailable-response outcomes | Corrected-image chain completed twice with matching outcomes; failure candidates and remaining campaigns require review |
 | Conditional features | Configuration or observed protocol evidence for each predicate | Undetermined inputs remain; do not submit blanket answers |
 | Metadata campaigns | Actual target import/refresh, changed metadata and subsequent correlated flow | Target refresh setup remains unestablished |
 | Browser campaigns and SLO | Requested browser/session transitions with Transcript correlation | Baseline SSO alone does not establish these |

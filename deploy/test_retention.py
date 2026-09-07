@@ -4,6 +4,8 @@ from pathlib import Path
 import sqlite3
 import tempfile
 import unittest
+from unittest.mock import patch
+import shutil
 from retention import maintain
 
 
@@ -21,6 +23,8 @@ class RetentionTest(unittest.TestCase):
             for migration in sorted((Path(__file__).resolve().parents[1] /
                     "store/src/main/resources/db/migration").glob("*.sql")):
                 db.executescript(migration.read_text())
+                db.execute("INSERT INTO schema_migrations VALUES (?, ?)",
+                           (int(migration.name[1:4]), NOW.isoformat()))
             db.execute("INSERT INTO plans VALUES (?, '{}', ?, ?)",
                        ("plan_" + "A" * 26, NOW.isoformat(), NOW.isoformat()))
             for run, age in ((self.old, 30), (self.fresh, 29), (self.published, 100)):
@@ -85,6 +89,14 @@ class RetentionTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             maintain(self.root, NOW, apply=True)
 
+    def test_unknown_schema_is_rejected_before_file_deletion(self):
+        with self.connect() as db:
+            db.execute("INSERT INTO schema_migrations VALUES (8, ?)", (NOW.isoformat(),))
+        before = self.snapshot()
+        with self.assertRaises(ValueError):
+            maintain(self.root, NOW, apply=True, service_stopped=True)
+        self.assertEqual(before, self.snapshot())
+
     def test_unsafe_reference_aborts_before_any_deletion(self):
         with self.connect() as db:
             db.execute("UPDATE transcript_entries SET document_json=? WHERE id=?",
@@ -100,6 +112,26 @@ class RetentionTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             maintain(self.root, NOW, apply=True, service_stopped=True)
         self.assertTrue((self.root / "results" / self.old / "result.json").exists())
+
+    def test_interrupted_file_cleanup_keeps_rows_for_retry(self):
+        original = shutil.rmtree
+
+        def fail_transcript_removal(path, *args, **kwargs):
+            if Path(path).resolve() == (self.root / "transcripts" / self.old).resolve():
+                raise OSError("Simulated storage failure")
+            return original(path, *args, **kwargs)
+
+        with patch("retention.shutil.rmtree", side_effect=fail_transcript_removal):
+            with self.assertRaises(OSError):
+                maintain(self.root, NOW, apply=True, service_stopped=True)
+        with self.connect() as db:
+            self.assertEqual(1, db.execute("SELECT count(*) FROM runs WHERE id=?",
+                                         (self.old,)).fetchone()[0])
+        self.assertTrue((self.root / "results" / self.fresh / "result.json").exists())
+        maintain(self.root, NOW, apply=True, service_stopped=True)
+        with self.connect() as db:
+            self.assertEqual(0, db.execute("SELECT count(*) FROM runs WHERE id=?",
+                                         (self.old,)).fetchone()[0])
 
 
 if __name__ == "__main__":

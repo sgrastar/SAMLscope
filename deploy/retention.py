@@ -55,6 +55,10 @@ def maintain(data_directory, now, *, apply=False, service_stopped=False):
     with sqlite3.connect(database.as_uri() + "?mode=" + mode, uri=True) as db:
         db.execute("PRAGMA foreign_keys = ON")
         db.execute("BEGIN IMMEDIATE" if apply else "BEGIN")
+        if db.execute("SELECT MAX(version) FROM schema_migrations").fetchone()[0] != 7:
+            raise ValueError("Unsupported database schema; migrate with the matching application first")
+        db.execute("SELECT run_id, entry_count, stored_bytes FROM transcript_usage LIMIT 0")
+        db.execute("SELECT singleton, entry_count, stored_bytes FROM transcript_global_usage LIMIT 0")
         private = [run_id(row[0]) for row in db.execute(
             "SELECT r.id, r.created_at FROM runs r LEFT JOIN published_runs p "
             "ON p.run_id = r.id WHERE p.run_id IS NULL")

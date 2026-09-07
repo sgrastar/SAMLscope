@@ -4,6 +4,22 @@ Implementation milestones M0–M4 are recorded as complete. This does not establ
 operational acceptance or readiness of the official hosted service. Hosting-provider
 preparation is pending; local verification can proceed independently.
 
+## Current status
+
+| Work | Latest state |
+|---|---|
+| Existing implementation and signed specifications | Full release verification passed for the runtime fixes |
+| Local Keycloak and reproducibility | Independent current-image Runs completed the registered active chain; M2/M3 exports match and contain no not_implemented reasons |
+| Reference scope inventory | Matrix documented; other products and Full/SP configurations remain unexecuted |
+| Progress and operations preparation | Documentation reconciled; isolated restore, persisted Plan-file deletion and Hosted authorization tested; offline retention and CI added |
+| Phase 2 | Scope draft available; no new verdict implementation authorized by that draft |
+
+The hosted service is not launch-ready. Remaining work includes metadata and
+operator campaigns, other reference configurations, concurrent deletion safety,
+owner-facing individual Run deletion/unpublication, production timer/backup-policy
+acceptance, and provider setup. Stable reference outputs can still be incomplete
+or contain failure candidates; reproducibility is not a conformance endorsement.
+
 ## Prioritized work
 
 | Priority | Work | Completion evidence | Hosting dependency |
@@ -355,3 +371,50 @@ the inspection instead loaded the existing key only in container memory.
 The added operations CI workflow runs the offline retention tests and shell syntax
 check independently of the signed release workflow. No production timer or hosted
 service has been enabled by this work.
+
+
+### Retention failure recovery checks
+
+An additional simulated storage failure verifies that a partial file cleanup keeps
+the database identifiers needed for retry, preserves unexpired data, and completes
+on retry. Unsupported database schema versions are rejected before file deletion.
+These Python tests pass against the application migration schema and the existing
+real-fixture retention copy remains readable by the tool.
+
+Do not run standalone structural validation concurrently with `releaseCheck`:
+both write `build/spec-reconcile-report.json`. One overlapping invocation replaced
+the pinned report and correctly failed the provenance gate. A subsequent isolated
+release verification passed with `complete=true`; no pin or policy was changed.
+
+
+### Repeated current-image acceptance
+
+Runtime commit `75579b8`, image
+`sha256:ff5444a887ea44b5bfb7d3f07c3c476e9292022db06695e63d37faba5926d3d5`,
+is isolated on loopback port 8086 with a new data volume. Runs
+`run_Y0DW9X8MCJ2S31HKQJB5H613RV` and
+`run_PSBXRH67VHZ72XXJ8XDQ09K6CH` independently executed the registered active chain.
+Both reached FINISHED. Both report IDP08 as NOT_VERIFIED with
+`idp.authn-context.inconclusive`, verifying the encrypted-context correction
+against actual target responses.
+
+The Keycloak converter had omitted the secondary HTTP-POST ACS from its URI
+allowlist. For these new Runs, fixture provisioning explicitly registered every
+ACS location from the Suite metadata. This is setup evidence, not a substitute
+for SAML observations. Historical Runs were not changed. Even with this correction,
+signed-request, NameIDPolicy and ACS-index failure candidates remain; publication
+still requires their review against the exact target configuration and signed
+specification interpretation.
+
+Case outcome/reason vectors matched across Runs. Starting M2 and M3 then produced
+matching case vectors, summaries, coverage and conformance statements without
+not_implemented reasons. JSON and standalone HTML requirement data matched for
+each Run. The resulting statement remains NON_CONFORMANT / INCOMPLETE for this
+fixture, not an accepted certification or a completed full-profile reference run.
+No operator completion answers or attestations were fabricated.
+
+Local evidence is under `build/acceptance/complete-reproduction/`: image/commit
+provenance, per-Run ACS registration inventory, protocol-client scripts and logs,
+all-milestone exports, pending interactions/campaigns/bootstrap contracts,
+`comparison.json` and `all-milestones-comparison.json`. These are private ignored
+artifacts; CI remains the canonical source for signed release-check artifacts.
