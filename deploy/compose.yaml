@@ -9,7 +9,7 @@ services:
       - path: /etc/samlscope/oidc.env
         required: false
     environment:
-      JAVA_TOOL_OPTIONS: -XX:MaxRAMPercentage=75
+      JAVA_TOOL_OPTIONS: -XX:MaxRAMPercentage=75 -Dorg.sqlite.tmpdir=/sqlite-native
       SAMLSCOPE_MODE: hosted
       SAMLSCOPE_PUBLIC_BASE_URL: https://app.samlscope.com
       SAMLSCOPE_PEER_BASE_URL: https://peer.samlscope.com
@@ -26,7 +26,9 @@ services:
       - /srv/samlscope/data:/data
     read_only: true
     tmpfs:
-      - /tmp:size=256m,mode=1777
+      - /tmp:size=256m,mode=1777,noexec,nosuid,nodev
+      # SQLite JDBC extracts and loads its native library here, not in /tmp.
+      - /sqlite-native:size=16m,mode=0700,uid=10001,gid=10001,exec,nosuid,nodev
     security_opt:
       - no-new-privileges:true
     cap_drop:

@@ -152,12 +152,19 @@ The image is the same, with features enabled by `SAMLSCOPE_MODE=hosted`.
 | Administrative access | Phase 1 uses **a per-Run secret URL** (no account login). A Hosted Plan-creation request also creates the initial Run; all subsequent Plan and Run reads or mutations require that Run session. Optional standard OIDC login and account ownership are implemented, pending renewed G2 approval; see [17](17-oidc-authentication.md). [09 D-09](09-open-decisions.md) |
 | Automatic deletion after the retention period | |
 
-The bundled Caddy configuration overwrites `X-Forwarded-For` with the direct client's
-numeric address. Its Compose network fixes the host gateway to `172.30.0.1` and configures
+The bundled Caddy configuration accepts `CF-Connecting-IP` only when the immediate
+sender belongs to Cloudflare's published address ranges. For all other senders, it
+overwrites `X-Forwarded-For` with the direct client's numeric address. Keep the configured
+Cloudflare ranges current. Its Compose network fixes the host gateway to `172.30.0.1` and configures
 that exact address as `SAMLSCOPE_TRUSTED_PROXY_ADDRESS`. The application ignores forwarded
 addresses from every other peer. If the default subnet conflicts with the host network, set
 both `SAMLSCOPE_DOCKER_SUBNET` and `SAMLSCOPE_DOCKER_GATEWAY`; the gateway is propagated to
 the application's trusted-proxy setting.
+
+The VPS serves only the `app` and `peer` origins; the apex website and `www` redirect
+remain on Cloudflare Workers. Caddy uses ACME HTTP challenges through the proxy.
+The container keeps its root filesystem read-only and general `/tmp` non-executable.
+SQLite JDBC uses a separate owner-only executable tmpfs to load its native library.
 
 self-hosted has no authentication (it is intended for use within a trusted network).
 **State this explicitly in the README**. Instruct users to put authentication in front of it when exposing it to the Internet.
