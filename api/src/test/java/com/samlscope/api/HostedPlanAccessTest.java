@@ -96,6 +96,19 @@ class HostedPlanAccessTest {
             var cookie = exchange.headers().firstValue("Set-Cookie").orElseThrow().split(";", 2)[0];
             var csrf = json.readTree(exchange.body()).path("csrfToken").asText();
 
+            var workspacePath = "/api/runs/" + runId + "/workspace-evidence";
+            assertDenied(client, base, "GET", workspacePath, null, null, null);
+            assertDenied(client, base, "GET", workspacePath, null, secondCookie, null);
+            for (int i = 0; i < 4; i++) {
+                var workspace = request(client, base, "GET", workspacePath, null, cookie, null, null);
+                assertEquals(200, workspace.statusCode(), workspace.body());
+                assertEquals("no-store", workspace.headers().firstValue("Cache-Control").orElseThrow());
+                var snapshot = json.readTree(workspace.body());
+                for (var section : new String[] { "interactions", "bootstrapContracts",
+                        "protocolEvidence", "activeProbe", "campaigns" }) assertTrue(snapshot.has(section));
+            }
+            assertEquals(429, request(client, base, "GET", workspacePath, null, cookie, null, null).statusCode());
+
             var resumeBody = "{\"runId\":\"" + runId + "\",\"resume\":true}";
             var resumed = request(client, base, "POST", "/api/manage/session",
                     resumeBody, cookie, null, appOrigin);

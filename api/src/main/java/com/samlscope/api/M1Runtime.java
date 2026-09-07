@@ -474,6 +474,22 @@ final class M1Runtime {
         return activeProbes.retry(runId);
     }
 
+    record WorkspaceEvidence(
+            java.util.List<com.samlscope.runner.InteractionQuery.PendingInteraction> interactions,
+            java.util.List<com.samlscope.runner.BootstrapContractQuery.BootstrapContract> bootstrapContracts,
+            com.samlscope.runner.ProtocolEvidenceAutomationService.Status protocolEvidence,
+            ActiveProbeCoordinator.Status activeProbe,
+            com.samlscope.runner.RunCampaignQuery.CampaignReport campaigns) {}
+
+    WorkspaceEvidence workspaceEvidence(String runId) {
+        return withManualEvidenceWork(runId, () -> {
+            reconcileTranscriptEvidenceNow(runId);
+            return new WorkspaceEvidence(pendingInteractions.pending(runId),
+                    bootstrapContracts.contracts(runId), protocolEvidence.status(runId),
+                    activeProbes.status(runId), campaigns.report(runId));
+        });
+    }
+
     java.util.List<com.samlscope.runner.InteractionQuery.PendingInteraction> pending(String runId) {
         return withManualEvidenceWork(runId, () -> {
             reconcileTranscriptEvidenceNow(runId);

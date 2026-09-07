@@ -2,6 +2,7 @@ import { cleanup, render, screen } from '@testing-library/react'
 import { afterEach, expect, test, vi } from 'vitest'
 import { ManagementBootstrap } from './ManagementBootstrap'
 import { api } from './api'
+import { stubWorkspaceFetch } from './workspaceTestFixture'
 
 afterEach(() => {
   cleanup()
@@ -34,7 +35,7 @@ test('removes the fragment before exchanging it and keeps only the CSRF token in
       status: 200, headers: { 'content-type': 'application/json' },
     })
   })
-  vi.stubGlobal('fetch', fetchMock)
+  stubWorkspaceFetch(fetchMock)
 
   render(<ManagementBootstrap runId={runId} />)
 
@@ -47,7 +48,7 @@ test('removes the fragment before exchanging it and keeps only the CSRF token in
 test('opens a self-hosted management page without a fragment secret', async () => {
   const runId = 'run_0123456789ABCDEFGHJKMNPQRS'
   window.history.replaceState(null, '', `/manage/${runId}`)
-  vi.stubGlobal('fetch', vi.fn(async (url: string) => new Response(JSON.stringify(
+  stubWorkspaceFetch(vi.fn(async (url: string) => new Response(JSON.stringify(
     url === '/api/health' ? { status: 'ok', version: 'test', mode: 'selfhosted' }
       : url.includes('/metadata-lab') ? {
         runId, planId: 'plan', selectedVariant: 'control', metadataUrl: 'https://suite.example/metadata',
@@ -73,11 +74,12 @@ test('resumes a hosted cookie session without the original fragment or tab stora
   vi.spyOn(api, 'run').mockResolvedValue({ id: runId, planId: 'plan', status: 'CREATED',
     targetToSuiteReachability: 'UNKNOWN', context: {} })
   const resume = vi.spyOn(api, 'resumeManagementSession').mockResolvedValue({ runId, csrfToken: 'resumed-csrf' })
-  vi.stubGlobal('fetch', vi.fn(async () => json([])))
+  stubWorkspaceFetch(emptyWorkspaceSection)
 
   render(<ManagementBootstrap runId={runId} />)
 
   expect(await screen.findByText('Run unlocked')).toBeTruthy()
+  expect(await screen.findByText('No pending interactions.')).toBeTruthy()
   expect(resume).toHaveBeenCalledWith(runId)
   expect(window.sessionStorage.getItem(`samlscope.csrf.${runId}`)).toBe('resumed-csrf')
   expect(screen.queryByRole('link', { name: 'Start IdP round trip' })).toBeNull()
@@ -105,10 +107,18 @@ test('keeps OIDC account access without requiring a legacy Run cookie', async ()
   vi.spyOn(api, 'authSession').mockResolvedValue({ enabled: true, authenticated: true,
     accessPolicy: 'required', displayName: 'Owner', csrfToken: 'oidc-csrf' })
   const resume = vi.spyOn(api, 'resumeManagementSession')
-  vi.stubGlobal('fetch', vi.fn(async () => json([])))
+  stubWorkspaceFetch(emptyWorkspaceSection)
 
   render(<ManagementBootstrap runId={runId} />)
 
   expect(await screen.findByText('Run unlocked')).toBeTruthy()
+  expect(await screen.findByText('No pending interactions.')).toBeTruthy()
   expect(resume).not.toHaveBeenCalled()
 })
+
+async function emptyWorkspaceSection(url: string) {
+  if (url.endsWith('/protocol-evidence')) return json({ eligibleCases: 0, readyCases: 0, cases: [] })
+  if (url.endsWith('/metadata-lab')) return json(null)
+  if (url.endsWith('/active-probe')) return json({ state: 'NOT_STARTED' })
+  return json([])
+}

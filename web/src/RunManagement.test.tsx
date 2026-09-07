@@ -2,15 +2,36 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-li
 import { afterEach, expect, test, vi } from 'vitest'
 import { metadataFixtureWork, RunManagement } from './RunManagement'
 import type { MetadataLab } from './api'
+import { stubWorkspaceFetch } from './workspaceTestFixture'
 
 afterEach(() => {
   cleanup()
   vi.restoreAllMocks()
 })
 
+test('loads all evidence through one request without competing section reads', async () => {
+  const calls: string[] = []
+  vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+    calls.push(url)
+    if (url.endsWith('/workspace-evidence')) return json({
+      interactions: [], bootstrapContracts: [], protocolEvidence: protocolEvidence(),
+      activeProbe: { state: 'NOT_STARTED' }, campaigns: [],
+    })
+    if (url.endsWith('/metadata-lab')) return json(metadataLab())
+    if (url === '/api/health') return json({ mode: 'hosted' })
+    if (url === '/api/plans') return json([])
+    if (url === '/api/runs/run_test') return json({ id: 'run_test', planId: 'plan', context: {} })
+    throw new Error(`Unexpected separate evidence request: ${url}`)
+  }))
+  render(<RunManagement runId="run_test" />)
+  expect(await screen.findByText('Run preflight')).toBeTruthy()
+  expect(calls.filter(url => url.endsWith('/workspace-evidence'))).toHaveLength(1)
+  expect(calls).toHaveLength(5)
+})
+
 test('blocks Run actions until the complete initial state loads and supports retry', async () => {
   let unavailable = true
-  vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+  stubWorkspaceFetch(vi.fn(async (url: string) => {
     if (unavailable) return new Response(JSON.stringify({ message: 'campaign projection unavailable' }), {
       status: 503, headers: { 'content-type': 'application/json' },
     })
@@ -40,7 +61,7 @@ test('blocks Run actions until the complete initial state loads and supports ret
 test('shows approved instructions and submits only an option plus evidence note', async () => {
   const calls: Array<{ url: string; init?: RequestInit }> = []
   let pending = true
-  vi.stubGlobal('fetch', vi.fn(async (url: string, init?: RequestInit) => {
+  stubWorkspaceFetch(vi.fn(async (url: string, init?: RequestInit) => {
     calls.push({ url, init })
     if (init?.method === 'POST') {
       pending = false
@@ -78,7 +99,7 @@ test('shows approved instructions and submits only an option plus evidence note'
 test('keeps configuration status separate from the later evidence conclusion', async () => {
   const calls: Array<{ url: string; init?: RequestInit }> = []
   let stage = 'config'
-  vi.stubGlobal('fetch', vi.fn(async (url: string, init?: RequestInit) => {
+  stubWorkspaceFetch(vi.fn(async (url: string, init?: RequestInit) => {
     calls.push({ url, init })
     if (init?.method === 'POST') {
       stage = 'evidence'
@@ -126,7 +147,7 @@ test('keeps configuration status separate from the later evidence conclusion', a
 })
 
 test('a focused browser URL shows only the requested case', async () => {
-  vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+  stubWorkspaceFetch(vi.fn(async (url: string) => {
     if (url.includes('/bootstrap-contracts')) return json([])
     if (url.includes('/metadata-lab')) return json(metadataLab())
     if (url.includes('/protocol-evidence')) return json(protocolEvidence())
@@ -162,7 +183,7 @@ test('a focused browser URL shows only the requested case', async () => {
 test('evaluates only server-reported ready protocol evidence from the shared metadata contract', async () => {
   const calls: Array<{ url: string; init?: RequestInit }> = []
   let evaluated = false
-  vi.stubGlobal('fetch', vi.fn(async (url: string, init?: RequestInit) => {
+  stubWorkspaceFetch(vi.fn(async (url: string, init?: RequestInit) => {
     calls.push({ url, init })
     if (url.includes('/protocol-evidence/evaluate')) {
       evaluated = true
@@ -212,7 +233,7 @@ test('evaluates only server-reported ready protocol evidence from the shared met
 
 test('confirms one metadata campaign operation without collecting per-case verdict answers', async () => {
   const calls: Array<{ url: string; init?: RequestInit }> = []
-  vi.stubGlobal('fetch', vi.fn(async (url: string, init?: RequestInit) => {
+  stubWorkspaceFetch(vi.fn(async (url: string, init?: RequestInit) => {
     calls.push({ url, init })
     if (url.includes('/protocol-evidence/confirm-attempts')) return json({
       completed: [{ caseId: 'IIP-MD04-b-idp-01', outcome: 'SATISFIED' }],
@@ -253,7 +274,7 @@ test('confirms one metadata campaign operation without collecting per-case verdi
 test('selects the next incomplete metadata fixture without asking for a verdict', async () => {
   const calls: Array<{ url: string; init?: RequestInit }> = []
   let selected = 'control'
-  vi.stubGlobal('fetch', vi.fn(async (url: string, init?: RequestInit) => {
+  stubWorkspaceFetch(vi.fn(async (url: string, init?: RequestInit) => {
     calls.push({ url, init })
     if (url.includes('/metadata-lab/variant') && init?.method === 'POST') {
       selected = JSON.parse(String(init.body)).variant
@@ -332,7 +353,7 @@ test('arms one automatic polling campaign without collecting target verdict answ
   const calls: Array<{ url: string; init?: RequestInit }> = []
   const navigateTo = vi.fn()
   let lab: MetadataLab = metadataLab()
-  vi.stubGlobal('fetch', vi.fn(async (url: string, init?: RequestInit) => {
+  stubWorkspaceFetch(vi.fn(async (url: string, init?: RequestInit) => {
     calls.push({ url, init })
     if (url.includes('/metadata-lab/automatic-polling') && init?.method === 'POST') {
       const variants = JSON.parse(String(init.body)).variants as string[]
@@ -383,7 +404,7 @@ test('arms one automatic polling campaign without collecting target verdict answ
 test('offers one aggregate import for compatible positive metadata fixtures', async () => {
   const calls: Array<{ url: string; init?: RequestInit }> = []
   let lab: MetadataLab = metadataLab()
-  vi.stubGlobal('fetch', vi.fn(async (url: string, init?: RequestInit) => {
+  stubWorkspaceFetch(vi.fn(async (url: string, init?: RequestInit) => {
     calls.push({ url, init })
     if (url.includes('/metadata-lab/preloaded') && init?.method === 'POST') {
       lab = { ...lab, ingestionMode: 'PRELOADED_AGGREGATE',
@@ -429,7 +450,7 @@ test('offers one aggregate import for compatible positive metadata fixtures', as
 })
 
 test('explains that protocol-driven configuration answers are only an unavailability fallback', async () => {
-  vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+  stubWorkspaceFetch(vi.fn(async (url: string) => {
     if (url.includes('/active-probe')) return json({ state: 'NOT_STARTED' })
     if (url.includes('/bootstrap-contracts')) return json([])
     if (url.includes('/metadata-lab')) return json(metadataLab())
@@ -457,7 +478,7 @@ test('explains that protocol-driven configuration answers are only an unavailabi
 })
 
 test('does not offer completed for a transcript-driven browser case', async () => {
-  vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+  stubWorkspaceFetch(vi.fn(async (url: string) => {
     if (url.includes('/active-probe')) return json({ state: 'NOT_STARTED' })
     if (url.includes('/bootstrap-contracts')) return json([])
     if (url.includes('/metadata-lab')) return json(metadataLab())
@@ -480,7 +501,7 @@ test('does not offer completed for a transcript-driven browser case', async () =
 })
 
 test('offers the server-generated active probe launch URL and explains fresh-session isolation', async () => {
-  vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+  stubWorkspaceFetch(vi.fn(async (url: string) => {
     if (url.includes('/active-probe')) return json({
       planId: 'plan', state: 'READY', actionId: 'action_probe',
       startUrl: 'https://peer.example/p/plan/probe/action_probe?run=run_0123456789ABCDEFGHJKMNPQRS',
@@ -525,7 +546,7 @@ test('offers the server-generated active probe launch URL and explains fresh-ses
 })
 
 test('keeps an ungrouped configuration interaction in the main work queue', async () => {
-  vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+  stubWorkspaceFetch(vi.fn(async (url: string) => {
     if (url.includes('/active-probe')) return json({ state: 'NOT_STARTED' })
     if (url.includes('/bootstrap-contracts')) return json([])
     if (url.includes('/metadata-lab')) return json(metadataLab())
@@ -556,7 +577,7 @@ test('keeps an ungrouped configuration interaction in the main work queue', asyn
 })
 
 test('filters the approved case workspace without changing case outcomes', async () => {
-  vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+  stubWorkspaceFetch(vi.fn(async (url: string) => {
     if (url.includes('/campaigns')) return json({
       runId: 'run_0123456789ABCDEFGHJKMNPQRS', cases: 3,
       casesByEvidenceClass: { PROTOCOL_OBSERVED: 2, OPERATOR_ASSISTED: 1, SELF_ATTESTED: 0 },
@@ -662,7 +683,7 @@ test('filters the approved case workspace without changing case outcomes', async
 test('reissues an uncertain one-time fixture without turning it into a target failure', async () => {
   const calls: Array<{ url: string; init?: RequestInit }> = []
   let retried = false
-  vi.stubGlobal('fetch', vi.fn(async (url: string, init?: RequestInit) => {
+  stubWorkspaceFetch(vi.fn(async (url: string, init?: RequestInit) => {
     calls.push({ url, init })
     if (url.includes('/active-probe/retry') && init?.method === 'POST') {
       retried = true
@@ -697,7 +718,7 @@ test('reissues an uncertain one-time fixture without turning it into a target fa
 })
 
 test('shows plan action budgets and keeps self-attested evidence separate', async () => {
-  vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+  stubWorkspaceFetch(vi.fn(async (url: string) => {
     if (url.includes('/campaigns')) return json({
       runId: 'run_0123456789ABCDEFGHJKMNPQRS', cases: 220,
       casesByEvidenceClass: { PROTOCOL_OBSERVED: 143, OPERATOR_ASSISTED: 55, SELF_ATTESTED: 22 },
@@ -747,7 +768,7 @@ test('shows plan action budgets and keeps self-attested evidence separate', asyn
 test('completes one shared policy action without collecting a target verdict', async () => {
   const calls: Array<{ url: string; init?: RequestInit }> = []
   let completed = false
-  vi.stubGlobal('fetch', vi.fn(async (url: string, init?: RequestInit) => {
+  stubWorkspaceFetch(vi.fn(async (url: string, init?: RequestInit) => {
     calls.push({ url, init })
     if (init?.method === 'POST' && url.includes('/campaigns/')) {
       completed = true
@@ -808,7 +829,7 @@ test('completes one shared policy action without collecting a target verdict', a
 test('shares one section conclusion while preserving case-specific overrides', async () => {
   const calls: Array<{ url: string; init?: RequestInit }> = []
   let completed = false
-  vi.stubGlobal('fetch', vi.fn(async (url: string, init?: RequestInit) => {
+  stubWorkspaceFetch(vi.fn(async (url: string, init?: RequestInit) => {
     calls.push({ url, init })
     if (init?.method === 'POST') {
       if (url.includes('/attest')) completed = true
