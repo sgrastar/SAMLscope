@@ -116,6 +116,17 @@ class HostedPlanAccessTest {
             assertEquals(200, request(client, base, "PUT", "/api/plans/" + planId,
                     planBody("Changed", "https://first.internal.example/idp",
                             "https://first.internal.example/metadata", "new-secret"), cookie, csrf, null).statusCode());
+
+            var artifacts = new com.samlscope.store.FileRunArtifactRepository(dataDirectory);
+            artifacts.saveResult(runId, "{}".getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            assertDenied(client, base, "DELETE", "/api/plans/" + planId, null, cookie, null);
+            assertTrue(artifacts.findResult(runId).isPresent());
+            assertEquals(204, request(client, base, "DELETE", "/api/plans/" + planId,
+                    null, cookie, csrf, null).statusCode());
+            assertTrue(artifacts.findResult(runId).isEmpty());
+            assertDenied(client, base, "GET", "/api/runs/" + runId, null, cookie, null);
+            assertEquals(200, request(client, base, "GET", "/api/plans/" + secondPlanId,
+                    null, secondCookie, null, null).statusCode());
         } finally {
             app.stop();
         }

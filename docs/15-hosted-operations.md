@@ -10,8 +10,8 @@ Do not interpret deployment manifests or a healthy process as launch acceptance.
 | Deployment | `deploy/deploy.sh` pulls a pinned image, stops the service, archives the data directory and checks health | Exercise on the chosen host; record image and backup provenance |
 | Rollback | Script restores the previous image environment after failed health checks | Data is not restored; establish schema compatibility or restore the matching snapshot |
 | Publication | Hosted publish route and sanitized public artifacts | Exercise anonymous view, owner authorization, CSRF and scrubbing with a disposable Run |
-| Deletion | Plan deletion removes Transcript trees and cascaded database rows | Results and cached metadata are separate files; complete erasure needs verification and implementation |
-| Retention | Design specifies retention periods | No scheduled retention implementation established by this audit |
+| Deletion | Plan deletion now also removes persisted results, Plan/Run metadata and Plan keys before deleting database rows | Hosted owner/CSRF/revocation checks pass; concurrent in-flight writer acceptance remains outstanding |
+| Retention | Offline preview/apply utility and daily systemd timer templates are available | Operator installation, backup rotation and production rehearsal pending |
 | Unpublication | Capacity rejection can remove publication internally | No owner-facing dedicated unpublish route established by this audit |
 
 The specification's retention and deletion promises must not be presented as
@@ -75,3 +75,43 @@ Require signed release verification, the reference acceptance matrix with honest
 unresolved results, a successful restore rehearsal, complete deletion and retention
 acceptance, publication/access checks, TLS and origin separation, and the operator's
 provider/contact/cost decisions. Track evidence in [release readiness](13-release-readiness.md).
+
+
+## Offline retention tooling
+
+`deploy/retention.py` previews expired private Runs and published Transcript entries.
+Private Run age is measured from Run creation; published Transcript age is measured
+per entry from its recording timestamp. The exact boundary expires the item.
+Published results, recent Transcript entries and reusable Plans/Plan keys remain.
+Run deletion also removes access grants and case/outbox rows through foreign keys;
+usage accounting is recomputed without clearing rejection flags.
+
+```bash
+python3 deploy/retention.py --data-dir /path/to/stopped-copy
+python3 -m unittest discover -s deploy -p 'test_*.py' -v
+```
+
+Application requires both `--apply` and `--service-stopped`; use these only for a
+stopped service or an isolated offline copy. All deletion paths are validated
+before mutation, and symlinks or unexpected Transcript references abort execution.
+File deletion precedes SQL deletion so a failed attempt retains the Run/entry
+identifiers for retry. On failure, keep the service stopped, investigate and retry
+or restore the pre-maintenance snapshot; do not serve partially removed evidence.
+
+On the eventual Linux host, install `retention.py` and `retention.sh` under
+`/opt/samlscope`. The shell wrapper uses the same deployment lock, stops the service,
+backs up the complete data tree and restarts only after successful cleanup.
+Install the supplied service/timer units only after operator rehearsal; the timer
+runs daily at 04:00 in the host timezone and catches up after downtime. These files
+have not been installed on a production machine. Routine maintenance briefly
+interrupts service and must be included in the operating policy.
+
+Tests cover expiry boundaries, preview immutability, preservation of published
+results and recent entries, accounting, repeated application, and unsafe paths.
+A copy of the real Keycloak fixture was also expired using a simulated future
+clock; no original acceptance data was deleted. The Linux wrapper and timer have
+only undergone syntax/configuration review on this macOS workstation.
+
+Backups intentionally still contain expired data. Define backup rotation and
+post-restore deletion reconciliation before enabling the timer in production;
+this utility does not silently select a backup retention policy.

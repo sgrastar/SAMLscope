@@ -115,6 +115,12 @@ public final class IdpAuthnContextScenarioTestCase
                     return success && assertions > 0
                             ? FixtureObservation.SATISFIED : FixtureObservation.CONTROL_FAILED;
                 }
+                // This observer has only the wire XML. An encrypted successful
+                // assertion does not establish that its context is absent or wrong,
+                // including for the supposedly unavailable class fixture.
+                if (success && root.getElementsByTagNameNS(ASSERTION, "EncryptedAssertion").getLength() > 0) {
+                    return FixtureObservation.NOT_VERIFIED;
+                }
                 if (fixture == Fixture.UNSATISFIABLE_CLASS) {
                     return RESPONDER.equals(top)
                             ? FixtureObservation.SATISFIED : FixtureObservation.VIOLATED;

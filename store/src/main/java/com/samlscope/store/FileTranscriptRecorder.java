@@ -90,14 +90,23 @@ public final class FileTranscriptRecorder implements TranscriptRecorder, Transcr
         }
     }
 
-    /** Deletes a Plan and its durable Transcript evidence, releasing global hosted capacity. */
+    /** Deletes a Plan and its persisted evidence, releasing global hosted capacity. */
     public boolean deletePlanAndEvidence(String planId) {
         if (planId == null || !planId.matches("plan_[0-9A-HJKMNP-TV-Z]{26}")) {
             throw new IllegalArgumentException("Invalid plan ID");
         }
         var runIds = runIdsForPlan(planId);
         markRunsRejected(runIds);
-        for (var runId : runIds) deleteTree(directory.resolve(runId));
+        var dataDirectory = directory.getParent();
+        for (var runId : runIds) {
+            deleteTree(directory.resolve(runId));
+            deleteTree(dataDirectory.resolve("results").resolve(runId));
+            deleteTree(dataDirectory.resolve("target-metadata").resolve(runId + ".xml"));
+        }
+        // Keep the database rows until all file removals succeed so an interrupted
+        // deletion can enumerate the same Runs on retry.
+        deleteTree(dataDirectory.resolve("target-metadata").resolve(planId + ".xml"));
+        deleteTree(dataDirectory.resolve("keys").resolve(planId));
 
         try (var connection = database.open()) {
             connection.setAutoCommit(false);

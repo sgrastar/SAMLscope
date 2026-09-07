@@ -57,6 +57,23 @@ class IdpAuthnContextScenarioTestCaseTest {
     }
 
     @Test
+    void encryptedContextCannotProveAnExactComparisonViolation() {
+        var testCase = testCase();
+        var step = (CaseStep.AwaitInbound) testCase.start(context());
+        for (int index = 0; index < 3; index++) {
+            step = next(testCase, step, encryptedResponse(step.next()));
+        }
+        var finish = (CaseStep.Finish) testCase.resume(
+                context(), step.next(), inbound(encryptedResponse(step.next())));
+        assertEquals(Outcome.NOT_VERIFIED, finish.outcome().outcome());
+    }
+
+    private String encryptedResponse(CaseState state) {
+        return response(state, true, null, null)
+                .replace("<saml:Assertion></saml:Assertion>", "<saml:EncryptedAssertion/>");
+    }
+
+    @Test
     void unavailableSatisfiableFixtureDoesNotFabricateTargetNonconformance() {
         var testCase = testCase();
         var baseline = (CaseStep.AwaitInbound) testCase.start(context());

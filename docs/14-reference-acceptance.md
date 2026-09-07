@@ -8,7 +8,7 @@ failure. Detailed Run provenance and known-invalid historical results are in
 
 | Target | IdP Core | IdP Full | SP Core | SP Full |
 |---|---|---|---|---|
-| Keycloak, pinned local fixture | Partial: browser SSO, repeated protocol Runs, M2/M3 startup, correlation and bounded error probes | Not executed | Not executed | Not executed |
+| Keycloak, pinned local fixture | Partial: browser SSO, repeated protocol Runs, M2/M3 startup, correlation and full registered active-chain execution | Not executed | Not executed | Not executed |
 | Shibboleth | Not executed | Not executed | Not executed | Not executed |
 | SimpleSAMLphp | Not executed | Not executed | Not executed | Not executed |
 
@@ -22,7 +22,7 @@ infer support or applicability from this planning table.
 | Work | Required observation | Current limitation |
 |---|---|---|
 | Current candidate rerun | New image and fresh Run verified immediate JSON/HTML agreement for the error-response case | Bounded protocol-client run; remaining chain and browser campaigns outstanding |
-| Active probe chain | Correlated positive/negative controls and explicit unavailable-response outcomes | Bounded corrected rerun stopped at the next algorithm case |
+| Active probe chain | Correlated positive/negative controls and explicit unavailable-response outcomes | Chain reached FINISHED; its export contains an AuthnContext observer bug and unreviewed target-failure candidates |
 | Conditional features | Configuration or observed protocol evidence for each predicate | Undetermined inputs remain; do not submit blanket answers |
 | Metadata campaigns | Actual target import/refresh, changed metadata and subsequent correlated flow | Target refresh setup remains unestablished |
 | Browser campaigns and SLO | Requested browser/session transitions with Transcript correlation | Baseline SSO alone does not establish these |

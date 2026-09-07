@@ -283,3 +283,75 @@ Evidence and the credential-free reproduction script are under
 response; its automatically generated form was outside this bounded execution.
 Do not treat that unexecuted exchange as target evidence. Historical containers
 and results remain separate.
+
+
+### Continued algorithms and operations implementation
+
+The current-image Run continued through ALG01 and ALG02 using correlated exchanges.
+Tampered ACS requests received Keycloak's `Invalid redirect uri` page; the altered
+ACS is part of the negative control, while ordinary signed requests did produce
+SAML responses. Both cases ended NOT_VERIFIED with
+`idp.signed-request.inconclusive`, not a target failure. EXT01 is now awaiting its
+next exchange. Evidence is in `algorithm-exchanges.json`, `algorithm-summary.json`,
+`outbound-shapes.json` and `after-algorithms-*` under the current-image evidence
+folder. The recorded retry reflects the previously unsent browser form.
+
+Plan deletion previously left results, cached metadata and generated keys on disk.
+`FileTranscriptRecorder.deletePlanAndEvidence` now removes those persisted files
+alongside Transcripts before deleting database rows. Its regression verifies
+removal and preservation of unrelated files; failure retains database identifiers
+for a retry. Hosted authorization and concurrent-writer deletion acceptance are
+still open and must not be inferred from this storage-layer check.
+
+Offline hosted retention tooling and optional Linux scheduling templates are now
+available; see [operations](15-hosted-operations.md). Preview, boundary, preservation,
+accounting, idempotence and path-safety tests pass. A real fixture snapshot copy
+also passed a simulated future expiry rehearsal. The source acceptance container
+and its data were unchanged. Production installation and backup rotation policy
+remain pending.
+
+
+Hosted HTTP deletion acceptance now checks that missing CSRF prevents deletion,
+the owner can delete with the correct token, persisted results are removed, the
+old Run session loses access, and another owner's Plan stays accessible. The
+storage regression additionally checks metadata and key cleanup. These checks
+pass; concurrent in-flight writer behavior remains a separate acceptance item.
+
+The EXT01 unknown-extension scenario completed SATISFIED with
+`idp.extension.satisfied`. Other exercised extension and general scenarios retain
+`browser_fixture_partial` where the external evidence does not cover all variants.
+Fresh-session scenarios are being exercised with explicit cookie resets in the
+local protocol client; these are not real-browser verification records.
+
+
+### Completion of the current active chain and finding triage
+
+The protocol client reached active-probe FINISHED, resetting its cookie jar only
+at explicit fresh-session boundaries. This completes the registered active chain,
+not metadata campaigns, all applicability inputs, or Phase 1 acceptance.
+Final historical exports are `after-session-cases-*` in the current-image folder.
+
+The exported result contains target-failure candidates and a confirmed Suite bug.
+IDP08 treated hidden AuthnContext values in successful EncryptedAssertions as
+mismatches. Every correlated response for that case had encrypted assertions and
+no visible context. A new regression reproduced VIOLATED and now expects
+NOT_VERIFIED; visible plaintext mismatches remain detected. The wire-only observer
+now declines to judge encrypted successful contexts. The running image predates
+this correction, so its aggregate result must not be published as a validated
+finding. `authn-context-visibility.json` records content-free evidence shapes.
+
+Signed-request results were checked against the approved catalog: requiring a
+signature and validating a signature that is present are separate obligations.
+The signature-required fixture setting therefore does not justify suppressing
+these candidates. NameID responses were inspected in memory inside the existing
+container: Formats matched the transient/persistent requests, but SPNameQualifier
+was absent. ACS-index response destinations pointed to the default endpoint.
+These findings still need isolated, repeatable target-configuration review before
+publication. Attribute-only observations are in
+`nameid-acs-attribute-comparison.txt`; no subject identifier or private key was
+exported. A proposed private-key copy was rejected by automatic approval review;
+the inspection instead loaded the existing key only in container memory.
+
+The added operations CI workflow runs the offline retention tests and shell syntax
+check independently of the signed release workflow. No production timer or hosted
+service has been enabled by this work.
