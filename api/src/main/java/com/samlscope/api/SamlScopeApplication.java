@@ -725,6 +725,8 @@ public final class SamlScopeApplication {
         // any Suite-controlled ACS index. Negative ACS-selection fixtures deliberately request an
         // unregistered path; recording that POST is what lets the scenario prove that the target
         // followed the unregistered URL instead of rejecting it or falling back to the default.
+        javalin.routes.get("/p/{plan}/ui/completion.css", ctx ->
+                serveClasspath(ctx, "/peer-completion.css", "text/css; charset=utf-8"));
         javalin.routes.post("/p/{plan}/sp/acs/{index}", ctx -> {
             var consumed = spPeer.consumeDetailed(
                     ctx.pathParam("plan"), ctx.bodyAsBytes(), headers(ctx), absoluteRequestUrl(ctx));
@@ -906,9 +908,9 @@ public final class SamlScopeApplication {
             return;
         }
         ctx.header("Cache-Control", "no-store").contentType("text/html; charset=utf-8")
-                .result("<!doctype html><html lang=\"en\"><body>"
-                        + "<h1>SAML Response recorded</h1><p>Return to SAMLscope.</p><pre>"
-                        + htmlEscape(consumed.summary().toString()) + "</pre></body></html>");
+                .result(PeerCompletionPage.render(m1.workspaceUrl(consumed.metadataProbe()
+                                ? consumed.metadataProbeRunId() : consumed.relayState()),
+                        "/p/" + ctx.pathParam("plan") + "/ui/completion.css", consumed.summary()));
     }
 
     private static void serveSlo(Context ctx, SloPeerService service, SloPeerService.Transport transport) {

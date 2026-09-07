@@ -161,6 +161,18 @@ textarea { min-height: 96px; resize: vertical; }
 
 .plan-detail-head { margin-bottom: 28px; display: flex; align-items: end; justify-content: space-between; gap: 30px; }
 .peer-panel { margin-bottom: 34px; }
+.button-spinner { display: inline-block; width: 1em; height: 1em; margin-right: 8px; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: button-spin .8s linear infinite; }
+@keyframes button-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .button-spinner { animation: none; } }
+.run-next-step, .preflight-summary { padding: 24px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); margin: 20px 0; }
+.run-next-step ol { padding-left: 22px; line-height: 1.7; }
+.preflight-summary ul { padding: 0; list-style: none; }
+.preflight-summary li { padding: 12px 0; border-bottom: 1px solid var(--line); }
+.preflight-summary li > span { display: inline-block; margin-left: 16px; font-weight: 700; }
+.preflight-summary li p { margin: 4px 0; }
+.preflight-summary pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+.additional-stages { flex-basis: 100%; padding: 10px 0; }
+.additional-stages summary { cursor: pointer; }
 .registration-guide .registration-steps { padding-left: 22px; line-height: 1.65; }
 .registration-steps li + li { margin-top: 8px; }
 .registration-guide h3 { margin-top: 28px; }
