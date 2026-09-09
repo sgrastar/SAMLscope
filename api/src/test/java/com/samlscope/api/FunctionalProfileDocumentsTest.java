@@ -29,7 +29,7 @@ class FunctionalProfileDocumentsTest {
     }
 
     @Test
-    void everyFunctionalProfileCandidateIsAValidSetOfApprovedCases() throws Exception {
+    void everyReleasedFunctionalProfileIsAValidSetOfApprovedCases() throws Exception {
         var catalogs = CatalogDocuments.load();
         for (var profile : FunctionalProfile.values()) {
             byte[] bytes;

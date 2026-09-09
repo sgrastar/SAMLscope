@@ -33,7 +33,7 @@ import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 
-/** Proves the normal product flow using the exact case-set candidate rather than a synthetic scope. */
+/** Proves the normal product flow using the exact release-pinned case sets. */
 class FunctionalProfileFlowTest {
     @TempDir Path dataDirectory;
     private final HttpClient http = HttpClient.newHttpClient();
@@ -41,7 +41,7 @@ class FunctionalProfileFlowTest {
 
     @ParameterizedTest
     @EnumSource(FunctionalProfile.class)
-    void everyCandidateRunsFromSharedTargetThroughStandaloneResult(FunctionalProfile profile) throws Exception {
+    void everyReleasedProfileRunsFromSharedTargetThroughStandaloneResult(FunctionalProfile profile) throws Exception {
         var config = new AppConfig(
                 AppConfig.Mode.SELFHOSTED,
                 URI.create("http://127.0.0.1:8080"),
@@ -53,7 +53,7 @@ class FunctionalProfileFlowTest {
                 false,
                 "sha256:" + "a".repeat(64),
                 "");
-        var app = FunctionalProfileTestInstallation.createWithCandidates(config).start(0);
+        var app = SamlScopeApplication.create(config).start(0);
         try {
             var base = URI.create("http://127.0.0.1:" + app.port());
             var metadata = """

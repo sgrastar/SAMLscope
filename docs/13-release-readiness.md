@@ -7,13 +7,13 @@ explicit authorization.
 
 ## Current status
 
-The seven functional-profile artifacts are now exact case-set release candidates.
+The seven functional-profile artifacts are exact, independently approved case sets.
 The runtime, normal Plan/Run path, shared target metadata, presets, result output and
 license/source display use existing approved cases as their only execution units.
 No case split or missing implementation input remains in the case-level inventory.
-The candidates remain unavailable in production until their exact memberships receive
-independent G2 approval and their digests are added to `profiles/release-pins.properties`.
-This is an approval boundary, not an implementation gap.
+Their memberships have independent G2 approval and their digests are installed in
+`profiles/release-pins.properties`. The normal product path loads only those pinned
+definitions.
 
 | Work | Latest state |
 |---|---|
@@ -23,9 +23,9 @@ This is an approval boundary, not an implementation gap.
 | Progress and operations preparation | Documentation reconciled; isolated restore, persisted Plan-file deletion and Hosted authorization tested; offline retention and CI added |
 | Phase 2 | Scope draft available; no new verdict implementation authorized by that draft |
 
-The functional-profile release is not yet publishable because its case-set artifacts
-are not independently approved or release-pinned. Production deployment, smoke
-verification and operational acceptance follow that approval. Stable reference
+The functional-profile implementation and approval boundary are complete. Production
+deployment, smoke verification and operational acceptance remain separate release
+actions. Stable reference
 outputs can still be incomplete or contain failure candidates; reproducibility is
 not a conformance endorsement.
 
@@ -33,7 +33,7 @@ not a conformance endorsement.
 
 | Priority | Work | Completion evidence | Hosting dependency |
 |---|---|---|---|
-| P0 | Verify the current implementation and approved catalogs | Successful Gradle `check`, generated-document check, structural validation, and externally pinned signed G1/G2 release verification for the candidate revision | None; specification reconciliation requires Internet access |
+| P0 | Verify the current implementation and approved catalogs | Successful Gradle `check`, generated-document check, structural validation, and externally pinned signed G1/G2 release verification for the approved release revision | None; specification reconciliation requires Internet access |
 | P1 | Execute the local Keycloak acceptance fixture | Record image digest, Suite revision, Test Plan, browser round trip, exported results, and unresolved evidence; repeat the same plan and explain any differences | None; local containers and browser required |
 | P1 | Establish the reference-implementation acceptance matrix | Track the seven functional profiles, conditional features, and Keycloak/Shibboleth/SimpleSAMLphp evidence separately; preserve historical Core/Full evidence under its original labels | None for local targets |
 | P2 | Reconcile progress documentation | Align AGENTS.md, D-15, README, and roadmap status with verified evidence; preserve signed artifacts and the independent-review boundary | None |

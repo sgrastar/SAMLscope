@@ -21,5 +21,5 @@ test('shows software scope and retained dependency notices as text', async () =>
   expect(screen.queryByText(/Notice page undefined/)).toBeNull()
   expect(screen.getByText(/catalog correction is pending review/)).toBeTruthy()
   expect(document.querySelector('script')).toBeNull()
-  expect(screen.getByText(/Attribution review and output integration are still in progress/)).toBeTruthy()
+  expect(screen.getByText(/Source notices are included in browser and standalone outputs/)).toBeTruthy()
 })

@@ -603,15 +603,15 @@ export function RunManagement({ runId, csrfToken, focusCaseId, navigateTo }: {
         </div></details>
       </div>
     </header>
-    {campaigns && <nav className="plan-progress" aria-label="Filter cases by evidence plan">
+    {campaigns && <nav className="plan-progress" aria-label="Filter cases by execution assistance">
       <button type="button" className={`plan-progress-card${planFilter === 'ALL' ? ' selected' : ''}`}
         aria-pressed={planFilter === 'ALL'} onClick={() => setPlanFilter('ALL')}>
-        <span>All plans</span><strong>{campaigns.cases}</strong><small>approved cases</small>
+        <span>All assistance levels</span><strong>{campaigns.cases}</strong><small>approved cases</small>
       </button>
       {campaigns.plans.map(value =>
       <button type="button" className={`plan-progress-card plan-${value.plan.toLowerCase()}${planFilter === value.plan ? ' selected' : ''}`}
         aria-pressed={planFilter === value.plan} onClick={() => setPlanFilter(value.plan)} key={value.plan}>
-        <span>{humanize(value.plan)}</span><strong>{value.remainingUserActions}</strong>
+        <span>{assistanceLabel(value.plan)}</span><strong>{value.remainingUserActions}</strong>
         <small>actions remaining · {value.estimatedMinutesMin}-{value.estimatedMinutesMax} min</small>
         <progress max={Math.max(value.deliberateUserActions, 1)}
           value={Math.max(value.deliberateUserActions - value.remainingUserActions, 0)} />
@@ -673,7 +673,7 @@ export function RunManagement({ runId, csrfToken, focusCaseId, navigateTo }: {
           <p><strong>{protocolEvidence.eligibleCases}</strong> currently implemented case{protocolEvidence.eligibleCases === 1 ? '' : 's'} can derive outcomes directly from metadata fetches and correlated SAML traffic; <strong>{protocolEvidence.readyCases}</strong> ready now.</p>
           <p>SAMLscope normally evaluates these cases automatically as Transcript evidence arrives. Because a public metadata fetch does not identify its caller, use the recovery action only after you triggered the target's normal refresh or re-import and attempted the listed SAML flows.</p>
           <div className="standard-work-queue">
-            <p><strong>Standard work queue:</strong> {metadataWork.completedFixtures}/{metadataWork.totalFixtures} fixture fetches recorded.</p>
+            <p><strong>Assisted work queue:</strong> {metadataWork.completedFixtures}/{metadataWork.totalFixtures} fixture fetches recorded.</p>
             {metadataLab?.ingestionMode === 'AUTOMATIC_POLLING' ? <>
               <p><strong>Automatic polling:</strong> {metadataLab.campaignIndex}/{metadataLab.campaignVariants.length} fixtures completed{metadataLab.campaignComplete ? '. Campaign complete.' : `; currently serving ${humanize(metadataLab.selectedVariant)}.`}</p>
               <p><strong>Operator continuations:</strong> {metadataLab.operatorContinuationActions}</p>
@@ -765,7 +765,7 @@ export function RunManagement({ runId, csrfToken, focusCaseId, navigateTo }: {
       <h2>Choose evidence depth, not individual cases</h2>
       <p>Cases share Transcripts, metadata fetches, and configuration campaigns. Counts below are deliberate user actions, not case counts.</p>
       <div className="contract-list">{campaigns.plans.map(value => <article className="contract" key={value.plan}>
-        <header><div><strong>{humanize(value.plan)}</strong><p>{planDescription(value.plan)}</p></div>
+        <header><div><strong>{assistanceLabel(value.plan)}</strong><p>{planDescription(value.plan)}</p></div>
           <span>{value.budgetMet ? 'WITHIN BUDGET' : 'OVER BUDGET'}</span></header>
         <dl>
           <dt>Cases</dt><dd>{value.cases}</dd>
@@ -839,7 +839,7 @@ export function RunManagement({ runId, csrfToken, focusCaseId, navigateTo }: {
           <button ref={caseDrawerCloseRef} type="button" className="button-secondary" onClick={closeCaseDrawer}
             aria-label="Close case details">Close</button></header>
         <dl><dt>Campaign</dt><dd>{selectedCaseCampaign.title}</dd>
-          <dt>Plan</dt><dd>{humanize(selectedCase.plan)}</dd>
+          <dt>Assistance</dt><dd>{assistanceLabel(selectedCase.plan)}</dd>
           <dt>Evidence</dt><dd><span className={`evidence-label evidence-${selectedCase.evidenceClass.toLowerCase()}`}>
             {humanize(selectedCase.evidenceClass)}</span></dd>
           <dt>Outcome</dt><dd>{selectedCase.outcome ? humanize(selectedCase.outcome) : selectedCase.resolved ? 'Resolved' : 'Pending evidence'}</dd>
@@ -1013,7 +1013,13 @@ function resolvePrompt(value: string, planId: string, runId: string) {
 function planDescription(plan: 'QUICK' | 'STANDARD' | 'FULL') {
   if (plan === 'QUICK') return 'Protocol-observed evidence only.'
   if (plan === 'STANDARD') return 'Quick plus operator-assisted configuration and refresh actions.'
-  return 'Standard plus grouped self-attested evidence that cannot be externally observed.'
+  return 'Assisted plus grouped self-attested evidence that cannot be externally observed.'
+}
+
+function assistanceLabel(plan: 'QUICK' | 'STANDARD' | 'FULL') {
+  if (plan === 'QUICK') return 'Quick'
+  if (plan === 'STANDARD') return 'Assisted'
+  return 'Assisted + attestation'
 }
 
 function attestationValue(interaction: PendingInteraction, conclusion: string) {

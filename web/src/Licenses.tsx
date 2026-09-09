@@ -33,7 +33,7 @@ export function Licenses() {
       <p><a href="/licenses/browser-dependencies.json" download>Download browser dependency notices</a></p>
     </section>
     <section><h2>Specification content</h2>
-      <p>Requirement summaries, test instructions and profile mappings use external specifications. Their original terms apply to incorporated material. Attribution review and output integration are still in progress.</p>
+      <p>Requirement summaries, test instructions and profile mappings use external specifications. Their original terms apply to incorporated material. Source notices are included in browser and standalone outputs; material-level attribution and sources marked as pending remain under review.</p>
       <p><a href="https://kantarainitiative.github.io/SAMLprofiles/fedinterop.html">Kantara SAML Implementation Profile</a> · <a href="https://docs.oasis-open.org/security/saml/v2.0/">OASIS SAML 2.0 specifications</a></p>
       <SpecificationNotices />
       <p>Results do not imply certification, approval or endorsement by Kantara or OASIS.</p>
