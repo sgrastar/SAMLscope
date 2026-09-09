@@ -67,17 +67,21 @@ public final class SqliteDatabase {
             applyMigration(connection, 5, "/db/migration/V005__published_runs.sql");
             applyMigration(connection, 6, "/db/migration/V006__run_session_lookup.sql");
             applyMigration(connection, 7, "/db/migration/V007__transcript_usage.sql");
+            applyMigration(connection, 8, "/db/migration/V008__target_connections.sql");
+            if (applyMigration(connection, 11, "/db/migration/V011__target_revision_summaries.sql")) {
+                SqliteTargetConnectionRepository.backfillSummaries(connection, new JsonCodec());
+            }
             connection.commit();
         } catch (SQLException | IOException e) {
             throw new StoreException("Could not apply database migrations", e);
         }
     }
 
-    private void applyMigration(Connection connection, int version, String resourceName)
+    private boolean applyMigration(Connection connection, int version, String resourceName)
             throws SQLException, IOException {
         try (var query = connection.prepareStatement("SELECT 1 FROM schema_migrations WHERE version = ?")) {
             query.setInt(1, version);
-            if (query.executeQuery().next()) return;
+            if (query.executeQuery().next()) return false;
         }
         var resource = SqliteDatabase.class.getResourceAsStream(resourceName);
         if (resource == null) throw new StoreException("Missing database migration V" + version);
@@ -93,5 +97,6 @@ public final class SqliteDatabase {
             insert.setString(2, Instant.now().toString());
             insert.executeUpdate();
         }
+        return true;
     }
 }

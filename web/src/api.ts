@@ -1,4 +1,11 @@
-export type Profile = 'IDP_CORE' | 'IDP_FULL' | 'SP_CORE' | 'SP_FULL'
+export type Profile =
+  | 'browser_sso_idp'
+  | 'browser_sso_sp'
+  | 'metadata_idp'
+  | 'metadata_sp'
+  | 'single_logout_idp'
+  | 'single_logout_sp'
+  | 'ecp_idp'
 
 export interface Plan {
   plan: {
@@ -108,6 +115,8 @@ interface ResultCount {
 }
 
 export interface PlanInput {
+  targetConnectionId?: string
+  targetRevisionId?: string
   name: string
   profile: Profile
   targetKind: 'IDP' | 'SP' | 'TOKEN_TRANSLATION_PROXY'
@@ -117,8 +126,24 @@ export interface PlanInput {
   suiteMetadataDelivery: 'MANUAL' | 'HTTP_URL' | 'MDQ'
   declaredFeatures: Record<string, boolean>
   parameters: { clockSkewToleranceSeconds: number; metadataRefreshWaitSeconds: number; testUserHint: string; requestSigningMode?: 'REQUIRED' | 'OPTIONAL' }
-  interaction: { allowBrowserSteps: boolean; allowAttestation: boolean }
+  interaction: {
+    allowBrowserSteps: boolean
+    allowAttestation: boolean
+    preset?: 'quick' | 'assisted' | 'assisted_with_attestation'
+  }
   authorizedTarget: boolean
+}
+
+export interface TargetConnection {
+  id: string
+  name: string
+  entityId: string
+  revisions: Array<{
+    id: string
+    roles: Array<'IDP' | 'SP'>
+    sha256: string
+    refreshable: boolean
+  }>
 }
 
 export interface ManagementSession {
@@ -309,6 +334,14 @@ export const api = {
     return health
   },
   plans: () => request<Plan[]>('/api/plans'),
+  profiles: () => request<Profile[]>('/api/profiles'),
+  targets: () => request<TargetConnection[]>('/api/targets'),
+  registerTarget: (input: { name: string; entityId: string; metadataUrl: string; authorizedTarget: boolean }) =>
+    request<TargetConnection>('/api/targets', { method: 'POST', body: JSON.stringify(input) }),
+  refreshTarget: (id: string, authorizedTarget: boolean, sourceRevisionId: string) =>
+    request<TargetConnection>(`/api/targets/${encodeURIComponent(id)}/revisions`, {
+      method: 'POST', body: JSON.stringify({ authorizedTarget, sourceRevisionId }),
+    }),
   createPlan: (input: PlanInput) => request<PlanCreated>('/api/plans', { method: 'POST', body: JSON.stringify(input) }),
   deletePlan: (id: string) => request<void>(`/api/plans/${id}`, { method: 'DELETE' }),
   runs: (planId: string) => request<Run[]>(`/api/plans/${planId}/runs`),

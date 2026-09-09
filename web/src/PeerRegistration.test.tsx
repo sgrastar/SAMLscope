@@ -3,7 +3,7 @@ import { afterEach, expect, test, vi } from 'vitest'
 import type { Plan } from './api'
 import { PeerRegistration } from './PeerRegistration'
 
-const plan: Plan = { plan: { id: 'plan_test', name: 'Test IdP', profile: 'IDP_CORE',
+const plan: Plan = { plan: { id: 'plan_test', name: 'Test IdP', profile: 'browser_sso_idp',
   target: { kind: 'IDP', entityId: 'https://target.example' }, requestSigningMode: 'OPTIONAL' },
   entityId: 'https://peer.example/p/plan_test', metadataUrl: 'https://peer.example/p/plan_test/metadata',
   mdqUrl: 'https://peer.example/mdq/encoded', secondaryIdpEntityId: 'https://peer.example/p/plan_test/idp/secondary',
@@ -45,7 +45,7 @@ test('distinguishes signed Plans and SP targets', () => {
   const { rerender } = render(<PeerRegistration plan={{ ...plan, plan: { ...plan.plan, requestSigningMode: 'REQUIRED' } }} />)
   expect(screen.getByText(/SAMLscope signs Redirect requests/)).toBeTruthy()
   expect(screen.queryByText(/initial Redirect request is unsigned/)).toBeNull()
-  rerender(<PeerRegistration plan={{ ...plan, plan: { ...plan.plan, profile: 'SP_CORE' } }} />)
+  rerender(<PeerRegistration plan={{ ...plan, plan: { ...plan.plan, profile: 'browser_sso_sp' } }} />)
   expect(screen.getByRole('heading', { name: 'Register SAMLscope as an IdP in your SP' })).toBeTruthy()
   expect(screen.getByText('https://peer.example/p/plan_test/idp/sso')).toBeTruthy()
   expect(screen.queryByText('ACS URL / Reply URL')).toBeNull()

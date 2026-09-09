@@ -19,7 +19,7 @@ import com.samlscope.core.caseexec.CaseStep;
 import com.samlscope.core.evaluation.Outcome;
 import com.samlscope.core.plan.MetadataDeliveryKind;
 import com.samlscope.core.plan.MetadataSourceKind;
-import com.samlscope.core.plan.PlanProfile;
+import com.samlscope.core.profile.FunctionalProfile;
 import com.samlscope.core.plan.TargetKind;
 import com.samlscope.core.plan.TargetRole;
 import com.samlscope.core.plan.TestPlan;
@@ -367,7 +367,7 @@ class BrowserEvidenceTestCaseTest {
 
     private DefaultCaseContext context(TranscriptRecorder recorder) {
         var plan = new TestPlan(
-                "plan_0123456789ABCDEFGHJKMNPQRS", "Browser", PlanProfile.IDP_CORE,
+                "plan_0123456789ABCDEFGHJKMNPQRS", "Browser", FunctionalProfile.BROWSER_SSO_IDP,
                 new TestPlan.Target(
                         TargetKind.IDP, "https://idp.example/entity",
                         new TestPlan.MetadataSource(MetadataSourceKind.URL, "https://idp.example/metadata")),

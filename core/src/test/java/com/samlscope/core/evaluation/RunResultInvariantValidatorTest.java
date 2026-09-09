@@ -5,7 +5,6 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.time.Instant;
 import java.util.List;
-import java.util.Map;
 import org.junit.jupiter.api.Test;
 import com.samlscope.core.evaluation.ApplicabilityEvaluation.Basis;
 import com.samlscope.core.evaluation.ApplicabilityEvaluation.EffectiveResult;
@@ -13,19 +12,14 @@ import com.samlscope.core.evaluation.CoverageCatalog.Obligation;
 import com.samlscope.core.evaluation.CoverageCatalog.ProfileScope;
 import com.samlscope.core.evaluation.CoverageCatalog.Testability;
 import com.samlscope.core.evaluation.RunResult.Conformance;
-import com.samlscope.core.plan.MetadataDeliveryKind;
-import com.samlscope.core.plan.MetadataSourceKind;
-import com.samlscope.core.plan.PlanProfile;
-import com.samlscope.core.plan.TargetKind;
 import com.samlscope.core.plan.TargetRole;
-import com.samlscope.core.plan.TestPlan;
 
 class RunResultInvariantValidatorTest {
     @Test
     void acceptsCanonicalEvaluatorOutput() {
         var fixture = fixture();
-        assertDoesNotThrow(() -> RunResultInvariantValidator.validate(
-                fixture.catalog(), fixture.plan(), fixture.result()));
+        assertDoesNotThrow(() -> RunResultInvariantValidator.validateSelectedObligations(
+                fixture.catalog(), fixture.result()));
     }
 
     @Test
@@ -33,8 +27,8 @@ class RunResultInvariantValidatorTest {
         var fixture = fixture();
         var corrupt = copy(fixture.result(), Conformance.CONFORMANT, fixture.result().coverage(),
                 fixture.result().applicability(), fixture.result().scopeQualifications());
-        assertThrows(IllegalStateException.class, () -> RunResultInvariantValidator.validate(
-                fixture.catalog(), fixture.plan(), corrupt));
+        assertThrows(IllegalStateException.class, () -> RunResultInvariantValidator.validateSelectedObligations(
+                fixture.catalog(), corrupt));
     }
 
     @Test
@@ -49,8 +43,8 @@ class RunResultInvariantValidatorTest {
                 source.verdictCounts());
         var corrupt = copy(fixture.result(), fixture.result().conformance(), corruptCoverage,
                 fixture.result().applicability(), fixture.result().scopeQualifications());
-        assertThrows(IllegalStateException.class, () -> RunResultInvariantValidator.validate(
-                fixture.catalog(), fixture.plan(), corrupt));
+        assertThrows(IllegalStateException.class, () -> RunResultInvariantValidator.validateSelectedObligations(
+                fixture.catalog(), corrupt));
     }
 
     @Test
@@ -58,27 +52,27 @@ class RunResultInvariantValidatorTest {
         var fixture = fixture();
         var missing = copy(fixture.result(), fixture.result().conformance(), fixture.result().coverage(),
                 List.of(), fixture.result().scopeQualifications());
-        assertThrows(IllegalStateException.class, () -> RunResultInvariantValidator.validate(
-                fixture.catalog(), fixture.plan(), missing));
+        assertThrows(IllegalStateException.class, () -> RunResultInvariantValidator.validateSelectedObligations(
+                fixture.catalog(), missing));
 
         var qualification = new RunResult.ScopeQualification(
                 "declared_exclusion", "invented", List.of("REQ.a"), "invented", "operator",
                 Instant.parse("2026-08-29T00:00:00Z"), false);
         var invented = copy(fixture.result(), fixture.result().conformance(), fixture.result().coverage(),
                 fixture.result().applicability(), List.of(qualification));
-        assertThrows(IllegalStateException.class, () -> RunResultInvariantValidator.validate(
-                fixture.catalog(), fixture.plan(), invented));
+        assertThrows(IllegalStateException.class, () -> RunResultInvariantValidator.validateSelectedObligations(
+                fixture.catalog(), invented));
     }
 
     private Fixture fixture() {
         var catalog = new CoverageCatalog(List.of(new Obligation(
                 "REQ.a", "REQ", Rfc2119Level.MUST, List.of(TargetRole.IDP), "feature",
                 Testability.AUTOMATED, ProfileScope.CORE)));
-        var plan = plan();
         var unknown = new ApplicabilityEvaluation(
                 "REQ.a", "feature", PredicateKind.CAPABILITY_BASED, false, null,
                 EffectiveResult.UNKNOWN, false, Basis.DECLARED, List.of(), null);
-        return new Fixture(catalog, plan, Evaluator.evaluate(catalog, plan, List.of(unknown), List.of(), List.of()));
+        return new Fixture(catalog, Evaluator.evaluateSelectedObligations(
+                catalog, List.of(unknown), List.of(), List.of()));
     }
 
     private RunResult copy(
@@ -92,15 +86,5 @@ class RunResultInvariantValidatorTest {
                 applicability, qualifications, source.suiteIncidents());
     }
 
-    private TestPlan plan() {
-        return new TestPlan(
-                "plan_0123456789ABCDEFGHJKMNPQRS", "Invariant fixture", PlanProfile.IDP_CORE,
-                new TestPlan.Target(
-                        TargetKind.IDP, "https://idp.example/entity",
-                        new TestPlan.MetadataSource(MetadataSourceKind.URL, "https://idp.example/metadata")),
-                MetadataDeliveryKind.MANUAL, Map.of(), TestPlan.Parameters.defaults(),
-                TestPlan.Interaction.defaults(), Instant.EPOCH, Instant.EPOCH);
-    }
-
-    private record Fixture(CoverageCatalog catalog, TestPlan plan, RunResult result) {}
+    private record Fixture(CoverageCatalog catalog, RunResult result) {}
 }

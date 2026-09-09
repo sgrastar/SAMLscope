@@ -64,7 +64,23 @@ public final class PreflightService {
                 publicBase.resolve("/p/" + plan.id() + "/metadata?probe=" + run.id()).toString());
         checkPublicBase(checks);
         byte[] targetMetadata = null;
-        if (plan.target().metadataSource().kind() == MetadataSourceKind.URL) {
+        if (plan.target().metadataSource().kind() == MetadataSourceKind.SNAPSHOT_BASE64) {
+            try {
+                targetMetadata = java.util.Base64.getDecoder().decode(
+                        plan.target().metadataSource().location());
+                var parsed = metadataParser.parse(targetMetadata, plan.target().entityId());
+                metadataCache.put(plan.id(), targetMetadata);
+                metadataCache.putIfAbsent(run.id(), targetMetadata);
+                observations.put("targetEntityId", parsed.entityId());
+                observations.put("singleSignOnServices", parsed.singleSignOnServices().size());
+                observations.put("assertionConsumerServices", parsed.assertionConsumerServices().size());
+                observations.put("metadataRevisionId", plan.target().metadataRevisionId());
+                checks.add(check("target_metadata", PreflightReport.Status.PASS,
+                        "Saved target metadata revision was parsed"));
+            } catch (Exception error) {
+                checks.add(check("target_metadata", PreflightReport.Status.FAIL, error.getMessage()));
+            }
+        } else if (plan.target().metadataSource().kind() == MetadataSourceKind.URL) {
             try {
                 var response = fetch(URI.create(plan.target().metadataSource().location()), 0);
                 targetMetadata = response.body();
@@ -115,6 +131,11 @@ public final class PreflightService {
         }
     }
 
+    /** Uses the same bounded, redirect-checked outbound path as Run preflight. */
+    public byte[] retrieveMetadata(URI uri) throws Exception {
+        return fetch(uri, 0).body();
+    }
+
     private HttpResponse<byte[]> fetch(URI uri, int redirects) throws Exception {
         if (redirects > 3) throw new IllegalArgumentException("Metadata redirect limit exceeded");
         outboundPolicy.requireAllowed(uri);
@@ -124,9 +145,11 @@ public final class PreflightService {
         if (response.statusCode() == 301 || response.statusCode() == 302 || response.statusCode() == 307) {
             var location = response.headers().firstValue("Location")
                     .orElseThrow(() -> new IllegalArgumentException("Metadata redirect has no Location"));
+            response.body().close();
             return fetch(uri.resolve(location), redirects + 1);
         }
         if (response.statusCode() < 200 || response.statusCode() >= 300) {
+            response.body().close();
             throw new IllegalArgumentException("Metadata endpoint returned HTTP " + response.statusCode());
         }
         var output = new ByteArrayOutputStream();

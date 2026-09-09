@@ -34,7 +34,8 @@ public final class ResultPublicationService implements ResultArtifactQuery, Repo
         var context = contexts.context(
                 snapshot.run(), snapshot.plan(), snapshot.cases(), snapshot.result());
         var document = ResultDocumentAssembler.assemble(
-                catalog, snapshot.plan(), snapshot.run(), snapshot.result(), snapshot.cases(), context);
+                snapshot.definition().selectedCoverage(catalog), snapshot.plan(), snapshot.run(),
+                snapshot.result(), snapshot.cases(), context);
         var bytes = json.write(document).getBytes(StandardCharsets.UTF_8);
         var report = reportHtml.write(bytes);
         artifacts.saveResult(runId, bytes);

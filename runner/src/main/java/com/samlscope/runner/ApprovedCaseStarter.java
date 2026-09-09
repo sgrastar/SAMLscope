@@ -12,6 +12,7 @@ import com.samlscope.core.evaluation.ApplicabilityEvaluation;
 import com.samlscope.core.evaluation.CoverageCatalog;
 import com.samlscope.core.plan.TestPlan;
 import com.samlscope.core.run.TestRun;
+import com.samlscope.core.profile.FunctionalCaseDefinition;
 
 /** Starts one approved implementation slice without bypassing profile or applicability scope. */
 public final class ApprovedCaseStarter {
@@ -20,18 +21,21 @@ public final class ApprovedCaseStarter {
     private final TestCaseRegistry registry;
     private final CaseExecutionService executions;
     private final ApplicabilityProvider applicability;
+    private final java.util.function.Function<TestPlan,FunctionalCaseDefinition> profileDefinitions;
 
     public ApprovedCaseStarter(
             CoverageCatalog coverage,
             CaseDefinitionCatalog definitions,
             TestCaseRegistry registry,
             CaseExecutionService executions,
-            ApplicabilityProvider applicability) {
+            ApplicabilityProvider applicability,
+            java.util.function.Function<TestPlan,FunctionalCaseDefinition> profileDefinitions) {
         this.obligations = Objects.requireNonNull(coverage, "coverage").byKey();
         this.definitions = Objects.requireNonNull(definitions, "definitions");
         this.registry = Objects.requireNonNull(registry, "registry");
         this.executions = Objects.requireNonNull(executions, "executions");
         this.applicability = Objects.requireNonNull(applicability, "applicability");
+        this.profileDefinitions = Objects.requireNonNull(profileDefinitions, "profileDefinitions");
         for (var id : registry.ids()) {
             var definition = definitions.require(id);
             var obligation = obligations.get(definition.obligation());
@@ -56,11 +60,12 @@ public final class ApprovedCaseStarter {
             throw new IllegalArgumentException("Plan profile belongs to another target role");
         }
         var applicable = applicableByObligation(run, plan);
+        var selectedCases = profileDefinitions.apply(plan).caseIds();
         var started = new ArrayList<CaseExecution>();
         for (var testCase : registry.forRole(context.targetRole())) {
             var definition = definitions.require(testCase.id());
             var obligation = obligations.get(definition.obligation());
-            if (!obligation.includedIn(plan.profile())) continue;
+            if (!selectedCases.contains(testCase.id())) continue;
             if (obligation.condition() != null
                     && applicable.getOrDefault(obligation.key(), ApplicabilityEvaluation.EffectiveResult.UNKNOWN)
                             != ApplicabilityEvaluation.EffectiveResult.TRUE) {

@@ -1,6 +1,8 @@
 package com.samlscope.core.plan;
 
 import java.net.URI;
+import com.samlscope.core.profile.FunctionalProfile;
+import com.samlscope.core.profile.FunctionalDefinitionIdentity;
 import java.time.Instant;
 import java.util.Map;
 import java.util.Objects;
@@ -8,7 +10,8 @@ import java.util.Objects;
 public record TestPlan(
         String id,
         String name,
-        PlanProfile profile,
+        FunctionalProfile profile,
+        FunctionalDefinitionIdentity definitionIdentity,
         Target target,
         MetadataDeliveryKind suiteMetadataDelivery,
         Map<String, Boolean> declaredFeatures,
@@ -17,10 +20,18 @@ public record TestPlan(
         Instant createdAt,
         Instant updatedAt) {
 
+    public TestPlan(String id, String name, FunctionalProfile profile, Target target,
+            MetadataDeliveryKind suiteMetadataDelivery, Map<String, Boolean> declaredFeatures,
+            Parameters parameters, Interaction interaction, Instant createdAt, Instant updatedAt) {
+        this(id,name,profile,null,target,suiteMetadataDelivery,declaredFeatures,parameters,interaction,createdAt,updatedAt);
+    }
+
     public TestPlan {
         requireText(id, "id");
         requireText(name, "name");
         Objects.requireNonNull(profile, "profile");
+        if (definitionIdentity != null && definitionIdentity.profile() != profile)
+            throw new IllegalArgumentException("Plan profile does not match its definition");
         Objects.requireNonNull(target, "target");
         Objects.requireNonNull(suiteMetadataDelivery, "suiteMetadataDelivery");
         declaredFeatures = Map.copyOf(declaredFeatures == null ? Map.of() : declaredFeatures);
@@ -39,20 +50,46 @@ public record TestPlan(
         }
     }
 
-    public record Target(TargetKind kind, String entityId, MetadataSource metadataSource) {
+    public record Target(TargetKind kind, String entityId, MetadataSource metadataSource,
+                         String connectionId, String metadataRevisionId) {
+        public Target(TargetKind kind, String entityId, MetadataSource metadataSource) {
+            this(kind, entityId, metadataSource, null, null);
+        }
         public Target {
             Objects.requireNonNull(kind, "kind");
             requireText(entityId, "target.entityId");
             Objects.requireNonNull(metadataSource, "target.metadataSource");
             URI.create(entityId);
+            if ((connectionId == null) != (metadataRevisionId == null)) {
+                throw new IllegalArgumentException("Connection and revision references must be supplied together");
+            }
+            if (connectionId == null && metadataSource.kind() == MetadataSourceKind.SNAPSHOT_BASE64)
+                throw new IllegalArgumentException("Metadata snapshot requires connection and revision references");
+            if (connectionId != null) {
+                requireText(connectionId, "connectionId");
+                requireText(metadataRevisionId, "metadataRevisionId");
+                if (metadataSource.kind() != MetadataSourceKind.SNAPSHOT_BASE64) {
+                    throw new IllegalArgumentException("Reusable metadata must be a fixed snapshot");
+                }
+            }
         }
+    }
+
+    /** Fields that determine execution and evidence provenance; display names are not configuration. */
+    public boolean sameExecutionConfiguration(TestPlan other) {
+        return other != null && profile == other.profile && Objects.equals(definitionIdentity,other.definitionIdentity) && target.equals(other.target)
+                && suiteMetadataDelivery == other.suiteMetadataDelivery
+                && declaredFeatures.equals(other.declaredFeatures) && parameters.equals(other.parameters)
+                && interaction.equals(other.interaction);
     }
 
     public record MetadataSource(MetadataSourceKind kind, String location) {
         public MetadataSource {
             Objects.requireNonNull(kind, "kind");
             requireText(location, "target.metadataSource.location");
-            if (kind != MetadataSourceKind.UPLOAD) {
+            if (kind == MetadataSourceKind.SNAPSHOT_BASE64 && java.util.Base64.getDecoder().decode(location).length == 0)
+                throw new IllegalArgumentException("Metadata snapshot is empty");
+            if (kind != MetadataSourceKind.UPLOAD && kind != MetadataSourceKind.SNAPSHOT_BASE64) {
                 URI.create(location);
             }
         }
@@ -80,8 +117,20 @@ public record TestPlan(
 
     public enum RequestSigningMode { REQUIRED, OPTIONAL }
 
-    public record Interaction(boolean allowBrowserSteps, boolean allowAttestation) {
-        public static Interaction defaults() { return new Interaction(true, true); }
+    /** Assistance changes input availability, never the profile membership or denominator. */
+    public enum ExecutionPreset { quick, assisted, assisted_with_attestation }
+
+    public record Interaction(boolean allowBrowserSteps, boolean allowAttestation, ExecutionPreset preset) {
+        public Interaction(boolean allowBrowserSteps, boolean allowAttestation) {
+            this(allowBrowserSteps, allowAttestation,
+                    allowAttestation ? ExecutionPreset.assisted_with_attestation : ExecutionPreset.assisted);
+        }
+        public Interaction {
+            preset = preset == null ? ExecutionPreset.quick : preset;
+            allowAttestation = allowAttestation && preset == ExecutionPreset.assisted_with_attestation;
+        }
+        public boolean allowOperatorEvidence() { return preset != ExecutionPreset.quick; }
+        public static Interaction defaults() { return new Interaction(true, false, ExecutionPreset.quick); }
     }
 
     private static void requireText(String value, String name) {

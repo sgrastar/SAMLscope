@@ -8,6 +8,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import com.samlscope.core.caseexec.*;
 import com.samlscope.core.plan.*;
+import com.samlscope.core.profile.FunctionalProfile;
 import com.samlscope.core.run.*;
 import com.samlscope.saml.crypto.*;
 import com.samlscope.saml.normal.*;
@@ -19,7 +20,7 @@ class PlanRequestSigningTest {
     private static final String RUN = "run_0123456789ABCDEFGHJKMNPQRS";
 
     private TestPlan plan(TestPlan.RequestSigningMode mode) {
-        return new TestPlan("plan_0123456789ABCDEFGHJKMNPQRS", "Signing test", PlanProfile.IDP_CORE,
+        return new TestPlan("plan_0123456789ABCDEFGHJKMNPQRS", "Signing test", FunctionalProfile.BROWSER_SSO_IDP,
                 new TestPlan.Target(TargetKind.IDP, "https://idp.example",
                         new TestPlan.MetadataSource(MetadataSourceKind.URL, "https://idp.example/metadata")),
                 MetadataDeliveryKind.MANUAL, Map.of(), new TestPlan.Parameters(180, 300, "", mode),

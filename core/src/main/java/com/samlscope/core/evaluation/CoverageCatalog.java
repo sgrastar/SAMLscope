@@ -4,7 +4,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import com.samlscope.core.plan.PlanProfile;
 import com.samlscope.core.plan.TargetRole;
 
 public record CoverageCatalog(List<Obligation> obligations) {
@@ -47,9 +46,6 @@ public record CoverageCatalog(List<Obligation> obligations) {
             }
         }
 
-        public boolean includedIn(PlanProfile profile) {
-            return roles.contains(profile.role()) && (profile.full() || profileScope == ProfileScope.CORE);
-        }
     }
 
     public enum Testability { AUTOMATED, BROWSER, ATTESTED, CONFIG, NOT_OBSERVABLE }

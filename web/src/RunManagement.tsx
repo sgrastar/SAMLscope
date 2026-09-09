@@ -621,7 +621,7 @@ export function RunManagement({ runId, csrfToken, focusCaseId, navigateTo }: {
       <ol>
         <li><strong>Register the Test Peer.</strong> Follow the registration guide below in your target product.</li>
         <li><strong>Run preflight.</strong> Check that SAMLscope can retrieve the target metadata.</li>
-        <li><strong>Complete one login.</strong> {profile.startsWith('IDP') ? 'Open the IdP, sign in with a test user, then return to this Run.' : 'Start login at your target SP and return to this Run after the response is recorded.'}</li>
+        <li><strong>Complete one login.</strong> {profile.endsWith('_idp') ? 'Open the IdP, sign in with a test user, then return to this Run.' : 'Start login at your target SP and return to this Run after the response is recorded.'}</li>
         <li><strong>Run the initial checks (M1).</strong> Then follow Pending interactions. M2 and M3 are additional test stages, not setup buttons.</li>
       </ol>
       <p className="notice">{runSummary?.status === 'COMPLETED'
@@ -635,7 +635,7 @@ export function RunManagement({ runId, csrfToken, focusCaseId, navigateTo }: {
       <div className="actions">
         <button disabled={busy !== ''} aria-busy={busy === 'preflight'} onClick={() => void runPreflight()}>
           {busy === 'preflight' && <span className="button-spinner" aria-hidden="true" />}Run preflight</button>
-        {plan && profile.startsWith('IDP') && idpRoundTripReady(runSummary) && runSummary?.status !== 'COMPLETED'
+        {plan && profile.endsWith('_idp') && idpRoundTripReady(runSummary) && runSummary?.status !== 'COMPLETED'
           && <RoundTripLink href={idpRoundTripUrl(plan, runId)} />}
         <button disabled={busy !== '' || runSummary?.status !== 'COMPLETED'} onClick={() => void startM1()}>Start or resume M1</button>
         <details className="additional-stages"><summary>Additional test stages (M2 / M3)</summary>
@@ -917,7 +917,7 @@ export function RunManagement({ runId, csrfToken, focusCaseId, navigateTo }: {
         </form>)}</div>
     </section>}
     <div className="section-heading"><div><p className="eyebrow">Evidence workflow</p><h2>Pending interactions</h2></div></div>
-    {profile === 'IDP_FULL' && <form className="interaction" onSubmit={event => void runEcpProbe(event)}>
+    {profile === 'ecp_idp' && <form className="interaction" onSubmit={event => void runEcpProbe(event)}>
       <fieldset disabled={busy === 'ecp-probe'}>
         <legend>ECP, channel-binding, and SAML-EC probes</legend>
         <p>Credentials are held in memory for this send only. They are never written to case state, the outbox, or the transcript.</p>
@@ -926,7 +926,7 @@ export function RunManagement({ runId, csrfToken, focusCaseId, navigateTo }: {
         <button type="submit">Run seven ECP probes before M3</button>
       </fieldset>
     </form>}
-    {plan && profile.startsWith('SP') && <p>Start login at the target SP after importing the Test Peer metadata.</p>}
+    {plan && profile.endsWith('_sp') && <p>Start login at the target SP after importing the Test Peer metadata.</p>}
     {focusCaseId && <div className="actions"><a className="button" href={`/manage/${runId}`}>Back to Run management</a></div>}
     {visibleInteractions.length === 0 ? <p className="quiet-success">
       {focusCaseId ? `No pending interaction for ${focusCaseId}.`

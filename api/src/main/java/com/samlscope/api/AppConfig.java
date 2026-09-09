@@ -18,11 +18,16 @@ public record AppConfig(
         boolean publishEnabled,
         String suiteImageDigest,
         String trustedProxyAddress,
-        com.samlscope.api.auth.OidcConfig oidc) {
+        com.samlscope.api.auth.OidcConfig oidc,
+        int targetImportsPerHour) {
     private static final Logger LOG = Logger.getLogger(AppConfig.class.getName());
 
     public AppConfig {
         Objects.requireNonNull(oidc, "oidc");
+        if (targetImportsPerHour < 0) {
+            throw new IllegalArgumentException(
+                    "Target import limit must be zero (unlimited) or positive");
+        }
         validateBaseUrl(publicBaseUrl, "publicBaseUrl");
         validateBaseUrl(peerBaseUrl, "peerBaseUrl");
         if (oidc.enabled()) {
@@ -66,6 +71,14 @@ public record AppConfig(
 
     public AppConfig(Mode mode, URI publicBaseUrl, URI peerBaseUrl, Path dataDirectory, int httpPort,
                      boolean outboundAllowPrivate, boolean outboundAllowInsecureTls, boolean publishEnabled,
+                     String suiteImageDigest, String trustedProxyAddress,
+                     com.samlscope.api.auth.OidcConfig oidc) {
+        this(mode, publicBaseUrl, peerBaseUrl, dataDirectory, httpPort, outboundAllowPrivate,
+                outboundAllowInsecureTls, publishEnabled, suiteImageDigest, trustedProxyAddress, oidc, 0);
+    }
+
+    public AppConfig(Mode mode, URI publicBaseUrl, URI peerBaseUrl, Path dataDirectory, int httpPort,
+                     boolean outboundAllowPrivate, boolean outboundAllowInsecureTls, boolean publishEnabled,
                      String suiteImageDigest, String trustedProxyAddress) {
         this(mode, publicBaseUrl, peerBaseUrl, dataDirectory, httpPort, outboundAllowPrivate,
                 outboundAllowInsecureTls, publishEnabled, suiteImageDigest, trustedProxyAddress,
@@ -98,7 +111,8 @@ public record AppConfig(
         var trustedProxy = resolve(environment, "TRUSTED_PROXY_ADDRESS", "");
         return new AppConfig(
                 mode, publicBase, peerBase, data, port, allowPrivate, insecureTls, publish,
-                imageDigest, trustedProxy, com.samlscope.api.auth.OidcConfig.from(environment));
+                imageDigest, trustedProxy, com.samlscope.api.auth.OidcConfig.from(environment),
+                Integer.parseInt(environment.getOrDefault("SAMLSCOPE_TARGET_IMPORTS_PER_HOUR", "0")));
     }
 
     private static String resolve(Map<String, String> environment, String suffix, String defaultValue) {

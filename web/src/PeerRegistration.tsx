@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import type { Plan } from './api'
+import { profileRole } from './profiles'
 
 function CopyValue({ label, value, link = false }: { label: string; value: string; link?: boolean }) {
   const [feedback, setFeedback] = useState('')
@@ -24,7 +25,7 @@ function CopyValue({ label, value, link = false }: { label: string; value: strin
 
 /** Initial interoperability setup, not additional conformance requirements. */
 export function PeerRegistration({ plan }: { plan: Plan }) {
-  const testingIdp = plan.plan.profile.startsWith('IDP')
+  const testingIdp = profileRole(plan.plan.profile) === 'IDP'
   const signed = plan.plan.requestSigningMode === 'REQUIRED'
   const endpoint = (path: string) => new URL(`/p/${encodeURIComponent(plan.plan.id)}${path}`, plan.metadataUrl).toString()
   return <section className="panel peer-panel peer-registration registration-guide">

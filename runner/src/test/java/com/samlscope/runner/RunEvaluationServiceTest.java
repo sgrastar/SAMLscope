@@ -21,7 +21,7 @@ import com.samlscope.core.evaluation.SuiteIncident;
 import com.samlscope.core.evaluation.Verdict;
 import com.samlscope.core.plan.MetadataDeliveryKind;
 import com.samlscope.core.plan.MetadataSourceKind;
-import com.samlscope.core.plan.PlanProfile;
+import com.samlscope.core.profile.FunctionalProfile;
 import com.samlscope.core.plan.TargetKind;
 import com.samlscope.core.plan.TargetRole;
 import com.samlscope.core.plan.TestPlan;
@@ -62,7 +62,10 @@ class RunEvaluationServiceTest {
                         CaseRun.completed(
                                 "case-b", "REQ.b", CaseOutcome.of(Outcome.VIOLATED, "b", List.of()))),
                 (run, sourcePlan) -> List.of(),
-                ignored -> List.of(incident));
+                ignored -> List.of(incident),
+                ignored -> FunctionalCaseFixtures.forCases(
+                        FunctionalProfile.BROWSER_SSO_IDP, catalog,
+                        Map.of("case-a", "REQ.a", "case-b", "REQ.b")));
 
         var result = service.evaluate(RUN_ID);
 
@@ -82,7 +85,7 @@ class RunEvaluationServiceTest {
 
     private TestPlan plan() {
         return new TestPlan(
-                "plan_0123456789ABCDEFGHJKMNPQRS", "Evaluation service test", PlanProfile.IDP_FULL,
+                "plan_0123456789ABCDEFGHJKMNPQRS", "Evaluation service test", FunctionalProfile.BROWSER_SSO_IDP,
                 new TestPlan.Target(
                         TargetKind.IDP, "https://idp.example/entity",
                         new TestPlan.MetadataSource(MetadataSourceKind.URL, "https://idp.example/metadata")),

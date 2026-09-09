@@ -523,7 +523,7 @@ test('offers the server-generated active probe launch URL and explains fresh-ses
       preflight: { checks: [{ code: 'target_metadata', status: 'PASS' }] },
     } })
     if (url === '/api/plans') return json([{
-      plan: { id: 'plan', name: 'Target IdP', profile: 'IDP_CORE', target: { kind: 'IDP', entityId: 'https://idp.example' } },
+      plan: { id: 'plan', name: 'Target IdP', profile: 'browser_sso_idp', target: { kind: 'IDP', entityId: 'https://idp.example' } },
       entityId: 'https://suite.example/p/plan', metadataUrl: 'https://suite.example/p/plan/metadata',
       mdqUrl: 'https://suite.example/mdq/plan', secondaryIdpEntityId: 'https://suite.example/p/plan/idp/secondary',
       secondaryIdpMetadataUrl: 'https://suite.example/p/plan/idp/secondary/metadata',

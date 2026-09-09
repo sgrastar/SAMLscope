@@ -64,10 +64,18 @@ public final class SamlScopeApplication {
     }
 
     public static Javalin create(AppConfig config) {
-        return create(config, null);
+        return create(config, null, Map.of(), Map.of());
     }
 
     static Javalin create(AppConfig config, com.samlscope.api.auth.OidcClient injectedOidcClient) {
+        return create(config, injectedOidcClient, Map.of(), Map.of());
+    }
+
+    static Javalin create(
+            AppConfig config,
+            com.samlscope.api.auth.OidcClient injectedOidcClient,
+            Map<com.samlscope.core.profile.FunctionalProfile,byte[]> profileArtifacts,
+            Map<com.samlscope.core.profile.FunctionalProfile,String> approvedProfileDigests) {
         var clock = Clock.systemUTC();
         var oidcClient = config.oidc().enabled()
                 ? (injectedOidcClient != null ? injectedOidcClient : new com.samlscope.api.auth.OidcClient(
@@ -79,6 +87,7 @@ public final class SamlScopeApplication {
         var database = new SqliteDatabase(config.dataDirectory());
         PlanRepository plans = new SqlitePlanRepository(database, json);
         RunRepository runs = new SqliteRunRepository(database, json);
+        var targetConnections = new com.samlscope.store.SqliteTargetConnectionRepository(database, json);
         var storedTranscript = config.mode() == AppConfig.Mode.HOSTED
                 ? new FileTranscriptRecorder(
                         database, json, config.dataDirectory(),
@@ -117,7 +126,8 @@ public final class SamlScopeApplication {
         var m1 = M1Runtime.create(
                 config, database, json, plans, runs, transcript, transcript, metadataCache,
                 metadataParser, keyStore, caseExecutions, metadataLab, outboundDispatcher,
-                hostedRateLimiter, hostedRunProvisioner, clock);
+                hostedRateLimiter, hostedRunProvisioner, clock,
+                profileArtifacts, approvedProfileDigests);
         var authorization = new ManagementAuthorization(oidc,
                 new com.samlscope.store.SqlitePlanOwnerRepository(database), plans, runs, m1);
         transcript.onRecorded(m1::reconcileTranscriptEvidenceAutomatically);
@@ -135,6 +145,8 @@ public final class SamlScopeApplication {
                     config.trustedProxyAddress());
             javalin.jsonMapper(new JavalinJackson().updateMapper(mapper -> {
                 mapper.findAndRegisterModules();
+                mapper.registerModule(new com.samlscope.store.FunctionalProfileJsonModule());
+                mapper.enable(DeserializationFeature.FAIL_ON_NUMBERS_FOR_ENUMS);
                 mapper.disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
             }));
             javalin.routes.before(ctx -> {
@@ -263,16 +275,23 @@ public final class SamlScopeApplication {
                                     Duration.ofMinutes(1)));
                 });
             }
+            TargetConnectionRoutes.register(
+                    javalin, config, authorization, targetConnections, clock, preflight,
+                    hostedRateLimiter);
             routes(javalin, config, plans, runs, transcript, storedTranscript,
                     eventBus, runService, preflight,
                     metadata, metadataLab, metadataCache, metadataParser, spPeer,
                     idpPeer, secondaryIdpPeer, sloPeer, m1,
-                    hostedRateLimiter, hostedRunProvisioner, preloadedMetadataCache, authorization, clock);
+                    hostedRateLimiter, hostedRunProvisioner, preloadedMetadataCache, authorization, clock,
+                    targetConnections);
             javalin.routes.exception(MisdirectedRequest.class, (error, ctx) ->
                     ctx.status(421).json(new ApiModels.ErrorView("misdirected_request", error.getMessage())));
             javalin.routes.exception(IllegalArgumentException.class, (error, ctx) -> {
                 ctx.status(HttpStatus.BAD_REQUEST).json(new ApiModels.ErrorView("invalid_request", error.getMessage()));
             });
+            javalin.routes.exception(com.samlscope.core.plan.PlanConfigurationConflict.class, (error, ctx) ->
+                    ctx.status(HttpStatus.CONFLICT).json(new ApiModels.ErrorView(
+                            "plan_configuration_fixed", error.getMessage())));
             javalin.routes.exception(SecurityException.class, (error, ctx) ->
                     ctx.status(HttpStatus.FORBIDDEN)
                             .json(new ApiModels.ErrorView("access_denied", "Access denied")));
@@ -317,7 +336,8 @@ public final class SamlScopeApplication {
                                M1Runtime m1, HostedRateLimiter hostedRateLimiter,
                                com.samlscope.store.SqliteHostedRunProvisioner hostedRunProvisioner,
                                BoundedByteArrayCache preloadedMetadataCache,
-                               ManagementAuthorization authorization, Clock clock) {
+                               ManagementAuthorization authorization, Clock clock,
+                               com.samlscope.store.SqliteTargetConnectionRepository targetConnections) {
         javalin.routes.get("/", SamlScopeApplication::serveIndex);
         javalin.routes.get("/reports/{run}", SamlScopeApplication::serveIndex);
         javalin.routes.get("/manage/{run}", SamlScopeApplication::serveIndex);
@@ -326,6 +346,9 @@ public final class SamlScopeApplication {
         javalin.routes.get("/api/health", ctx -> ctx.json(Map.of(
                 "status", "ok", "version", "0.1.0", "mode", config.mode().name().toLowerCase(),
                 "oidcEnabled", config.oidc().enabled())));
+        javalin.routes.get("/api/profiles", ctx -> ctx.json(m1.installedProfiles().stream()
+                .sorted(java.util.Comparator.comparing(com.samlscope.core.profile.FunctionalProfile::id))
+                .toList()));
         javalin.routes.get("/api/plans", ctx -> ctx.json((config.managementProtected()
                         ? authorization.list(ctx)
                         : plans.list()).stream()
@@ -337,7 +360,9 @@ public final class SamlScopeApplication {
             }
             var request = ctx.bodyAsClass(ApiModels.PlanWrite.class);
             var now = clock.instant();
-            var plan = fromWrite(Identifiers.newId("plan"), request, now, now);
+            var target = resolveTarget(request, targetConnections, authorization, ctx, config);
+            var plan = fromWrite(Identifiers.newId("plan"), request,
+                    m1.definitionIdentity(request.profile()), target, now, now);
             ApiModels.RunCreated initialRun = null;
             if (config.managementProtected()) {
                 var run = runService.prepare(plan.id());
@@ -357,14 +382,14 @@ public final class SamlScopeApplication {
         javalin.routes.get("/api/plans/{id}", ctx -> ctx.json(view(config, requirePlan(plans, ctx.pathParam("id")))));
         javalin.routes.put("/api/plans/{id}", ctx -> {
             var existing = requirePlan(plans, ctx.pathParam("id"));
-            var updated = fromWrite(existing.id(), ctx.bodyAsClass(ApiModels.PlanWrite.class),
+            var request = ctx.bodyAsClass(ApiModels.PlanWrite.class);
+            var identity = request.profile() == existing.profile()
+                    ? existing.definitionIdentity() : m1.definitionIdentity(request.profile());
+            var target = resolveTarget(request, targetConnections, authorization, ctx, config);
+            var updated = fromWrite(existing.id(), request, identity, target,
                     existing.createdAt(), clock.instant());
             if (config.mode() == AppConfig.Mode.HOSTED) {
-                if (!hostedRunProvisioner.updatePlanUnlessActiveRetarget(updated)) {
-                    ctx.status(HttpStatus.CONFLICT).json(new ApiModels.ErrorView(
-                            "active_run_conflict", "A Plan with an active Run cannot change target entity ID"));
-                    return;
-                }
+                hostedRunProvisioner.updatePlan(updated);
             } else {
                 plans.save(updated);
             }
@@ -965,17 +990,51 @@ public final class SamlScopeApplication {
     }
 
     private static TestPlan fromWrite(String id, ApiModels.PlanWrite request,
-                                      java.time.Instant createdAt, java.time.Instant updatedAt) {
+            com.samlscope.core.profile.FunctionalDefinitionIdentity definitionIdentity,
+            TestPlan.Target target,
+            java.time.Instant createdAt, java.time.Instant updatedAt) {
         if (request == null) throw new IllegalArgumentException("JSON body is required");
         if (!request.authorizedTarget()) {
             throw new IllegalArgumentException(
                     "Confirm that you own or are authorized to test the target before creating the Test Plan");
         }
-        return new TestPlan(id, request.name(), request.profile(),
-                new TestPlan.Target(request.targetKind(), request.targetEntityId(),
-                        new TestPlan.MetadataSource(request.metadataSourceKind(), request.metadataSourceLocation())),
+        return new TestPlan(id, request.name(), request.profile(), definitionIdentity, target,
                 request.suiteMetadataDelivery(), request.declaredFeatures(), request.parameters(), request.interaction(),
                 createdAt, updatedAt);
+    }
+
+    private static TestPlan.Target resolveTarget(
+            ApiModels.PlanWrite request,
+            com.samlscope.store.SqliteTargetConnectionRepository targets,
+            ManagementAuthorization authorization,
+            Context context,
+            AppConfig config) {
+        if (request.targetConnectionId() == null && request.targetRevisionId() == null) {
+            return new TestPlan.Target(request.targetKind(), request.targetEntityId(),
+                    new TestPlan.MetadataSource(
+                            request.metadataSourceKind(), request.metadataSourceLocation()));
+        }
+        if (request.targetConnectionId() == null || request.targetRevisionId() == null) {
+            throw new IllegalArgumentException("Select a target and metadata revision");
+        }
+        var owner = authorization.connectionOwner(context, true, config.managementProtected());
+        var revision = targets.findRevision(
+                        owner, request.targetConnectionId(), request.targetRevisionId())
+                .orElseThrow(() -> new IllegalArgumentException("Target metadata unavailable"));
+        var target = targets.list(owner).stream()
+                .filter(value -> value.id().equals(revision.connectionId()))
+                .findFirst().orElseThrow(() -> new IllegalArgumentException("Target unavailable"));
+        if (!revision.roles().contains(request.profile().role())) {
+            throw new IllegalArgumentException("Target does not have the selected role");
+        }
+        var kind = request.profile().role() == com.samlscope.core.plan.TargetRole.IDP
+                ? com.samlscope.core.plan.TargetKind.IDP : com.samlscope.core.plan.TargetKind.SP;
+        return new TestPlan.Target(
+                kind, target.entityId(),
+                new TestPlan.MetadataSource(
+                        com.samlscope.core.plan.MetadataSourceKind.SNAPSHOT_BASE64,
+                        revision.metadataBase64()),
+                target.id(), revision.id());
     }
 
     private static ApiModels.PlanView view(AppConfig config, TestPlan plan) {
@@ -983,7 +1042,9 @@ public final class SamlScopeApplication {
         var secondaryEntityId = secondaryIdpEntityId(config, plan);
         var summary = new ApiModels.PlanSummary(
                 plan.id(), plan.name(), plan.profile(),
-                new ApiModels.TargetSummary(plan.target().kind(), plan.target().entityId()),
+                new ApiModels.TargetSummary(
+                        plan.target().kind(), plan.target().entityId(),
+                        plan.target().connectionId(), plan.target().metadataRevisionId()),
                 plan.parameters().requestSigningMode());
         return new ApiModels.PlanView(summary, entityId, entityId + "/metadata",
                 config.peerBaseUrl().resolve("/mdq/" + java.net.URLEncoder.encode(entityId, StandardCharsets.UTF_8)).toString(),

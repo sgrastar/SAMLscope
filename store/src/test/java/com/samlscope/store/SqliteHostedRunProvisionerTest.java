@@ -15,9 +15,10 @@ import org.junit.jupiter.api.io.TempDir;
 import com.samlscope.core.access.RunAccessGrant;
 import com.samlscope.core.plan.MetadataDeliveryKind;
 import com.samlscope.core.plan.MetadataSourceKind;
-import com.samlscope.core.plan.PlanProfile;
+import com.samlscope.core.profile.FunctionalProfile;
 import com.samlscope.core.plan.TargetKind;
 import com.samlscope.core.plan.TestPlan;
+import com.samlscope.core.plan.PlanConfigurationConflict;
 import com.samlscope.core.run.Reachability;
 import com.samlscope.core.run.RunStatus;
 import com.samlscope.core.run.TestRun;
@@ -104,12 +105,12 @@ class SqliteHostedRunProvisionerTest {
                 plan.declaredFeatures(), new TestPlan.Parameters(180, 300, "", TestPlan.RequestSigningMode.REQUIRED),
                 plan.interaction(), plan.createdAt(), Instant.ofEpochSecond(1));
         org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class,
-                () -> fixture.provisioner.updatePlanUnlessActiveRetarget(changed));
+                () -> fixture.provisioner.updatePlan(changed));
         assertEquals(plan, fixture.plans.find(plan.id()).orElseThrow());
     }
 
     @Test
-    void preventsRetargetingAPlanWithAnActiveRunButAllowsOtherEdits() {
+    void preventsRetargetingAPlanWithAnActiveRunButAllowsNameEdits() {
         var fixture = fixture();
         var plan = plan("plan_active", "https://first.example/idp");
         var run = run("run_active", plan.id(), RunStatus.CREATED);
@@ -118,16 +119,16 @@ class SqliteHostedRunProvisionerTest {
         var renamed = new TestPlan(
                 plan.id(), "Renamed", plan.profile(), plan.target(), plan.suiteMetadataDelivery(),
                 plan.declaredFeatures(), plan.parameters(), plan.interaction(), plan.createdAt(), Instant.ofEpochSecond(1));
-        assertTrue(fixture.provisioner.updatePlanUnlessActiveRetarget(renamed));
+        fixture.provisioner.updatePlan(renamed);
         assertEquals("Renamed", fixture.plans.find(plan.id()).orElseThrow().name());
 
         var retargeted = plan(plan.id(), "https://second.example/idp");
-        assertFalse(fixture.provisioner.updatePlanUnlessActiveRetarget(retargeted));
+        assertThrows(PlanConfigurationConflict.class, () -> fixture.provisioner.updatePlan(retargeted));
         assertEquals(plan.target().entityId(), fixture.plans.find(plan.id()).orElseThrow().target().entityId());
     }
 
     @Test
-    void permitsRetargetingAfterThePlansRunBecomesTerminal() {
+    void preservesTargetAfterThePlansRunBecomesTerminal() {
         var fixture = fixture();
         var plan = plan("plan_terminal", "https://first.example/idp");
         var run = run("run_terminal", plan.id(), RunStatus.CREATED);
@@ -135,13 +136,12 @@ class SqliteHostedRunProvisionerTest {
         fixture.runs.save(run(run.id(), plan.id(), RunStatus.ABORTED));
 
         var retargeted = plan(plan.id(), "https://second.example/idp");
-        assertTrue(fixture.provisioner.updatePlanUnlessActiveRetarget(retargeted));
-        assertEquals(retargeted.target().entityId(),
-                fixture.plans.find(plan.id()).orElseThrow().target().entityId());
+        assertThrows(PlanConfigurationConflict.class, () -> fixture.provisioner.updatePlan(retargeted));
+        assertEquals(plan, fixture.plans.find(plan.id()).orElseThrow());
     }
 
     @Test
-    void serializesRetargetingAgainstRunCreationUsingTheCurrentStoredTarget() throws Exception {
+    void serializesConfigurationChangesAgainstRunCreation() throws Exception {
         var fixture = fixture();
         var occupied = plan("plan_occupied", "https://occupied.example/idp");
         var occupiedRun = run("run_occupied", occupied.id(), RunStatus.CREATED);
@@ -158,7 +158,12 @@ class SqliteHostedRunProvisionerTest {
             var update = executor.submit(() -> {
                 ready.countDown();
                 assertTrue(start.await(2, TimeUnit.SECONDS));
-                return fixture.provisioner.updatePlanUnlessActiveRetarget(retargeted);
+                try {
+                    fixture.provisioner.updatePlan(retargeted);
+                    return true;
+                } catch (PlanConfigurationConflict conflict) {
+                    return false;
+                }
             });
             var create = executor.submit(() -> {
                 ready.countDown();
@@ -234,7 +239,7 @@ class SqliteHostedRunProvisionerTest {
     }
 
     private TestPlan plan(String id, String entityId) {
-        return new TestPlan(id, id, PlanProfile.IDP_CORE,
+        return new TestPlan(id, id, FunctionalProfile.BROWSER_SSO_IDP,
                 new TestPlan.Target(TargetKind.IDP, entityId,
                         new TestPlan.MetadataSource(MetadataSourceKind.URL, entityId + "/metadata")),
                 MetadataDeliveryKind.MANUAL, Map.of(), TestPlan.Parameters.defaults(),

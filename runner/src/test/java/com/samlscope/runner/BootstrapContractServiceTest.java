@@ -26,7 +26,7 @@ import com.samlscope.core.caseexec.OutboxStatus;
 import com.samlscope.core.caseexec.WaitCondition;
 import com.samlscope.core.plan.MetadataDeliveryKind;
 import com.samlscope.core.plan.MetadataSourceKind;
-import com.samlscope.core.plan.PlanProfile;
+import com.samlscope.core.profile.FunctionalProfile;
 import com.samlscope.core.plan.PlanRepository;
 import com.samlscope.core.plan.TargetKind;
 import com.samlscope.core.plan.TargetRole;
@@ -127,7 +127,7 @@ class BootstrapContractServiceTest {
 
     private static TestPlan plan(MetadataDeliveryKind delivery) {
         return new TestPlan(
-                "plan", "Target", PlanProfile.IDP_CORE,
+                "plan", "Target", FunctionalProfile.BROWSER_SSO_IDP,
                 new TestPlan.Target(TargetKind.IDP, "https://idp.example/entity",
                         new TestPlan.MetadataSource(MetadataSourceKind.URL, "https://idp.example/metadata")),
                 delivery, Map.of(), TestPlan.Parameters.defaults(), TestPlan.Interaction.defaults(), NOW, NOW);

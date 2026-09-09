@@ -177,7 +177,7 @@ def prepare_fixture(samlscope_base: str, keycloak_base: str, target_metadata_url
 
     plan_request = {
         "name": "Keycloak 26.7.2 IdP smoke",
-        "profile": "IDP_CORE",
+        "profile": "browser_sso_idp",
         "targetKind": "IDP",
         "targetEntityId": f"{keycloak_base}/realms/samlscope",
         "metadataSourceKind": "URL",
@@ -189,7 +189,7 @@ def prepare_fixture(samlscope_base: str, keycloak_base: str, target_metadata_url
             "metadataRefreshWaitSeconds": 300,
             "testUserHint": "samlscope-m0-user",
         },
-        "interaction": {"allowBrowserSteps": True, "allowAttestation": True},
+        "interaction": {"allowBrowserSteps": True, "allowAttestation": False, "preset": "quick"},
         "authorizedTarget": True,
     }
     plan_document = json.loads(request_bytes(

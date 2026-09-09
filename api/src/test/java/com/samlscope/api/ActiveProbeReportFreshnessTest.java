@@ -26,11 +26,11 @@ class ActiveProbeReportFreshnessTest {
         var config = new AppConfig(AppConfig.Mode.SELFHOSTED,
                 URI.create("http://127.0.0.1:8080"), URI.create("http://127.0.0.1:8080"),
                 data, 8080, true, false, false, "sha256:" + "1".repeat(64), "");
-        var app = SamlScopeApplication.create(config).start(0);
+        var app = FunctionalProfileTestInstallation.create(config).start(0);
         try {
             base = URI.create("http://127.0.0.1:" + app.port());
             var plan = post("/api/plans", """
-                    {"name":"Report regression","profile":"IDP_CORE","targetKind":"IDP",
+                    {"name":"Report regression","profile":"browser_sso_idp","targetKind":"IDP",
                     "targetEntityId":"https://idp.example/entity","metadataSourceKind":"URL",
                     "metadataSourceLocation":"https://idp.example/metadata","suiteMetadataDelivery":"HTTP_URL",
                     "declaredFeatures":{},"parameters":{"clockSkewToleranceSeconds":180,

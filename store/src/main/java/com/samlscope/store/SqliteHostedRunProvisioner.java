@@ -61,24 +61,16 @@ public final class SqliteHostedRunProvisioner {
         }
     }
 
-    /**
-     * Updates a Plan atomically with Run creation. A target entity ID cannot change while
-     * that Plan has a non-terminal Run; other Plan edits remain allowed.
-     */
-    public boolean updatePlanUnlessActiveRetarget(TestPlan updated) {
+    /** Serializes configuration updates with Run creation and preserves all Run provenance. */
+    public void updatePlan(TestPlan updated) {
         try (var connection = database.open()) {
             execute(connection, "BEGIN IMMEDIATE");
             try {
                 var existing = findPlan(connection, updated.id())
                         .orElseThrow(() -> new IllegalArgumentException("Unknown Test Plan"));
-                var changesTarget = !existing.target().entityId().equals(updated.target().entityId());
-                if (changesTarget && hasActiveRunForPlan(connection, updated.id())) {
-                    execute(connection, "ROLLBACK");
-                    return false;
-                }
+                PlanWritePolicy.requireAllowed(connection, existing, updated);
                 updatePlan(connection, updated);
                 execute(connection, "COMMIT");
-                return true;
             } catch (SQLException error) {
                 rollback(connection, error);
                 throw error;
@@ -151,19 +143,6 @@ public final class SqliteHostedRunProvisioner {
         }
     }
 
-    private boolean hasActiveRunForPlan(Connection connection, String planId) throws SQLException {
-        try (var statement = connection.prepareStatement("""
-                SELECT 1 FROM runs
-                WHERE plan_id = ? AND status NOT IN ('COMPLETED', 'ABORTED')
-                LIMIT 1
-                """)) {
-            statement.setString(1, planId);
-            try (var rows = statement.executeQuery()) {
-                return rows.next();
-            }
-        }
-    }
-
     private void insertPlan(Connection connection, TestPlan plan) throws SQLException {
         try (var statement = connection.prepareStatement(
                 "INSERT INTO plans(id, document_json, created_at, updated_at) VALUES(?, ?, ?, ?)")) {
@@ -186,14 +165,13 @@ public final class SqliteHostedRunProvisioner {
 
     private void updatePlan(Connection connection, TestPlan plan) throws SQLException {
         try (var statement = connection.prepareStatement(
-                "UPDATE plans SET document_json = ?, updated_at = ? WHERE id = ? "
-                        + "AND COALESCE(json_extract(document_json, '$.parameters.requestSigningMode'), 'OPTIONAL') = ?")) {
+                "UPDATE plans SET document_json = ?, updated_at = ? WHERE id = ?")) {
             statement.setString(1, json.write(plan));
             statement.setString(2, plan.updatedAt().toString());
             statement.setString(3, plan.id());
-            statement.setString(4, plan.parameters().requestSigningMode().name());
-            if (statement.executeUpdate() != 1) throw new IllegalArgumentException(
-                    "Unknown Test Plan or changed request signing mode; create a separate Test Plan");
+            if (statement.executeUpdate() != 1) {
+                throw new IllegalArgumentException("Unknown Test Plan");
+            }
         }
     }
 

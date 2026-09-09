@@ -27,7 +27,7 @@ import com.samlscope.core.evaluation.CaseOutcome;
 import com.samlscope.core.evaluation.Outcome;
 import com.samlscope.core.plan.MetadataDeliveryKind;
 import com.samlscope.core.plan.MetadataSourceKind;
-import com.samlscope.core.plan.PlanProfile;
+import com.samlscope.core.profile.FunctionalProfile;
 import com.samlscope.core.plan.TargetKind;
 import com.samlscope.core.plan.TargetRole;
 import com.samlscope.core.plan.TestPlan;
@@ -69,25 +69,31 @@ class AutomatedCaseRunnerTest {
 
     @Test
     void startsActiveCasesDuringTheRunAndPassiveCasesOnlyAfterTranscriptCompletion() {
-        var during = runner.startReady(RUN_ID, PlanProfile.IDP_CORE, context(false));
+        var definition = definition(FunctionalProfile.BROWSER_SSO_IDP);
+        var during = runner.startReady(RUN_ID, definition, context(false));
         assertEquals(List.of(IdpErrorResponseTestCase.CASE_ID), during.stream().map(value -> value.caseId()).toList());
         assertEquals(CaseExecutionStatus.WAITING_INBOUND, during.getFirst().status());
         assertEquals(1, repository.listOutbox(RUN_ID).size());
 
-        var completed = runner.startReady(RUN_ID, PlanProfile.IDP_CORE, context(true));
+        var completed = runner.startReady(RUN_ID, definition, context(true));
         assertEquals(2, completed.size());
         assertEquals(CaseExecutionStatus.FINISHED,
                 repository.find(RUN_ID, "IIP-G03-a-idp-01").orElseThrow().status());
         assertEquals(1, repository.listOutbox(RUN_ID).size());
 
-        runner.startReady(RUN_ID, PlanProfile.IDP_CORE, context(true));
+        runner.startReady(RUN_ID, definition, context(true));
         assertEquals(1, repository.listOutbox(RUN_ID).size());
     }
 
     @Test
     void refusesAProfileForAnotherTargetRole() {
         assertThrows(IllegalArgumentException.class,
-                () -> runner.startReady(RUN_ID, PlanProfile.SP_CORE, context(false)));
+                () -> runner.startReady(RUN_ID, definition(FunctionalProfile.BROWSER_SSO_SP), context(false)));
+    }
+
+    private com.samlscope.core.profile.FunctionalCaseDefinition definition(FunctionalProfile profile) {
+        return FunctionalCaseFixtures.automated(
+                profile, IdpErrorResponseTestCase.CASE_ID, "IIP-G03-a-idp-01");
     }
 
     private TestCase activeCase() {
@@ -138,7 +144,7 @@ class AutomatedCaseRunnerTest {
 
     private TestPlan plan() {
         return new TestPlan(
-                "plan_0123456789ABCDEFGHJKMNPQRS", "Automated case runner test", PlanProfile.IDP_CORE,
+                "plan_0123456789ABCDEFGHJKMNPQRS", "Automated case runner test", FunctionalProfile.BROWSER_SSO_IDP,
                 new TestPlan.Target(TargetKind.IDP, "https://idp.example/entity",
                         new TestPlan.MetadataSource(MetadataSourceKind.URL, "https://idp.example/metadata")),
                 MetadataDeliveryKind.MANUAL, Map.of(), TestPlan.Parameters.defaults(), TestPlan.Interaction.defaults(), NOW, NOW);

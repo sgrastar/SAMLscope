@@ -18,7 +18,7 @@ import com.samlscope.core.caseexec.CaseExecutionStatus;
 import com.samlscope.core.evaluation.Outcome;
 import com.samlscope.core.plan.MetadataDeliveryKind;
 import com.samlscope.core.plan.MetadataSourceKind;
-import com.samlscope.core.plan.PlanProfile;
+import com.samlscope.core.profile.FunctionalProfile;
 import com.samlscope.core.plan.TargetKind;
 import com.samlscope.core.plan.TargetRole;
 import com.samlscope.core.plan.TestPlan;
@@ -28,6 +28,7 @@ import com.samlscope.core.run.TestRun;
 import com.samlscope.runner.AutomatedCaseRunner;
 import com.samlscope.runner.CaseExecutionService;
 import com.samlscope.runner.DefaultCaseContext;
+import com.samlscope.runner.FunctionalCaseFixtures;
 import com.samlscope.saml.crypto.FilePlanKeyStore;
 import com.samlscope.store.FileTranscriptRecorder;
 import com.samlscope.store.JsonCodec;
@@ -76,11 +77,11 @@ class AutomatedCaseEmptyEvidenceTest {
                 plan.interaction(),
                 Reachability.CONFIRMED, transcript, true);
 
-        var snapshot = runner.startReady(RUN_ID, plan.profile(), context);
+        var selected = registry.forRole(TargetRole.IDP).stream().map(value -> value.id()).toArray(String[]::new);
+        var snapshot = runner.startReady(
+                RUN_ID, FunctionalCaseFixtures.automated(plan.profile(), selected), context);
 
-        assertEquals(registry.forRole(TargetRole.IDP).stream()
-                .filter(value -> AutomatedCaseRegistry.includedIn(value.id(), plan.profile())).count(), snapshot.size());
-        assertFalse(snapshot.stream().anyMatch(value -> AutomatedCaseRegistry.fullProfileCaseIds().contains(value.caseId())));
+        assertEquals(registry.forRole(TargetRole.IDP).size(), snapshot.size());
         var finished = snapshot.stream().filter(value -> value.status() == CaseExecutionStatus.FINISHED).toList();
         assertEquals(snapshot.size() - 1, finished.size(), "Only the active error probe should still be waiting");
         assertFalse(finished.stream().anyMatch(value -> value.outcome().outcome() == Outcome.VIOLATED),
@@ -95,7 +96,7 @@ class AutomatedCaseEmptyEvidenceTest {
         var database = new SqliteDatabase(directory);
         var json = new JsonCodec();
         var plan = new TestPlan(
-                PLAN_ID, "Empty SP evidence", PlanProfile.SP_CORE,
+                PLAN_ID, "Empty SP evidence", FunctionalProfile.BROWSER_SSO_SP,
                 new TestPlan.Target(TargetKind.SP, "https://sp.example/entity",
                         new TestPlan.MetadataSource(MetadataSourceKind.URL, "https://sp.example/metadata")),
                 MetadataDeliveryKind.MANUAL, Map.of(), TestPlan.Parameters.defaults(),
@@ -124,11 +125,11 @@ class AutomatedCaseEmptyEvidenceTest {
                 plan.interaction(),
                 Reachability.CONFIRMED, transcript, true);
 
-        var snapshot = runner.startReady(RUN_ID, plan.profile(), context);
+        var selected = registry.forRole(TargetRole.SP).stream().map(value -> value.id()).toArray(String[]::new);
+        var snapshot = runner.startReady(
+                RUN_ID, FunctionalCaseFixtures.automated(plan.profile(), selected), context);
 
-        assertEquals(registry.forRole(TargetRole.SP).stream()
-                .filter(value -> AutomatedCaseRegistry.includedIn(value.id(), plan.profile())).count(), snapshot.size());
-        assertFalse(snapshot.stream().anyMatch(value -> AutomatedCaseRegistry.fullProfileCaseIds().contains(value.caseId())));
+        assertEquals(registry.forRole(TargetRole.SP).size(), snapshot.size());
         assertEquals(snapshot.size(), snapshot.stream()
                 .filter(value -> value.status() == CaseExecutionStatus.FINISHED).count());
         assertFalse(snapshot.stream().anyMatch(value -> value.outcome().outcome() == Outcome.VIOLATED),
@@ -153,7 +154,7 @@ class AutomatedCaseEmptyEvidenceTest {
 
     private TestPlan plan() {
         return new TestPlan(
-                PLAN_ID, "Empty evidence", PlanProfile.IDP_CORE,
+                PLAN_ID, "Empty evidence", FunctionalProfile.BROWSER_SSO_IDP,
                 new TestPlan.Target(TargetKind.IDP, "https://idp.example/entity",
                         new TestPlan.MetadataSource(MetadataSourceKind.URL, "https://idp.example/metadata")),
                 MetadataDeliveryKind.MANUAL, Map.of(), TestPlan.Parameters.defaults(),

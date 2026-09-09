@@ -15,7 +15,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import com.samlscope.core.plan.MetadataDeliveryKind;
 import com.samlscope.core.plan.MetadataSourceKind;
-import com.samlscope.core.plan.PlanProfile;
+import com.samlscope.core.profile.FunctionalProfile;
 import com.samlscope.core.plan.TargetKind;
 import com.samlscope.core.plan.TestPlan;
 import com.samlscope.core.run.RunStatus;
@@ -84,7 +84,7 @@ class SloPeerServiceTest {
         var plans = new SqlitePlanRepository(database, json);
         var runs = new SqliteRunRepository(database, json);
         var plan = new TestPlan(
-                "plan_0123456789ABCDEFGHJKMNPQRS", "IdP target", PlanProfile.IDP_FULL,
+                "plan_0123456789ABCDEFGHJKMNPQRS", "IdP target", FunctionalProfile.SINGLE_LOGOUT_IDP,
                 new TestPlan.Target(TargetKind.IDP, "https://idp.example/entity",
                         new TestPlan.MetadataSource(MetadataSourceKind.URL, "https://idp.example/metadata")),
                 MetadataDeliveryKind.HTTP_URL, Map.of(), TestPlan.Parameters.defaults(),

@@ -14,7 +14,7 @@ import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import com.samlscope.core.plan.MetadataDeliveryKind;
 import com.samlscope.core.plan.MetadataSourceKind;
-import com.samlscope.core.plan.PlanProfile;
+import com.samlscope.core.profile.FunctionalProfile;
 import com.samlscope.core.plan.PlanRepository;
 import com.samlscope.core.plan.TargetKind;
 import com.samlscope.core.plan.TestPlan;
@@ -193,7 +193,7 @@ class MetadataLabServiceTest {
 
     private static TestPlan plan() {
         return new TestPlan(
-                "plan", "Target", PlanProfile.IDP_CORE,
+                "plan", "Target", FunctionalProfile.BROWSER_SSO_IDP,
                 new TestPlan.Target(TargetKind.IDP, "https://idp.example/entity",
                         new TestPlan.MetadataSource(MetadataSourceKind.URL, "https://idp.example/metadata")),
                 MetadataDeliveryKind.HTTP_URL, Map.of(), TestPlan.Parameters.defaults(),

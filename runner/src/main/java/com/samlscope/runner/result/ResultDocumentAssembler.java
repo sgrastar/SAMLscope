@@ -42,7 +42,7 @@ public final class ResultDocumentAssembler {
         caseRuns = List.copyOf(caseRuns == null ? List.of() : caseRuns);
         java.util.Objects.requireNonNull(context, "context");
         if (!run.planId().equals(plan.id())) throw new IllegalArgumentException("Run does not belong to plan");
-        RunResultInvariantValidator.validate(catalog, plan, evaluation);
+        RunResultInvariantValidator.validateSelectedObligations(catalog, evaluation);
 
         var sourceByKey = catalog.byKey();
         var resultByKey = new LinkedHashMap<String, RunResult.ObligationResult>();

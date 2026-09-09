@@ -30,7 +30,7 @@ import com.samlscope.core.evaluation.EvidenceRef;
 import com.samlscope.core.evaluation.Outcome;
 import com.samlscope.core.plan.MetadataDeliveryKind;
 import com.samlscope.core.plan.MetadataSourceKind;
-import com.samlscope.core.plan.PlanProfile;
+import com.samlscope.core.profile.FunctionalProfile;
 import com.samlscope.core.plan.TargetKind;
 import com.samlscope.core.plan.TargetRole;
 import com.samlscope.core.plan.TestPlan;
@@ -374,7 +374,7 @@ class CaseExecutionServiceTest {
         return new TestPlan(
                 "plan_0123456789ABCDEFGHJKMNPQRS",
                 "Case execution test",
-                PlanProfile.IDP_CORE,
+                FunctionalProfile.BROWSER_SSO_IDP,
                 new TestPlan.Target(
                         TargetKind.IDP,
                         "https://idp.example/entity",
