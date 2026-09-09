@@ -8,15 +8,24 @@ import com.samlscope.core.casedef.CaseDefinitionCatalogMapper;
 import com.samlscope.core.evaluation.CoverageCatalogMapper;
 import com.samlscope.core.profile.FunctionalCaseDefinitionLoader;
 import com.samlscope.core.profile.FunctionalProfile;
+import java.security.MessageDigest;
+import java.util.HexFormat;
 import java.util.Map;
+import java.util.Set;
 import org.junit.jupiter.api.Test;
 
 class FunctionalProfileDocumentsTest {
     @Test
-    void reviewCandidatesAreNotInstalledWithoutAnIndependentReleasePin() {
+    void everyReleasedProfileIsInstalledUnderItsExactArtifactPin() throws Exception {
         var bundle = FunctionalProfileDocuments.load();
-        assertTrue(bundle.artifacts().isEmpty());
-        assertTrue(bundle.digests().isEmpty());
+        var expected = Set.of(FunctionalProfile.values());
+        assertEquals(expected, bundle.artifacts().keySet());
+        assertEquals(expected, bundle.digests().keySet());
+        for (var profile : expected) {
+            var actual = "sha256:" + HexFormat.of().formatHex(
+                    MessageDigest.getInstance("SHA-256").digest(bundle.artifacts().get(profile)));
+            assertEquals(actual, bundle.digests().get(profile));
+        }
     }
 
     @Test
