@@ -11,7 +11,8 @@ export const profileCatalog: Array<{ id: Profile; title: string; description: st
 ]
 
 export function profileLabel(id: string) {
-  return profileCatalog.find(profile => profile.id === id)?.title ?? id
+  const normalized = id.replaceAll('-', '_')
+  return profileCatalog.find(profile => profile.id === normalized)?.title ?? id
 }
 
 export function profileRole(profile: Profile): 'IDP' | 'SP' {

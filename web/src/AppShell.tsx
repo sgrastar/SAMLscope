@@ -1,7 +1,7 @@
 import { ReactNode, useEffect, useState } from 'react'
 import { api, type AuthSession } from './api'
 
-type CurrentSurface = 'plans' | 'run' | 'report' | 'access'
+type CurrentSurface = 'plans' | 'run' | 'report' | 'access' | 'licenses'
 
 export function AppShell({
   children,
@@ -48,6 +48,7 @@ export function AppShell({
       >{theme === 'dark' ? 'Light' : 'Dark'}</button>
     </header>
     {children}
+    <footer className="shell legal"><a href="/licenses">Licenses and sources</a></footer>
   </div>
 }
 

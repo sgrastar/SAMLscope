@@ -46,6 +46,7 @@ import com.samlscope.runner.result.EvaluationArtifactDigests;
 import com.samlscope.runner.result.ResultDocumentContext;
 import com.samlscope.runner.result.ResultJsonWriter;
 import com.samlscope.runner.result.ResultPublicationService;
+import com.samlscope.runner.result.ReportHtmlWriter;
 import com.samlscope.saml.crypto.FilePlanKeyStore;
 import com.samlscope.saml.metadata.TargetMetadataParser;
 import com.samlscope.store.FileRunArtifactRepository;
@@ -420,7 +421,11 @@ final class M1Runtime {
                     run -> metadataCache.getRunSnapshot(run.id(), run.planId()),
                     campaigns::report);
             results = new ResultPublicationService(
-                    coverage, evaluator, contexts, new ResultJsonWriter(), artifacts);
+                    coverage, evaluator, contexts, new ResultJsonWriter(), artifacts,
+                    new ReportHtmlWriter(
+                            resource("/META-INF/samlscope/LICENSE"),
+                            resource("/META-INF/samlscope/LICENSING.md"),
+                            resource("/META-INF/samlscope/LICENSES/source-notices.json")));
         }
         var access = new RunAccessService(
                 config.publicBaseUrl(), runs, new SqliteRunAccessGrantRepository(database), clock);
@@ -682,6 +687,15 @@ final class M1Runtime {
             requireManualReconciliationAllowed(runId);
             return operation.get();
         });
+    }
+
+    private static byte[] resource(String path) {
+        try (var stream = M1Runtime.class.getResourceAsStream(path)) {
+            if (stream == null) throw new IllegalStateException("Missing distribution notice: " + path);
+            return stream.readAllBytes();
+        } catch (java.io.IOException error) {
+            throw new IllegalStateException("Could not read distribution notice: " + path, error);
+        }
     }
 
     private void requireManualReconciliationAllowed(String runId) {

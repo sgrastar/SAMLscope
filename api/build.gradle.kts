@@ -24,7 +24,20 @@ application {
     applicationName = "samlscope"
 }
 
+// Keep the software license, scope statement and retained source notices with distributions.
+val softwareLicenseFiles = rootProject.files("LICENSE", "LICENSING.md")
+distributions {
+    main {
+        contents {
+            from(softwareLicenseFiles)
+            from(rootProject.file("LICENSES")) { into("LICENSES") }
+        }
+    }
+}
+
 tasks.processResources {
+    from(softwareLicenseFiles) { into("META-INF/samlscope") }
+    from(rootProject.file("LICENSES")) { into("META-INF/samlscope/LICENSES") }
     dependsOn(":web:buildWeb")
     from(project(":web").layout.buildDirectory.dir("dist")) {
         into("public")

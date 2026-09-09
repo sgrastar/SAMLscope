@@ -20,13 +20,14 @@ public final class ResultPublicationService implements ResultArtifactQuery, Repo
             RunEvaluationService evaluation,
             ResultContextProvider contexts,
             ResultJsonWriter json,
-            RunArtifactRepository artifacts) {
+            RunArtifactRepository artifacts,
+            ReportHtmlWriter reportHtml) {
         this.catalog = Objects.requireNonNull(catalog, "catalog");
         this.evaluation = Objects.requireNonNull(evaluation, "evaluation");
         this.contexts = Objects.requireNonNull(contexts, "contexts");
         this.json = Objects.requireNonNull(json, "json");
         this.artifacts = Objects.requireNonNull(artifacts, "artifacts");
-        this.reportHtml = new ReportHtmlWriter();
+        this.reportHtml = Objects.requireNonNull(reportHtml, "reportHtml");
     }
 
     public byte[] generate(String runId) {

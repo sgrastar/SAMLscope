@@ -342,6 +342,11 @@ public final class SamlScopeApplication {
                                com.samlscope.store.SqliteTargetConnectionRepository targetConnections) {
         javalin.routes.get("/", SamlScopeApplication::serveIndex);
         javalin.routes.get("/reports/{run}", SamlScopeApplication::serveIndex);
+        javalin.routes.get("/licenses", SamlScopeApplication::serveIndex);
+        javalin.routes.get("/licenses/source-notices.json", ctx ->
+                serveClasspath(ctx, "/public/licenses/source-notices.json", "application/json; charset=utf-8"));
+        javalin.routes.get("/licenses/browser-dependencies.json", ctx ->
+                serveClasspath(ctx, "/public/licenses/browser-dependencies.json", "application/json; charset=utf-8"));
         javalin.routes.get("/manage/{run}", SamlScopeApplication::serveIndex);
         javalin.routes.get("/browser/{run}/{caseId}", SamlScopeApplication::serveIndex);
         javalin.routes.get("/assets/{file}", SamlScopeApplication::serveAsset);

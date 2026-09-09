@@ -60,6 +60,26 @@ final class FunctionalProfileTestInstallation {
         }
     }
 
+    /** Installs the checked-in review candidates without changing the production release allowlist. */
+    static Javalin createWithCandidates(AppConfig config) {
+        try {
+            var artifacts = new java.util.EnumMap<FunctionalProfile,byte[]>(FunctionalProfile.class);
+            var pins = new java.util.EnumMap<FunctionalProfile,String>(FunctionalProfile.class);
+            for (var profile : FunctionalProfile.values()) {
+                try (var stream = FunctionalProfileTestInstallation.class.getResourceAsStream(
+                        "/profiles/" + profile.id() + ".json")) {
+                    if (stream == null) throw new IllegalStateException("Missing profile candidate: " + profile.id());
+                    var artifact = stream.readAllBytes();
+                    artifacts.put(profile, artifact);
+                    pins.put(profile, digest(artifact));
+                }
+            }
+            return SamlScopeApplication.create(config, null, artifacts, pins);
+        } catch (Exception error) {
+            throw new IllegalStateException("Could not install functional profile candidates", error);
+        }
+    }
+
     private static String digest(byte[] value) throws Exception {
         return "sha256:" + java.util.HexFormat.of().formatHex(
                 MessageDigest.getInstance("SHA-256").digest(value));

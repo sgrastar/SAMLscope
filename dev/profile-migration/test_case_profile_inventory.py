@@ -23,7 +23,7 @@ class CaseProfileInventoryTest(unittest.TestCase):
         self.assertEqual({case["id"] for case in approved}, {row["case_id"] for row in rows})
         self.assertEqual(len(approved), len(rows))
 
-    def test_case_semantics_are_preserved(self):
+    def test_inventory_uses_approved_case_identity_without_copying_execution_detail(self):
         import yaml
 
         approved = {
@@ -32,18 +32,13 @@ class CaseProfileInventoryTest(unittest.TestCase):
         }
         for row in self.inventory["cases"]:
             source = approved[row["case_id"]]
-            self.assertEqual(source.get("covers_variants") or [], row["variant_references"])
-            self.assertEqual(source.get("variant_plan") or [], row["variant_plan"])
-            self.assertEqual(source.get("variant_groups") or [], row["variant_groups"])
-            self.assertEqual(source.get("controls") or [], row["controls"])
-            self.assertEqual(source.get("requires") or {}, row["requires"])
             self.assertEqual(source["case_digest"], row["case_digest"])
+            for field in ("variant_references", "variant_plan", "variant_groups", "controls", "requires"):
+                self.assertNotIn(field, row)
 
     def test_membership_is_role_safe_and_complete(self):
         for row in self.inventory["cases"]:
             self.assertTrue(row["profiles"], row["case_id"])
-            self.assertFalse(row["missing_membership_references"], row["case_id"])
-            self.assertFalse(row["extra_membership_references"], row["case_id"])
             self.assertTrue(all(profile.endswith("_" + row["role"]) for profile in row["profiles"]))
         self.assertEqual(0, self.inventory["summary"]["by_classification"]["4"])
 
@@ -51,10 +46,18 @@ class CaseProfileInventoryTest(unittest.TestCase):
         split = {row["case_id"] for row in self.inventory["cases"] if row["classification"] == 3}
         self.assertEqual(set(), split)
 
+    def test_approval_only_status_is_separate_from_case_reuse(self):
+        self.assertEqual(set(module.PROFILES), set(self.inventory["approval_only_profile_candidates"]))
+        self.assertNotIn("5", self.inventory["summary"]["by_classification"])
+
     def test_inventory_does_not_define_runtime_items(self):
-        self.assertIsNone(self.inventory["summary"]["runtime_item_count"])
         self.assertEqual("approved_case", self.inventory["execution_unit"])
         self.assertNotIn("items", self.inventory)
+        self.assertNotIn("runtime_item_count", self.inventory["summary"])
+        self.assertEqual(
+            "dev/profile-migration/case-profile-membership-draft.json",
+            self.inventory["membership_source"],
+        )
 
     def test_non_observable_owners_remain_explicit_without_inventing_cases(self):
         self.assertEqual(

@@ -1,0 +1,589 @@
+{
+  "schema_version": 1,
+  "version": "functional-case-v1",
+  "profile": "metadata_sp",
+  "source_digests": {
+    "tests/coverage.yaml": "sha256:2bee3db74c9be9908710bbe18935c73454f1ed4c5c0f06bdab1cf18deaef843c",
+    "tests/cases.yaml": "sha256:431d9aa863d5d882d37266667a8fd20547d1fe6d037274b8d59ff66347f5ecd4",
+    "tests/predicates.yaml": "sha256:ea0aec770d743d0c8315c706ae80fb5979a103021ebdc4fcf86187c052e90262"
+  },
+  "cases": [
+    {
+      "id": "IIP-G01-a-sp-01",
+      "digest": "sha256:558986067bf29c0de7f3a0534ea031f4e320627cdca231ebea7e1683f081c8ab"
+    },
+    {
+      "id": "IIP-MD01-b-sp-01",
+      "digest": "sha256:c98d32419d3707286ec2b06a46574b392e19b86c0eb59339e2f83e8975069d2e"
+    },
+    {
+      "id": "IIP-MD01-c-sp-01",
+      "digest": "sha256:cdb1817f70b3e5cf89b48392d42f6a79a0ad2682449959efbfeb764ae555cf54"
+    },
+    {
+      "id": "IIP-MD02-a-sp-01",
+      "digest": "sha256:131cf43f77edfb5e364c529240d038f3795ba679af44e6f23fb5c4f5a497a3e4"
+    },
+    {
+      "id": "IIP-MD02-b-sp-01",
+      "digest": "sha256:12a7bdac67b6bcacac3197890a3b24c918e972b8424c874ab4a5b0cd6f3c5bae"
+    },
+    {
+      "id": "IIP-MD02-c-sp-01",
+      "digest": "sha256:eec35f8033fcc5b5847dfffddd6e7e0dd68665791cca2b02e37dff7f298d5c38"
+    },
+    {
+      "id": "IIP-MD02-d-sp-01",
+      "digest": "sha256:342db35585368dc293d92c4eec7dc9ba690c4c76ac6ad7304d2b2703b649f04d"
+    },
+    {
+      "id": "IIP-MD03-a-sp-01",
+      "digest": "sha256:0d89e6452cfc1fd365a6db6053cfcc875bf8648187a801b4ffb87a863bb1268a"
+    },
+    {
+      "id": "IIP-MD03-b-sp-01",
+      "digest": "sha256:61a1f412e8f4b84a63c5e85fd1e1487fe5fe226ea12bddbd917832ba33765391"
+    },
+    {
+      "id": "IIP-MD03-c-sp-01",
+      "digest": "sha256:7eb25aec9c1b6d3461e603722ecb1f633ce7db4c50cdb8cbc7b9690a26f95542"
+    },
+    {
+      "id": "IIP-MD03-d-sp-01",
+      "digest": "sha256:a7985002df2419fd50a5bdfca4cfa338e4a92a2515f1ba4804fbefade265edc1"
+    },
+    {
+      "id": "IIP-MD03-e-sp-01",
+      "digest": "sha256:8f4de0ece7efbda46cfe22fbee1762dd46045a4d26fbede2ad31c5a3c73080de"
+    },
+    {
+      "id": "IIP-MD04-a-sp-01",
+      "digest": "sha256:8b3b274f7811f0f552a755e8d650b356886a168d2618d5dce2390705e905cad2"
+    },
+    {
+      "id": "IIP-MD04-b-sp-01",
+      "digest": "sha256:c79a267c33a0fea16dbf6d3fdbf75cbba3164855928cb2ac7ec409e1a49cd944"
+    },
+    {
+      "id": "IIP-MD04-c-sp-01",
+      "digest": "sha256:990476e1e481dea3c09acb2a9c38539ca83bbdb6509f5c7a078c01c0ce8e17f5"
+    },
+    {
+      "id": "IIP-MD05-a-sp-01",
+      "digest": "sha256:6fe9da6f768dde4749ea4f7a66524833c19dab8a1dc4fb031a30445e5ad58c65"
+    },
+    {
+      "id": "IIP-MD05-a1-sp-01",
+      "digest": "sha256:b50047e55d6072dcb2d1deb7607fb95237016f1d39b0846402af5de77ac8fee5"
+    },
+    {
+      "id": "IIP-MD05-a2-sp-01",
+      "digest": "sha256:6f07d5ab042525ca398e6f55ff27c5f5ec3f360d6d17a8f6bdb703773897eb25"
+    },
+    {
+      "id": "IIP-MD05-a3-sp-01",
+      "digest": "sha256:957a5d0cfe3c7431305f986e8031e64853d743e152086fc050bab07ac6f14d17"
+    },
+    {
+      "id": "IIP-MD05-a4-sp-01",
+      "digest": "sha256:a7b00ca0a68d0a00f5a905838de4a5211745f7a7a66e608cc694a7dd9d1c4004"
+    },
+    {
+      "id": "IIP-MD05-a5-sp-01",
+      "digest": "sha256:05e234592da2c4d4edabd0f3a1c1ca7e74310f1f924ac228b6b29912f3337721"
+    },
+    {
+      "id": "IIP-MD05-a6-sp-01",
+      "digest": "sha256:42718b2b208ba140e8cb8a92cbd3ff5ddf29e78a069e941703e2464e982b161f"
+    },
+    {
+      "id": "IIP-MD05-a7-sp-01",
+      "digest": "sha256:4a349c458bab60c1262893156b697148749a96ee317f5eb910901f3db57d0f38"
+    },
+    {
+      "id": "IIP-MD05-a8-sp-01",
+      "digest": "sha256:08cb7fcc85208ad73bcb574dac2a30f0095488ceb60f7854fa901110ccfe2f05"
+    },
+    {
+      "id": "IIP-MD05-a9-sp-01",
+      "digest": "sha256:0d00a0ff5df6019ea9acb2d92c8bfd77a9253d39e03cc5d39bcb598a48a57a1f"
+    },
+    {
+      "id": "IIP-MD05-ab-sp-01",
+      "digest": "sha256:8237ac1ed99d7a7565323e150e9aba48c5ae4271d9063d8f3a747396829de754"
+    },
+    {
+      "id": "IIP-MD05-ac-sp-01",
+      "digest": "sha256:00d17299ecdb5704ff9905fec086880f189c9b3efaacf2245707d491a21edf88"
+    },
+    {
+      "id": "IIP-MD05-ad-sp-01",
+      "digest": "sha256:df20163dbe9e1a8e9157e212aa01ac74a511e93fe5c7c27921f326f0eae1f2b8"
+    },
+    {
+      "id": "IIP-MD05-ae-sp-01",
+      "digest": "sha256:ac0380cf044392e2361763510de7fd661232c492e981b1503f56d3bd385ee0fb"
+    },
+    {
+      "id": "IIP-MD05-af-sp-01",
+      "digest": "sha256:7ae3b63ed67c5e01ebc52406258245526dea73360746f2cc11fea0e3f5777c38"
+    },
+    {
+      "id": "IIP-MD05-ag-sp-01",
+      "digest": "sha256:5d00d61808a5af387a628de224d2289527c357083171419beffd007824a4fb42"
+    },
+    {
+      "id": "IIP-MD05-ah-sp-01",
+      "digest": "sha256:b63fc7b3b32bd7c614eb5005edb641abc61ff39b88da06329c4c4d7fe4e17a8b"
+    },
+    {
+      "id": "IIP-MD05-ai-sp-01",
+      "digest": "sha256:58dcf3bf07b3f9965450e54cd0d04847568e0c4d0034cb027dbacbcb1fd47d5a"
+    },
+    {
+      "id": "IIP-MD05-aj-sp-01",
+      "digest": "sha256:725a74d71735ce993ed2e7072855c7425d944e71bd29d8c793c10925d2e57038"
+    },
+    {
+      "id": "IIP-MD05-ak-sp-01",
+      "digest": "sha256:37cefb1f3a9954f455349c33b2e55273148e7a8d9e28ce767529beafccd90f12"
+    },
+    {
+      "id": "IIP-MD05-al-sp-01",
+      "digest": "sha256:eb87c0033f2e8f21497352c47adb5d32267574cf892f3dd57c0015f9a07514c5"
+    },
+    {
+      "id": "IIP-MD05-am-sp-01",
+      "digest": "sha256:e2f1de9aae45e2ce66120719183d036045265e2a6b77c715e1d22ff21c370bf3"
+    },
+    {
+      "id": "IIP-MD05-an-sp-01",
+      "digest": "sha256:cc7e0f7f823c3d97fda02c5afbfdc06c95f50a0d653f50efa68cc8a5c92f5d38"
+    },
+    {
+      "id": "IIP-MD05-ao-sp-01",
+      "digest": "sha256:37714318aa184f4c0d5b6cecab88e9aaf12b1ed3539b30cc68f02dcf37143e50"
+    },
+    {
+      "id": "IIP-MD05-ap-sp-01",
+      "digest": "sha256:48fc0d0ff2a568f282b64726f025004535bee09ecb4304fd7de5c564528dc296"
+    },
+    {
+      "id": "IIP-MD05-aq-sp-01",
+      "digest": "sha256:4187265c30de1ee44d19427cd062d0fb2933083bcfe183e62c77b5596971233e"
+    },
+    {
+      "id": "IIP-MD05-ar-sp-01",
+      "digest": "sha256:0e4243ed5118dfb6e04cd36a8f601fff2dd6055f90f8cca050878ff62795aff7"
+    },
+    {
+      "id": "IIP-MD05-as-sp-01",
+      "digest": "sha256:d8e76394262a97d456fa90117d7fdc7fb7cf870cbb7d59e91f1a4f63069a0005"
+    },
+    {
+      "id": "IIP-MD05-at-sp-01",
+      "digest": "sha256:8a106c5513393e2b137c1cdd78510cb9760065e9fbd4d85ea0fb846b426c086f"
+    },
+    {
+      "id": "IIP-MD05-au-sp-01",
+      "digest": "sha256:49ff3df45d975c1e04307cddd61ead771b634a5ca096f1c50b02b4fc513ad2bd"
+    },
+    {
+      "id": "IIP-MD05-av-sp-01",
+      "digest": "sha256:a846d215b23fab7a383fd92bbe7965844dafafe059e6ba0d808a1ea1e56b73d5"
+    },
+    {
+      "id": "IIP-MD05-aw-sp-01",
+      "digest": "sha256:33d2c2fe94c3e0df199809a5ec25733011982727a8576c583692149b9ad96ce9"
+    },
+    {
+      "id": "IIP-MD05-b-sp-01",
+      "digest": "sha256:eade6356ef9b721ac17d8798f5e6e7d5970cfe4cdf5d3d676ba146aa6a002deb"
+    },
+    {
+      "id": "IIP-MD05-c-sp-01",
+      "digest": "sha256:64991dd93f7385e2f4191ad048d9628f39f28cecd058df15bfa308a72c298b33"
+    },
+    {
+      "id": "IIP-MD05-c1-sp-01",
+      "digest": "sha256:b5a8bd5dfde391839ef0785b803535c7599076058f1c3dd7cbd1533e2e52781f"
+    },
+    {
+      "id": "IIP-MD05-c2-sp-01",
+      "digest": "sha256:de3d76c3c00fd7989f7d84e59eb5818a6c046593b31f68d01fb30d08a100bb89"
+    },
+    {
+      "id": "IIP-MD05-c3-sp-01",
+      "digest": "sha256:d79bba3b10e4453ce43e461b0b958dee94ad632a0803a0bd21e5f66e0631bc02"
+    },
+    {
+      "id": "IIP-MD05-c4-sp-01",
+      "digest": "sha256:f62d05276d29e3aece03de04ebf83271f8cd361a46573bd8ed9471adbf7c5deb"
+    },
+    {
+      "id": "IIP-MD05-c5-sp-01",
+      "digest": "sha256:d4a1525820affc7c555860b875bebd4e8c551fc318505e97408247a9e3cb6010"
+    },
+    {
+      "id": "IIP-MD05-c6-sp-01",
+      "digest": "sha256:c1412aa6da365a96781cb0cc3b4522f456a894a4f34b50199074f27976cdc06d"
+    },
+    {
+      "id": "IIP-MD05-c7-sp-01",
+      "digest": "sha256:34b1b6296cd7032d1838e58a1219164be296c552851312f718ec7ae613aa15a6"
+    },
+    {
+      "id": "IIP-MD05-c8-sp-01",
+      "digest": "sha256:40e92539f466af9b43e591ce8c414df66bc7aaa6cb03a473326eafc176cf794b"
+    },
+    {
+      "id": "IIP-MD05-c9-sp-01",
+      "digest": "sha256:12b92611baaf20368e68301a3ad0b57d0f25f747579402c886f9caee26be8333"
+    },
+    {
+      "id": "IIP-MD05-ca-sp-01",
+      "digest": "sha256:df6c164a7d14a9bb4645e2955b5ac9e8c7db2524eaa8c5d1c5b8959a3fa2752c"
+    },
+    {
+      "id": "IIP-MD05-cb-sp-01",
+      "digest": "sha256:d8659d9a6fb075999810e957595a22d429ca20809c46c8af1beb562db97f3c7a"
+    },
+    {
+      "id": "IIP-MD05-cc-sp-01",
+      "digest": "sha256:4eb3092124c082a9b22a713687af49ab1d2eeb6653b3016bbfda905376580f2f"
+    },
+    {
+      "id": "IIP-MD05-cd-sp-01",
+      "digest": "sha256:faa71e0c59102f483af48665144d775fd2256acff747ea34798a0a28eb33e146"
+    },
+    {
+      "id": "IIP-MD05-ce-sp-01",
+      "digest": "sha256:dc76ca5bde55de6cdcc590dca10d72e4f40d90bcedd6ae3c329b9ea172f061a8"
+    },
+    {
+      "id": "IIP-MD05-d-sp-01",
+      "digest": "sha256:6d961b741a5383f0868fb1ffef4cc23f882ff26b7c47c1252f8fce6dfe0554bd"
+    },
+    {
+      "id": "IIP-MD05-d1-sp-01",
+      "digest": "sha256:1958d00f7591e36de6e6a72b03d63fb1eda4534059b06d67eaa2bc1e40de9d61"
+    },
+    {
+      "id": "IIP-MD05-d2-sp-01",
+      "digest": "sha256:09d8127ece3fbc2591afca33febddf8d01d15eba9190f6fb31c46e373d7bb061"
+    },
+    {
+      "id": "IIP-MD05-d3-sp-01",
+      "digest": "sha256:e93f14f6f5444ec2091fa7fac54e7c4677420841c22cf7481d45913702343a5d"
+    },
+    {
+      "id": "IIP-MD05-d4-sp-01",
+      "digest": "sha256:286a2a5113c570ac0cf752a0544f708a1f15343f3055d6094d4ed44be6d733ba"
+    },
+    {
+      "id": "IIP-MD05-d5-sp-01",
+      "digest": "sha256:1c76f0f895ec7c20b90d1c61bb676960d8395593a709606d4aff921539bcad72"
+    },
+    {
+      "id": "IIP-MD05-d6-sp-01",
+      "digest": "sha256:b6c9c0f1429854b669a324d148b093a72a548a554503153ed3fd229aace5b6c7"
+    },
+    {
+      "id": "IIP-MD05-d7-sp-01",
+      "digest": "sha256:fa9e3782e6770399aec35c12bfc24715889026184550dab8589376a838b58957"
+    },
+    {
+      "id": "IIP-MD05-d8-sp-01",
+      "digest": "sha256:988790be4e3f1bc0024300a761c82a8d142fe7f4693586915aa5847f1dfc735b"
+    },
+    {
+      "id": "IIP-MD05-d9-sp-01",
+      "digest": "sha256:009e4d71734812e3e2f632ac648ee4b29b74a2b99cbb4a823bed5bbbb204bee4"
+    },
+    {
+      "id": "IIP-MD05-e-sp-01",
+      "digest": "sha256:d760b1cf0dac06ea9b116a62f392818f0e46312f42ffe0857eb9c7e27cdd037a"
+    },
+    {
+      "id": "IIP-MD05-e1-sp-01",
+      "digest": "sha256:1352b80071b575f212c23e3a83dd0a181b9270d877478c2adf9c772ca023e844"
+    },
+    {
+      "id": "IIP-MD05-e2-sp-01",
+      "digest": "sha256:299a6aeb35a9c30cb09fd539ddb910eae49d0073791ef4602997f725ee99f93e"
+    },
+    {
+      "id": "IIP-MD05-e3-sp-01",
+      "digest": "sha256:1cbce05bfdb383995b90d6a10e04e406c5ef847de8094588bf9a016072e3b5e7"
+    },
+    {
+      "id": "IIP-MD05-e4-sp-01",
+      "digest": "sha256:c66b5be74c1c0104c741f6dd5f097b28590f163a92a35003ceb3b7242bc0c0fe"
+    },
+    {
+      "id": "IIP-MD05-e5-sp-01",
+      "digest": "sha256:cdd3806a14b5b58e72b62b8e4ddf15b75e0cb01dbcd30a7bc07b2b17c36fac34"
+    },
+    {
+      "id": "IIP-MD05-e6-sp-01",
+      "digest": "sha256:b03f31d621f6323fa896f825b4b29fbb5ba020b1f20a4b21ce331bb51b764a21"
+    },
+    {
+      "id": "IIP-MD05-e7-sp-01",
+      "digest": "sha256:f19829ee3fb28d65d7fbf8f4a842943751b83e0a64fb26d2ec76d46cbdc4ce72"
+    },
+    {
+      "id": "IIP-MD05-e8-sp-01",
+      "digest": "sha256:25ea66be36cc1481044783fed111a7c689371852dd7e2a95cf8f0f16801f0721"
+    },
+    {
+      "id": "IIP-MD05-e9-sp-01",
+      "digest": "sha256:6800d87f184687ea9b399b0861399f4c10a4f03eeab97432b08793003dc0c4dd"
+    },
+    {
+      "id": "IIP-MD05-ea-sp-01",
+      "digest": "sha256:d2493aeb1e99d3a34a2c1d10ff70c9b88d7d71808061093a237afaf42cac6029"
+    },
+    {
+      "id": "IIP-MD05-eb-sp-01",
+      "digest": "sha256:615ae6994f19f8bc9428b265c49d8a23010e5b5ce637ce73356a4b57204e5305"
+    },
+    {
+      "id": "IIP-MD05-ec-sp-01",
+      "digest": "sha256:13e5f5d9d4f9e672fc6d867e7375dc6b12435a8941086cf107cac3f964c605d9"
+    },
+    {
+      "id": "IIP-MD05-ed-sp-01",
+      "digest": "sha256:3e8efcacdc7432757db0f04ffdf3991769ea87c414e36349617d5c0296d8c45c"
+    },
+    {
+      "id": "IIP-MD05-f-sp-01",
+      "digest": "sha256:57c1560539eb799fef0f73592928f4f740a578601c332127485ad2fc577b9b6e"
+    },
+    {
+      "id": "IIP-MD05-f1-sp-01",
+      "digest": "sha256:3c35c631bbbe76e4b9e40f27a831de90762b6b828edfaee29a088607a66fdd83"
+    },
+    {
+      "id": "IIP-MD05-f2-sp-01",
+      "digest": "sha256:f38bce6a9df54b60a0392d0bd69066e7b2c4f16bd342cf4817e0905d477ed8b2"
+    },
+    {
+      "id": "IIP-MD05-f3-sp-01",
+      "digest": "sha256:6e86975879e7f6a7ac70408600bde87ef0847885ed5c32f2f6d6edf739b33f1b"
+    },
+    {
+      "id": "IIP-MD05-f4-sp-01",
+      "digest": "sha256:89e01794e4543de0ad766ac822672f9f33af9da050bbc70073e73eec98fe7e0d"
+    },
+    {
+      "id": "IIP-MD05-f5-sp-01",
+      "digest": "sha256:b6970a2b7abc9ea26a3753b96e3b6e5632ce6272bb6c0ffa1017eba76e929c9c"
+    },
+    {
+      "id": "IIP-MD05-f6-sp-01",
+      "digest": "sha256:fe0dc51e3d9b10117e3dcd5d5060242236b711fb188c7641ff3c3b28fdc66cd0"
+    },
+    {
+      "id": "IIP-MD05-f8-sp-01",
+      "digest": "sha256:7405d7ebb0b32659ae4c8fde694b5653c3aa4c17ccbc77392b84798a501bda33"
+    },
+    {
+      "id": "IIP-MD05-f9-sp-01",
+      "digest": "sha256:845f31ed58b8e3cd1d6a5a41acefb8d1f62c577a29eb316f280387044b4a814b"
+    },
+    {
+      "id": "IIP-MD05-fa-sp-01",
+      "digest": "sha256:51752bb5aa1af429a9b1fe186525ef28c655c4ded108658b557474317420daa9"
+    },
+    {
+      "id": "IIP-MD05-fb-sp-01",
+      "digest": "sha256:26284d4ce0d13f97c4a17714b1d779576ed28e1f1f165637bb98135461150482"
+    },
+    {
+      "id": "IIP-MD05-fc-sp-01",
+      "digest": "sha256:0c363d9e7a05c4d7446dd0840a4ff30f04c19fa89aecc959f917a55cb5118b99"
+    },
+    {
+      "id": "IIP-MD05-fd-sp-01",
+      "digest": "sha256:5350181057f5049d888d79786f6c78f1e795c0183e335b53106655a7f569963c"
+    },
+    {
+      "id": "IIP-MD05-fe-sp-01",
+      "digest": "sha256:f2de3332f42faffadad84791c81b1b0d61daccae97f9811e016e937c777284b7"
+    },
+    {
+      "id": "IIP-MD05-ff-sp-01",
+      "digest": "sha256:53c2cb9a23266b6630fa388fc804c0d2a90b2b55df4560bd08076ff3170908b5"
+    },
+    {
+      "id": "IIP-MD05-fg-sp-01",
+      "digest": "sha256:8214e3914c840f37dc4ac4f7589e17055d67d7c8554aeb72c47daf118bac91ab"
+    },
+    {
+      "id": "IIP-MD05-fh-sp-01",
+      "digest": "sha256:ca14c3eba3520b75e2a965d5972be09d2d78f4352233b43d9722f4160999759c"
+    },
+    {
+      "id": "IIP-MD05-fi-sp-01",
+      "digest": "sha256:9e1352909859a0e6349c0759e462757f114aeddbc49ed04f351d78f4e4795afc"
+    },
+    {
+      "id": "IIP-MD05-fj-sp-01",
+      "digest": "sha256:8d3dab7ffdd05d37a0360fc16662ef92c151b27487b45b54e3131398a2a77112"
+    },
+    {
+      "id": "IIP-MD05-fk-sp-01",
+      "digest": "sha256:76804c5cbc5ec8286222d53159563945bae873e21a4d7c67f6e9761d4d21d928"
+    },
+    {
+      "id": "IIP-MD05-g-sp-01",
+      "digest": "sha256:37699a03cd3a45ac29d2bcf575f9be6a9263b6010ff21d1762ec5579c017a614"
+    },
+    {
+      "id": "IIP-MD06-a-sp-01",
+      "digest": "sha256:4bdce8eabeb62199e5312a47ef3b3e7b9ed322fffa802837df3c06bf1b026a6f"
+    },
+    {
+      "id": "IIP-MD06-a1-sp-01",
+      "digest": "sha256:f7d1e044f8e4c0d402f0e290efb09d44b6b30cdbfaced39f1018bce9ded13f81"
+    },
+    {
+      "id": "IIP-MD06-a2-sp-01",
+      "digest": "sha256:da505fc5acbc3d63e37b607fbd73d7b75ceba22d6f5c2af72dfb1229c44d898b"
+    },
+    {
+      "id": "IIP-MD06-a3-sp-01",
+      "digest": "sha256:d377b10e7c9f1d12cb51d53a4cf74a8486707f4ac5039293f081876651256506"
+    },
+    {
+      "id": "IIP-MD06-a4-sp-01",
+      "digest": "sha256:585db74c1657f2ca0ddcaeead2acba2480fc5d722217b525de8ba60c99dc9855"
+    },
+    {
+      "id": "IIP-MD06-a5-sp-01",
+      "digest": "sha256:bffc9b41cd0868932fdd88fd6f75d48b56944ec32d94fb22492c4b5c43c94a85"
+    },
+    {
+      "id": "IIP-MD06-a6-sp-01",
+      "digest": "sha256:19906c714e81599c12b6a5878aca819ac0308f12bef4e798e28fdadabc9de7d1"
+    },
+    {
+      "id": "IIP-MD06-a7-sp-01",
+      "digest": "sha256:915d7993cea3ee39387d0050a54d3a5bfd5a8d5f28a528b7a00f5dae7fdc5296"
+    },
+    {
+      "id": "IIP-MD06-a8-sp-01",
+      "digest": "sha256:daf48efc2cb495446a61881772aa493f83c95a7a0a869b9200a3748cf428c2fd"
+    },
+    {
+      "id": "IIP-MD06-a9-sp-01",
+      "digest": "sha256:d74b5361fea83d68cfa5d9425260223d4ec122c0662077b2a0d36520e3e5ebee"
+    },
+    {
+      "id": "IIP-MD06-aa-sp-01",
+      "digest": "sha256:ebb77a86f7de8bc06d42fbdc1e44a155763c9d1eafd488a7ddc1de5c068b45ae"
+    },
+    {
+      "id": "IIP-MD06-ab-sp-01",
+      "digest": "sha256:dc2c5cfcc007929a2c0d4473856034492f10435cd53715582cd86b56aa1a09b0"
+    },
+    {
+      "id": "IIP-MD06-b-sp-01",
+      "digest": "sha256:f47273054fcdc9556f409ff75b7b5dcabe0fe7ce4d50d6f195989886ff3b3e48"
+    },
+    {
+      "id": "IIP-MD06-c-sp-01",
+      "digest": "sha256:1512b70efa7842aef79f1ee291eed944b6120c50997220152a49a3cc07c66ade"
+    },
+    {
+      "id": "IIP-MD07-a-sp-01",
+      "digest": "sha256:95b8d51c7cdb5eb0b230942c420b39c38655fb1171eae11d2534d59101139b30"
+    },
+    {
+      "id": "IIP-MD07-b-sp-01",
+      "digest": "sha256:0012742960798f9dbffc4a7a098fb2d6d517d75e1276cc4ab6ec5e049474ed36"
+    },
+    {
+      "id": "IIP-MD08-a-sp-01",
+      "digest": "sha256:5c0b8eeb63960bc1d01f55eceb1add5c795d01fc8c78ac6e911b6d2cc99529f9"
+    },
+    {
+      "id": "IIP-MD09-a-sp-01",
+      "digest": "sha256:a3dd4eccd59dfc9ea89313e51562e2ac0b415bbcdb7a0201d94fc35cc5d209e8"
+    },
+    {
+      "id": "IIP-MD09-b-sp-01",
+      "digest": "sha256:836dfe122b69678c8264030a5f609b0056ba438239257998eddba8e0fc5466f4"
+    },
+    {
+      "id": "IIP-MD10-b-sp-01",
+      "digest": "sha256:b63259a2324770134a5ba5707b45b753e16d3445e28c57619d6e0ebdfd4fb743"
+    },
+    {
+      "id": "IIP-MD11-a-sp-01",
+      "digest": "sha256:5eab1b829e9fe14a6fe6f2a150c015d18785bf5b0e512aa6e8eefe76b633d17c"
+    },
+    {
+      "id": "IIP-MD12-a-sp-01",
+      "digest": "sha256:87c2a9118716276f0d8e45a8b5c62ad50da6014bc89d97c6f1dc556059d104b9"
+    },
+    {
+      "id": "IIP-MD12-b-sp-01",
+      "digest": "sha256:99802a58e9f7c4e8a54ef7887ef41279715698308e0bef5233186c7bd40274da"
+    },
+    {
+      "id": "IIP-MD12-c-sp-01",
+      "digest": "sha256:545379209bd88bffc843271d3dbf59020636b6b18b95104a51624b54facec92e"
+    },
+    {
+      "id": "IIP-MD12-d-sp-01",
+      "digest": "sha256:64f4e6fea776a51045a2f3465ee35d911f593e3ea460d20559b5316ef3acf4b6"
+    },
+    {
+      "id": "IIP-EXT01-a-sp-01",
+      "digest": "sha256:cefd01bd8785aeff3a74ea15f77d28ee5bc53955acc173d80d24d328a8c58ce9"
+    },
+    {
+      "id": "IIP-EXT01-b1-sp-01",
+      "digest": "sha256:c18e1d36da240688d038ea8cd2ba1c5107b4f9a8a8cfdc2c3f7763c9cc92a55d"
+    },
+    {
+      "id": "IIP-EXT01-b-sp-01",
+      "digest": "sha256:48ea29715923a6ad4747b9ff43202eb157550018d32bd1f8a51dddf28ef8736c"
+    },
+    {
+      "id": "IIP-EXT01-c1-sp-01",
+      "digest": "sha256:ca9491ae2c334706dd3383a4467b6c4315cc2c4d0cae0421994b5288618c9d7c"
+    },
+    {
+      "id": "IIP-EXT01-c-sp-01",
+      "digest": "sha256:4c5c497e275d2ac8b83d83ce8dc1d246afb2a67093d26658254ba0b539fd92ae"
+    },
+    {
+      "id": "IIP-ALG01-a-sp-01",
+      "digest": "sha256:464133dc6d7d1c051b6bd86f8c2bc991873558f61124ce66efcc10024d5e37f3"
+    },
+    {
+      "id": "IIP-ALG02-a-sp-01",
+      "digest": "sha256:4ad13b7635e9662950f1b5c1d47639b1691cb1a83a4907341bb9db02bb2dc0cb"
+    },
+    {
+      "id": "IIP-ALG03-a-sp-01",
+      "digest": "sha256:3f7fa5f7489a0d8d425b821d1da784518fcd2f59e53e4b2573c16a599bb84194"
+    },
+    {
+      "id": "IIP-ALG07-a-sp-01",
+      "digest": "sha256:5f9e03f52431e0578acf872ea597ce0197c0281779014a5b70465ea101c3d863"
+    },
+    {
+      "id": "IIP-SP04-h-sp-01",
+      "digest": "sha256:186c6d8b7eb86a0033ba2ebffed5375f86a2cd8485150b67e17033690139fd04"
+    },
+    {
+      "id": "IIP-SP04-i-sp-01",
+      "digest": "sha256:11629b69cc5e912b0943695252537ada481a713337b99589d98751a1b6379666"
+    }
+  ],
+  "non_executable_obligations": []
+}

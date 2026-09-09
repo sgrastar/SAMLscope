@@ -9,6 +9,7 @@ import { idpRoundTripReady, idpRoundTripUrl } from './peerUrls'
 import { PeerRegistration } from './PeerRegistration'
 import { RoundTripLink } from './RoundTripLink'
 import { profileCatalog, profileLabel, profileRole } from './profiles'
+import { Licenses } from './Licenses'
 
 const initialInput: PlanInput = {
   name: '',
@@ -25,6 +26,7 @@ const initialInput: PlanInput = {
 }
 
 export function App() {
+  if (window.location.pathname === '/licenses') return <Licenses />
   const reportRunId = window.location.pathname.match(/^\/reports\/(run_[0-9A-HJKMNP-TV-Z]{26})$/)?.[1]
   if (reportRunId) return <ResultReport runId={reportRunId} />
   const manageRunId = window.location.pathname.match(/^\/manage\/(run_[0-9A-HJKMNP-TV-Z]{26})$/)?.[1]

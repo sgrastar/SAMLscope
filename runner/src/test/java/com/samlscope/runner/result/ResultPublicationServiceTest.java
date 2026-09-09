@@ -62,7 +62,9 @@ class ResultPublicationServiceTest {
         var repository = new FileRunArtifactRepository(directory);
         var service = new ResultPublicationService(
                 catalog, evaluation, (sourceRun, sourcePlan, cases, result) -> context(),
-                new ResultJsonWriter(), repository);
+                new ResultJsonWriter(), repository,
+                new ReportHtmlWriter("license".getBytes(), "scope".getBytes(),
+                        "{\"sources\":[],\"unresolved_sources\":[]}".getBytes()));
 
         var generated = service.generate(RUN_ID);
 

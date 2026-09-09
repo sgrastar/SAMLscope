@@ -41,6 +41,23 @@ class SamlScopeApplicationTest {
             assertTrue(completionStyle.headers().firstValue("Content-Type").orElseThrow().startsWith("text/css"));
             assertTrue(completionStyle.body().contains("prefers-color-scheme"));
 
+            var licenses = client.send(HttpRequest.newBuilder(base.resolve("/licenses")).build(),
+                    HttpResponse.BodyHandlers.ofString());
+            assertEquals(200, licenses.statusCode());
+            assertTrue(licenses.body().contains("<div id=\"root\"></div>"));
+            var browserNotices = client.send(HttpRequest.newBuilder(
+                    base.resolve("/licenses/browser-dependencies.json")).build(),
+                    HttpResponse.BodyHandlers.ofString());
+            assertEquals(200, browserNotices.statusCode());
+            assertTrue(browserNotices.headers().firstValue("Content-Type").orElseThrow()
+                    .startsWith("application/json"));
+            assertTrue(browserNotices.body().contains("\"name\": \"react\""));
+            var sourceNotices = client.send(HttpRequest.newBuilder(
+                    base.resolve("/licenses/source-notices.json")).build(),
+                    HttpResponse.BodyHandlers.ofString());
+            assertEquals(200, sourceNotices.statusCode());
+            assertTrue(sourceNotices.body().contains("\"unresolved_sources\""));
+
             var requestBody = """
                     {
                       "name":"Example IdP",

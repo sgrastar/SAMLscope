@@ -1,9 +1,14 @@
 # 03. Test Model
 
+> **Current profile model:** An approved case remains the execution and verdict
+> unit. New Plans select a versioned functional profile, which is a reviewed set of
+> those cases. The Core/Full labels below document the legacy result model and do
+> not create a second execution path. See [20](20-profiles-and-public-summaries.md).
+
 ## 1. Data Model
 
 ```
-Profile          Static. IIP v1.1 IdP Core / IdP Full / SP Core / SP Full
+Profile          Static, versioned set of approved cases for one function and role
   └─ Requirement Static. IIP-G01 … IIP-IDP21 (69 items)
        └─ Obligation ★ Static. An obligation unit of “role × condition × RFC2119 level” within one requirement
             └─ TestCase  Static. 0..N cases per Obligation. YAML + implementation class

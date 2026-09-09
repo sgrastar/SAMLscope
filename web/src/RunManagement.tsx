@@ -855,7 +855,7 @@ export function RunManagement({ runId, csrfToken, focusCaseId, navigateTo }: {
       </aside>
     </div>, document.body)}
     {sharedOperatorActions.length > 0 && <section className="shared-operator-actions">
-      <p className="eyebrow">Standard plan operations</p>
+      <p className="eyebrow">Operator-assisted evidence</p>
       <h2>Shared target policy changes</h2>
       <p>Perform each target-side policy change once. SAMLscope applies that operation to every listed case, but the operation itself is not evidence of conformance. Without a conclusive Transcript or other external evidence, those cases remain not verified.</p>
       <div className="interaction-list">{sharedOperatorActions.map(section => {
@@ -876,7 +876,7 @@ export function RunManagement({ runId, csrfToken, focusCaseId, navigateTo }: {
       })}</div>
     </section>}
     {selfCheckSections.length > 0 && <section className="self-check-sections">
-      <p className="eyebrow">Full plan evidence</p>
+      <p className="eyebrow">Self-attested evidence</p>
       <h2>Grouped self-check sections</h2>
       <p>These are the cases that cannot currently be proved from standard SAML, browser, metadata, or Transcript evidence. Record one evidence conclusion per section. Open case-specific overrides only when the shared evidence supports different conclusions.</p>
       <div className="interaction-list">{selfCheckSections.map(section =>

@@ -89,7 +89,8 @@ class ActiveProbeReportFreshnessTest {
             var html = client.send(HttpRequest.newBuilder(base.resolve(api + "/report.html")).build(),
                     HttpResponse.BodyHandlers.ofString());
             assertEquals(200, html.statusCode());
-            var embedded = java.util.regex.Pattern.compile("atob\\('([^']+)'\\)")
+            var embedded = java.util.regex.Pattern.compile(
+                            "decode\\('([^']+)'\\);const r=JSON\\.parse\\(text\\)")
                     .matcher(html.body());
             assertTrue(embedded.find(), "Report must contain its standalone result data");
             var htmlResult = json.mapper().readTree(Base64.getDecoder().decode(embedded.group(1)));

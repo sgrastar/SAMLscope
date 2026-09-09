@@ -1,8 +1,8 @@
 # Functional profiles and public verification summaries
 
-Status: product specification agreed with the operator on 2026-09-07.
-Profile-to-case mappings and publication implementation remain subject to design
-validation and independent G2 approval where applicable.
+Status: product specification agreed with the operator on 2026-09-07. Exact
+case-set candidates and their common Plan/Run/result path are implemented.
+Profile membership remains subject to independent G2 approval and release pinning.
 This document does not approve new conformance interpretations or a certification program.
 
 ## Purpose
@@ -210,8 +210,8 @@ before badge issuance; a copied image alone cannot establish current validity.
 
 ## Remaining design work
 
-The catalog, case execution unit and public communication principles above are agreed.
-The precise case membership, numerical OIDF benchmark, qualified-outcome badge
-eligibility, summary schema, badge delivery and withdrawal behavior still need
-concrete design and validation. These are not implemented or independently approved
-merely by recording this specification.
+The catalog, case execution unit and exact membership candidates are implemented.
+Independent review must approve each exact case set before production installation.
+The numerical OIDF benchmark, qualified-outcome badge eligibility, summary schema,
+badge delivery and withdrawal behavior remain later publication work; they are not
+prerequisites for running and exporting the seven functional profiles.
