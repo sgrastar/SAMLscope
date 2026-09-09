@@ -37,4 +37,5 @@ tasks.processResources {
     from(rootProject.layout.projectDirectory.file("tests/mutants/baselines.yaml")) { into("catalog/tests/mutants") }
     from(rootProject.layout.projectDirectory.file("tests/mutants/catalog.yaml")) { into("catalog/tests/mutants") }
     from(rootProject.layout.projectDirectory.file("tests/mutants/control-mutants.yaml")) { into("catalog/tests/mutants") }
+    from(rootProject.layout.projectDirectory.dir("profiles")) { into("profiles") }
 }

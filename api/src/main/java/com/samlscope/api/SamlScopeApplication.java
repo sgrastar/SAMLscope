@@ -64,11 +64,13 @@ public final class SamlScopeApplication {
     }
 
     public static Javalin create(AppConfig config) {
-        return create(config, null, Map.of(), Map.of());
+        var profiles = FunctionalProfileDocuments.load();
+        return create(config, null, profiles.artifacts(), profiles.digests());
     }
 
     static Javalin create(AppConfig config, com.samlscope.api.auth.OidcClient injectedOidcClient) {
-        return create(config, injectedOidcClient, Map.of(), Map.of());
+        var profiles = FunctionalProfileDocuments.load();
+        return create(config, injectedOidcClient, profiles.artifacts(), profiles.digests());
     }
 
     static Javalin create(

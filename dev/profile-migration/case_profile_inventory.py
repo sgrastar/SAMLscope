@@ -230,13 +230,13 @@ def review_candidate(inventory: dict) -> dict:
     }
 
 
-def profile_release_candidates(inventory: dict) -> dict[str, dict]:
+def profile_release_candidates(inventory: dict, version: str = "functional-case-v1-draft") -> dict[str, dict]:
     """Create loader-shaped review candidates without granting release approval."""
     releases = {}
     for profile in PROFILES:
         releases[profile] = {
             "schema_version": 1,
-            "version": "functional-case-v1-draft",
+            "version": version,
             "profile": profile,
             "source_digests": inventory["source_digests"],
             "cases": [
@@ -318,6 +318,7 @@ def main() -> None:
     parser.add_argument("--markdown-output", type=Path)
     parser.add_argument("--write-review-candidate", type=Path)
     parser.add_argument("--release-candidates-dir", type=Path)
+    parser.add_argument("--release-version", default="functional-case-v1-draft")
     args = parser.parse_args()
     inventory = build_inventory(args.root)
     json_output = args.json_output or args.root / "build/case-profile-inventory.json"
@@ -331,7 +332,7 @@ def main() -> None:
         args.write_review_candidate.write_text(json.dumps(review_candidate(inventory), indent=2) + "\n")
     if args.release_candidates_dir:
         args.release_candidates_dir.mkdir(parents=True, exist_ok=True)
-        for profile, document in profile_release_candidates(inventory).items():
+        for profile, document in profile_release_candidates(inventory, args.release_version).items():
             (args.release_candidates_dir / f"{profile}.json").write_text(
                 json.dumps(document, indent=2) + "\n"
             )

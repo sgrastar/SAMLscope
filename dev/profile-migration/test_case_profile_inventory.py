@@ -69,11 +69,12 @@ class CaseProfileInventoryTest(unittest.TestCase):
         )
 
     def test_release_candidates_are_case_sets_for_all_profiles(self):
-        releases = module.profile_release_candidates(self.inventory)
+        releases = module.profile_release_candidates(self.inventory, "functional-case-v1")
         self.assertEqual(set(module.PROFILES), set(releases))
         known = {row["case_id"] for row in self.inventory["cases"]}
         for profile, release in releases.items():
             self.assertEqual(profile, release["profile"])
+            self.assertEqual("functional-case-v1", release["version"])
             self.assertTrue(release["cases"])
             self.assertTrue({row["id"] for row in release["cases"]} <= known)
             self.assertNotIn("items", release)
