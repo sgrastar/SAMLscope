@@ -7,7 +7,7 @@ import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
 import java.util.Objects;
-import com.samlscope.core.plan.PlanProfile;
+import com.samlscope.core.profile.FunctionalProfile;
 import com.samlscope.core.plan.PlanRepository;
 import com.samlscope.core.run.RunRepository;
 import com.samlscope.core.run.RunStatus;
@@ -58,8 +58,8 @@ final class EcpProbeRuntime {
             throw new IllegalArgumentException("ECP probing requires a completed baseline SSO round trip");
         }
         var plan = plans.find(run.planId()).orElseThrow(() -> new IllegalStateException("Run has no Test Plan"));
-        if (plan.profile() != PlanProfile.IDP_FULL) {
-            throw new IllegalArgumentException("The ECP probe is available only for an IdP Full Profile Run");
+        if (plan.profile() != FunctionalProfile.ECP_IDP) {
+            throw new IllegalArgumentException("The ECP probe is available only for an ECP — IdP Run");
         }
         var target = metadataParser.parse(
                 metadataCache.getRunSnapshot(run.id(), plan.id()), plan.target().entityId());

@@ -69,7 +69,9 @@ class AutoAttestedMetadataEvidenceTestCaseTest {
                 return com.samlscope.core.plan.TestPlan.Parameters.defaults();
             }
             @Override public com.samlscope.core.plan.TestPlan.Interaction interaction() {
-                return com.samlscope.core.plan.TestPlan.Interaction.defaults();
+                return new com.samlscope.core.plan.TestPlan.Interaction(
+                        true, true,
+                        com.samlscope.core.plan.TestPlan.ExecutionPreset.assisted_with_attestation);
             }
             @Override public com.samlscope.core.run.Reachability reachability() {
                 return com.samlscope.core.run.Reachability.CONFIRMED;

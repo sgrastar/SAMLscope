@@ -71,7 +71,7 @@ public final class DefaultResultContextProvider implements ResultContextProvider
                 new ResultDocumentContext.ProfileSpec(
                         "SAML V2.0 Implementation Profile for Federation Interoperability",
                         "1.1", LocalDate.parse("2019-12-18"),
-                        "Core and Full are SAMLscope test scopes; the RFC 2119 level of each obligation remains authoritative."),
+                        "The functional profile selects approved cases; each obligation's RFC 2119 level remains authoritative."),
                 new ResultDocumentContext.TargetDeclaration(
                         plan.name(), "Test Plan operator", EvaluationArtifactDigests.digestBytes(metadata)),
                 requirementUrls, caseUrls, evidenceClasses, List.of());

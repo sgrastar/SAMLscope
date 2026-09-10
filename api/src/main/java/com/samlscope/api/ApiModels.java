@@ -3,7 +3,7 @@ package com.samlscope.api;
 import java.util.Map;
 import com.samlscope.core.plan.MetadataDeliveryKind;
 import com.samlscope.core.plan.MetadataSourceKind;
-import com.samlscope.core.plan.PlanProfile;
+import com.samlscope.core.profile.FunctionalProfile;
 import com.samlscope.core.plan.TargetKind;
 import com.samlscope.core.plan.TestPlan;
 
@@ -12,7 +12,7 @@ final class ApiModels {
 
     record PlanWrite(
             String name,
-            PlanProfile profile,
+            FunctionalProfile profile,
             TargetKind targetKind,
             String targetEntityId,
             MetadataSourceKind metadataSourceKind,
@@ -21,7 +21,9 @@ final class ApiModels {
             Map<String, Boolean> declaredFeatures,
             TestPlan.Parameters parameters,
             TestPlan.Interaction interaction,
-            boolean authorizedTarget) {}
+            boolean authorizedTarget,
+            String targetConnectionId,
+            String targetRevisionId) {}
 
     record PlanView(
             PlanSummary plan,
@@ -30,9 +32,10 @@ final class ApiModels {
             String mdqUrl,
             String secondaryIdpEntityId,
             String secondaryIdpMetadataUrl) {}
-    record PlanSummary(String id, String name, PlanProfile profile, TargetSummary target,
+    record PlanSummary(String id, String name, FunctionalProfile profile, TargetSummary target,
             TestPlan.RequestSigningMode requestSigningMode) {}
-    record TargetSummary(TargetKind kind, String entityId) {}
+    record TargetSummary(
+            TargetKind kind, String entityId, String connectionId, String metadataRevisionId) {}
     record PlanCreated(PlanView plan, RunCreated initialRun) {}
     record RunCreated(com.samlscope.core.run.TestRun run, String managementUrl) {}
     record ErrorView(String error, String message) {}

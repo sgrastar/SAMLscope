@@ -23,7 +23,7 @@ import com.samlscope.core.evaluation.EvidenceRef;
 import com.samlscope.core.evaluation.Outcome;
 import com.samlscope.core.plan.MetadataDeliveryKind;
 import com.samlscope.core.plan.MetadataSourceKind;
-import com.samlscope.core.plan.PlanProfile;
+import com.samlscope.core.profile.FunctionalProfile;
 import com.samlscope.core.plan.TargetKind;
 import com.samlscope.core.plan.TestPlan;
 import com.samlscope.core.run.Reachability;
@@ -61,7 +61,7 @@ class ActiveProbeCoordinatorTest {
         var json = new JsonCodec();
         plans = new SqlitePlanRepository(database, json);
         var plan = new TestPlan(
-                PLAN, "Active probe", PlanProfile.IDP_CORE,
+                PLAN, "Active probe", FunctionalProfile.BROWSER_SSO_IDP,
                 new TestPlan.Target(TargetKind.IDP, "https://idp.example/entity",
                         new TestPlan.MetadataSource(MetadataSourceKind.URL, "https://idp.example/metadata")),
                 MetadataDeliveryKind.HTTP_URL, Map.of(), TestPlan.Parameters.defaults(),

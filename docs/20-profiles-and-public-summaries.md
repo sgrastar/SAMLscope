@@ -1,8 +1,8 @@
 # Functional profiles and public verification summaries
 
-Status: product specification agreed with the operator on 2026-09-07.
-Profile-to-obligation mappings, new aggregation rules and publication implementation
-remain subject to design validation and independent G1/G2 approval where applicable.
+Status: product specification agreed with the operator on 2026-09-07. Exact
+case sets and their common Plan/Run/result path are implemented. Profile membership
+has independent G2 approval and each installed definition is release-pinned.
 This document does not approve new conformance interpretations or a certification program.
 
 ## Purpose
@@ -34,8 +34,10 @@ Use these names as the basis of the user-facing profile catalog:
 | Enhanced Client or Proxy (ECP) — IdP | IdP | ECP authentication and associated protocol processing |
 
 These are SAMLscope verification units, not a claim that the boundaries exactly
-match profile definitions in SAML specifications. Exact obligations, shared
-requirements and mandatory variants for each unit require a traceable mapping.
+match profile definitions in SAML specifications. Each functional profile is a
+versioned set of existing approved cases. The cases remain the execution and
+verdict units and retain their approved obligations, conditions, variants and controls.
+Profile membership requires a traceable mapping.
 Metadata publication and consumption must remain distinguishable in detailed results.
 Do not grant a combined Metadata completion claim from evidence for only one side.
 
@@ -53,18 +55,18 @@ catalog design does not make it available for verified claims today.
 | Configuration variant | Declared, reproducible target configuration | Required AuthnRequest signing |
 | Plan | Configured instance of a profile with target/peer identities | One target client with fixed signature policy |
 | Run | Execution with a recorded configuration and evidence | A repeat against the same product version |
-| Test module | User-visible group of coherent checks | NameIDPolicy handling |
-| Internal case/check | Specification-backed observation or control | Requested qualifier is honored or a permitted error is returned |
+| Case | Approved execution and verdict unit | NameIDPolicy handling with its controls and variants |
+| Traceability row | Searchable case-to-obligation relationship | Case IIP-SP13-a-sp-01 covers obligation IIP-SP13.a |
 
 Do not append Core, Standard or Full to the new public profile names. Standard
 is not introduced. Existing Core/Full remain legacy execution scopes until all
 existing cases and obligations have been mapped and migration has been reviewed.
 Do not simply rename legacy results as new-profile results.
 
-Users may run all tests or selected tests during development. Selected successful
-tests alone cannot yield a complete-profile claim. Certification-oriented execution
-must cover all tests and variants required by the approved profile definition.
-The mandatory variant matrix is not established by this product specification.
+Users may run all cases or selected cases during development. Selected successful
+cases alone cannot yield a complete-profile claim. A complete profile result must
+account for every applicable case in the pinned profile definition. Variants remain
+inside their approved cases; they do not become separate runtime test records.
 
 Convenience selection sets may include “SSO” (Browser SSO plus Metadata),
 “SSO and Logout”, and “All selected supported functions”. Sets are shortcuts for
@@ -188,12 +190,15 @@ before badge issuance; a copied image alone cannot establish current validity.
 
 ## Migration and implementation acceptance
 
-- Map every existing obligation and case to the functional catalog, including
-  shared requirements, owner conditions, linked variants and positive/negative controls.
-- Define mandatory versus selectable variants from reviewed specifications; do
-  not remove unresolved requirements merely to make a profile complete.
-- Group checks into user-visible modules while preserving links to original IDs,
-  evidence and Evaluator outcomes. Benchmark OIDF module counts, not raw assertions.
+- Inventory every existing approved case in the functional catalog and preserve
+  its obligation owner, conditions, variants and positive/negative controls.
+- Reuse one case in multiple profiles when the same approved behavior belongs to
+  multiple functions. This does not duplicate execution within one Run.
+- Split an approved case only when incompatible target configuration, a distinct
+  protocol flow, independent verdict meaning, a user-visible function boundary or
+  evidence attribution makes one execution ambiguous. A split requires the normal
+  G2 design and independent approval process.
+- Treat traceability rows as navigation and review data. Their count is not a test count.
 - Preserve old Core/Full results and their original scope labels. Introduce
   versioned profile mappings before creating new functional-profile claims.
 - Persist summary identity/configuration and validate result compatibility before
@@ -205,8 +210,8 @@ before badge issuance; a copied image alone cannot establish current validity.
 
 ## Remaining design work
 
-The catalog, hierarchy and public communication principles above are agreed.
-The precise obligation/module mapping, mandatory variant matrix, numerical OIDF
-benchmark, qualified-outcome badge eligibility, summary schema, badge delivery and
-withdrawal behavior still need concrete design and validation. These are not
-implemented or independently approved merely by recording this specification.
+The catalog, case execution unit and exact memberships are implemented, independently
+approved through G2 and installed through digest-pinned profile definitions.
+The numerical OIDF benchmark, qualified-outcome badge eligibility, summary schema,
+badge delivery and withdrawal behavior remain later publication work; they are not
+prerequisites for running and exporting the seven functional profiles.

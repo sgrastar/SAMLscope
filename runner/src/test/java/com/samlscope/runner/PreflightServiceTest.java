@@ -12,7 +12,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import com.samlscope.core.plan.MetadataDeliveryKind;
 import com.samlscope.core.plan.MetadataSourceKind;
-import com.samlscope.core.plan.PlanProfile;
+import com.samlscope.core.profile.FunctionalProfile;
 import com.samlscope.core.plan.TargetKind;
 import com.samlscope.core.plan.TestPlan;
 import com.samlscope.core.run.Reachability;
@@ -58,7 +58,7 @@ class PreflightServiceTest {
 
     private TestPlan plan() {
         return new TestPlan(
-                PLAN_ID, "Completed preflight", PlanProfile.IDP_CORE,
+                PLAN_ID, "Completed preflight", FunctionalProfile.BROWSER_SSO_IDP,
                 new TestPlan.Target(TargetKind.IDP, "https://idp.example/entity",
                         new TestPlan.MetadataSource(MetadataSourceKind.UPLOAD, "manual.xml")),
                 MetadataDeliveryKind.MANUAL, Map.of(), TestPlan.Parameters.defaults(),

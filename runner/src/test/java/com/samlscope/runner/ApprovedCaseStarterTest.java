@@ -27,7 +27,7 @@ import com.samlscope.core.evaluation.PredicateKind;
 import com.samlscope.core.evaluation.Rfc2119Level;
 import com.samlscope.core.plan.MetadataDeliveryKind;
 import com.samlscope.core.plan.MetadataSourceKind;
-import com.samlscope.core.plan.PlanProfile;
+import com.samlscope.core.profile.FunctionalProfile;
 import com.samlscope.core.plan.TargetKind;
 import com.samlscope.core.plan.TargetRole;
 import com.samlscope.core.plan.TestPlan;
@@ -47,30 +47,36 @@ class ApprovedCaseStarterTest {
     void startsOnlyProfileSelectedCasesWhoseApplicabilityIsTrue() {
         var definitions = definitions();
         var registry = ApprovedAttestedCaseRegistry.create(definitions);
-        var plan = plan(PlanProfile.IDP_FULL);
+        var plan = plan(FunctionalProfile.BROWSER_SSO_IDP);
         var run = run(plan);
 
         var falseRepository = new MemoryRepository();
         var falseStarter = new ApprovedCaseStarter(
                 coverage(), definitions, registry, new CaseExecutionService(falseRepository),
-                (ignoredRun, ignoredPlan) -> List.of(applicability(false)));
+                (ignoredRun, ignoredPlan) -> List.of(applicability(false)),
+                ignored -> FunctionalCaseFixtures.definition(plan.profile(), definitions, coverage(),
+                        "IIP-A-a-idp-01", "IIP-B-b-idp-01"));
         var falseStarted = falseStarter.startApplicable(run, plan, context(plan));
         assertEquals(List.of("IIP-A-a-idp-01"), falseStarted.stream().map(CaseExecution::caseId).toList());
 
         var trueRepository = new MemoryRepository();
         var trueStarter = new ApprovedCaseStarter(
                 coverage(), definitions, registry, new CaseExecutionService(trueRepository),
-                (ignoredRun, ignoredPlan) -> List.of(applicability(true)));
+                (ignoredRun, ignoredPlan) -> List.of(applicability(true)),
+                ignored -> FunctionalCaseFixtures.definition(plan.profile(), definitions, coverage(),
+                        "IIP-A-a-idp-01", "IIP-B-b-idp-01"));
         var trueStarted = trueStarter.startApplicable(run, plan, context(plan));
         assertEquals(List.of("IIP-A-a-idp-01", "IIP-B-b-idp-01"),
                 trueStarted.stream().map(CaseExecution::caseId).toList());
 
-        var corePlan = plan(PlanProfile.IDP_CORE);
+        var corePlan = plan(FunctionalProfile.BROWSER_SSO_IDP);
         var coreRun = run(corePlan);
         var coreRepository = new MemoryRepository();
         var coreStarter = new ApprovedCaseStarter(
                 coverage(), definitions, registry, new CaseExecutionService(coreRepository),
-                (ignoredRun, ignoredPlan) -> List.of());
+                (ignoredRun, ignoredPlan) -> List.of(),
+                ignored -> FunctionalCaseFixtures.definition(corePlan.profile(), definitions, coverage(),
+                        "IIP-A-a-idp-01"));
         assertEquals(List.of("IIP-A-a-idp-01"), coreStarter.startApplicable(
                 coreRun, corePlan, context(corePlan)).stream().map(CaseExecution::caseId).toList());
     }
@@ -107,7 +113,7 @@ class ApprovedCaseStarterTest {
                 false, ApplicabilityEvaluation.Basis.DECLARED, List.of(), null);
     }
 
-    private TestPlan plan(PlanProfile profile) {
+    private TestPlan plan(FunctionalProfile profile) {
         return new TestPlan(
                 "plan_0123456789ABCDEFGHJKMNPQRS", "Attested", profile,
                 new TestPlan.Target(

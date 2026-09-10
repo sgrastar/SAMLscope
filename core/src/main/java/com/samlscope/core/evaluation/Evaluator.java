@@ -19,27 +19,97 @@ import com.samlscope.core.evaluation.RunResult.ObligationResult;
 import com.samlscope.core.evaluation.RunResult.RequirementResult;
 import com.samlscope.core.evaluation.RunResult.ScopeQualification;
 import com.samlscope.core.plan.TestPlan;
+import com.samlscope.core.profile.FunctionalCaseDefinition;
 
 /** The sole canonical location for outcome conversion and result aggregation. */
 public final class Evaluator {
     private Evaluator() {}
 
     /** Canonical signature from docs/03-test-model.md section 7.5. */
-    public static RunResult evaluate(
-            CoverageCatalog catalog,
-            TestPlan plan,
+    /** Evaluates one versioned functional profile whose execution units are approved cases. */
+    public static RunResult evaluateFunctionalCases(
+            FunctionalCaseDefinition definition,
+            CoverageCatalog coverage,
             List<ApplicabilityEvaluation> applicability,
             List<CaseRun> caseRuns,
             List<SuiteIncident> incidents) {
-        Objects.requireNonNull(catalog, "catalog");
-        Objects.requireNonNull(plan, "plan");
+        return evaluateFunctionalCaseSnapshot(
+                definition, coverage, applicability, caseRuns, incidents).result();
+    }
+
+    /** Returns the normalized case set used by both aggregation and public result output. */
+    public static FunctionalEvaluation evaluateFunctionalCaseSnapshot(
+            FunctionalCaseDefinition definition,
+            CoverageCatalog coverage,
+            List<ApplicabilityEvaluation> applicability,
+            List<CaseRun> caseRuns,
+            List<SuiteIncident> incidents) {
+        Objects.requireNonNull(definition, "definition");
+        var selected = definition.selectedCoverage(Objects.requireNonNull(coverage, "coverage"));
+        var selectedOwners = selected.byKey();
+        var approved = new LinkedHashMap<String,com.samlscope.core.casedef.CaseDefinitionCatalog.CaseDefinition>();
+        definition.cases().forEach(value -> approved.put(value.id(), value));
+        var observed = new LinkedHashMap<String,CaseRun>();
+        for (var run : List.copyOf(caseRuns == null ? List.of() : caseRuns)) {
+            var source = approved.get(run.id());
+            if (source == null) throw new IllegalArgumentException("Case is outside the functional profile: " + run.id());
+            if (!source.obligation().equals(run.obligationKey())) {
+                throw new IllegalArgumentException("Case outcome belongs to another obligation: " + run.id());
+            }
+            if (observed.putIfAbsent(run.id(), run) != null) {
+                throw new IllegalArgumentException("Duplicate case outcome: " + run.id());
+            }
+        }
+        var selectedApplicability = List.copyOf(applicability == null ? List.of() : applicability).stream()
+                .filter(value -> selectedOwners.containsKey(value.obligationKey())).toList();
+        var applicabilityByOwner = new LinkedHashMap<String,ApplicabilityEvaluation>();
+        selectedApplicability.forEach(value -> {
+            if (applicabilityByOwner.putIfAbsent(value.obligationKey(), value) != null) {
+                throw new IllegalArgumentException("Duplicate applicability: " + value.obligationKey());
+            }
+        });
+        var completeInput = new ArrayList<CaseRun>();
+        for (var source : definition.cases()) {
+            var run = observed.get(source.id());
+            if (run != null) {
+                completeInput.add(run);
+                continue;
+            }
+            var owner = selectedOwners.get(source.obligation());
+            var application = applicabilityByOwner.get(source.obligation());
+            var effective = application == null
+                    ? (owner.condition() == null ? EffectiveResult.TRUE : EffectiveResult.UNKNOWN)
+                    : application.effectiveResult();
+            if (effective == EffectiveResult.TRUE) {
+                completeInput.add(CaseRun.completed(source.id(), source.obligation(),
+                        CaseOutcome.notVerified("case_not_executed", "case.not-executed")));
+            }
+        }
+        var normalized = List.copyOf(completeInput);
+        return new FunctionalEvaluation(
+                normalized,
+                evaluateSelectedObligations(selected, selectedApplicability, normalized, incidents));
+    }
+
+    public record FunctionalEvaluation(List<CaseRun> cases, RunResult result) {
+        public FunctionalEvaluation {
+            cases = List.copyOf(cases);
+            Objects.requireNonNull(result, "result");
+        }
+    }
+
+    /** Obligation arithmetic for an explicit reviewed scope; never derives Core/Full membership. */
+    static RunResult evaluateSelectedObligations(
+            CoverageCatalog selectedCatalog,
+            List<ApplicabilityEvaluation> applicability,
+            List<CaseRun> caseRuns,
+            List<SuiteIncident> incidents) {
+        Objects.requireNonNull(selectedCatalog, "selectedCatalog");
         applicability = List.copyOf(applicability == null ? List.of() : applicability);
         caseRuns = List.copyOf(caseRuns == null ? List.of() : caseRuns);
         incidents = List.copyOf(incidents == null ? List.of() : incidents);
 
-        var selected = catalog.obligations().stream()
-                .filter(obligation -> obligation.includedIn(plan.profile()))
-                .toList();
+        var selected = selectedCatalog.obligations();
         var selectedByKey = indexObligations(selected);
         var applicabilityByKey = indexApplicability(applicability, selectedByKey);
         requireConditionalApplicability(selected, applicabilityByKey);
@@ -52,22 +122,13 @@ public final class Evaluator {
             var runs = casesByObligation.getOrDefault(obligation.key(), List.of());
             obligationResults.add(evaluateObligation(obligation, evaluation, runs));
         }
-
         var requirementResults = aggregateRequirements(obligationResults);
-        var coverage = coverage(obligationResults, applicabilityByKey, selectedByKey);
-        var conformance = conformance(obligationResults, coverage.excludedByDeclaration());
+        var resultCoverage = coverage(obligationResults, applicabilityByKey, selectedByKey);
+        var conformance = conformance(obligationResults, resultCoverage.excludedByDeclaration());
         var completeness = completeness(obligationResults);
-
-        var result = new RunResult(
-                conformance,
-                completeness,
-                obligationResults,
-                requirementResults,
-                coverage,
-                applicability,
-                scopeQualifications(applicability),
-                incidents);
-        RunResultInvariantValidator.validate(catalog, plan, result);
+        var result = new RunResult(conformance, completeness, obligationResults, requirementResults,
+                resultCoverage, applicability, scopeQualifications(applicability), incidents);
+        RunResultInvariantValidator.validateSelectedObligations(selectedCatalog, result);
         return result;
     }
 

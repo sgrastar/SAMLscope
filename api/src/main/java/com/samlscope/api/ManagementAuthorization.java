@@ -46,6 +46,13 @@ final class ManagementAuthorization {
         }
         return session.map(s -> s.identity().ownerId()).orElse(anonymousOwner);
     }
+    String connectionOwner(Context ctx, boolean mutation, boolean protectedManagement) {
+        if (!protectedManagement) return "local-operator";
+        var current = session(ctx).orElseThrow(
+                () -> new SecurityException("Sign in to reuse target connections"));
+        if (mutation) oidc.requireMutation(ctx, current);
+        return current.identity().ownerId();
+    }
     void authorizeRun(Context ctx, boolean mutation) {
         var current = session(ctx);
         var run = runs.find(ctx.pathParam("id"));

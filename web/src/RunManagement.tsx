@@ -603,15 +603,15 @@ export function RunManagement({ runId, csrfToken, focusCaseId, navigateTo }: {
         </div></details>
       </div>
     </header>
-    {campaigns && <nav className="plan-progress" aria-label="Filter cases by evidence plan">
+    {campaigns && <nav className="plan-progress" aria-label="Filter cases by execution assistance">
       <button type="button" className={`plan-progress-card${planFilter === 'ALL' ? ' selected' : ''}`}
         aria-pressed={planFilter === 'ALL'} onClick={() => setPlanFilter('ALL')}>
-        <span>All plans</span><strong>{campaigns.cases}</strong><small>approved cases</small>
+        <span>All assistance levels</span><strong>{campaigns.cases}</strong><small>approved cases</small>
       </button>
       {campaigns.plans.map(value =>
       <button type="button" className={`plan-progress-card plan-${value.plan.toLowerCase()}${planFilter === value.plan ? ' selected' : ''}`}
         aria-pressed={planFilter === value.plan} onClick={() => setPlanFilter(value.plan)} key={value.plan}>
-        <span>{humanize(value.plan)}</span><strong>{value.remainingUserActions}</strong>
+        <span>{assistanceLabel(value.plan)}</span><strong>{value.remainingUserActions}</strong>
         <small>actions remaining · {value.estimatedMinutesMin}-{value.estimatedMinutesMax} min</small>
         <progress max={Math.max(value.deliberateUserActions, 1)}
           value={Math.max(value.deliberateUserActions - value.remainingUserActions, 0)} />
@@ -621,7 +621,7 @@ export function RunManagement({ runId, csrfToken, focusCaseId, navigateTo }: {
       <ol>
         <li><strong>Register the Test Peer.</strong> Follow the registration guide below in your target product.</li>
         <li><strong>Run preflight.</strong> Check that SAMLscope can retrieve the target metadata.</li>
-        <li><strong>Complete one login.</strong> {profile.startsWith('IDP') ? 'Open the IdP, sign in with a test user, then return to this Run.' : 'Start login at your target SP and return to this Run after the response is recorded.'}</li>
+        <li><strong>Complete one login.</strong> {profile.endsWith('_idp') ? 'Open the IdP, sign in with a test user, then return to this Run.' : 'Start login at your target SP and return to this Run after the response is recorded.'}</li>
         <li><strong>Run the initial checks (M1).</strong> Then follow Pending interactions. M2 and M3 are additional test stages, not setup buttons.</li>
       </ol>
       <p className="notice">{runSummary?.status === 'COMPLETED'
@@ -635,7 +635,7 @@ export function RunManagement({ runId, csrfToken, focusCaseId, navigateTo }: {
       <div className="actions">
         <button disabled={busy !== ''} aria-busy={busy === 'preflight'} onClick={() => void runPreflight()}>
           {busy === 'preflight' && <span className="button-spinner" aria-hidden="true" />}Run preflight</button>
-        {plan && profile.startsWith('IDP') && idpRoundTripReady(runSummary) && runSummary?.status !== 'COMPLETED'
+        {plan && profile.endsWith('_idp') && idpRoundTripReady(runSummary) && runSummary?.status !== 'COMPLETED'
           && <RoundTripLink href={idpRoundTripUrl(plan, runId)} />}
         <button disabled={busy !== '' || runSummary?.status !== 'COMPLETED'} onClick={() => void startM1()}>Start or resume M1</button>
         <details className="additional-stages"><summary>Additional test stages (M2 / M3)</summary>
@@ -673,7 +673,7 @@ export function RunManagement({ runId, csrfToken, focusCaseId, navigateTo }: {
           <p><strong>{protocolEvidence.eligibleCases}</strong> currently implemented case{protocolEvidence.eligibleCases === 1 ? '' : 's'} can derive outcomes directly from metadata fetches and correlated SAML traffic; <strong>{protocolEvidence.readyCases}</strong> ready now.</p>
           <p>SAMLscope normally evaluates these cases automatically as Transcript evidence arrives. Because a public metadata fetch does not identify its caller, use the recovery action only after you triggered the target's normal refresh or re-import and attempted the listed SAML flows.</p>
           <div className="standard-work-queue">
-            <p><strong>Standard work queue:</strong> {metadataWork.completedFixtures}/{metadataWork.totalFixtures} fixture fetches recorded.</p>
+            <p><strong>Assisted work queue:</strong> {metadataWork.completedFixtures}/{metadataWork.totalFixtures} fixture fetches recorded.</p>
             {metadataLab?.ingestionMode === 'AUTOMATIC_POLLING' ? <>
               <p><strong>Automatic polling:</strong> {metadataLab.campaignIndex}/{metadataLab.campaignVariants.length} fixtures completed{metadataLab.campaignComplete ? '. Campaign complete.' : `; currently serving ${humanize(metadataLab.selectedVariant)}.`}</p>
               <p><strong>Operator continuations:</strong> {metadataLab.operatorContinuationActions}</p>
@@ -765,7 +765,7 @@ export function RunManagement({ runId, csrfToken, focusCaseId, navigateTo }: {
       <h2>Choose evidence depth, not individual cases</h2>
       <p>Cases share Transcripts, metadata fetches, and configuration campaigns. Counts below are deliberate user actions, not case counts.</p>
       <div className="contract-list">{campaigns.plans.map(value => <article className="contract" key={value.plan}>
-        <header><div><strong>{humanize(value.plan)}</strong><p>{planDescription(value.plan)}</p></div>
+        <header><div><strong>{assistanceLabel(value.plan)}</strong><p>{planDescription(value.plan)}</p></div>
           <span>{value.budgetMet ? 'WITHIN BUDGET' : 'OVER BUDGET'}</span></header>
         <dl>
           <dt>Cases</dt><dd>{value.cases}</dd>
@@ -839,7 +839,7 @@ export function RunManagement({ runId, csrfToken, focusCaseId, navigateTo }: {
           <button ref={caseDrawerCloseRef} type="button" className="button-secondary" onClick={closeCaseDrawer}
             aria-label="Close case details">Close</button></header>
         <dl><dt>Campaign</dt><dd>{selectedCaseCampaign.title}</dd>
-          <dt>Plan</dt><dd>{humanize(selectedCase.plan)}</dd>
+          <dt>Assistance</dt><dd>{assistanceLabel(selectedCase.plan)}</dd>
           <dt>Evidence</dt><dd><span className={`evidence-label evidence-${selectedCase.evidenceClass.toLowerCase()}`}>
             {humanize(selectedCase.evidenceClass)}</span></dd>
           <dt>Outcome</dt><dd>{selectedCase.outcome ? humanize(selectedCase.outcome) : selectedCase.resolved ? 'Resolved' : 'Pending evidence'}</dd>
@@ -855,7 +855,7 @@ export function RunManagement({ runId, csrfToken, focusCaseId, navigateTo }: {
       </aside>
     </div>, document.body)}
     {sharedOperatorActions.length > 0 && <section className="shared-operator-actions">
-      <p className="eyebrow">Standard plan operations</p>
+      <p className="eyebrow">Operator-assisted evidence</p>
       <h2>Shared target policy changes</h2>
       <p>Perform each target-side policy change once. SAMLscope applies that operation to every listed case, but the operation itself is not evidence of conformance. Without a conclusive Transcript or other external evidence, those cases remain not verified.</p>
       <div className="interaction-list">{sharedOperatorActions.map(section => {
@@ -876,7 +876,7 @@ export function RunManagement({ runId, csrfToken, focusCaseId, navigateTo }: {
       })}</div>
     </section>}
     {selfCheckSections.length > 0 && <section className="self-check-sections">
-      <p className="eyebrow">Full plan evidence</p>
+      <p className="eyebrow">Self-attested evidence</p>
       <h2>Grouped self-check sections</h2>
       <p>These are the cases that cannot currently be proved from standard SAML, browser, metadata, or Transcript evidence. Record one evidence conclusion per section. Open case-specific overrides only when the shared evidence supports different conclusions.</p>
       <div className="interaction-list">{selfCheckSections.map(section =>
@@ -917,7 +917,7 @@ export function RunManagement({ runId, csrfToken, focusCaseId, navigateTo }: {
         </form>)}</div>
     </section>}
     <div className="section-heading"><div><p className="eyebrow">Evidence workflow</p><h2>Pending interactions</h2></div></div>
-    {profile === 'IDP_FULL' && <form className="interaction" onSubmit={event => void runEcpProbe(event)}>
+    {profile === 'ecp_idp' && <form className="interaction" onSubmit={event => void runEcpProbe(event)}>
       <fieldset disabled={busy === 'ecp-probe'}>
         <legend>ECP, channel-binding, and SAML-EC probes</legend>
         <p>Credentials are held in memory for this send only. They are never written to case state, the outbox, or the transcript.</p>
@@ -926,7 +926,7 @@ export function RunManagement({ runId, csrfToken, focusCaseId, navigateTo }: {
         <button type="submit">Run seven ECP probes before M3</button>
       </fieldset>
     </form>}
-    {plan && profile.startsWith('SP') && <p>Start login at the target SP after importing the Test Peer metadata.</p>}
+    {plan && profile.endsWith('_sp') && <p>Start login at the target SP after importing the Test Peer metadata.</p>}
     {focusCaseId && <div className="actions"><a className="button" href={`/manage/${runId}`}>Back to Run management</a></div>}
     {visibleInteractions.length === 0 ? <p className="quiet-success">
       {focusCaseId ? `No pending interaction for ${focusCaseId}.`
@@ -1013,7 +1013,13 @@ function resolvePrompt(value: string, planId: string, runId: string) {
 function planDescription(plan: 'QUICK' | 'STANDARD' | 'FULL') {
   if (plan === 'QUICK') return 'Protocol-observed evidence only.'
   if (plan === 'STANDARD') return 'Quick plus operator-assisted configuration and refresh actions.'
-  return 'Standard plus grouped self-attested evidence that cannot be externally observed.'
+  return 'Assisted plus grouped self-attested evidence that cannot be externally observed.'
+}
+
+function assistanceLabel(plan: 'QUICK' | 'STANDARD' | 'FULL') {
+  if (plan === 'QUICK') return 'Quick'
+  if (plan === 'STANDARD') return 'Assisted'
+  return 'Assisted + attestation'
 }
 
 function attestationValue(interaction: PendingInteraction, conclusion: string) {

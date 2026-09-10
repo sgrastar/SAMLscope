@@ -9,7 +9,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import com.samlscope.core.plan.MetadataDeliveryKind;
 import com.samlscope.core.plan.MetadataSourceKind;
-import com.samlscope.core.plan.PlanProfile;
+import com.samlscope.core.profile.FunctionalProfile;
 import com.samlscope.core.plan.TargetKind;
 import com.samlscope.core.plan.TestPlan;
 import com.samlscope.core.run.Reachability;
@@ -26,7 +26,7 @@ class SqlitePublicationRepositoryTest {
         var json = new JsonCodec();
         var now = Instant.parse("2026-08-29T00:00:00Z");
         var plan = new TestPlan(
-                "plan_0123456789ABCDEFGHJKMNPQRS", "Publication", PlanProfile.IDP_CORE,
+                "plan_0123456789ABCDEFGHJKMNPQRS", "Publication", FunctionalProfile.BROWSER_SSO_IDP,
                 new TestPlan.Target(TargetKind.IDP, "https://idp.example/entity",
                         new TestPlan.MetadataSource(MetadataSourceKind.URL, "https://idp.example/metadata")),
                 MetadataDeliveryKind.MANUAL, Map.of(), TestPlan.Parameters.defaults(),

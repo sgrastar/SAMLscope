@@ -27,6 +27,7 @@ import com.samlscope.runner.cases.SamlAttributeReleaseFixture;
 import com.samlscope.runner.cases.SamlOptionalFieldObservationCase;
 import com.samlscope.runner.cases.TargetSigningCertificateProvider;
 import com.samlscope.saml.crypto.FilePlanKeyStore;
+import com.samlscope.core.profile.FunctionalCaseDefinition;
 
 /** Executes the approved M1 automated subset as an operational check over a completed Transcript. */
 public final class QuickCheckService implements QuickCheckExecutor {
@@ -42,6 +43,7 @@ public final class QuickCheckService implements QuickCheckExecutor {
     private final Clock clock;
     private final CaseDefinitionCatalog approvedDefinitions;
     private final BiFunction<com.samlscope.core.plan.TestPlan, String, IdpErrorProbeConfiguration> probeConfigurations;
+    private final java.util.function.Function<com.samlscope.core.plan.TestPlan,FunctionalCaseDefinition> profileDefinitions;
 
     public QuickCheckService(
             PlanRepository plans,
@@ -54,7 +56,7 @@ public final class QuickCheckService implements QuickCheckExecutor {
             URI peerBase,
             Clock clock) {
         this(plans, runs, transcript, transcriptContent, caseExecutions, keys,
-                targetSigningCertificates, peerBase, clock, null, null);
+                targetSigningCertificates, peerBase, clock, null, null, null);
     }
 
     public QuickCheckService(
@@ -69,7 +71,7 @@ public final class QuickCheckService implements QuickCheckExecutor {
             Clock clock,
             CaseDefinitionCatalog approvedDefinitions) {
         this(plans, runs, transcript, transcriptContent, caseExecutions, keys,
-                targetSigningCertificates, peerBase, clock, approvedDefinitions, null);
+                targetSigningCertificates, peerBase, clock, approvedDefinitions, null, null);
     }
 
     public QuickCheckService(
@@ -84,6 +86,23 @@ public final class QuickCheckService implements QuickCheckExecutor {
             Clock clock,
             CaseDefinitionCatalog approvedDefinitions,
             BiFunction<com.samlscope.core.plan.TestPlan, String, IdpErrorProbeConfiguration> probeConfigurations) {
+        this(plans, runs, transcript, transcriptContent, caseExecutions, keys,
+                targetSigningCertificates, peerBase, clock, approvedDefinitions, probeConfigurations, null);
+    }
+
+    public QuickCheckService(
+            PlanRepository plans,
+            RunRepository runs,
+            TranscriptRecorder transcript,
+            TranscriptContentReader transcriptContent,
+            CaseExecutionRepository caseExecutions,
+            FilePlanKeyStore keys,
+            TargetSigningCertificateProvider targetSigningCertificates,
+            URI peerBase,
+            Clock clock,
+            CaseDefinitionCatalog approvedDefinitions,
+            BiFunction<com.samlscope.core.plan.TestPlan, String, IdpErrorProbeConfiguration> probeConfigurations,
+            java.util.function.Function<com.samlscope.core.plan.TestPlan,FunctionalCaseDefinition> profileDefinitions) {
         this.plans = Objects.requireNonNull(plans, "plans");
         this.runs = Objects.requireNonNull(runs, "runs");
         this.transcript = Objects.requireNonNull(transcript, "transcript");
@@ -98,6 +117,7 @@ public final class QuickCheckService implements QuickCheckExecutor {
         this.probeConfigurations = probeConfigurations == null
                 ? (plan, runId) -> inactiveProbe(plan.id())
                 : probeConfigurations;
+        this.profileDefinitions = profileDefinitions;
     }
 
     @Override
@@ -129,8 +149,13 @@ public final class QuickCheckService implements QuickCheckExecutor {
                 plan.interaction(),
                 run.targetToSuiteReachability(), transcript, true);
         var snapshot = new AutomatedCaseRunner(registry, new CaseExecutionService(caseExecutions, new PlanRequestSigning(plans, runs, keys)))
-                .startReady(run.id(), plan.profile(), context);
+                .startReady(run.id(), requireProfileDefinition(plan), context);
         return new QuickCheckResult(run.id(), DISCLAIMER, snapshot);
+    }
+
+    private FunctionalCaseDefinition requireProfileDefinition(com.samlscope.core.plan.TestPlan plan) {
+        if (profileDefinitions == null) throw new IllegalStateException("Functional case definition is unavailable");
+        return profileDefinitions.apply(plan);
     }
 
     private IdpErrorProbeConfiguration inactiveProbe(String planId) {

@@ -52,10 +52,32 @@ STATIC_PROTECTED_PATHS = {
     'saml/src/main/java/com/samlscope/saml/raw/BytePreservingRawMessageBuilder.java',
     'peer/src/main/java/com/samlscope/peer/PeerIdentity.java',
     'api/src/main/java/com/samlscope/api/SamlScopeApplication.java',
+    'api/src/main/java/com/samlscope/api/FunctionalProfileDocuments.java',
+    'api/src/main/java/com/samlscope/api/M1Runtime.java',
+    'core/src/main/java/com/samlscope/core/evaluation/Evaluator.java',
+    'core/src/main/java/com/samlscope/core/evaluation/RunResultInvariantValidator.java',
+    'core/src/main/java/com/samlscope/core/plan/TestPlan.java',
+    'runner/src/main/java/com/samlscope/runner/ApprovedCaseStarter.java',
+    'runner/src/main/java/com/samlscope/runner/AutomatedCaseRunner.java',
+    'runner/src/main/java/com/samlscope/runner/CatalogApplicabilityProvider.java',
+    'runner/src/main/java/com/samlscope/runner/PinnedFunctionalCaseDefinitionResolver.java',
+    'runner/src/main/java/com/samlscope/runner/QuickCheckService.java',
+    'runner/src/main/java/com/samlscope/runner/RunEvaluationService.java',
+    'runner/src/main/java/com/samlscope/runner/result/DefaultResultContextProvider.java',
+    'runner/src/main/java/com/samlscope/runner/result/ResultDocumentAssembler.java',
+    'runner/src/main/java/com/samlscope/runner/result/ResultPublicationService.java',
+    'store/src/main/java/com/samlscope/store/FunctionalProfileJsonModule.java',
+    'store/src/main/java/com/samlscope/store/PlanWritePolicy.java',
+    'store/src/main/java/com/samlscope/store/SqlitePlanRepository.java',
     'saml/src/test/java/com/samlscope/saml/G2FeasibilitySpikeTest.java',
     'peer/src/test/java/com/samlscope/peer/PeerG2FeasibilityTest.java',
 }
-PROTECTED_PREFIXES = ('tests/fixtures/',)
+PROTECTED_PREFIXES = (
+    'tests/fixtures/',
+    'core/src/main/java/com/samlscope/core/profile/',
+    'dev/profile-migration/',
+    'profiles/',
+)
 NON_EVALUATIVE = {
     'IIP-MD05.am', 'IIP-MD05.at', 'IIP-MD05.c4', 'IIP-MD05.ed',
     'IIP-MD06.aa', 'IIP-SSO07.a', 'IIP-EXT01.b1', 'IIP-EXT01.c1',

@@ -1,6 +1,9 @@
 # syntax=docker/dockerfile:1.7
 
 FROM node:24.11.1-bookworm-slim@sha256:48abc13a19400ca3985071e287bd405a1d99306770eb81d61202fb6b65cf0b57 AS web-build
+WORKDIR /src
+COPY LICENSE LICENSING.md ./
+COPY LICENSES/source-notices.json LICENSES/source-notices.json
 WORKDIR /src/web
 COPY web/package.json web/package-lock.json ./
 RUN npm ci --ignore-scripts

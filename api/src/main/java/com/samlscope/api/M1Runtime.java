@@ -26,6 +26,7 @@ import com.samlscope.runner.CaseTimeoutService;
 import com.samlscope.runner.DefaultCaseContext;
 import com.samlscope.runner.OutboxIncidentProjection;
 import com.samlscope.runner.PendingInteractionService;
+import com.samlscope.runner.PinnedFunctionalCaseDefinitionResolver;
 import com.samlscope.runner.PersistedApplicabilityInputProvider;
 import com.samlscope.runner.ProtocolEvidenceAutomationService;
 import com.samlscope.runner.QuickCheckService;
@@ -45,6 +46,7 @@ import com.samlscope.runner.result.EvaluationArtifactDigests;
 import com.samlscope.runner.result.ResultDocumentContext;
 import com.samlscope.runner.result.ResultJsonWriter;
 import com.samlscope.runner.result.ResultPublicationService;
+import com.samlscope.runner.result.ReportHtmlWriter;
 import com.samlscope.saml.crypto.FilePlanKeyStore;
 import com.samlscope.saml.metadata.TargetMetadataParser;
 import com.samlscope.store.FileRunArtifactRepository;
@@ -84,6 +86,7 @@ final class M1Runtime {
     private final CaseTimeoutService timeouts;
     private final RunCampaignService campaigns;
     private final com.samlscope.runner.CampaignActionCompletionService campaignActions;
+    private final PinnedFunctionalCaseDefinitionResolver profileDefinitions;
 
     private M1Runtime(
             AppConfig config,
@@ -109,7 +112,8 @@ final class M1Runtime {
             ActiveProbeCoordinator activeProbes,
             CaseTimeoutService timeouts,
             RunCampaignService campaigns,
-            com.samlscope.runner.CampaignActionCompletionService campaignActions) {
+            com.samlscope.runner.CampaignActionCompletionService campaignActions,
+            PinnedFunctionalCaseDefinitionResolver profileDefinitions) {
         this.config = config;
         this.quickCheck = quickCheck;
         this.results = results;
@@ -134,6 +138,7 @@ final class M1Runtime {
         this.timeouts = timeouts;
         this.campaigns = campaigns;
         this.campaignActions = campaignActions;
+        this.profileDefinitions = profileDefinitions;
     }
 
     static M1Runtime create(
@@ -153,10 +158,49 @@ final class M1Runtime {
             HostedRateLimiter reconciliationLimiter,
             SqliteHostedRunProvisioner hostedRunProvisioner,
             Clock clock) {
+        return create(config, database, json, plans, runs, transcript, transcriptContent,
+                metadataCache, metadataParser, keys, caseExecutions, metadataLab,
+                outboundDispatcher, reconciliationLimiter, hostedRunProvisioner, clock,
+                Map.of(), Map.of());
+    }
+
+    static M1Runtime create(
+            AppConfig config,
+            SqliteDatabase database,
+            JsonCodec json,
+            PlanRepository plans,
+            RunRepository runs,
+            TranscriptRecorder transcript,
+            TranscriptContentReader transcriptContent,
+            MetadataCache metadataCache,
+            TargetMetadataParser metadataParser,
+            FilePlanKeyStore keys,
+            SqliteCaseExecutionRepository caseExecutions,
+            com.samlscope.runner.MetadataLabService metadataLab,
+            OutboundDispatcher outboundDispatcher,
+            HostedRateLimiter reconciliationLimiter,
+            SqliteHostedRunProvisioner hostedRunProvisioner,
+            Clock clock,
+            Map<com.samlscope.core.profile.FunctionalProfile,byte[]> profileArtifacts,
+            Map<com.samlscope.core.profile.FunctionalProfile,String> approvedProfileDigests) {
         var documents = CatalogDocuments.load();
         var coverage = CoverageCatalogMapper.fromDocument(documents.parsed("tests/coverage.yaml"));
         var predicates = PredicateCatalogMapper.fromDocument(documents.parsed("tests/predicates.yaml"));
         var definitions = CaseDefinitionCatalogMapper.fromDocument(documents.parsed("tests/cases.yaml"));
+        var profileDefinitions = new PinnedFunctionalCaseDefinitionResolver(
+                profileArtifacts, approvedProfileDigests,
+                Map.of(
+                        "tests/coverage.yaml", documents.bytes("tests/coverage.yaml"),
+                        "tests/cases.yaml", documents.bytes("tests/cases.yaml"),
+                        "tests/predicates.yaml", documents.bytes("tests/predicates.yaml")),
+                definitions, coverage);
+        java.util.function.Function<com.samlscope.core.plan.TestPlan,
+                com.samlscope.core.profile.FunctionalCaseDefinition> definitionForPlan = plan -> {
+            if (plan.definitionIdentity() == null) {
+                throw new IllegalStateException("Test Plan has no pinned functional profile definition");
+            }
+            return profileDefinitions.resolve(plan.definitionIdentity());
+        };
         java.util.function.Function<String, byte[]> runMetadata = runId -> {
             var run = runs.find(runId).orElseThrow(() -> new IllegalArgumentException("Unknown Run"));
             return metadataCache.getRunSnapshot(run.id(), run.planId());
@@ -192,10 +236,11 @@ final class M1Runtime {
         };
         var quickCheck = new QuickCheckService(
                 plans, runs, transcript, transcriptContent, caseExecutions, keys, targetCertificates,
-                config.peerBaseUrl(), clock, definitions, probeConfigurations);
+                config.peerBaseUrl(), clock, definitions, probeConfigurations, definitionForPlan);
         var applicability = new CatalogApplicabilityProvider(
                 coverage, predicates,
-                new PersistedApplicabilityInputProvider(new SqliteApplicabilityInputRepository(database, json)));
+                new PersistedApplicabilityInputProvider(new SqliteApplicabilityInputRepository(database, json)),
+                definitionForPlan);
         var m1Attested = ApprovedAttestedCaseRegistry.create(
                 definitions, com.samlscope.core.casedef.CaseDefinitionCatalog.Milestone.M1,
                 config.publicBaseUrl(),
@@ -330,19 +375,19 @@ final class M1Runtime {
                 transcript, caseContexts, probeConfigurations, interactiveRegistry, clock, executionService);
         var starters = Map.of(
                 com.samlscope.core.casedef.CaseDefinitionCatalog.Milestone.M1, List.of(
-                        new ApprovedCaseStarter(coverage, definitions, m1Attested, executionService, applicability),
-                        new ApprovedCaseStarter(coverage, definitions, m1Config, executionService, applicability),
-                        new ApprovedCaseStarter(coverage, definitions, m1Browser, executionService, applicability)),
+                        new ApprovedCaseStarter(coverage, definitions, m1Attested, executionService, applicability, definitionForPlan),
+                        new ApprovedCaseStarter(coverage, definitions, m1Config, executionService, applicability, definitionForPlan),
+                        new ApprovedCaseStarter(coverage, definitions, m1Browser, executionService, applicability, definitionForPlan)),
                 com.samlscope.core.casedef.CaseDefinitionCatalog.Milestone.M2, List.of(
-                        new ApprovedCaseStarter(coverage, definitions, m2Automated, executionService, applicability),
-                        new ApprovedCaseStarter(coverage, definitions, m2Attested, executionService, applicability),
-                        new ApprovedCaseStarter(coverage, definitions, m2Config, executionService, applicability),
-                        new ApprovedCaseStarter(coverage, definitions, m2Browser, executionService, applicability)),
+                        new ApprovedCaseStarter(coverage, definitions, m2Automated, executionService, applicability, definitionForPlan),
+                        new ApprovedCaseStarter(coverage, definitions, m2Attested, executionService, applicability, definitionForPlan),
+                        new ApprovedCaseStarter(coverage, definitions, m2Config, executionService, applicability, definitionForPlan),
+                        new ApprovedCaseStarter(coverage, definitions, m2Browser, executionService, applicability, definitionForPlan)),
                 com.samlscope.core.casedef.CaseDefinitionCatalog.Milestone.M3, List.of(
-                        new ApprovedCaseStarter(coverage, definitions, m3Automated, executionService, applicability),
-                        new ApprovedCaseStarter(coverage, definitions, m3Attested, executionService, applicability),
-                        new ApprovedCaseStarter(coverage, definitions, m3Config, executionService, applicability),
-                        new ApprovedCaseStarter(coverage, definitions, m3Browser, executionService, applicability)));
+                        new ApprovedCaseStarter(coverage, definitions, m3Automated, executionService, applicability, definitionForPlan),
+                        new ApprovedCaseStarter(coverage, definitions, m3Attested, executionService, applicability, definitionForPlan),
+                        new ApprovedCaseStarter(coverage, definitions, m3Config, executionService, applicability, definitionForPlan),
+                        new ApprovedCaseStarter(coverage, definitions, m3Browser, executionService, applicability, definitionForPlan)));
         var pendingInteractions = new PendingInteractionService(caseExecutions, interactiveRegistry);
         var bootstrapContracts = new BootstrapContractService(
                 definitions, caseExecutions, plans, runs, transcript, metadataLab);
@@ -359,7 +404,7 @@ final class M1Runtime {
         var evaluator = new RunEvaluationService(
                 coverage, plans, runs,
                 new CaseRunProjection(caseExecutions, definitions.byId().keySet()), applicability,
-                new OutboxIncidentProjection(caseExecutions));
+                new OutboxIncidentProjection(caseExecutions), definitionForPlan);
         var artifacts = new FileRunArtifactRepository(config.dataDirectory());
         ResultPublicationService results = null;
         if (!config.suiteImageDigest().isBlank()) {
@@ -376,7 +421,11 @@ final class M1Runtime {
                     run -> metadataCache.getRunSnapshot(run.id(), run.planId()),
                     campaigns::report);
             results = new ResultPublicationService(
-                    coverage, evaluator, contexts, new ResultJsonWriter(), artifacts);
+                    coverage, evaluator, contexts, new ResultJsonWriter(), artifacts,
+                    new ReportHtmlWriter(
+                            resource("/META-INF/samlscope/LICENSE"),
+                            resource("/META-INF/samlscope/LICENSING.md"),
+                            resource("/META-INF/samlscope/LICENSES/source-notices.json")));
         }
         var access = new RunAccessService(
                 config.publicBaseUrl(), runs, new SqliteRunAccessGrantRepository(database), clock);
@@ -386,7 +435,16 @@ final class M1Runtime {
                 starters, pendingInteractions, bootstrapContracts, protocolEvidence, attestations,
                 configurations, browserCompletions, caseExecutions, publications,
                 reconciliationLimiter, hostedRunProvisioner, activeProbes, timeouts,
-                campaigns, campaignActions);
+                campaigns, campaignActions, profileDefinitions);
+    }
+
+    java.util.Set<com.samlscope.core.profile.FunctionalProfile> installedProfiles() {
+        return profileDefinitions.profiles();
+    }
+
+    com.samlscope.core.profile.FunctionalDefinitionIdentity definitionIdentity(
+            com.samlscope.core.profile.FunctionalProfile profile) {
+        return profileDefinitions.identity(profile);
     }
 
     QuickCheckService.QuickCheckResult quickCheck(String runId) {
@@ -574,11 +632,11 @@ final class M1Runtime {
             var run = requireRun(runId);
             var plan = requirePlan(run);
             if (milestone == com.samlscope.core.casedef.CaseDefinitionCatalog.Milestone.M3
-                    && plan.profile() == com.samlscope.core.plan.PlanProfile.IDP_FULL
+                    && plan.profile() == com.samlscope.core.profile.FunctionalProfile.ECP_IDP
                     && !com.samlscope.runner.outbox.EcpProbeService.allRequiredFixturesSent(
                             caseExecutions, run.id())) {
                 throw new IllegalArgumentException(
-                        "Run the ECP, channel-binding, and SAML-EC probes before starting M3 for an IdP Full Profile Run");
+                        "Run the ECP, channel-binding, and SAML-EC probes before starting M3 for an ECP — IdP Run");
             }
             var started = startInteractive(run, plan, milestone);
             reconcileTranscriptEvidenceNow(runId);
@@ -629,6 +687,15 @@ final class M1Runtime {
             requireManualReconciliationAllowed(runId);
             return operation.get();
         });
+    }
+
+    private static byte[] resource(String path) {
+        try (var stream = M1Runtime.class.getResourceAsStream(path)) {
+            if (stream == null) throw new IllegalStateException("Missing distribution notice: " + path);
+            return stream.readAllBytes();
+        } catch (java.io.IOException error) {
+            throw new IllegalStateException("Could not read distribution notice: " + path, error);
+        }
     }
 
     private void requireManualReconciliationAllowed(String runId) {

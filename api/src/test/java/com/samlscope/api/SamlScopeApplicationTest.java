@@ -24,7 +24,7 @@ class SamlScopeApplicationTest {
         var config = new AppConfig(AppConfig.Mode.SELFHOSTED,
                 URI.create("http://127.0.0.1:8080"), URI.create("http://127.0.0.1:8080"),
                 dataDirectory, 8080, true, false, false);
-        var app = SamlScopeApplication.create(config).start(0);
+        var app = FunctionalProfileTestInstallation.create(config).start(0);
         try {
             var base = URI.create("http://127.0.0.1:" + app.port());
             var client = HttpClient.newHttpClient();
@@ -41,10 +41,27 @@ class SamlScopeApplicationTest {
             assertTrue(completionStyle.headers().firstValue("Content-Type").orElseThrow().startsWith("text/css"));
             assertTrue(completionStyle.body().contains("prefers-color-scheme"));
 
+            var licenses = client.send(HttpRequest.newBuilder(base.resolve("/licenses")).build(),
+                    HttpResponse.BodyHandlers.ofString());
+            assertEquals(200, licenses.statusCode());
+            assertTrue(licenses.body().contains("<div id=\"root\"></div>"));
+            var browserNotices = client.send(HttpRequest.newBuilder(
+                    base.resolve("/licenses/browser-dependencies.json")).build(),
+                    HttpResponse.BodyHandlers.ofString());
+            assertEquals(200, browserNotices.statusCode());
+            assertTrue(browserNotices.headers().firstValue("Content-Type").orElseThrow()
+                    .startsWith("application/json"));
+            assertTrue(browserNotices.body().contains("\"name\": \"react\""));
+            var sourceNotices = client.send(HttpRequest.newBuilder(
+                    base.resolve("/licenses/source-notices.json")).build(),
+                    HttpResponse.BodyHandlers.ofString());
+            assertEquals(200, sourceNotices.statusCode());
+            assertTrue(sourceNotices.body().contains("\"unresolved_sources\""));
+
             var requestBody = """
                     {
                       "name":"Example IdP",
-                      "profile":"IDP_CORE",
+                      "profile":"browser_sso_idp",
                       "targetKind":"IDP",
                       "targetEntityId":"https://idp.example/entity",
                       "metadataSourceKind":"URL",
@@ -317,7 +334,7 @@ class SamlScopeApplicationTest {
         var config = new AppConfig(AppConfig.Mode.SELFHOSTED,
                 URI.create("http://127.0.0.1:8080"), URI.create("http://127.0.0.1:8080"),
                 dataDirectory, 8080, true, false, false);
-        var app = SamlScopeApplication.create(config).start(0);
+        var app = FunctionalProfileTestInstallation.create(config).start(0);
         try {
             var base = URI.create("http://127.0.0.1:" + app.port());
             var response = HttpClient.newHttpClient().send(HttpRequest.newBuilder(base.resolve(
@@ -374,12 +391,12 @@ class SamlScopeApplicationTest {
         var config = new AppConfig(AppConfig.Mode.SELFHOSTED,
                 URI.create("http://127.0.0.1:8080"), URI.create("https://peer.example"),
                 dataDirectory, 8080, true, false, false);
-        var app = SamlScopeApplication.create(config).start(0);
+        var app = FunctionalProfileTestInstallation.create(config).start(0);
         try {
             var base = URI.create("http://127.0.0.1:" + app.port());
             var client = HttpClient.newHttpClient();
             var requestBody = """
-                    {"name":"Snapshot IdP","profile":"IDP_CORE","targetKind":"IDP",
+                    {"name":"Snapshot IdP","profile":"browser_sso_idp","targetKind":"IDP",
                      "targetEntityId":"https://idp.example/entity","metadataSourceKind":"URL",
                      "metadataSourceLocation":"http://127.0.0.1:%d/metadata",
                      "suiteMetadataDelivery":"HTTP_URL","declaredFeatures":{},

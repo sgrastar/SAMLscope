@@ -1,5 +1,10 @@
 # 01. Scope and Roadmap
 
+> **Current profile model:** Phase 1 execution is migrating from the historical
+> Core/Full scopes described below to the seven functional case-set profiles in
+> [20](20-profiles-and-public-summaries.md). The historical definitions remain here
+> to interpret existing results; they are not the names of new Plans.
+
 ## Overall phases
 
 ```

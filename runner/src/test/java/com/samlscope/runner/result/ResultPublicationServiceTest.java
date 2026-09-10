@@ -18,7 +18,7 @@ import com.samlscope.core.evaluation.Outcome;
 import com.samlscope.core.evaluation.Rfc2119Level;
 import com.samlscope.core.plan.MetadataDeliveryKind;
 import com.samlscope.core.plan.MetadataSourceKind;
-import com.samlscope.core.plan.PlanProfile;
+import com.samlscope.core.profile.FunctionalProfile;
 import com.samlscope.core.plan.TargetKind;
 import com.samlscope.core.plan.TargetRole;
 import com.samlscope.core.plan.TestPlan;
@@ -26,6 +26,7 @@ import com.samlscope.core.run.Reachability;
 import com.samlscope.core.run.RunStatus;
 import com.samlscope.core.run.TestRun;
 import com.samlscope.runner.RunEvaluationService;
+import com.samlscope.runner.FunctionalCaseFixtures;
 import com.samlscope.store.FileRunArtifactRepository;
 import com.samlscope.store.JsonCodec;
 import com.samlscope.store.SqliteDatabase;
@@ -55,11 +56,15 @@ class ResultPublicationServiceTest {
                 CaseOutcome.of(Outcome.SATISFIED, "ok", List.of()));
         var evaluation = new RunEvaluationService(
                 catalog, plans, runs, ignored -> List.of(caseRun), (ignoredRun, ignoredPlan) -> List.of(),
-                ignored -> List.of());
+                ignored -> List.of(), ignored -> FunctionalCaseFixtures.forCases(
+                        FunctionalProfile.BROWSER_SSO_IDP, catalog,
+                        Map.of("REQ-a-idp-01", "REQ.a")));
         var repository = new FileRunArtifactRepository(directory);
         var service = new ResultPublicationService(
                 catalog, evaluation, (sourceRun, sourcePlan, cases, result) -> context(),
-                new ResultJsonWriter(), repository);
+                new ResultJsonWriter(), repository,
+                new ReportHtmlWriter("license".getBytes(), "scope".getBytes(),
+                        "{\"sources\":[],\"unresolved_sources\":[]}".getBytes()));
 
         var generated = service.generate(RUN_ID);
 
@@ -74,7 +79,7 @@ class ResultPublicationServiceTest {
 
     private TestPlan plan() {
         return new TestPlan(
-                "plan_0123456789ABCDEFGHJKMNPQRS", "Publication", PlanProfile.IDP_CORE,
+                "plan_0123456789ABCDEFGHJKMNPQRS", "Publication", FunctionalProfile.BROWSER_SSO_IDP,
                 new TestPlan.Target(TargetKind.IDP, "https://idp.example/entity",
                         new TestPlan.MetadataSource(MetadataSourceKind.URL, "https://idp.example/metadata")),
                 MetadataDeliveryKind.MANUAL, Map.of(), new TestPlan.Parameters(180, 300, "private@example.test"),

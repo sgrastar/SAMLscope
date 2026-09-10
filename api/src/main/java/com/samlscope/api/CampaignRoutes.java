@@ -4,7 +4,7 @@ import io.javalin.config.JavalinConfig;
 import java.util.Objects;
 import com.samlscope.runner.RunCampaignQuery;
 
-/** Read-only Quick / Standard / Full evidence-campaign projection. */
+/** Read-only projection of evidence campaigns for the selected functional profile. */
 public final class CampaignRoutes {
     private CampaignRoutes() {}
 

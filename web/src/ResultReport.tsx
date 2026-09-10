@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { AppShell } from './AppShell'
 import { api, type PublicResult } from './api'
 import { humanize } from './format'
+import { profileLabel } from './profiles'
 
 export function ResultReport({ runId }: { runId: string }) {
   const [result, setResult] = useState<PublicResult>()
@@ -54,7 +55,7 @@ export function ResultReport({ runId }: { runId: string }) {
           <dt>Product</dt><dd>{result.target.declaredProduct} <small>(declared)</small></dd>
           <dt>Entity ID</dt><dd><code>{result.target.entityId}</code></dd>
           <dt>Role</dt><dd>{targetRole(result.target.role, result.target.kind)}</dd>
-          <dt>Profile</dt><dd>{result.profile.id}</dd>
+          <dt>Profile</dt><dd>{profileLabel(result.profile.id)}</dd>
           <dt>Request signing</dt><dd>{humanize(result.configuration?.parameters?.requestSigningMode ?? 'Not recorded')}</dd>
           <dt>Suite</dt><dd>{result.suite.name} {result.suite.version}</dd>
           <dt>Evaluation bundle</dt><dd><code>{shortDigest(result.evaluationBundle.digest)}</code></dd>
@@ -95,7 +96,7 @@ export function ResultReport({ runId }: { runId: string }) {
         <a className="button" href={`/api/runs/${runId}/result.json`} download>Download result.json</a>
         <a className="button button-secondary" href={`/api/runs/${runId}/report.html`} download>Download static report.html</a>
       </div></section>
-      <footer className="legal disclaimer">This is a test result, not a certification. Target product details are declarations and are not independently verified.</footer>
+      <footer className="legal disclaimer">This is a test result, not a certification. Target product details are declarations and are not independently verified. <a href="/licenses">Licenses and sources</a></footer>
     </main>
   </AppShell>
 }

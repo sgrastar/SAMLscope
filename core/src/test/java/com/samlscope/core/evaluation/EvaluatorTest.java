@@ -14,12 +14,7 @@ import com.samlscope.core.evaluation.CoverageCatalog.ProfileScope;
 import com.samlscope.core.evaluation.CoverageCatalog.Testability;
 import com.samlscope.core.evaluation.RunResult.Completeness;
 import com.samlscope.core.evaluation.RunResult.Conformance;
-import com.samlscope.core.plan.MetadataDeliveryKind;
-import com.samlscope.core.plan.MetadataSourceKind;
-import com.samlscope.core.plan.PlanProfile;
-import com.samlscope.core.plan.TargetKind;
 import com.samlscope.core.plan.TargetRole;
-import com.samlscope.core.plan.TestPlan;
 
 class EvaluatorTest {
     @Test
@@ -28,7 +23,7 @@ class EvaluatorTest {
                 obligation("REQ.a", Rfc2119Level.MUST, Testability.AUTOMATED, ProfileScope.CORE, null),
                 obligation("REQ.b", Rfc2119Level.SHOULD, Testability.AUTOMATED, ProfileScope.CORE, null));
 
-        var result = Evaluator.evaluate(catalog, plan(PlanProfile.IDP_CORE), List.of(), List.of(
+        var result = Evaluator.evaluateSelectedObligations(catalog, List.of(), List.of(
                 completed("case-a", "REQ.a", Outcome.SATISFIED),
                 completed("case-b", "REQ.b", Outcome.VIOLATED)), List.of());
 
@@ -43,7 +38,7 @@ class EvaluatorTest {
                 obligation("REQ.a", Rfc2119Level.MUST, Testability.AUTOMATED, ProfileScope.CORE, null),
                 obligation("REQ.b", Rfc2119Level.SHOULD, Testability.AUTOMATED, ProfileScope.CORE, null));
 
-        var result = Evaluator.evaluate(catalog, plan(PlanProfile.IDP_CORE), List.of(), List.of(
+        var result = Evaluator.evaluateSelectedObligations(catalog, List.of(), List.of(
                 completed("case-a", "REQ.a", Outcome.SATISFIED),
                 CaseRun.completed("case-b", "REQ.b", CaseOutcome.notVerified("timeout", "case.timeout"))), List.of());
 
@@ -59,7 +54,7 @@ class EvaluatorTest {
                 "REQ.a", "feature", PredicateKind.CAPABILITY_BASED, false, true,
                 EffectiveResult.TRUE, true, Basis.OBSERVED, List.of("metadata:feature"), null);
 
-        var result = Evaluator.evaluate(catalog, plan(PlanProfile.IDP_CORE), List.of(applicability),
+        var result = Evaluator.evaluateSelectedObligations(catalog, List.of(applicability),
                 List.of(completed("case-a", "REQ.a", Outcome.VIOLATED)), List.of());
 
         assertEquals(Verdict.FAIL, result.obligations().getFirst().verdict());
@@ -74,13 +69,12 @@ class EvaluatorTest {
                 "REQ.a", "feature", PredicateKind.CAPABILITY_BASED, false, false,
                 EffectiveResult.FALSE, false, Basis.OBSERVED, List.of("probe:negative"), null);
 
-        var result = Evaluator.evaluate(catalog, plan(PlanProfile.IDP_CORE), List.of(applicability), List.of(), List.of());
+        var result = Evaluator.evaluateSelectedObligations(catalog, List.of(applicability), List.of(), List.of());
         assertEquals(Verdict.NOT_APPLICABLE, result.obligations().getFirst().verdict());
         assertEquals(Conformance.CONFORMANT, result.conformance());
 
-        assertThrows(IllegalArgumentException.class, () -> Evaluator.evaluate(
+        assertThrows(IllegalArgumentException.class, () -> Evaluator.evaluateSelectedObligations(
                 catalog,
-                plan(PlanProfile.IDP_CORE),
                 List.of(applicability),
                 List.of(completed("case-a", "REQ.a", Outcome.SATISFIED)),
                 List.of()));
@@ -94,8 +88,8 @@ class EvaluatorTest {
                 "REQ.a", "feature", PredicateKind.CAPABILITY_BASED, false, null,
                 EffectiveResult.UNKNOWN, false, Basis.DECLARED, List.of(), null);
 
-        var result = Evaluator.evaluate(
-                catalog, plan(PlanProfile.IDP_CORE), List.of(unknown), List.of(), List.of());
+        var result = Evaluator.evaluateSelectedObligations(
+                catalog, List.of(unknown), List.of(), List.of());
 
         assertEquals(Verdict.NOT_VERIFIED, result.obligations().getFirst().verdict());
         assertEquals(Conformance.INDETERMINATE, result.conformance());
@@ -111,14 +105,14 @@ class EvaluatorTest {
     void rejectsMissingMismatchedOrUnconditionalApplicabilityInputs() {
         var conditional = catalog(obligation(
                 "REQ.a", Rfc2119Level.MUST, Testability.AUTOMATED, ProfileScope.CORE, "feature"));
-        assertThrows(IllegalArgumentException.class, () -> Evaluator.evaluate(
-                conditional, plan(PlanProfile.IDP_CORE), List.of(), List.of(), List.of()));
+        assertThrows(IllegalArgumentException.class, () -> Evaluator.evaluateSelectedObligations(
+                conditional, List.of(), List.of(), List.of()));
 
         var wrongPredicate = new ApplicabilityEvaluation(
                 "REQ.a", "other", PredicateKind.CAPABILITY_BASED, true, null,
                 EffectiveResult.TRUE, false, Basis.DECLARED, List.of(), null);
-        assertThrows(IllegalArgumentException.class, () -> Evaluator.evaluate(
-                conditional, plan(PlanProfile.IDP_CORE), List.of(wrongPredicate), List.of(), List.of()));
+        assertThrows(IllegalArgumentException.class, () -> Evaluator.evaluateSelectedObligations(
+                conditional, List.of(wrongPredicate), List.of(), List.of()));
 
         var unconditional = catalog(obligation(
                 "REQ.a", Rfc2119Level.MUST, Testability.AUTOMATED, ProfileScope.CORE, null));
@@ -127,8 +121,8 @@ class EvaluatorTest {
                 EffectiveResult.FALSE, false, Basis.DECLARATION_ONLY_EXCLUSION, List.of(),
                 new ApplicabilityInput.ExclusionDeclaration(
                         "Injected exclusion", "operator", Instant.parse("2026-08-29T00:00:00Z")));
-        assertThrows(IllegalArgumentException.class, () -> Evaluator.evaluate(
-                unconditional, plan(PlanProfile.IDP_CORE), List.of(injectedExclusion), List.of(), List.of()));
+        assertThrows(IllegalArgumentException.class, () -> Evaluator.evaluateSelectedObligations(
+                unconditional, List.of(injectedExclusion), List.of(), List.of()));
     }
 
     @Test
@@ -143,7 +137,7 @@ class EvaluatorTest {
                 EffectiveResult.FALSE, false, Basis.DECLARATION_ONLY_EXCLUSION,
                 List.of("attestation:proxy"), exclusionDeclaration);
 
-        var result = Evaluator.evaluate(catalog, plan(PlanProfile.IDP_CORE), List.of(exclusion),
+        var result = Evaluator.evaluateSelectedObligations(catalog, List.of(exclusion),
                 List.of(completed("case-a", "REQ.a", Outcome.SATISFIED)), List.of());
 
         assertEquals(Conformance.CONFORMANT_WITH_DECLARED_EXCLUSIONS, result.conformance());
@@ -168,14 +162,14 @@ class EvaluatorTest {
         var exclusionB = exclusion("REQ.b", first);
         var exclusionC = exclusion("REQ.c", first);
 
-        var result = Evaluator.evaluate(
-                catalog, plan(PlanProfile.IDP_CORE), List.of(exclusionB, exclusionC),
+        var result = Evaluator.evaluateSelectedObligations(
+                catalog, List.of(exclusionB, exclusionC),
                 List.of(completed("case-a", "REQ.a", Outcome.SATISFIED)), List.of());
         assertEquals(List.of("REQ.b", "REQ.c"),
                 result.scopeQualifications().getFirst().excludedObligations());
 
-        assertThrows(IllegalArgumentException.class, () -> Evaluator.evaluate(
-                catalog, plan(PlanProfile.IDP_CORE), List.of(exclusionB, exclusion("REQ.c", second)),
+        assertThrows(IllegalArgumentException.class, () -> Evaluator.evaluateSelectedObligations(
+                catalog, List.of(exclusionB, exclusion("REQ.c", second)),
                 List.of(completed("case-a", "REQ.a", Outcome.SATISFIED)), List.of()));
     }
 
@@ -185,7 +179,7 @@ class EvaluatorTest {
                 obligation("REQ.a", Rfc2119Level.MUST, Testability.AUTOMATED, ProfileScope.CORE, null),
                 obligation("REQ.b", Rfc2119Level.MUST, Testability.NOT_OBSERVABLE, ProfileScope.CORE, null));
 
-        var result = Evaluator.evaluate(catalog, plan(PlanProfile.IDP_CORE), List.of(),
+        var result = Evaluator.evaluateSelectedObligations(catalog, List.of(),
                 List.of(completed("case-a", "REQ.a", Outcome.SATISFIED)), List.of());
 
         assertEquals(Conformance.CONFORMANT, result.conformance());
@@ -205,9 +199,8 @@ class EvaluatorTest {
                 "REQ.d", "feature", PredicateKind.CAPABILITY_BASED, false, false,
                 EffectiveResult.FALSE, false, Basis.OBSERVED, List.of("probe:negative"), null);
 
-        var result = Evaluator.evaluate(
+        var result = Evaluator.evaluateSelectedObligations(
                 catalog,
-                plan(PlanProfile.IDP_CORE),
                 List.of(notApplicable),
                 List.of(
                         completed("case-a", "REQ.a", Outcome.SATISFIED),
@@ -228,12 +221,13 @@ class EvaluatorTest {
     }
 
     @Test
-    void fullObligationsAreNotIncludedInACoreRun() {
-        var catalog = catalog(
+    void evaluatesOnlyTheExplicitlySelectedObligations() {
+        var source = catalog(
                 obligation("REQ.a", Rfc2119Level.MUST, Testability.AUTOMATED, ProfileScope.CORE, null),
                 obligation("REQ.b", Rfc2119Level.SHOULD, Testability.AUTOMATED, ProfileScope.FULL, null));
+        var selected = catalog(source.obligations().getFirst());
 
-        var result = Evaluator.evaluate(catalog, plan(PlanProfile.IDP_CORE), List.of(),
+        var result = Evaluator.evaluateSelectedObligations(selected, List.of(),
                 List.of(completed("case-a", "REQ.a", Outcome.SATISFIED)), List.of());
 
         assertEquals(List.of("REQ.a"), result.obligations().stream().map(RunResult.ObligationResult::key).toList());
@@ -244,7 +238,7 @@ class EvaluatorTest {
         var catalog = catalog(obligation(
                 "REQ.a", Rfc2119Level.MUST, Testability.AUTOMATED, ProfileScope.CORE, null));
 
-        var result = Evaluator.evaluate(catalog, plan(PlanProfile.IDP_CORE), List.of(),
+        var result = Evaluator.evaluateSelectedObligations(catalog, List.of(),
                 List.of(CaseRun.suiteError("case-a", "REQ.a", "runner crashed")),
                 List.of(new SuiteIncident("INTERNAL_ERROR", "case-a", null, "runner crashed")));
 
@@ -263,8 +257,8 @@ class EvaluatorTest {
                 "REQ.a",
                 CaseOutcome.notVerified("delivery_unknown", "outbox.delivery-unknown"));
 
-        var result = Evaluator.evaluate(
-                catalog, plan(PlanProfile.IDP_CORE), List.of(), List.of(caseRun), List.of(incident));
+        var result = Evaluator.evaluateSelectedObligations(
+                catalog, List.of(), List.of(caseRun), List.of(incident));
 
         assertEquals(Verdict.NOT_VERIFIED, result.obligations().getFirst().verdict());
         assertEquals(Conformance.INDETERMINATE, result.conformance());
@@ -278,9 +272,8 @@ class EvaluatorTest {
                 "REQ.a", Rfc2119Level.MUST, Testability.AUTOMATED, ProfileScope.CORE, null));
         var incident = new SuiteIncident("UNKNOWN_DELIVERY", "case-a", "action-1", "delivery unknown");
 
-        assertThrows(IllegalArgumentException.class, () -> Evaluator.evaluate(
+        assertThrows(IllegalArgumentException.class, () -> Evaluator.evaluateSelectedObligations(
                 catalog,
-                plan(PlanProfile.IDP_CORE),
                 List.of(),
                 List.of(completed("case-a", "REQ.a", Outcome.VIOLATED)),
                 List.of(incident)));
@@ -296,9 +289,8 @@ class EvaluatorTest {
                 List.of(new EvidenceRef("test", "evidence:action-2")),
                 Map.of("violating_action_ids", List.of("action-2")));
 
-        var result = Evaluator.evaluate(
+        var result = Evaluator.evaluateSelectedObligations(
                 catalog,
-                plan(PlanProfile.IDP_CORE),
                 List.of(),
                 List.of(CaseRun.completed("case-a", "REQ.a", outcome)),
                 List.of(incident));
@@ -317,9 +309,8 @@ class EvaluatorTest {
                 List.of(new EvidenceRef("test", "evidence:action-1")),
                 Map.of("violating_action_ids", List.of("action-1")));
 
-        assertThrows(IllegalArgumentException.class, () -> Evaluator.evaluate(
+        assertThrows(IllegalArgumentException.class, () -> Evaluator.evaluateSelectedObligations(
                 catalog,
-                plan(PlanProfile.IDP_CORE),
                 List.of(),
                 List.of(CaseRun.completed("case-a", "REQ.a", outcome)),
                 List.of(incident)));
@@ -352,20 +343,4 @@ class EvaluatorTest {
                 List.of(TargetRole.IDP), condition, testability, profileScope);
     }
 
-    private static TestPlan plan(PlanProfile profile) {
-        return new TestPlan(
-                "plan_0123456789ABCDEFGHJKMNPQRS",
-                "Evaluator test",
-                profile,
-                new TestPlan.Target(
-                        TargetKind.IDP,
-                        "https://idp.example/entity",
-                        new TestPlan.MetadataSource(MetadataSourceKind.URL, "https://idp.example/metadata")),
-                MetadataDeliveryKind.MANUAL,
-                Map.of(),
-                TestPlan.Parameters.defaults(),
-                TestPlan.Interaction.defaults(),
-                Instant.EPOCH,
-                Instant.EPOCH);
-    }
 }

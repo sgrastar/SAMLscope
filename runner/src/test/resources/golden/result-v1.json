@@ -33,7 +33,7 @@
     }
   },
   "profile" : {
-    "id" : "idp-full",
+    "id" : "browser-sso-idp",
     "spec" : {
       "document" : "SAML V2.0 Implementation Profile for Federation Interoperability",
       "version" : "1.1",

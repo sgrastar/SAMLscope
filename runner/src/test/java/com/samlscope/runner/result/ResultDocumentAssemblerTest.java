@@ -25,13 +25,14 @@ import com.samlscope.core.evaluation.Rfc2119Level;
 import com.samlscope.core.evaluation.RunResult.Conformance;
 import com.samlscope.core.plan.MetadataDeliveryKind;
 import com.samlscope.core.plan.MetadataSourceKind;
-import com.samlscope.core.plan.PlanProfile;
+import com.samlscope.core.profile.FunctionalProfile;
 import com.samlscope.core.plan.TargetKind;
 import com.samlscope.core.plan.TargetRole;
 import com.samlscope.core.plan.TestPlan;
 import com.samlscope.core.run.Reachability;
 import com.samlscope.core.run.RunStatus;
 import com.samlscope.core.run.TestRun;
+import com.samlscope.runner.FunctionalCaseFixtures;
 
 class ResultDocumentAssemblerTest {
     private static final Instant NOW = Instant.parse("2026-08-29T14:00:00Z");
@@ -133,13 +134,18 @@ class ResultDocumentAssemblerTest {
                 ApplicabilityEvaluation.Basis.DECLARATION_ONLY_EXCLUSION, List.of(),
                 new ApplicabilityInput.ExclusionDeclaration(
                         "Target is outside this classification", "operator", NOW));
-        var evaluation = Evaluator.evaluate(catalog, plan, List.of(exclusion), cases, List.of());
+        var definition = FunctionalCaseFixtures.forCases(
+                FunctionalProfile.BROWSER_SSO_IDP, catalog,
+                Map.of("REQ-a-idp-01", "REQ.a", "REQ-b-idp-01", "REQ.b",
+                        "OTHER-a-idp-01", "OTHER.a"), java.util.Set.of("REQ.c"));
+        var evaluation = Evaluator.evaluateFunctionalCases(
+                definition, catalog, List.of(exclusion), cases, List.of());
         return new Fixture(catalog, plan, run, cases, evaluation);
     }
 
     private TestPlan plan() {
         return new TestPlan(
-                "plan_0123456789ABCDEFGHJKMNPQRS", "Result fixture", PlanProfile.IDP_FULL,
+                "plan_0123456789ABCDEFGHJKMNPQRS", "Result fixture", FunctionalProfile.BROWSER_SSO_IDP,
                 new TestPlan.Target(
                         TargetKind.IDP, "https://idp.example/entity",
                         new TestPlan.MetadataSource(MetadataSourceKind.URL, "https://idp.example/metadata")),

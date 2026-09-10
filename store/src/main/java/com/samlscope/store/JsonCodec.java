@@ -11,6 +11,8 @@ public final class JsonCodec {
     public JsonCodec() {
         mapper = new ObjectMapper()
                 .registerModule(new JavaTimeModule())
+                .registerModule(new FunctionalProfileJsonModule())
+                .enable(DeserializationFeature.FAIL_ON_NUMBERS_FOR_ENUMS)
                 .disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
     }
 

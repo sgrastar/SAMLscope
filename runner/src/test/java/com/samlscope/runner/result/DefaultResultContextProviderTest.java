@@ -16,13 +16,14 @@ import com.samlscope.core.evaluation.Outcome;
 import com.samlscope.core.evaluation.Rfc2119Level;
 import com.samlscope.core.plan.MetadataDeliveryKind;
 import com.samlscope.core.plan.MetadataSourceKind;
-import com.samlscope.core.plan.PlanProfile;
+import com.samlscope.core.profile.FunctionalProfile;
 import com.samlscope.core.plan.TargetKind;
 import com.samlscope.core.plan.TargetRole;
 import com.samlscope.core.plan.TestPlan;
 import com.samlscope.core.run.Reachability;
 import com.samlscope.core.run.RunStatus;
 import com.samlscope.core.run.TestRun;
+import com.samlscope.runner.FunctionalCaseFixtures;
 
 class DefaultResultContextProviderTest {
     @Test
@@ -35,7 +36,10 @@ class DefaultResultContextProviderTest {
                 CoverageCatalog.Testability.AUTOMATED, CoverageCatalog.ProfileScope.CORE)));
         var caseRun = CaseRun.completed("REQ-a-idp-01", "REQ.a",
                 CaseOutcome.of(Outcome.SATISFIED, "ok", List.of()));
-        var result = Evaluator.evaluate(catalog, plan, List.of(), List.of(caseRun), List.of());
+        var result = Evaluator.evaluateFunctionalCases(
+                FunctionalCaseFixtures.forCases(FunctionalProfile.BROWSER_SSO_IDP, catalog,
+                        Map.of("REQ-a-idp-01", "REQ.a")),
+                catalog, List.of(), List.of(caseRun), List.of());
         var provider = new DefaultResultContextProvider(
                 new ResultDocumentContext.Suite("SAMLscope", "0.1", digest('a'), "self-hosted"),
                 new ResultDocumentContext.EvaluationComponents(digest('b'), digest('c'), digest('d'), "1", "1"),
@@ -58,7 +62,7 @@ class DefaultResultContextProviderTest {
     }
 
     private TestPlan plan() {
-        return new TestPlan("plan_0123456789ABCDEFGHJKMNPQRS", "Example IdP", PlanProfile.IDP_CORE,
+        return new TestPlan("plan_0123456789ABCDEFGHJKMNPQRS", "Example IdP", FunctionalProfile.BROWSER_SSO_IDP,
                 new TestPlan.Target(TargetKind.IDP, "https://idp.example/entity",
                         new TestPlan.MetadataSource(MetadataSourceKind.URL, "https://idp.example/metadata")),
                 MetadataDeliveryKind.MANUAL, Map.of(), TestPlan.Parameters.defaults(),

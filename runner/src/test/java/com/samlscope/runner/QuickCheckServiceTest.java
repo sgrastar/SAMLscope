@@ -8,7 +8,11 @@ import java.net.URI;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.time.Duration;
+import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import javax.xml.namespace.QName;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -16,7 +20,7 @@ import com.samlscope.core.caseexec.CaseExecutionStatus;
 import com.samlscope.core.evaluation.Outcome;
 import com.samlscope.core.plan.MetadataDeliveryKind;
 import com.samlscope.core.plan.MetadataSourceKind;
-import com.samlscope.core.plan.PlanProfile;
+import com.samlscope.core.profile.FunctionalProfile;
 import com.samlscope.core.plan.TargetKind;
 import com.samlscope.core.plan.TestPlan;
 import com.samlscope.core.run.Reachability;
@@ -29,6 +33,12 @@ import com.samlscope.store.SqliteCaseExecutionRepository;
 import com.samlscope.store.SqliteDatabase;
 import com.samlscope.store.SqlitePlanRepository;
 import com.samlscope.store.SqliteRunRepository;
+import com.samlscope.runner.cases.AutomatedCaseDependencies;
+import com.samlscope.runner.cases.AutomatedCaseRegistry;
+import com.samlscope.runner.cases.IdpErrorProbeConfiguration;
+import com.samlscope.runner.cases.PrincipalIdentityResolver;
+import com.samlscope.runner.cases.SamlAttributeReleaseFixture;
+import com.samlscope.runner.cases.SamlOptionalFieldObservationCase;
 
 class QuickCheckServiceTest {
     private static final String RUN_ID = "run_0123456789ABCDEFGHJKMNPQRS";
@@ -44,7 +54,7 @@ class QuickCheckServiceTest {
         var json = new JsonCodec();
         var plans = new SqlitePlanRepository(database, json);
         var plan = new TestPlan(
-                PLAN_ID, "Quick check", PlanProfile.IDP_CORE,
+                PLAN_ID, "Quick check", FunctionalProfile.BROWSER_SSO_IDP,
                 new TestPlan.Target(TargetKind.IDP, "https://idp.example/entity",
                         new TestPlan.MetadataSource(MetadataSourceKind.URL, "https://idp.example/metadata")),
                 MetadataDeliveryKind.MANUAL, Map.of(), TestPlan.Parameters.defaults(),
@@ -52,12 +62,38 @@ class QuickCheckServiceTest {
         plans.save(plan);
         runs = new SqliteRunRepository(database, json);
         var transcript = new FileTranscriptRecorder(database, json, directory);
+        var caseExecutions = new SqliteCaseExecutionRepository(database, json);
+        var keys = new FilePlanKeyStore(directory, Clock.fixed(NOW, ZoneOffset.UTC));
+        var credentials = keys.getOrCreate(PLAN_ID);
+        var selector = SamlOptionalFieldObservationCase.Selector.element(new QName(
+                "urn:oasis:names:tc:SAML:2.0:protocol", "Extensions"));
+        var dependencies = new AutomatedCaseDependencies(
+                transcript,
+                Map.of(
+                        "IIP-SSO01-dj-idp-01", new SamlAttributeReleaseFixture("no-values", null, List.of()),
+                        "IIP-SSO01-dk-idp-01", new SamlAttributeReleaseFixture(
+                                "empty", null, List.of(SamlAttributeReleaseFixture.EmptyValue.INSTANCE)),
+                        "IIP-SSO01-dl-idp-01", new SamlAttributeReleaseFixture(
+                                "null", null, List.of(SamlAttributeReleaseFixture.NullValue.INSTANCE)),
+                        "IIP-SSO01-du-idp-01", new SamlAttributeReleaseFixture(
+                                "discrete", null, List.of(new SamlAttributeReleaseFixture.TextValue("one")))),
+                Map.of("IIP-SSO07-a-idp-01", selector, "IIP-SSO07-a-sp-01", selector),
+                List.of(), "https://suite.example/p/" + PLAN_ID,
+                ignored -> Optional.of(credentials.privateKey()),
+                (runId, identifier) -> PrincipalIdentityResolver.Resolution.unknown(),
+                caseExecutions,
+                new IdpErrorProbeConfiguration(
+                        URI.create("https://idp.example/sso"), "https://suite.example/p/" + PLAN_ID,
+                        URI.create("https://suite.example/p/" + PLAN_ID + "/sp/acs/0"),
+                        Duration.ofMinutes(2), false, false, false));
+        var selected = AutomatedCaseRegistry.create(dependencies).forRole(plan.profile().role()).stream()
+                .map(value -> value.id()).toArray(String[]::new);
         service = new QuickCheckService(
                 plans, runs, transcript, transcript,
-                new SqliteCaseExecutionRepository(database, json),
-                new FilePlanKeyStore(directory, Clock.fixed(NOW, ZoneOffset.UTC)),
+                caseExecutions, keys,
                 (ignored, runId) -> java.util.List.of(),
-                URI.create("https://suite.example"), Clock.fixed(NOW, ZoneOffset.UTC));
+                URI.create("https://suite.example"), Clock.fixed(NOW, ZoneOffset.UTC),
+                null, null, ignored -> FunctionalCaseFixtures.automated(plan.profile(), selected));
     }
 
     @Test

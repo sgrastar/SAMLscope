@@ -1,10 +1,19 @@
 # Phase 1 release readiness
 
-Implementation milestones M0–M4 are recorded as complete. This does not establish
-operational acceptance or readiness of the official hosted service. Hosting-provider
-preparation is pending; local verification can proceed independently.
+Implementation milestones M0–M4 are recorded as complete. The hosting provider and
+production environment are available. Deployment and production smoke verification
+of the new functional-profile release remain separate release actions and require
+explicit authorization.
 
 ## Current status
+
+The seven functional-profile artifacts are exact, independently approved case sets.
+The runtime, normal Plan/Run path, shared target metadata, presets, result output and
+license/source display use existing approved cases as their only execution units.
+No case split or missing implementation input remains in the case-level inventory.
+Their memberships have independent G2 approval and their digests are installed in
+`profiles/release-pins.properties`. The normal product path loads only those pinned
+definitions.
 
 | Work | Latest state |
 |---|---|
@@ -14,19 +23,19 @@ preparation is pending; local verification can proceed independently.
 | Progress and operations preparation | Documentation reconciled; isolated restore, persisted Plan-file deletion and Hosted authorization tested; offline retention and CI added |
 | Phase 2 | Scope draft available; no new verdict implementation authorized by that draft |
 
-The hosted service is not launch-ready. Remaining work includes metadata and
-operator campaigns, other reference configurations, concurrent deletion safety,
-owner-facing individual Run deletion/unpublication, production timer/backup-policy
-acceptance, and provider setup. Stable reference outputs can still be incomplete
-or contain failure candidates; reproducibility is not a conformance endorsement.
+The functional-profile implementation and approval boundary are complete. Production
+deployment, smoke verification and operational acceptance remain separate release
+actions. Stable reference
+outputs can still be incomplete or contain failure candidates; reproducibility is
+not a conformance endorsement.
 
 ## Prioritized work
 
 | Priority | Work | Completion evidence | Hosting dependency |
 |---|---|---|---|
-| P0 | Verify the current implementation and approved catalogs | Successful Gradle `check`, generated-document check, structural validation, and externally pinned signed G1/G2 release verification for the candidate revision | None; specification reconciliation requires Internet access |
+| P0 | Verify the current implementation and approved catalogs | Successful Gradle `check`, generated-document check, structural validation, and externally pinned signed G1/G2 release verification for the approved release revision | None; specification reconciliation requires Internet access |
 | P1 | Execute the local Keycloak acceptance fixture | Record image digest, Suite revision, Test Plan, browser round trip, exported results, and unresolved evidence; repeat the same plan and explain any differences | None; local containers and browser required |
-| P1 | Establish the reference-implementation acceptance matrix | Track IdP/SP and Core/Full coverage, conditional features, and Keycloak/Shibboleth/SimpleSAMLphp evidence separately; mark unexecuted combinations explicitly | None for local targets |
+| P1 | Establish the reference-implementation acceptance matrix | Track the seven functional profiles, conditional features, and Keycloak/Shibboleth/SimpleSAMLphp evidence separately; preserve historical Core/Full evidence under its original labels | None for local targets |
 | P2 | Reconcile progress documentation | Align AGENTS.md, D-15, README, and roadmap status with verified evidence; preserve signed artifacts and the independent-review boundary | None |
 | P2 | Prepare hosted operations | Document deployment and rollback, backup/restore verification, retention enforcement, deletion contact, and publication/scrubbing acceptance steps; leave operator-specific values pending | Preparation is local; production execution waits |
 | P3 | Scope Phase 2 | Define the next specification catalog and review gates for Artifact, queries, browser automation, CI integration, and badges before implementing new verdict cases | None |
@@ -76,7 +85,7 @@ their volume remain available for continued evidence collection.
 2. Resolve the fixture's declared conditional features and execute the pending
    browser/configuration campaigns. Record unsupported or unavailable evidence
    explicitly; do not fabricate operator answers to increase coverage.
-3. Extend the matrix to IdP Full and SP Core/Full, then to the other reference
+3. Extend the matrix to the functional IdP/SP profiles, then to the other reference
    products. These combinations have not been executed in this session.
 
 ### Continued browser evidence collection

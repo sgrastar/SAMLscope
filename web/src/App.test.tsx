@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, expect, test, vi } from 'vitest'
 import { App } from './App'
 import { applyPreferredTheme } from './AppShell'
@@ -33,7 +33,7 @@ test('does not offer local Run creation in hosted mode', async () => {
       ? { status: 'ok', version: '0.1.0', mode: 'hosted' }
       : url.endsWith('/api/plans')
         ? [{
-            plan: { id: 'plan_0123456789ABCDEFGHJKMNPQRS', name: 'Hosted target', profile: 'IDP_CORE', target: { kind: 'IDP', entityId: 'https://idp.example' } },
+            plan: { id: 'plan_0123456789ABCDEFGHJKMNPQRS', name: 'Hosted target', profile: 'browser_sso_idp', target: { kind: 'IDP', entityId: 'https://idp.example' } },
             entityId: 'https://suite.example/p/plan', metadataUrl: 'https://suite.example/p/plan/metadata',
             mdqUrl: 'https://suite.example/mdq/plan', secondaryIdpEntityId: 'https://suite.example/p/plan/idp/secondary',
             secondaryIdpMetadataUrl: 'https://suite.example/p/plan/idp/secondary/metadata',
@@ -57,7 +57,7 @@ test('shows Run count and latest status in the Test Plan overview', async () => 
       ? { status: 'ok', version: '0.1.0', mode: 'selfhosted' }
       : url.endsWith('/api/plans')
         ? [{
-            plan: { id: 'plan_0123456789ABCDEFGHJKMNPQRS', name: 'Production IdP', profile: 'IDP_CORE', target: { kind: 'IDP', entityId: 'https://idp.example' } },
+            plan: { id: 'plan_0123456789ABCDEFGHJKMNPQRS', name: 'Production IdP', profile: 'browser_sso_idp', target: { kind: 'IDP', entityId: 'https://idp.example' } },
             entityId: 'https://suite.example/p/plan', metadataUrl: 'https://suite.example/p/plan/metadata',
             mdqUrl: 'https://suite.example/mdq/plan', secondaryIdpEntityId: 'https://suite.example/p/plan/idp/secondary',
             secondaryIdpMetadataUrl: 'https://suite.example/p/plan/idp/secondary/metadata',
@@ -90,7 +90,7 @@ test('does not misreport a failed Run history request as zero Runs', async () =>
       status: 'ok', version: '0.1.0', mode: 'selfhosted',
     }), { status: 200, headers: { 'content-type': 'application/json' } })
     if (url.endsWith('/api/plans')) return new Response(JSON.stringify([{
-      plan: { id: 'plan_0123456789ABCDEFGHJKMNPQRS', name: 'Unavailable history', profile: 'IDP_CORE',
+      plan: { id: 'plan_0123456789ABCDEFGHJKMNPQRS', name: 'Unavailable history', profile: 'browser_sso_idp',
         target: { kind: 'IDP', entityId: 'https://idp.example' } },
       entityId: 'https://suite.example/p/plan', metadataUrl: 'https://suite.example/p/plan/metadata',
       mdqUrl: 'https://suite.example/mdq/plan', secondaryIdpEntityId: 'https://suite.example/p/plan/idp/secondary',
@@ -123,7 +123,7 @@ test('restores plan navigation when browser history changes', async () => {
   render(<App />)
   fireEvent.click(await screen.findByRole('button', { name: 'New Test Plan' }))
   expect(pushState).toHaveBeenCalledWith(null, '', '?new=1')
-  expect(screen.getByRole('heading', { name: 'Register a target' })).toBeTruthy()
+  expect(screen.getByRole('heading', { name: 'Create Test Plan' })).toBeTruthy()
 
   window.history.replaceState(null, '', '/')
   window.dispatchEvent(new PopStateEvent('popstate'))
@@ -136,3 +136,53 @@ test('applies the saved theme before the React shell renders', () => {
   applyPreferredTheme()
   expect(document.documentElement.dataset.theme).toBe('dark')
 })
+
+test('reuses one saved metadata revision for a functional profile Plan', async () => {
+  window.history.replaceState(null, '', '?new=1')
+  vi.stubGlobal('scrollTo', vi.fn())
+  let planRequest: Record<string, unknown> | undefined
+  const fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = String(input)
+    if (url.endsWith('/api/health')) return json({ status: 'ok', version: '0.1.0', mode: 'selfhosted' })
+    if (url.endsWith('/api/profiles')) return json(['browser_sso_idp', 'metadata_idp'])
+    if (url.endsWith('/api/targets')) return json([{
+      id: 'target_saved', name: 'Reusable IdP', entityId: 'https://idp.example',
+      revisions: [{ id: 'metadata_saved', roles: ['IDP'], sha256: 'a'.repeat(64), refreshable: true }],
+    }])
+    if (url.endsWith('/api/plans') && init?.method === 'POST') {
+      planRequest = JSON.parse(String(init.body))
+      return json({
+        plan: {
+          plan: { id: 'plan_0123456789ABCDEFGHJKMNPQRS', name: 'Reusable IdP', profile: 'metadata_idp', target: { kind: 'IDP', entityId: 'https://idp.example' } },
+          entityId: 'https://suite.example/p/plan', metadataUrl: 'https://suite.example/p/plan/metadata',
+          mdqUrl: 'https://suite.example/mdq/plan', secondaryIdpEntityId: 'https://suite.example/p/plan/idp/secondary',
+          secondaryIdpMetadataUrl: 'https://suite.example/p/plan/idp/secondary/metadata',
+        },
+        initialRun: null,
+      }, 201)
+    }
+    if (url.endsWith('/api/plans')) return json([])
+    return json([])
+  })
+  stubWorkspaceFetch(fetch)
+
+  render(<App />)
+  fireEvent.click(await screen.findByRole('radio', { name: /Metadata — IdP/ }))
+  fireEvent.change(screen.getByLabelText('Saved target'), { target: { value: 'target_saved' } })
+  fireEvent.change(screen.getByLabelText('Plan name'), { target: { value: 'Metadata review' } })
+  fireEvent.click(screen.getByLabelText('I own or am authorized to test this target.'))
+  fireEvent.click(screen.getByRole('button', { name: 'Create plan' }))
+
+  await waitFor(() => expect(planRequest).toBeTruthy())
+  expect(planRequest).toMatchObject({
+    profile: 'metadata_idp',
+    targetConnectionId: 'target_saved',
+    targetRevisionId: 'metadata_saved',
+    targetEntityId: 'https://idp.example',
+  })
+  expect(fetch.mock.calls.some(([url, init]) => String(url).endsWith('/api/targets') && init?.method === 'POST')).toBe(false)
+})
+
+function json(body: unknown, status = 200) {
+  return new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } })
+}

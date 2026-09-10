@@ -162,7 +162,8 @@ class OidcLoginIntegrationTest {
         provider = new OidcProviderFixture();
         var config = new AppConfig(mode, publicBase, URI.create("https://localhost:" + port), data, port,
                 mode == AppConfig.Mode.SELFHOSTED, false, true, "sha256:" + "a".repeat(64), "127.0.0.1", provider.config(policy));
-        app = SamlScopeApplication.create(config, new OidcClient(config.oidc(), publicBase.resolve("/auth/callback"), provider)).start(port);
+        app = FunctionalProfileTestInstallation.create(
+                config, new OidcClient(config.oidc(), publicBase.resolve("/auth/callback"), provider)).start(port);
     }
     Account login(String subject) throws Exception {
         var response = call("GET", "/auth/login", null, null, false);
@@ -205,7 +206,7 @@ class OidcLoginIntegrationTest {
     }
     String plan(String label) {
         return """
-                {"name":"%s","profile":"IDP_CORE","targetKind":"IDP",
+                {"name":"%s","profile":"browser_sso_idp","targetKind":"IDP",
                  "targetEntityId":"https://%s.example/idp","metadataSourceKind":"URL",
                  "metadataSourceLocation":"https://%s.example/metadata","suiteMetadataDelivery":"MANUAL",
                  "declaredFeatures":{},"parameters":{"clockSkewToleranceSeconds":180,"metadataRefreshWaitSeconds":300,"testUserHint":""},

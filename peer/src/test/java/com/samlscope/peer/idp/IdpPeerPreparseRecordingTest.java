@@ -16,7 +16,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import com.samlscope.core.plan.MetadataDeliveryKind;
 import com.samlscope.core.plan.MetadataSourceKind;
-import com.samlscope.core.plan.PlanProfile;
+import com.samlscope.core.profile.FunctionalProfile;
 import com.samlscope.core.plan.TargetKind;
 import com.samlscope.core.plan.TestPlan;
 import com.samlscope.runner.RunEventBus;
@@ -48,7 +48,7 @@ class IdpPeerPreparseRecordingTest {
         var plans = new SqlitePlanRepository(database, json);
         var runs = new SqliteRunRepository(database, json);
         var plan = new TestPlan(
-                "plan_0123456789ABCDEFGHJKMNPQRS", "SP target", PlanProfile.SP_CORE,
+                "plan_0123456789ABCDEFGHJKMNPQRS", "SP target", FunctionalProfile.BROWSER_SSO_SP,
                 new TestPlan.Target(TargetKind.SP, "https://sp.example/entity",
                         new TestPlan.MetadataSource(MetadataSourceKind.URL, "https://sp.example/metadata")),
                 MetadataDeliveryKind.MANUAL, Map.of(), TestPlan.Parameters.defaults(),
@@ -85,7 +85,7 @@ class IdpPeerPreparseRecordingTest {
         var plans = new SqlitePlanRepository(database, json);
         var runs = new SqliteRunRepository(database, json);
         var plan = new TestPlan(
-                "plan_0123456789ABCDEFGHJKMNPQRS", "SP target", PlanProfile.SP_CORE,
+                "plan_0123456789ABCDEFGHJKMNPQRS", "SP target", FunctionalProfile.BROWSER_SSO_SP,
                 new TestPlan.Target(TargetKind.SP, "https://sp.example/entity",
                         new TestPlan.MetadataSource(MetadataSourceKind.URL, "https://sp.example/metadata")),
                 MetadataDeliveryKind.MANUAL, Map.of(), TestPlan.Parameters.defaults(),

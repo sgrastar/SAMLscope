@@ -10,7 +10,7 @@ test('renders the authoritative determination and its non-certification boundary
     run: { id: 'run_0123456789ABCDEFGHJKMNPQRS', started_at: '2026-08-29T00:00:00Z', finished_at: '2026-08-29T00:01:00Z', conformance: 'CONFORMANT_WITH_WARNINGS', completeness: 'COMPLETE', scope_qualifications: [] },
     suite: { name: 'SAMLscope', version: '0.1.0', image_digest: 'sha256:a', execution_mode: 'self-hosted' },
     evaluation_bundle: { digest: `sha256:${'b'.repeat(64)}` },
-    profile: { id: 'idp-core', spec: { document: 'IIP', version: '1.1', date: '2019-12-18' }, level_definition_note: 'Core scope.' },
+    profile: { id: 'browser-sso-idp', spec: { document: 'IIP', version: '1.1', date: '2019-12-18' }, level_definition_note: 'Functional case profile.' },
     target: { declared_product: 'Example IdP', declared_by: 'operator', verified: false, entity_id: 'https://idp.example/entity', metadata_digest: 'sha256:c', role: 'IDP', kind: 'IDP' },
     advisories: [], suite_incidents: [],
     summary: { requirements: { total: 1, verdicts: { pass: 1 } }, obligations: { total: 1, verdicts: { pass: 1 } }, cases: { total: 1, verdicts: { pass: 1 } } },

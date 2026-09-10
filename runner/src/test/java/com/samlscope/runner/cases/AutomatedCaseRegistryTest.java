@@ -14,7 +14,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 import javax.xml.namespace.QName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -38,7 +37,6 @@ class AutomatedCaseRegistryTest {
         assertEquals(67, approved.size());
         assertEquals(approved.keySet(), registry.ids());
         approved.forEach((caseId, obligation) -> assertEquals(obligation, CaseIds.obligationKey(caseId), caseId));
-        assertEquals(approvedFullProfileCaseIds(), AutomatedCaseRegistry.fullProfileCaseIds());
         assertTrue(registry.forRole(TargetRole.IDP).stream().allMatch(testCase -> testCase.role() == TargetRole.IDP));
         assertTrue(registry.forRole(TargetRole.SP).stream().allMatch(testCase -> testCase.role() == TargetRole.SP));
     }
@@ -125,36 +123,6 @@ class AutomatedCaseRegistryTest {
             if (Files.isRegularFile(candidate)) return candidate;
         }
         throw new IllegalStateException("Cannot locate tests/cases.yaml from " + Path.of("").toAbsolutePath());
-    }
-
-    private Set<String> approvedFullProfileCaseIds() throws Exception {
-        var selected = new java.util.LinkedHashSet<String>();
-        String id = null;
-        String mode = null;
-        String milestone = null;
-        String baseline = null;
-        for (var line : Files.readAllLines(locateCasesYaml())) {
-            if (line.startsWith("- id: ")) {
-                addIfFull(selected, id, mode, milestone, baseline);
-                id = line.substring("- id: ".length()).trim();
-                mode = null;
-                milestone = null;
-                baseline = null;
-            } else if (id != null && line.startsWith("  mode: ")) {
-                mode = line.substring("  mode: ".length()).trim();
-            } else if (id != null && line.startsWith("  milestone: ")) {
-                milestone = line.substring("  milestone: ".length()).trim();
-            } else if (id != null && line.startsWith("  baseline: ")) {
-                baseline = line.substring("  baseline: ".length()).trim();
-            }
-        }
-        addIfFull(selected, id, mode, milestone, baseline);
-        return Set.copyOf(selected);
-    }
-
-    private void addIfFull(Set<String> selected, String id, String mode, String milestone, String baseline) {
-        if (id != null && "AUTOMATED".equals(mode) && "M1".equals(milestone)
-                && baseline != null && baseline.contains("-full")) selected.add(id);
     }
 
     private CaseExecutionRepository emptyRepository() {

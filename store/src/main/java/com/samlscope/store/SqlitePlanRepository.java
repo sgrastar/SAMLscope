@@ -50,13 +50,29 @@ public final class SqlitePlanRepository implements PlanRepository {
                 WHERE COALESCE(json_extract(plans.document_json, '$.parameters.requestSigningMode'), 'OPTIONAL')
                     = COALESCE(json_extract(excluded.document_json, '$.parameters.requestSigningMode'), 'OPTIONAL')
                 """;
-        try (var connection = database.open(); var statement = connection.prepareStatement(sql)) {
-            statement.setString(1, plan.id());
-            statement.setString(2, json.write(plan));
-            statement.setString(3, plan.createdAt().toString());
-            statement.setString(4, plan.updatedAt().toString());
-            if (statement.executeUpdate() != 1) {
-                throw new IllegalArgumentException("Request signing mode is fixed; create a separate Test Plan");
+        try (var connection = database.open(); var transaction = connection.createStatement()) {
+            transaction.execute("BEGIN IMMEDIATE");
+            try {
+                try (var query = connection.prepareStatement(
+                        "SELECT document_json FROM plans WHERE id = ?")) {
+                    query.setString(1, plan.id());
+                    try (var rows = query.executeQuery()) {
+                        if (rows.next()) PlanWritePolicy.requireAllowed(
+                                connection, json.read(rows.getString(1), TestPlan.class), plan);
+                    }
+                }
+                try (var statement = connection.prepareStatement(sql)) {
+                    statement.setString(1, plan.id());
+                    statement.setString(2, json.write(plan));
+                    statement.setString(3, plan.createdAt().toString());
+                    statement.setString(4, plan.updatedAt().toString());
+                    statement.executeUpdate();
+                }
+                transaction.execute("COMMIT");
+            } catch (SQLException | RuntimeException error) {
+                try { transaction.execute("ROLLBACK"); }
+                catch (SQLException rollback) { error.addSuppressed(rollback); }
+                throw error;
             }
         } catch (SQLException e) {
             throw new StoreException("Could not save plan", e);

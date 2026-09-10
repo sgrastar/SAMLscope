@@ -17,7 +17,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import com.samlscope.core.plan.MetadataDeliveryKind;
 import com.samlscope.core.plan.MetadataSourceKind;
-import com.samlscope.core.plan.PlanProfile;
+import com.samlscope.core.profile.FunctionalProfile;
 import com.samlscope.core.plan.TargetKind;
 import com.samlscope.core.plan.TestPlan;
 import com.samlscope.core.run.RunStatus;
@@ -51,7 +51,7 @@ class SpPeerRoundTripTest {
         var plans = new SqlitePlanRepository(database, json);
         var runs = new SqliteRunRepository(database, json);
         var cache = new MetadataCache(directory);
-        var plan = plan("plan_0123456789ABCDEFGHJKMNPQRS", PlanProfile.IDP_CORE, TargetKind.IDP,
+        var plan = plan("plan_0123456789ABCDEFGHJKMNPQRS", FunctionalProfile.BROWSER_SSO_IDP, TargetKind.IDP,
                 "https://idp.example/entity", now);
         plans.save(plan);
         var runService = new RunService(plans, runs, new RunEventBus(), clock);
@@ -76,7 +76,7 @@ class SpPeerRoundTripTest {
         cache.putIfAbsent(run.id(), idpMetadata());
         var redirect = peer.start(plan.id(), run.id());
         var request = saml.decodeRedirect(redirect.getRawQuery(), "SAMLRequest");
-        var responsePlan = plan("plan_1123456789ABCDEFGHJKMNPQRS", PlanProfile.SP_CORE, TargetKind.SP,
+        var responsePlan = plan("plan_1123456789ABCDEFGHJKMNPQRS", FunctionalProfile.BROWSER_SSO_SP, TargetKind.SP,
                 "https://peer.example/p/" + plan.id(), now);
         var response = saml.buildResponse(responsePlan, request,
                 URI.create("https://peer.example/p/" + plan.id() + "/sp/acs/0"), "smoke-user");
@@ -170,7 +170,7 @@ class SpPeerRoundTripTest {
         var plans = new SqlitePlanRepository(database, json);
         var runs = new SqliteRunRepository(database, json);
         var cache = new MetadataCache(directory);
-        var plan = plan("plan_0123456789ABCDEFGHJKMNPQRS", PlanProfile.IDP_CORE, TargetKind.IDP,
+        var plan = plan("plan_0123456789ABCDEFGHJKMNPQRS", FunctionalProfile.BROWSER_SSO_IDP, TargetKind.IDP,
                 "https://idp.example/entity", now);
         plans.save(plan);
         cache.put(plan.id(), idpMetadata());
@@ -184,7 +184,7 @@ class SpPeerRoundTripTest {
                 saml, recorder, clock);
         var redirect = peer.start(plan.id(), run.id());
         var request = saml.decodeRedirect(redirect.getRawQuery(), "SAMLRequest");
-        var responsePlan = plan("plan_1123456789ABCDEFGHJKMNPQRS", PlanProfile.SP_CORE, TargetKind.SP,
+        var responsePlan = plan("plan_1123456789ABCDEFGHJKMNPQRS", FunctionalProfile.BROWSER_SSO_SP, TargetKind.SP,
                 "https://peer.example/p/" + plan.id(), now);
         var response = saml.buildResponse(responsePlan, request,
                 URI.create("https://peer.example/p/" + plan.id() + "/sp/acs/3"), "smoke-user");
@@ -212,7 +212,7 @@ class SpPeerRoundTripTest {
         var json = new JsonCodec();
         var plans = new SqlitePlanRepository(database, json);
         var runs = new SqliteRunRepository(database, json);
-        var plan = plan("plan_0123456789ABCDEFGHJKMNPQRS", PlanProfile.IDP_CORE, TargetKind.IDP,
+        var plan = plan("plan_0123456789ABCDEFGHJKMNPQRS", FunctionalProfile.BROWSER_SSO_IDP, TargetKind.IDP,
                 "https://idp.example/entity", now);
         plans.save(plan);
         var runService = new RunService(plans, runs, new RunEventBus(), clock);
@@ -249,7 +249,7 @@ class SpPeerRoundTripTest {
         }
     }
 
-    private TestPlan plan(String id, PlanProfile profile, TargetKind kind, String entityId, Instant now) {
+    private TestPlan plan(String id, FunctionalProfile profile, TargetKind kind, String entityId, Instant now) {
         return new TestPlan(id, "Round trip", profile,
                 new TestPlan.Target(kind, entityId,
                         new TestPlan.MetadataSource(MetadataSourceKind.URL, "https://target.example/metadata")),

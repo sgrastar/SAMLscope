@@ -20,7 +20,7 @@ import com.samlscope.core.evaluation.PredicateKind;
 import com.samlscope.core.evaluation.Rfc2119Level;
 import com.samlscope.core.plan.MetadataDeliveryKind;
 import com.samlscope.core.plan.MetadataSourceKind;
-import com.samlscope.core.plan.PlanProfile;
+import com.samlscope.core.profile.FunctionalProfile;
 import com.samlscope.core.plan.TargetKind;
 import com.samlscope.core.plan.TargetRole;
 import com.samlscope.core.plan.TestPlan;
@@ -45,7 +45,8 @@ class CatalogApplicabilityProviderTest {
                 (definition, run, plan) -> {
                     calls.incrementAndGet();
                     return new ApplicabilityInput(false, true, List.of("transcript:1"), null);
-                });
+                }, ignored -> FunctionalCaseFixtures.forObligations(
+                        FunctionalProfile.BROWSER_SSO_IDP, coverage, "REQ.a", "REQ.b"));
 
         var evaluations = provider.evaluations(run(), plan());
 
@@ -59,10 +60,14 @@ class CatalogApplicabilityProviderTest {
 
     @Test
     void representsMissingKnowledgeAsUnknownInsteadOfInventingFalse() {
+        var coverage = new CoverageCatalog(List.of(
+                obligation("REQ.a", TargetRole.IDP, ProfileScope.CORE, "feature")));
         var provider = new CatalogApplicabilityProvider(
-                new CoverageCatalog(List.of(obligation("REQ.a", TargetRole.IDP, ProfileScope.CORE, "feature"))),
+                coverage,
                 new PredicateCatalog(List.of(definition("feature", PredicateKind.CAPABILITY_BASED))),
-                (definition, run, plan) -> new ApplicabilityInput(null, null, List.of(), null));
+                (definition, run, plan) -> new ApplicabilityInput(null, null, List.of(), null),
+                ignored -> FunctionalCaseFixtures.forObligations(
+                        FunctionalProfile.BROWSER_SSO_IDP, coverage, "REQ.a"));
 
         var evaluation = provider.evaluations(run(), plan()).get(0);
 
@@ -75,12 +80,16 @@ class CatalogApplicabilityProviderTest {
                 obligation("REQ.a", TargetRole.IDP, ProfileScope.CORE, "missing")));
         assertThrows(IllegalArgumentException.class, () -> new CatalogApplicabilityProvider(
                 coverage, new PredicateCatalog(List.of(definition("other", PredicateKind.CLAIM_BASED))),
-                (definition, run, plan) -> new ApplicabilityInput(null, null, List.of(), null)));
+                (definition, run, plan) -> new ApplicabilityInput(null, null, List.of(), null),
+                ignored -> FunctionalCaseFixtures.forObligations(
+                        FunctionalProfile.BROWSER_SSO_IDP, coverage, "REQ.a")));
 
         var provider = new CatalogApplicabilityProvider(
                 coverage,
                 new PredicateCatalog(List.of(definition("missing", PredicateKind.CLAIM_BASED))),
-                (definition, run, plan) -> null);
+                (definition, run, plan) -> null,
+                ignored -> FunctionalCaseFixtures.forObligations(
+                        FunctionalProfile.BROWSER_SSO_IDP, coverage, "REQ.a"));
         assertThrows(NullPointerException.class, () -> provider.evaluations(run(), plan()));
     }
 
@@ -97,7 +106,7 @@ class CatalogApplicabilityProviderTest {
 
     private TestPlan plan() {
         return new TestPlan(
-                "plan_0123456789ABCDEFGHJKMNPQRS", "Applicability", PlanProfile.IDP_FULL,
+                "plan_0123456789ABCDEFGHJKMNPQRS", "Applicability", FunctionalProfile.BROWSER_SSO_IDP,
                 new TestPlan.Target(
                         TargetKind.IDP, "https://idp.example/entity",
                         new TestPlan.MetadataSource(MetadataSourceKind.URL, "https://idp.example/metadata")),

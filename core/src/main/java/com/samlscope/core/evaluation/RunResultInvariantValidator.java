@@ -13,21 +13,15 @@ import com.samlscope.core.evaluation.Rfc2119Level.LevelClass;
 import com.samlscope.core.evaluation.RunResult.Completeness;
 import com.samlscope.core.evaluation.RunResult.Conformance;
 import com.samlscope.core.evaluation.RunResult.ObligationResult;
-import com.samlscope.core.plan.TestPlan;
 
 /** Independently checks the cross-field invariants of an authoritative Run result. */
 public final class RunResultInvariantValidator {
     private RunResultInvariantValidator() {}
 
-    public static void validate(CoverageCatalog catalog, TestPlan plan, RunResult result) {
+    public static void validateSelectedObligations(CoverageCatalog catalog, RunResult result) {
         Objects.requireNonNull(catalog, "catalog");
-        Objects.requireNonNull(plan, "plan");
         Objects.requireNonNull(result, "result");
-
-        var selected = new LinkedHashMap<String, CoverageCatalog.Obligation>();
-        for (var obligation : catalog.obligations()) {
-            if (obligation.includedIn(plan.profile())) selected.put(obligation.key(), obligation);
-        }
+        var selected = new LinkedHashMap<String, CoverageCatalog.Obligation>(catalog.byKey());
         var obligations = uniqueObligations(result.obligations());
         require(selected.keySet().equals(obligations.keySet()), "Result obligation set does not match selected profile");
         for (var entry : obligations.entrySet()) {

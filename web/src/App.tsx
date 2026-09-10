@@ -1,6 +1,6 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react'
 import { AppShell } from './AppShell'
-import { api, type AuthSession, type Plan, type PlanInput, type Profile, type Run } from './api'
+import { api, type AuthSession, type Plan, type PlanInput, type Profile, type Run, type TargetConnection } from './api'
 import { ResultReport } from './ResultReport'
 import { ManagementBootstrap } from './ManagementBootstrap'
 import { RunManagement } from './RunManagement'
@@ -8,10 +8,12 @@ import { formatDate, humanize } from './format'
 import { idpRoundTripReady, idpRoundTripUrl } from './peerUrls'
 import { PeerRegistration } from './PeerRegistration'
 import { RoundTripLink } from './RoundTripLink'
+import { profileCatalog, profileLabel, profileRole } from './profiles'
+import { Licenses } from './Licenses'
 
 const initialInput: PlanInput = {
   name: '',
-  profile: 'IDP_CORE',
+  profile: 'browser_sso_idp',
   targetKind: 'IDP',
   targetEntityId: '',
   metadataSourceKind: 'URL',
@@ -19,11 +21,12 @@ const initialInput: PlanInput = {
   suiteMetadataDelivery: 'MANUAL',
   declaredFeatures: {},
   parameters: { clockSkewToleranceSeconds: 180, metadataRefreshWaitSeconds: 300, testUserHint: '', requestSigningMode: 'OPTIONAL' },
-  interaction: { allowBrowserSteps: true, allowAttestation: true },
+  interaction: { allowBrowserSteps: true, allowAttestation: false, preset: 'quick' },
   authorizedTarget: false,
 }
 
 export function App() {
+  if (window.location.pathname === '/licenses') return <Licenses />
   const reportRunId = window.location.pathname.match(/^\/reports\/(run_[0-9A-HJKMNP-TV-Z]{26})$/)?.[1]
   if (reportRunId) return <ResultReport runId={reportRunId} />
   const manageRunId = window.location.pathname.match(/^\/manage\/(run_[0-9A-HJKMNP-TV-Z]{26})$/)?.[1]
@@ -43,6 +46,8 @@ export function App() {
 
 function PlanWorkspace() {
   const initialLocation = planLocation()
+  const [targets, setTargets] = useState<TargetConnection[]>([])
+  const [installedProfiles, setInstalledProfiles] = useState<Profile[]>([])
   const [plans, setPlans] = useState<Plan[]>([])
   const [selectedId, setSelectedId] = useState<string | undefined>(initialLocation.planId)
   const [runs, setRuns] = useState<Run[]>([])
@@ -81,7 +86,10 @@ function PlanWorkspace() {
   useEffect(() => {
     void api.health().then(async health => {
       setMode(health.mode)
-      if (health.oidcEnabled) setAuth(await api.authSession())
+      const session = health.oidcEnabled ? await api.authSession() : undefined
+      if (session) setAuth(session)
+      setInstalledProfiles(await api.profiles())
+      if (health.mode === 'selfhosted' || session?.authenticated) setTargets(await api.targets())
       try { await refreshPlans() } catch (cause) {
         if (health.mode === 'selfhosted') throw cause
       }
@@ -123,7 +131,22 @@ function PlanWorkspace() {
     event.preventDefault()
     setError('')
     try {
-      const created = await api.createPlan(input)
+      let planInput = input
+      if (!input.targetConnectionId) {
+        const target = await api.registerTarget({
+          name: input.name,
+          entityId: input.targetEntityId,
+          metadataUrl: input.metadataSourceLocation,
+          authorizedTarget: input.authorizedTarget,
+        })
+        setTargets(current => [target, ...current])
+        planInput = {
+          ...input,
+          targetConnectionId: target.id,
+          targetRevisionId: target.revisions[0].id,
+        }
+      }
+      const created = await api.createPlan(planInput)
       setPlans(current => [created.plan, ...current])
       setSelectedId(created.plan.plan.id)
       setRuns(created.initialRun ? [created.initialRun.run] : [])
@@ -180,7 +203,8 @@ function PlanWorkspace() {
         <h1>Sign in to create a Test Plan</h1>
         <p>Your Plans and Runs will be available when you return.</p>
         <a className="button" href="/auth/login">Continue to sign in</a>
-      </section> : view === 'new' ? <NewPlan input={input} setInput={setInput} create={create} cancel={() => show('list')} />
+      </section> : view === 'new' ? <NewPlan input={input} setInput={setInput} create={create} cancel={() => show('list')}
+        targets={targets} installedProfiles={installedProfiles} />
         : view === 'detail' && selected ? <PlanDetail plan={selected} runs={runs} createRun={createRun} canCreateRun={mode === 'selfhosted' || auth?.authenticated === true} back={() => show('list')} />
           : <PlanList plans={plans} runs={planRuns} open={id => show('detail', id)} create={() => show('new')}
             refresh={() => void refreshPlans().catch(cause => setError((cause as Error).message))} />}
@@ -214,8 +238,8 @@ function PlanList({ plans, runs, open, create, refresh }: {
       const latest = planHistory?.[0]
       return <button className="plan-row" key={plan.plan.id} onClick={() => open(plan.plan.id)}>
         <span><strong>{plan.plan.name}</strong><small>{plan.plan.target.entityId}</small>
-          {plan.plan.profile.startsWith('IDP') && <small>Request signing: {humanize(plan.plan.requestSigningMode ?? 'OPTIONAL')}</small>}</span>
-        <span className={`profile-badge profile-${plan.plan.profile.toLowerCase()}`}>{humanize(plan.plan.profile)}</span>
+          {profileRole(plan.plan.profile) === 'IDP' && <small>Request signing: {humanize(plan.plan.requestSigningMode ?? 'OPTIONAL')}</small>}</span>
+        <span className={`profile-badge profile-${plan.plan.profile.toLowerCase()}`}>{profileLabel(plan.plan.profile)}</span>
         <span className="plan-run-summary">
           {history?.state === 'error' ? <><strong>Run history unavailable</strong><small>Refresh to retry</small></>
             : planHistory ? <><strong>{planHistory.length} Run{planHistory.length === 1 ? '' : 's'}</strong>
@@ -228,38 +252,87 @@ function PlanList({ plans, runs, open, create, refresh }: {
   </>
 }
 
-function NewPlan({ input, setInput, create, cancel }: {
+function NewPlan({ input, setInput, create, cancel, targets, installedProfiles }: {
   input: PlanInput
   setInput: (value: PlanInput) => void
   create: (event: FormEvent) => void
   cancel: () => void
+  targets: TargetConnection[]
+  installedProfiles: Profile[]
 }) {
-  const profiles: Array<{ id: Profile; title: string; description: string }> = [
-    { id: 'IDP_CORE', title: 'IdP Core', description: 'Baseline SSO and SLO obligations for an Identity Provider.' },
-    { id: 'IDP_FULL', title: 'IdP Full', description: 'Core plus ECP, channel binding, and extended evidence.' },
-    { id: 'SP_CORE', title: 'SP Core', description: 'Baseline SSO and SLO obligations for a Service Provider.' },
-    { id: 'SP_FULL', title: 'SP Full', description: 'Core plus extended evidence for a Service Provider.' },
-  ]
+  const profiles = profileCatalog.filter(profile => installedProfiles.includes(profile.id))
+  const role = profileRole(input.profile)
+  const compatibleTargets = targets.filter(target => target.revisions[0]?.roles.includes(role))
+
+  useEffect(() => {
+    if (profiles.length > 0 && !installedProfiles.includes(input.profile)) chooseProfile(profiles[0].id)
+  }, [installedProfiles.join(',')])
+
+  const chooseProfile = (profile: Profile) => {
+    const nextRole = profileRole(profile)
+    const selected = targets.find(target => target.id === input.targetConnectionId)
+    const retainTarget = selected?.revisions.some(revision =>
+      revision.id === input.targetRevisionId && revision.roles.includes(nextRole)) === true
+    setInput({
+      ...input,
+      profile,
+      targetKind: nextRole,
+      targetConnectionId: retainTarget ? input.targetConnectionId : undefined,
+      targetRevisionId: retainTarget ? input.targetRevisionId : undefined,
+      targetEntityId: retainTarget ? input.targetEntityId : '',
+      metadataSourceLocation: retainTarget ? input.metadataSourceLocation : '',
+      parameters: {
+        ...input.parameters,
+        requestSigningMode: nextRole === 'IDP' ? input.parameters.requestSigningMode : 'OPTIONAL',
+      },
+    })
+  }
+
+  const chooseTarget = (id: string) => {
+    const target = compatibleTargets.find(candidate => candidate.id === id)
+    const revision = target?.revisions.find(candidate => candidate.roles.includes(role))
+    setInput({
+      ...input,
+      targetConnectionId: target?.id,
+      targetRevisionId: revision?.id,
+      targetEntityId: target?.entityId ?? '',
+      metadataSourceLocation: '',
+      name: input.name || target?.name || '',
+    })
+  }
+
   return <section className="form-wrap">
     <button className="text-button back-link" onClick={cancel}>Back to Test Plans</button>
-    <header className="page-head compact"><p className="eyebrow">New Test Plan</p><h1>Register a target</h1>
-      <p>Choose the profile and tell SAMLscope how the target can be reached.</p></header>
+    <header className="page-head compact"><p className="eyebrow">New Test Plan</p><h1>Create Test Plan</h1>
+      <p>Choose a functional profile and reuse registered metadata or add a target once.</p></header>
     <form onSubmit={create}>
       <fieldset className="field-group"><legend>Profile</legend><p>Choose the conformance profile for this Test Plan.</p>
+        {profiles.length === 0 ? <p role="status">No approved functional profile definitions are installed.</p> :
         <div className="profile-grid">{profiles.map(profile => <label className={`profile-option${input.profile === profile.id ? ' selected' : ''}`} key={profile.id}>
-          <input type="radio" name="profile" value={profile.id} checked={input.profile === profile.id} onChange={() => setInput({
-            ...input, profile: profile.id, targetKind: profile.id.startsWith('IDP') ? 'IDP' : 'SP',
-            parameters: { ...input.parameters, requestSigningMode: profile.id.startsWith('IDP') ? input.parameters.requestSigningMode : 'OPTIONAL' },
-          })} />
+          <input type="radio" name="profile" value={profile.id} checked={input.profile === profile.id} onChange={() => chooseProfile(profile.id)} />
           <strong>{profile.title}</strong><span>{profile.description}</span>
-        </label>)}</div>
+        </label>)}</div>}
       </fieldset>
       <fieldset className="field-group"><legend>Target</legend>
         <label>Plan name<input required value={input.name} onChange={event => setInput({ ...input, name: event.target.value })} /></label>
+        {compatibleTargets.length > 0 && <label>Saved target<select value={input.targetConnectionId ?? ''} onChange={event => chooseTarget(event.target.value)}>
+          <option value="">Register a new target</option>
+          {compatibleTargets.map(target => <option key={target.id} value={target.id}>{target.name} — {target.entityId}</option>)}
+        </select></label>}
+        {input.targetConnectionId ? <p>Using the saved metadata snapshot for <strong>{input.targetEntityId}</strong>. The same target can be reused by other compatible profiles.</p> : <>
         <label>Target SAML Entity ID<input required type="url" value={input.targetEntityId} onChange={event => setInput({ ...input, targetEntityId: event.target.value })} /></label>
         <label>Target metadata URL<input required type="url" value={input.metadataSourceLocation} onChange={event => setInput({ ...input, metadataSourceLocation: event.target.value })} /></label>
+        </>}
       </fieldset>
-      {input.profile.startsWith('IDP') && <fieldset className="field-group"><legend>Request signing</legend>
+      <label>Execution assistance<select value={input.interaction.preset ?? 'quick'} onChange={event => {
+        const preset = event.target.value as NonNullable<PlanInput['interaction']['preset']>
+        setInput({ ...input, interaction: { ...input.interaction, preset, allowAttestation: preset === 'assisted_with_attestation' } })
+      }}>
+        <option value="quick">Quick</option>
+        <option value="assisted">Assisted</option>
+        <option value="assisted_with_attestation">Assisted + attestation</option>
+      </select><small>Checks without the selected evidence method remain not verified.</small></label>
+      {['browser_sso_idp', 'metadata_idp'].includes(input.profile) && <fieldset className="field-group"><legend>Request signing</legend>
         <p>Keep the target's signature requirement fixed for this Plan. Use a separate Plan to test the other setting.</p>
         <label>Target requires signed requests<select value={input.parameters.requestSigningMode ?? 'OPTIONAL'}
           onChange={event => setInput({ ...input, parameters: { ...input.parameters,
@@ -280,7 +353,7 @@ function NewPlan({ input, setInput, create, cancel }: {
         <input required type="checkbox" checked={input.authorizedTarget} onChange={event => setInput({ ...input, authorizedTarget: event.target.checked })} />
         I own or am authorized to test this target.
       </label></fieldset>
-      <div className="form-actions"><button type="submit">Create plan</button><button className="button-secondary" type="button" onClick={cancel}>Cancel</button></div>
+      <div className="form-actions"><button type="submit" disabled={profiles.length === 0}>Create plan</button><button className="button-secondary" type="button" onClick={cancel}>Cancel</button></div>
     </form>
   </section>
 }
@@ -294,7 +367,7 @@ function PlanDetail({ plan, runs, createRun, canCreateRun, back }: {
 }) {
   return <>
     <button className="text-button back-link" onClick={back}>Back to Test Plans</button>
-    <header className="plan-detail-head"><div><p className="eyebrow">Test Plan / {humanize(plan.plan.profile)}</p><h1>{plan.plan.name}</h1><p>Request signing: {humanize(plan.plan.requestSigningMode ?? 'OPTIONAL')} · fixed for this Plan</p></div>
+    <header className="plan-detail-head"><div><p className="eyebrow">Test Plan / {profileLabel(plan.plan.profile)}</p><h1>{plan.plan.name}</h1>{profileRole(plan.plan.profile) === 'IDP' && <p>Request signing: {humanize(plan.plan.requestSigningMode ?? 'OPTIONAL')} · fixed for this Plan</p>}</div>
       <span className="authorization-state"><span className="semantic-dot status-live" />Authorized target</span></header>
     <PeerRegistration plan={plan} />
     {canCreateRun && <button onClick={createRun}>Create Run and preflight</button>}
@@ -304,7 +377,7 @@ function PlanDetail({ plan, runs, createRun, canCreateRun, back }: {
           <div><span className={`run-status status-${run.status.toLowerCase()}`}>{humanize(run.status)}</span><code>{run.id}</code></div>
           <span>Suite to target reachability: {humanize(run.targetToSuiteReachability)}</span>
           <div className="row-actions">
-            {plan.plan.profile.startsWith('IDP') && run.status !== 'COMPLETED' && (idpRoundTripReady(run)
+            {profileRole(plan.plan.profile) === 'IDP' && run.status !== 'COMPLETED' && (idpRoundTripReady(run)
               ? <RoundTripLink href={idpRoundTripUrl(plan, run.id)} />
               : <span>Open Run workspace and run preflight before starting SAML.</span>)}
             <a className="button button-secondary" href={`/manage/${run.id}`}>{run.status === 'COMPLETED' ? 'Manage evidence' : 'Open Run workspace'}</a>

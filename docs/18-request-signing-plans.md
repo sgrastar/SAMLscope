@@ -46,7 +46,7 @@ without changing enforcement. Optional mode needs a separate client and Run.
 
 Explicit protocol campaigns that alter metadata or cryptographic policy still
 require their documented operator actions. This change does not establish all
-Full-profile, ECP, SP-role, or metadata-campaign acceptance. Deliberately unsigned
+functional-profile, ECP, SP-role, or metadata-campaign acceptance. Deliberately unsigned
 fixtures introduced in future must carry an explicit policy exemption; they must
 not be silently signed as ordinary traffic.
 

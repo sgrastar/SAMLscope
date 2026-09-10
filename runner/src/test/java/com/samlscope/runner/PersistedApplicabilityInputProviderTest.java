@@ -16,7 +16,7 @@ import com.samlscope.core.evaluation.PredicateCatalog.ConflictPolicy;
 import com.samlscope.core.evaluation.PredicateKind;
 import com.samlscope.core.plan.MetadataDeliveryKind;
 import com.samlscope.core.plan.MetadataSourceKind;
-import com.samlscope.core.plan.PlanProfile;
+import com.samlscope.core.profile.FunctionalProfile;
 import com.samlscope.core.plan.TargetKind;
 import com.samlscope.core.plan.TestPlan;
 import com.samlscope.core.run.Reachability;
@@ -71,7 +71,7 @@ class PersistedApplicabilityInputProviderTest {
 
     private TestPlan plan() {
         return new TestPlan(
-                "plan_0123456789ABCDEFGHJKMNPQRS", "Applicability persistence", PlanProfile.IDP_CORE,
+                "plan_0123456789ABCDEFGHJKMNPQRS", "Applicability persistence", FunctionalProfile.BROWSER_SSO_IDP,
                 new TestPlan.Target(
                         TargetKind.IDP, "https://idp.example/entity",
                         new TestPlan.MetadataSource(MetadataSourceKind.URL, "https://idp.example/metadata")),

@@ -28,7 +28,7 @@ class HostedPlanAccessTest {
                 AppConfig.Mode.HOSTED, URI.create(appOrigin), URI.create("https://peer.example"),
                 dataDirectory, port, false, false, true,
                 "sha256:" + "a".repeat(64), "127.0.0.1");
-        var app = SamlScopeApplication.create(config).start(port);
+        var app = FunctionalProfileTestInstallation.create(config).start(port);
         try {
             var base = URI.create("http://127.0.0.1:" + port);
             var client = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(2)).build();
@@ -125,7 +125,7 @@ class HostedPlanAccessTest {
                     resumeBody, cookie, null, "https://peer.example").statusCode());
             assertEquals(200, request(client, base, "PUT", "/api/plans/" + planId,
                     planBody("Resumed", "https://first.internal.example/idp",
-                            "https://first.internal.example/metadata", "secret"),
+                            "https://first.internal.example/metadata", "svc-user / secret-value"),
                     cookie, resumedCsrf, null).statusCode());
 
             var visiblePlans = request(client, base, "GET", "/api/plans", null, cookie, null, null);
@@ -145,7 +145,7 @@ class HostedPlanAccessTest {
                     planBody("Changed", "https://first.internal.example/idp",
                             "https://first.internal.example/metadata", "secret"), cookie, null);
             assertDenied(client, base, "DELETE", "/api/plans/" + secondPlanId, null, cookie, csrf);
-            assertEquals(200, request(client, base, "PUT", "/api/plans/" + planId,
+            assertEquals(409, request(client, base, "PUT", "/api/plans/" + planId,
                     planBody("Changed", "https://first.internal.example/idp",
                             "https://first.internal.example/metadata", "new-secret"), cookie, csrf, null).statusCode());
 
@@ -173,7 +173,7 @@ class HostedPlanAccessTest {
 
     private String planBody(String name, String entityId, String metadata, String hint) {
         return """
-                {"name":"%s","profile":"IDP_CORE","targetKind":"IDP",
+                {"name":"%s","profile":"browser_sso_idp","targetKind":"IDP",
                  "targetEntityId":"%s","metadataSourceKind":"URL","metadataSourceLocation":"%s",
                  "suiteMetadataDelivery":"MANUAL","declaredFeatures":{},
                  "parameters":{"clockSkewToleranceSeconds":180,"metadataRefreshWaitSeconds":300,
