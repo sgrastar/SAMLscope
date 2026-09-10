@@ -183,6 +183,45 @@ test('reuses one saved metadata revision for a functional profile Plan', async (
   expect(fetch.mock.calls.some(([url, init]) => String(url).endsWith('/api/targets') && init?.method === 'POST')).toBe(false)
 })
 
+test('shows creation progress and moves focus to a returned error', async () => {
+  window.history.replaceState(null, '', '?new=1')
+  vi.stubGlobal('scrollTo', vi.fn())
+  const originalScrollIntoView = Element.prototype.scrollIntoView
+  const scrollIntoView = vi.fn()
+  Element.prototype.scrollIntoView = scrollIntoView
+  let finishTarget!: (response: Response) => void
+  const targetResponse = new Promise<Response>(resolve => { finishTarget = resolve })
+  stubWorkspaceFetch(vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = String(input)
+    if (url.endsWith('/api/health')) return json({ status: 'ok', version: '0.1.0', mode: 'hosted', oidcEnabled: false })
+    if (url.endsWith('/api/profiles')) return json(['browser_sso_idp'])
+    if (url.endsWith('/api/plans')) return json([])
+    if (url.endsWith('/api/targets') && init?.method === 'POST') return targetResponse
+    return json([])
+  }))
+
+  try {
+    render(<App />)
+    fireEvent.change(await screen.findByLabelText('Plan name'), { target: { value: 'MockIdP' } })
+    fireEvent.change(screen.getByLabelText('Target SAML Entity ID'), { target: { value: 'https://mockidp.dev/entityid' } })
+    fireEvent.change(screen.getByLabelText('Target metadata URL'), { target: { value: 'https://mockidp.dev/api/saml/metadata' } })
+    fireEvent.click(screen.getByLabelText('I own or am authorized to test this target.'))
+    fireEvent.click(screen.getByRole('button', { name: 'Create plan' }))
+
+    const busy = await screen.findByRole('button', { name: 'Creating plan…' })
+    expect((busy as HTMLButtonElement).disabled).toBe(true)
+    expect(busy.getAttribute('aria-busy')).toBe('true')
+    finishTarget(json({ message: 'Access denied' }, 403))
+
+    const alert = await screen.findByRole('alert')
+    await waitFor(() => expect(document.activeElement).toBe(alert))
+    expect(scrollIntoView).toHaveBeenCalledWith({ behavior: 'smooth', block: 'start' })
+    expect((screen.getByRole('button', { name: 'Create plan' }) as HTMLButtonElement).disabled).toBe(false)
+  } finally {
+    Element.prototype.scrollIntoView = originalScrollIntoView
+  }
+})
+
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } })
 }

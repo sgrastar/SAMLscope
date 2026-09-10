@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useMemo, useState } from 'react'
+import { FormEvent, useEffect, useMemo, useRef, useState } from 'react'
 import { AppShell } from './AppShell'
 import { api, type AuthSession, type Plan, type PlanInput, type Profile, type Run, type TargetConnection } from './api'
 import { ResultReport } from './ResultReport'
@@ -55,6 +55,8 @@ function PlanWorkspace() {
   const [input, setInput] = useState(initialInput)
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
+  const [creating, setCreating] = useState(false)
+  const errorRef = useRef<HTMLDivElement>(null)
   const [loading, setLoading] = useState(true)
   const [mode, setMode] = useState<'selfhosted' | 'hosted'>('selfhosted')
   const [auth, setAuth] = useState<AuthSession>()
@@ -115,6 +117,12 @@ function PlanWorkspace() {
     }).catch(cause => setError((cause as Error).message))
   }, [selectedId, view])
 
+  useEffect(() => {
+    if (!error) return
+    errorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    errorRef.current?.focus({ preventScroll: true })
+  }, [error])
+
   const show = (next: 'list' | 'new' | 'detail', planId?: string) => {
     setView(next)
     if (next === 'new' && auth?.enabled && !auth.authenticated && auth.accessPolicy !== 'optional') {
@@ -129,7 +137,9 @@ function PlanWorkspace() {
 
   const create = async (event: FormEvent) => {
     event.preventDefault()
+    if (creating) return
     setError('')
+    setCreating(true)
     try {
       let planInput = input
       if (!input.targetConnectionId) {
@@ -162,6 +172,7 @@ function PlanWorkspace() {
         ? 'Test Plan and initial Run created. Save the protected management link below.'
         : 'Test Plan created. Register the Test Peer metadata in the target before starting a Run.')
     } catch (cause) { setError((cause as Error).message) }
+    finally { setCreating(false) }
   }
 
   const createRun = async () => {
@@ -196,7 +207,7 @@ function PlanWorkspace() {
   const mustSignIn = auth?.enabled && !auth.authenticated && auth.accessPolicy !== 'optional'
   return <AppShell current="plans" mode={mode}>
     <main className="shell page-main">
-      {error && <div className="notice notice-error" role="alert"><strong>Unable to continue</strong>{error}</div>}
+      {error && <div ref={errorRef} className="notice notice-error" role="alert" tabIndex={-1}><strong>Unable to continue</strong>{error}</div>}
       {message && <div className="notice notice-success" role="status">{message}</div>}
       {managementUrl && <ManagementLink url={managementUrl} />}
       {loading ? <PlanSkeleton /> : view === 'new' && mustSignIn ? <section className="panel">
@@ -204,7 +215,7 @@ function PlanWorkspace() {
         <p>Your Plans and Runs will be available when you return.</p>
         <a className="button" href="/auth/login">Continue to sign in</a>
       </section> : view === 'new' ? <NewPlan input={input} setInput={setInput} create={create} cancel={() => show('list')}
-        targets={targets} installedProfiles={installedProfiles} />
+        targets={targets} installedProfiles={installedProfiles} creating={creating} />
         : view === 'detail' && selected ? <PlanDetail plan={selected} runs={runs} createRun={createRun} canCreateRun={mode === 'selfhosted' || auth?.authenticated === true} back={() => show('list')} />
           : <PlanList plans={plans} runs={planRuns} open={id => show('detail', id)} create={() => show('new')}
             refresh={() => void refreshPlans().catch(cause => setError((cause as Error).message))} />}
@@ -252,13 +263,14 @@ function PlanList({ plans, runs, open, create, refresh }: {
   </>
 }
 
-function NewPlan({ input, setInput, create, cancel, targets, installedProfiles }: {
+function NewPlan({ input, setInput, create, cancel, targets, installedProfiles, creating }: {
   input: PlanInput
   setInput: (value: PlanInput) => void
   create: (event: FormEvent) => void
   cancel: () => void
   targets: TargetConnection[]
   installedProfiles: Profile[]
+  creating: boolean
 }) {
   const profiles = profileCatalog.filter(profile => installedProfiles.includes(profile.id))
   const role = profileRole(input.profile)
@@ -353,7 +365,9 @@ function NewPlan({ input, setInput, create, cancel, targets, installedProfiles }
         <input required type="checkbox" checked={input.authorizedTarget} onChange={event => setInput({ ...input, authorizedTarget: event.target.checked })} />
         I own or am authorized to test this target.
       </label></fieldset>
-      <div className="form-actions"><button type="submit" disabled={profiles.length === 0}>Create plan</button><button className="button-secondary" type="button" onClick={cancel}>Cancel</button></div>
+      <div className="form-actions"><button type="submit" disabled={profiles.length === 0 || creating} aria-busy={creating}>
+        {creating ? 'Creating plan…' : 'Create plan'}
+      </button><button className="button-secondary" type="button" onClick={cancel} disabled={creating}>Cancel</button></div>
     </form>
   </section>
 }
