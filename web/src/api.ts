@@ -336,7 +336,7 @@ export const api = {
   plans: () => request<Plan[]>('/api/plans'),
   profiles: () => request<Profile[]>('/api/profiles'),
   targets: () => request<TargetConnection[]>('/api/targets'),
-  registerTarget: (input: { name: string; entityId: string; metadataUrl: string; authorizedTarget: boolean }) =>
+  registerTarget: (input: { name: string; entityId: string; metadataUrl: string; authorizedTarget: boolean; expectedRole: 'IDP' | 'SP' }) =>
     request<TargetConnection>('/api/targets', { method: 'POST', body: JSON.stringify(input) }),
   refreshTarget: (id: string, authorizedTarget: boolean, sourceRevisionId: string) =>
     request<TargetConnection>(`/api/targets/${encodeURIComponent(id)}/revisions`, {

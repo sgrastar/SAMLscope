@@ -129,6 +129,16 @@ export function RunManagement({ runId, csrfToken, focusCaseId, navigateTo }: {
   }, [runId])
 
   useEffect(() => {
+    const refreshAfterBrowserStep = () => {
+      void refresh().catch(cause => setError((cause as Error).message))
+    }
+    window.addEventListener('focus', refreshAfterBrowserStep)
+    return () => {
+      window.removeEventListener('focus', refreshAfterBrowserStep)
+    }
+  }, [runId])
+
+  useEffect(() => {
     if (!caseDrawerOpen) return
     const previousOverflow = document.body.style.overflow
     const workspaceRoot = document.querySelector<HTMLElement>('.management.workspace')
@@ -510,7 +520,7 @@ export function RunManagement({ runId, csrfToken, focusCaseId, navigateTo }: {
     <header><strong>{interaction.caseId}</strong><span>{interaction.kind}</span></header>
     {interaction.promptEn && <pre>{resolvePrompt(interaction.promptEn, planId, runId)}</pre>}
     {interaction.kind === 'BROWSER' && <div className="actions">
-      {interaction.startUrl && <a className="button" href={interaction.startUrl}>Open focused browser step</a>}
+      {interaction.startUrl && <a className="button" href={interaction.startUrl} target="_blank" rel="noreferrer">Open focused browser step</a>}
       {interaction.completionMode === 'TRANSCRIPT'
         ? <p>Waiting for the required correlated Transcript evidence. No completion answer is needed.</p>
         : <button disabled={busy === interaction.caseId} onClick={() => void completeBrowser(interaction)}>
@@ -551,12 +561,12 @@ export function RunManagement({ runId, csrfToken, focusCaseId, navigateTo }: {
         <header><strong>{activeProbe.caseId ?? 'Browser-assisted SAML scenario'}</strong><span>AUTOMATED ORACLE</span></header>
         <p>{activeProbe.instructionsEn}</p>
         {activeProbe.requiresFreshSession && <p>The first IsPassive probe must start in a private browser context with no active target session.</p>}
-        <a className="button" href={activeProbe.startUrl}>Open scenario</a>
+        <a className="button" href={activeProbe.startUrl} target="_blank" rel="noreferrer">Open one browser check</a>
       </article>
     : activeProbe?.state === 'AWAITING_RESPONSE'
       ? <article className="interaction active-probe">
           <header><strong>{activeProbe.caseId ?? 'Browser-assisted SAML scenario'}</strong><span>WAITING</span></header>
-          <p>The request was dispatched. Complete target login or consent in that browser. SAMLscope will continue automatically after a correlated SAML Response.</p>
+          <p>The request was dispatched in another tab. Complete login only if this check calls for it. After one correlated SAML Response, SAMLscope pauses before the next request and returns you to this workspace.</p>
           <button disabled={busy === 'active-probe-retry'} onClick={() => void retryActiveProbe()}>
             Reissue this one-time fixture
           </button>
@@ -771,7 +781,7 @@ export function RunManagement({ runId, csrfToken, focusCaseId, navigateTo }: {
           <dt>Cases</dt><dd>{value.cases}</dd>
           <dt>Actions</dt><dd>{value.deliberateUserActions} total / {value.remainingUserActions} remaining (budget {value.actionBudget})</dd>
           <dt>Estimated time</dt><dd>{value.estimatedMinutesMin}-{value.estimatedMinutesMax} minutes</dd>
-          <dt>Action mix</dt><dd>{value.loginActions} login, {value.configurationActions} configuration, {value.metadataRefreshActions} metadata refresh</dd>
+          <dt>Action mix</dt><dd>{value.loginActions} browser campaign, {value.configurationActions} configuration, {value.metadataRefreshActions} metadata refresh</dd>
           {value.plan === 'FULL' && <><dt>Self-check sections</dt><dd>{value.selfAttestationSections}</dd></>}
         </dl>
       </article>)}</div>

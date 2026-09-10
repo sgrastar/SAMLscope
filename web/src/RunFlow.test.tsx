@@ -8,6 +8,8 @@ afterEach(cleanup)
 test('round trip shows progress, blocks duplicate clicks and resets on return', () => {
   render(<RoundTripLink href="#idp" />)
   const link = screen.getByRole('link')
+  expect(link.getAttribute('target')).toBe('_blank')
+  expect(link.getAttribute('rel')).toBe('noreferrer')
   fireEvent.click(link)
   expect(link.textContent).toBe('Opening IdP…')
   expect(link.getAttribute('aria-busy')).toBe('true')
@@ -15,6 +17,9 @@ test('round trip shows progress, blocks duplicate clicks and resets on return', 
   fireEvent(window, new Event('pageshow'))
   expect(link.textContent).toBe('Start IdP round trip')
   expect(link.getAttribute('aria-busy')).toBe('false')
+  fireEvent.click(link)
+  fireEvent(window, new Event('focus'))
+  expect(link.textContent).toBe('Start IdP round trip')
 })
 
 test('opening another tab preserves the original button', () => {

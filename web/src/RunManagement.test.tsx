@@ -498,6 +498,8 @@ test('does not offer completed for a transcript-driven browser case', async () =
 
   expect(await screen.findByText(/No completion answer is needed/)).toBeTruthy()
   expect(screen.queryByRole('button', { name: 'Browser steps completed' })).toBeNull()
+  expect(screen.getByRole('link', { name: 'Open focused browser step' }).getAttribute('target')).toBe('_blank')
+  expect(screen.getByRole('link', { name: 'Open focused browser step' }).getAttribute('rel')).toBe('noreferrer')
 })
 
 test('offers the server-generated active probe launch URL and explains fresh-session isolation', async () => {
@@ -537,8 +539,9 @@ test('offers the server-generated active probe launch URL and explains fresh-ses
   expect(screen.getByText(/positive control/)).toBeTruthy()
   expect(screen.getByText(/private browser context/)).toBeTruthy()
   expect(screen.queryByRole('button', { name: 'Browser steps completed' })).toBeNull()
-  expect(screen.getByRole('link', { name: 'Open scenario' }).getAttribute('href'))
+  expect(screen.getByRole('link', { name: 'Open one browser check' }).getAttribute('href'))
     .toContain('/probe/action_probe')
+  expect(screen.getByRole('link', { name: 'Open one browser check' }).getAttribute('target')).toBe('_blank')
   expect(screen.getByRole('link', { name: 'Start IdP round trip' }).getAttribute('href'))
     .toBe('https://suite.example/p/plan/start/m0-roundtrip?run=run_0123456789ABCDEFGHJKMNPQRS')
   expect(screen.getByText('No other pending interactions. Continue the active probe above.')).toBeTruthy()
@@ -711,7 +714,7 @@ test('reissues an uncertain one-time fixture without turning it into a target fa
   render(<RunManagement runId="run_0123456789ABCDEFGHJKMNPQRS" csrfToken="csrf" />)
   fireEvent.click(await screen.findByRole('button', { name: 'Reissue this one-time fixture' }))
 
-  expect(await screen.findByRole('link', { name: 'Open scenario' })).toBeTruthy()
+  expect(await screen.findByRole('link', { name: 'Open one browser check' })).toBeTruthy()
   expect(await screen.findByText(/new one-time fixture was issued/)).toBeTruthy()
   const post = calls.find(call => call.url.includes('/active-probe/retry'))!
   expect(post.init?.headers).toEqual({ 'content-type': 'application/json', 'X-CSRF-Token': 'csrf' })

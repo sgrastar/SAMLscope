@@ -153,6 +153,7 @@ function PlanWorkspace() {
           entityId: input.targetEntityId,
           metadataUrl: input.metadataSourceLocation,
           authorizedTarget: input.authorizedTarget,
+          expectedRole: profileRole(input.profile),
         })
         setTargets(current => [target, ...current])
         planInput = {
@@ -176,7 +177,7 @@ function PlanWorkspace() {
       setMessage(created.initialRun?.managementUrl
         ? 'Test Plan and initial Run created. Save the protected management link below.'
         : 'Test Plan created. Register the Test Peer metadata in the target before starting a Run.')
-    } catch (cause) { setError((cause as Error).message) }
+    } catch (cause) { setError(planCreationError(cause, input.profile)) }
     finally { setCreating(false) }
   }
 
@@ -212,7 +213,7 @@ function PlanWorkspace() {
   const mustSignIn = auth?.enabled && !auth.authenticated && auth.accessPolicy !== 'optional'
   return <AppShell current="plans" mode={mode}>
     <main className="shell page-main">
-      {error && <div ref={errorRef} className="notice notice-error" role="alert" tabIndex={-1}><strong>Unable to continue</strong>{error}</div>}
+      {error && <div ref={errorRef} className="notice notice-error workspace-error" role="alert" tabIndex={-1}><strong>Unable to continue</strong>{error}</div>}
       {message && <div className="notice notice-success" role="status">{message}</div>}
       {managementUrl && <ManagementLink url={managementUrl} />}
       {loading ? <PlanSkeleton /> : view === 'new' && mustSignIn ? <section className="panel">
@@ -423,4 +424,57 @@ function planLocation(): { view: 'list' | 'new' | 'detail'; planId?: string } {
   if (query.has('new')) return { view: 'new' }
   const planId = query.get('plan') ?? undefined
   return planId ? { view: 'detail', planId } : { view: 'list' }
+}
+
+function planCreationError(cause: unknown, profile: Profile): string {
+  const message = cause instanceof Error ? cause.message : 'The Test Plan could not be created.'
+  const role = profileRole(profile)
+  const descriptor = role === 'SP' ? 'SPSSODescriptor' : 'IDPSSODescriptor'
+  const roleName = role === 'SP' ? 'Service Provider' : 'Identity Provider'
+  const roleLabel = role === 'SP' ? 'SP' : 'IdP'
+  const otherRole = role === 'SP' ? 'IdP' : 'SP'
+
+  if (message.includes('Target does not have the selected role')) {
+    return `This profile requires ${roleName} metadata, but the selected entity does not include a SAML 2.0 ${descriptor}. Use metadata for an ${roleLabel}, or choose an ${otherRole} profile.`
+  }
+  if (message.includes('Selected entityID is absent from metadata')) {
+    return 'The entered Entity ID was not found in the downloaded metadata. Copy the exact entityID value from the metadata document.'
+  }
+  if (message.includes('Expected SAML metadata document')) {
+    return 'The URL did not return a SAML metadata document. Check that it points directly to an EntityDescriptor or EntitiesDescriptor XML document.'
+  }
+  if (message.includes('Selected entity has no SAML 2.0 IdP or SP role')) {
+    return 'The selected entity does not declare a SAML 2.0 IdP or SP role. Its metadata needs an IDPSSODescriptor or SPSSODescriptor with SAML 2.0 protocol support.'
+  }
+  if (message.includes('Target metadata could not be retrieved')) {
+    return 'The metadata URL could not be fetched. Check that it is publicly reachable over HTTP(S), does not require sign-in, and returns metadata directly.'
+  }
+  if (message.includes('Target metadata could not be parsed')) {
+    return 'The downloaded content could not be parsed as valid SAML metadata. Check the XML, certificate data, and Entity ID.'
+  }
+  if (message.includes('Target metadata unavailable') || message.includes('Target unavailable')) {
+    return 'The saved target or metadata revision is no longer available. Register the target metadata again.'
+  }
+  if (message.includes('Select a target and metadata revision')) {
+    return 'Select a saved target with a compatible metadata revision, or register a new target.'
+  }
+  if (message.includes('Another Run against this target is already active')) {
+    return 'This target already has an active Run. Open or complete that Run before creating another Plan for the same target.'
+  }
+  if (message.includes('Too many hosted requests') || message.includes('Too many hosted request identities')) {
+    return 'Plan creation is temporarily rate limited. Wait a few minutes, then try again.'
+  }
+  if (message.includes('Authorization to test the target is required') || message.includes('Confirm that you own or are authorized')) {
+    return 'Confirm the authorization checkbox before creating the Test Plan.'
+  }
+  if (message === 'Access denied') {
+    return 'The server did not authorize this action. Reload the page and try again.'
+  }
+  if (message === 'Failed to fetch' || message.includes('NetworkError')) {
+    return 'SAMLscope could not reach the server. Check your connection and try again.'
+  }
+  if (message === 'The request could not be completed') {
+    return 'SAMLscope could not complete the request. Try again; if it continues, report the time and selected profile.'
+  }
+  return message
 }

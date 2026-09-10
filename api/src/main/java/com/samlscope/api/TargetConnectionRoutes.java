@@ -10,7 +10,8 @@ import java.util.List;
 import java.util.Set;
 
 final class TargetConnectionRoutes {
-    record Write(String name, String entityId, String metadataXml, String metadataUrl, boolean authorizedTarget, String sourceRevisionId) {}
+    record Write(String name, String entityId, String metadataXml, String metadataUrl, boolean authorizedTarget,
+                 String sourceRevisionId, TargetRole expectedRole) {}
     record RevisionView(String id, Set<TargetRole> roles, String sha256, boolean refreshable) {}
     record View(String id, String name, String entityId, List<RevisionView> revisions) {}
     static void register(io.javalin.config.JavalinConfig app, AppConfig config,
@@ -29,6 +30,7 @@ final class TargetConnectionRoutes {
             if (config.targetImportsPerHour() > 0) limiter.requireAllowed("target-import", owner,
                     config.targetImportsPerHour(), java.time.Duration.ofHours(1));
             var revision = accept(target, input, clock, preflight);
+            requireExpectedRole(revision, input.expectedRole());
             repository.createWithRevision(target, revision);
             ctx.status(201).json(view(repository, target));
         });
@@ -49,9 +51,11 @@ final class TargetConnectionRoutes {
                         .orElseThrow(() -> new IllegalArgumentException("Saved metadata revision unavailable"));
                 if (previous.privateSourceUrl() == null)
                     throw new IllegalArgumentException("No saved metadata source; supply XML or a URL");
-                input = new Write(input.name(), target.entityId(), null, previous.privateSourceUrl(), true, previous.id());
+                input = new Write(input.name(), target.entityId(), null, previous.privateSourceUrl(), true,
+                        previous.id(), input.expectedRole());
             }
             var revision = accept(target, input, clock, preflight);
+            requireExpectedRole(revision, input.expectedRole());
             repository.appendRevision(owner, revision);
             ctx.status(201).json(view(repository, target));
         });
@@ -76,6 +80,10 @@ final class TargetConnectionRoutes {
         } catch (com.samlscope.saml.normal.SamlException invalid) {
             throw new IllegalArgumentException("Target metadata could not be parsed", invalid);
         }
+    }
+    private static void requireExpectedRole(TargetConnection.Revision revision, TargetRole expectedRole) {
+        if (expectedRole == null || revision.roles().contains(expectedRole)) return;
+        throw new IllegalArgumentException("Target does not have the selected role");
     }
     private static View view(SqliteTargetConnectionRepository repository, TargetConnection target) {
         return new View(target.id(),target.name(),target.entityId(),repository.revisionSummaries(target.ownerId(),target.id())
