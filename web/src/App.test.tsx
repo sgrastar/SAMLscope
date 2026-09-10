@@ -222,6 +222,54 @@ test('shows creation progress and moves focus to a returned error', async () => 
   }
 })
 
+test('keeps the created Run visible without an unauthorized history reload', async () => {
+  window.history.replaceState(null, '', '?new=1')
+  vi.stubGlobal('scrollTo', vi.fn())
+  const planId = 'plan_0123456789ABCDEFGHJKMNPQRS'
+  const runId = 'run_0123456789ABCDEFGHJKMNPQRS'
+  const fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = String(input)
+    if (url.endsWith('/api/health')) return json({ status: 'ok', version: '0.1.0', mode: 'hosted', oidcEnabled: false })
+    if (url.endsWith('/api/profiles')) return json(['browser_sso_idp'])
+    if (url.endsWith('/api/targets') && init?.method === 'POST') return json({
+      id: 'target_mockidp', name: 'MockIdP', entityId: 'https://mockidp.dev/entityid',
+      revisions: [{ id: 'metadata_mockidp', roles: ['IDP'], sha256: 'a'.repeat(64), refreshable: true }],
+    }, 201)
+    if (url.endsWith('/api/plans') && init?.method === 'POST') return json({
+      plan: {
+        plan: { id: planId, name: 'MockIdP', profile: 'browser_sso_idp',
+          target: { kind: 'IDP', entityId: 'https://mockidp.dev/entityid' } },
+        entityId: `https://suite.example/p/${planId}`,
+        metadataUrl: `https://suite.example/p/${planId}/metadata`,
+        mdqUrl: `https://suite.example/mdq/${planId}`,
+        secondaryIdpEntityId: `https://suite.example/p/${planId}/idp/secondary`,
+        secondaryIdpMetadataUrl: `https://suite.example/p/${planId}/idp/secondary/metadata`,
+      },
+      initialRun: {
+        run: { id: runId, planId, status: 'CREATED', targetToSuiteReachability: 'UNKNOWN', context: {} },
+        managementUrl: `https://suite.example/manage/${runId}#t=${'a'.repeat(43)}`,
+      },
+    }, 201)
+    if (url.endsWith('/api/plans')) return json([])
+    if (url.endsWith(`/api/plans/${planId}/runs`)) return json({ message: 'Access denied' }, 403)
+    return json([])
+  })
+  stubWorkspaceFetch(fetch)
+
+  render(<App />)
+  fireEvent.change(await screen.findByLabelText('Plan name'), { target: { value: 'MockIdP' } })
+  fireEvent.change(screen.getByLabelText('Target SAML Entity ID'), { target: { value: 'https://mockidp.dev/entityid' } })
+  fireEvent.change(screen.getByLabelText('Target metadata URL'), { target: { value: 'https://mockidp.dev/api/saml/metadata' } })
+  fireEvent.click(screen.getByLabelText('I own or am authorized to test this target.'))
+  fireEvent.click(screen.getByRole('button', { name: 'Create plan' }))
+
+  expect(await screen.findByRole('heading', { name: 'MockIdP' })).toBeTruthy()
+  expect(screen.getByText('1 total')).toBeTruthy()
+  expect(screen.getByRole('link', { name: 'Open protected Run' })).toBeTruthy()
+  expect(screen.queryByRole('alert')).toBeNull()
+  expect(fetch.mock.calls.some(([url]) => String(url).endsWith(`/api/plans/${planId}/runs`))).toBe(false)
+})
+
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } })
 }
