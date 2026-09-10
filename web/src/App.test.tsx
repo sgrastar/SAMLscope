@@ -222,6 +222,45 @@ test('shows creation progress and moves focus to a returned error', async () => 
   }
 })
 
+test('explains how to fix metadata role and common metadata input errors', async () => {
+  window.history.replaceState(null, '', '?new=1')
+  vi.stubGlobal('scrollTo', vi.fn())
+  const originalScrollIntoView = Element.prototype.scrollIntoView
+  Element.prototype.scrollIntoView = vi.fn()
+  const fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = String(input)
+    if (url.endsWith('/api/health')) return json({ status: 'ok', version: '0.1.0', mode: 'hosted', oidcEnabled: false })
+    if (url.endsWith('/api/profiles')) return json(['metadata_sp'])
+    if (url.endsWith('/api/targets') && init?.method === 'POST') return json({
+      id: 'target_mockidp', name: 'MockIdP', entityId: 'https://mockidp.dev/entityid',
+      revisions: [{ id: 'metadata_mockidp', roles: ['IDP'], sha256: 'a'.repeat(64), refreshable: true }],
+    }, 201)
+    if (url.endsWith('/api/plans') && init?.method === 'POST') {
+      return json({ message: 'Target does not have the selected role' }, 400)
+    }
+    if (url.endsWith('/api/plans')) return json([])
+    return json([])
+  })
+  stubWorkspaceFetch(fetch)
+
+  try {
+    render(<App />)
+    fireEvent.change(await screen.findByLabelText('Plan name'), { target: { value: 'MockIdP as SP' } })
+    fireEvent.change(screen.getByLabelText('Target SAML Entity ID'), { target: { value: 'https://mockidp.dev/entityid' } })
+    fireEvent.change(screen.getByLabelText('Target metadata URL'), { target: { value: 'https://mockidp.dev/api/saml/metadata' } })
+    fireEvent.click(screen.getByLabelText('I own or am authorized to test this target.'))
+    fireEvent.click(screen.getByRole('button', { name: 'Create plan' }))
+
+    expect(await screen.findByText(/requires Service Provider metadata/)).toBeTruthy()
+    expect(screen.getByText(/SPSSODescriptor/)).toBeTruthy()
+    expect(screen.getByText(/choose an IdP profile/)).toBeTruthy()
+    expect(fetch.mock.calls.find(([url, init]) => String(url).endsWith('/api/targets') && init?.method === 'POST')?.[1]?.body)
+      .toContain('"expectedRole":"SP"')
+  } finally {
+    Element.prototype.scrollIntoView = originalScrollIntoView
+  }
+})
+
 test('keeps the created Run visible without an unauthorized history reload', async () => {
   window.history.replaceState(null, '', '?new=1')
   vi.stubGlobal('scrollTo', vi.fn())

@@ -206,6 +206,7 @@ dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
 .notice strong { display: block; color: var(--ink); margin-bottom: 4px; }
 .notice-success { border-color: var(--brand); background: var(--brand-soft); }
 .notice-error { border-color: var(--red); background: var(--red-soft); color: var(--ink); }
+.workspace-error { scroll-margin-top: 86px; }
 .notice-neutral { margin-top: 12px; }
 .compact-notice { margin-bottom: 22px; }
 .management-link { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 5px 20px; }
@@ -382,6 +383,7 @@ button.case-drawer-backdrop:hover:not(:disabled) { transform: none; border: 0; b
 }
 
 @media (max-width: 700px) {
+  .workspace-error { scroll-margin-top: 126px; }
   .shell { width: min(100% - 24px, 1240px); }
   .page-main { padding-block: 34px 56px; }
   .app-topbar { flex-wrap: wrap; gap: 12px; padding: 10px 12px; }

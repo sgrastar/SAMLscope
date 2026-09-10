@@ -741,9 +741,10 @@ public final class SamlScopeApplication {
             var status = m1.activeProbeRouteStatus(runId);
             requireActiveProbeRoute(ctx, status);
             ctx.header("Cache-Control", "no-store");
-            ctx.header("Content-Security-Policy", "default-src 'none'; form-action 'self'; "
+            ctx.header("Content-Security-Policy", "default-src 'none'; style-src 'self'; form-action 'self'; "
                     + "frame-ancestors 'none'; base-uri 'none'; object-src 'none'");
-            ctx.contentType("text/html; charset=utf-8").result(activeProbeStartPage(status));
+            ctx.contentType("text/html; charset=utf-8").result(ActiveProbePage.start(
+                    status, "/p/" + ctx.pathParam("plan") + "/ui/completion.css"));
         });
         javalin.routes.post("/p/{plan}/probe/{action}", ctx -> {
             var runId = requiredQuery(ctx, "run");
@@ -805,21 +806,6 @@ public final class SamlScopeApplication {
         }
     }
 
-    private static String activeProbeStartPage(
-            com.samlscope.runner.ActiveProbeCoordinator.Status status) {
-        var fresh = status.requiresFreshSession()
-                ? "<p>This first probe verifies IsPassive with no existing IdP session. Open this page in a new private browser window, then confirm below.</p>"
-                        + "<label><input required type=\"checkbox\" name=\"freshSessionConfirmed\" value=\"true\"> "
-                        + "This browser context has no active target IdP session.</label>"
-                : "";
-        return "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><title>Active SAML probes</title></head>"
-                + "<body><h1>Run browser-assisted SAML scenario</h1>"
-                + "<p><strong>" + htmlEscape(status.caseId()) + "</strong></p>"
-                + "<p>" + htmlEscape(status.instructionsEn()) + "</p>"
-                + "<form method=\"post\">" + fresh
-                + "<p><button type=\"submit\">Continue scenario</button></p></form></body></html>";
-    }
-
     private static void renderActiveProbe(
             Context ctx, com.samlscope.runner.ActiveProbeCoordinator.PreparedProbe probe) {
         var nonceBytes = new byte[18];
@@ -838,14 +824,15 @@ public final class SamlScopeApplication {
             MetadataLabService metadataLab) {
         if (consumed.activeProbe()) {
             var status = m1.activeProbeRouteStatus(consumed.activeProbeRunId());
-            if (status.state() == com.samlscope.runner.ActiveProbeCoordinator.State.READY) {
-                renderActiveProbe(ctx, m1.prepareActiveProbe(
-                        consumed.activeProbeRunId(), status.actionId(), false));
-                return;
-            }
+            var nonceBytes = new byte[18];
+            NONCE_RANDOM.nextBytes(nonceBytes);
+            var nonce = Base64.getUrlEncoder().withoutPadding().encodeToString(nonceBytes);
+            ctx.header("Content-Security-Policy", "default-src 'none'; script-src 'nonce-" + nonce
+                    + "'; style-src 'self'; frame-ancestors 'none'; base-uri 'none'; object-src 'none'");
             ctx.header("Cache-Control", "no-store").contentType("text/html; charset=utf-8")
-                    .result("<!doctype html><html lang=\"en\"><body><h1>Active probes completed</h1>"
-                            + "<p>The responses were recorded and evaluated automatically.</p></body></html>");
+                    .result(ActiveProbePage.recorded(
+                            "/p/" + ctx.pathParam("plan") + "/ui/completion.css",
+                            status, consumed.summary(), nonce));
             return;
         }
         if (consumed.metadataProbe() && consumed.relayState() != null

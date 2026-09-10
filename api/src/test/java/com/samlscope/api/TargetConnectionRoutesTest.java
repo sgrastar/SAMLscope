@@ -112,6 +112,42 @@ class TargetConnectionRoutesTest {
         assertEquals(0, AppConfig.from(Map.of()).targetImportsPerHour());
     }
 
+    @Test
+    void rejectsAnIncompatibleExpectedRoleBeforeSavingTheTarget() throws Exception {
+        var config = new AppConfig(
+                AppConfig.Mode.SELFHOSTED, URI.create("http://127.0.0.1:8080"),
+                URI.create("http://127.0.0.1:8080"), directory, 8080,
+                true, false, false);
+        var app = FunctionalProfileTestInstallation.create(config).start(0);
+        try {
+            var base = URI.create("http://127.0.0.1:" + app.port());
+            var metadata = """
+                    <EntityDescriptor xmlns='urn:oasis:names:tc:SAML:2.0:metadata' entityID='https://idp.example'>
+                      <IDPSSODescriptor protocolSupportEnumeration='urn:oasis:names:tc:SAML:2.0:protocol'>
+                        <SingleSignOnService Binding='urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST'
+                          Location='https://idp.example/sso'/>
+                      </IDPSSODescriptor>
+                    </EntityDescriptor>
+                    """;
+            var response = client.send(HttpRequest.newBuilder(base.resolve("/api/targets"))
+                            .header("Content-Type", "application/json")
+                            .POST(HttpRequest.BodyPublishers.ofString(json.mapper().writeValueAsString(Map.of(
+                                    "name", "IdP used as SP", "entityId", "https://idp.example",
+                                    "metadataXml", metadata, "authorizedTarget", true, "expectedRole", "SP"))))
+                            .build(), HttpResponse.BodyHandlers.ofString());
+
+            assertEquals(400, response.statusCode(), response.body());
+            assertEquals("Target does not have the selected role",
+                    json.mapper().readTree(response.body()).path("message").asText());
+            var targets = client.send(HttpRequest.newBuilder(base.resolve("/api/targets")).GET().build(),
+                    HttpResponse.BodyHandlers.ofString());
+            assertEquals(200, targets.statusCode(), targets.body());
+            assertEquals(0, json.mapper().readTree(targets.body()).size());
+        } finally {
+            app.stop();
+        }
+    }
+
     private JsonNode post(URI base, String path, Map<String,?> body) throws Exception {
         var response = client.send(
                 HttpRequest.newBuilder(base.resolve(path))

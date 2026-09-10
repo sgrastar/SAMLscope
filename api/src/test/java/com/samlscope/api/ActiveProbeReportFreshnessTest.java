@@ -22,7 +22,7 @@ class ActiveProbeReportFreshnessTest {
     private URI base;
 
     @Test
-    void completedCaseAppearsInBothReportsWhileTheNextCaseAwaitsResponse() throws Exception {
+    void completedCaseAppearsInBothReportsWhileTheNextCaseWaitsForOperatorLaunch() throws Exception {
         var config = new AppConfig(AppConfig.Mode.SELFHOSTED,
                 URI.create("http://127.0.0.1:8080"), URI.create("http://127.0.0.1:8080"),
                 data, 8080, true, false, false, "sha256:" + "1".repeat(64), "");
@@ -54,6 +54,13 @@ class ActiveProbeReportFreshnessTest {
             post(api + "/quick-check", "", "application/json");
             var initial = get(api + "/active-probe");
             var start = URI.create(initial.path("startUrl").asText());
+            var startPage = client.send(HttpRequest.newBuilder(base.resolve(
+                            start.getRawPath() + "?" + start.getRawQuery())).build(),
+                    HttpResponse.BodyHandlers.ofString());
+            assertEquals(200, startPage.statusCode());
+            assertTrue(startPage.body().contains("Run one SAML check"));
+            assertTrue(startPage.body().contains("do not enter credentials"));
+            assertTrue(startPage.body().contains("/ui/completion.css"));
             send(start.getRawPath() + "?" + start.getRawQuery(),
                     "freshSessionConfirmed=true", "application/x-www-form-urlencoded");
             for (int i = 0; i < 4; i++) {
@@ -67,13 +74,21 @@ class ActiveProbeReportFreshnessTest {
                         <a:Issuer>https://idp.example/entity</a:Issuer>
                         <p:Status><p:StatusCode Value="urn:oasis:names:tc:SAML:2.0:status:%s"/></p:Status>%s</p:Response>
                         """.formatted(i, action, i == 1 ? "Success" : "Responder", i == 1 ? "<a:Assertion/>" : "");
-                send("/p/" + plan + "/sp/acs/0", "SAMLResponse=" + encode(Base64.getEncoder()
+                var receipt = send("/p/" + plan + "/sp/acs/0", "SAMLResponse=" + encode(Base64.getEncoder()
                         .encodeToString(response.getBytes(StandardCharsets.UTF_8)))
                         + "&RelayState=" + encode("sp1:" + runId + ":" + action),
                         "application/x-www-form-urlencoded");
+                assertTrue(receipt.contains("The next request was not sent automatically"));
+                assertTrue(receipt.contains("Close this tab and return to workspace"));
+                if (i < 3) {
+                    var ready = get(api + "/active-probe");
+                    var nextStart = URI.create(ready.path("startUrl").asText());
+                    send(nextStart.getRawPath() + "?" + nextStart.getRawQuery(),
+                            "", "application/x-www-form-urlencoded");
+                }
             }
             var next = get(api + "/active-probe");
-            assertEquals("AWAITING_RESPONSE", next.path("state").asText());
+            assertEquals("READY", next.path("state").asText());
             assertNotEquals("IIP-IDP05-a-idp-01", next.path("caseId").asText());
             var report = get(api + "/result.json");
             JsonNode completed = null;
