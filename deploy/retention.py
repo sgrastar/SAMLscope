@@ -12,6 +12,8 @@ import re
 import shutil
 import sqlite3
 
+SUPPORTED_SCHEMA_VERSION = 11
+
 
 def instant(value):
     result = dt.datetime.fromisoformat(value.replace("Z", "+00:00"))
@@ -55,7 +57,7 @@ def maintain(data_directory, now, *, apply=False, service_stopped=False):
     with sqlite3.connect(database.as_uri() + "?mode=" + mode, uri=True) as db:
         db.execute("PRAGMA foreign_keys = ON")
         db.execute("BEGIN IMMEDIATE" if apply else "BEGIN")
-        if db.execute("SELECT MAX(version) FROM schema_migrations").fetchone()[0] != 7:
+        if db.execute("SELECT MAX(version) FROM schema_migrations").fetchone()[0] != SUPPORTED_SCHEMA_VERSION:
             raise ValueError("Unsupported database schema; migrate with the matching application first")
         db.execute("SELECT run_id, entry_count, stored_bytes FROM transcript_usage LIMIT 0")
         db.execute("SELECT singleton, entry_count, stored_bytes FROM transcript_global_usage LIMIT 0")

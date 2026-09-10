@@ -6,7 +6,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 import shutil
-from retention import maintain
+from retention import SUPPORTED_SCHEMA_VERSION, maintain
 
 
 NOW = dt.datetime(2026, 9, 7, tzinfo=dt.timezone.utc)
@@ -91,7 +91,8 @@ class RetentionTest(unittest.TestCase):
 
     def test_unknown_schema_is_rejected_before_file_deletion(self):
         with self.connect() as db:
-            db.execute("INSERT INTO schema_migrations VALUES (8, ?)", (NOW.isoformat(),))
+            db.execute("INSERT INTO schema_migrations VALUES (?, ?)",
+                       (SUPPORTED_SCHEMA_VERSION + 1, NOW.isoformat()))
         before = self.snapshot()
         with self.assertRaises(ValueError):
             maintain(self.root, NOW, apply=True, service_stopped=True)
