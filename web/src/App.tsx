@@ -111,6 +111,11 @@ function PlanWorkspace() {
 
   useEffect(() => {
     if (!selectedId || view !== 'detail') return
+    const history = planRuns[selectedId]
+    if (history?.state === 'loaded') {
+      setRuns(history.runs)
+      return
+    }
     void api.runs(selectedId).then(value => {
       setRuns(value)
       setPlanRuns(current => ({ ...current, [selectedId]: { state: 'loaded', runs: value } }))
