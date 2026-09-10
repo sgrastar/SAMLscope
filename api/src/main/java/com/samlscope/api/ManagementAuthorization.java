@@ -8,6 +8,10 @@ import com.samlscope.core.plan.TestPlan;
 import com.samlscope.core.run.RunRepository;
 import com.samlscope.store.SqlitePlanOwnerRepository;
 import io.javalin.http.Context;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Optional;
@@ -48,10 +52,13 @@ final class ManagementAuthorization {
     }
     String connectionOwner(Context ctx, boolean mutation, boolean protectedManagement) {
         if (!protectedManagement) return "local-operator";
-        var current = session(ctx).orElseThrow(
-                () -> new SecurityException("Sign in to reuse target connections"));
-        if (mutation) oidc.requireMutation(ctx, current);
-        return current.identity().ownerId();
+        var current = session(ctx);
+        if (current.isEmpty()) {
+            if (!oidc.config().enabled() && mutation) return anonymousOwner(ctx.ip());
+            throw new SecurityException("Sign in to reuse target connections");
+        }
+        if (mutation) oidc.requireMutation(ctx, current.orElseThrow());
+        return current.orElseThrow().identity().ownerId();
     }
     void authorizeRun(Context ctx, boolean mutation) {
         var current = session(ctx);
@@ -89,5 +96,15 @@ final class ManagementAuthorization {
     }
     private boolean owns(Optional<OidcSessions.Session> current, String planId) {
         return current.isPresent() && owners.ownedPlans(current.get().identity().ownerId()).contains(planId);
+    }
+
+    private static String anonymousOwner(String sourceAddress) {
+        try {
+            var digest = MessageDigest.getInstance("SHA-256")
+                    .digest(sourceAddress.getBytes(StandardCharsets.UTF_8));
+            return "sha256:" + HexFormat.of().formatHex(digest);
+        } catch (NoSuchAlgorithmException impossible) {
+            throw new IllegalStateException("SHA-256 is unavailable", impossible);
+        }
     }
 }

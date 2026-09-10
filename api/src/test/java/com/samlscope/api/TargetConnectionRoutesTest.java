@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.samlscope.store.JsonCodec;
+import java.net.ServerSocket;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -19,6 +20,49 @@ class TargetConnectionRoutesTest {
     @TempDir Path directory;
     private final HttpClient client = HttpClient.newHttpClient();
     private final JsonCodec json = new JsonCodec();
+
+    @Test
+    void hostedModeWithoutOidcCanRegisterTargetAndCreateProtectedPlan() throws Exception {
+        int port;
+        try (var socket = new ServerSocket(0)) {
+            port = socket.getLocalPort();
+        }
+        var config = new AppConfig(
+                AppConfig.Mode.HOSTED, URI.create("https://127.0.0.1:" + port),
+                URI.create("https://peer.example"), directory, port,
+                false, false, true, "sha256:" + "a".repeat(64), "127.0.0.1");
+        var app = FunctionalProfileTestInstallation.create(config).start(port);
+        try {
+            var base = URI.create("http://127.0.0.1:" + app.port());
+            var metadata = """
+                    <EntityDescriptor xmlns='urn:oasis:names:tc:SAML:2.0:metadata' entityID='https://mockidp.dev/entityid'>
+                      <IDPSSODescriptor protocolSupportEnumeration='urn:oasis:names:tc:SAML:2.0:protocol'>
+                        <SingleSignOnService Binding='urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST'
+                          Location='https://mockidp.dev/api/saml/sso'/>
+                      </IDPSSODescriptor>
+                    </EntityDescriptor>
+                    """;
+            var target = post(base, "/api/targets", Map.of(
+                    "name", "MockIdP", "entityId", "https://mockidp.dev/entityid",
+                    "metadataXml", metadata, "authorizedTarget", true));
+
+            var created = post(base, "/api/plans", Map.ofEntries(
+                    Map.entry("name", "MockIdP browser SSO"),
+                    Map.entry("profile", "browser_sso_idp"),
+                    Map.entry("suiteMetadataDelivery", "MANUAL"),
+                    Map.entry("authorizedTarget", true),
+                    Map.entry("targetConnectionId", target.path("id").asText()),
+                    Map.entry("targetRevisionId", target.at("/revisions/0/id").asText())));
+
+            assertEquals("https://mockidp.dev/entityid", created.at("/plan/plan/target/entityId").asText());
+            assertTrue(created.at("/initialRun/managementUrl").asText().contains("#t="));
+            var list = client.send(HttpRequest.newBuilder(base.resolve("/api/targets")).GET().build(),
+                    HttpResponse.BodyHandlers.ofString());
+            assertEquals(403, list.statusCode(), list.body());
+        } finally {
+            app.stop();
+        }
+    }
 
     @Test
     void oneImmutableMetadataRevisionFeedsCompatibleProfilesAndTheirPreflights() throws Exception {
