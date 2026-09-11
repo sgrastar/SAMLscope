@@ -122,6 +122,11 @@ public final class QuickCheckService implements QuickCheckExecutor {
 
     @Override
     public QuickCheckResult execute(String runId) {
+        return executeApplicable(runId, null, null);
+    }
+
+    public QuickCheckResult executeApplicable(String runId,
+            com.samlscope.core.evaluation.CoverageCatalog coverage, ApplicabilityProvider applicability) {
         var run = runs.find(runId).orElseThrow(() -> new IllegalArgumentException("Unknown Run"));
         if (run.status() != RunStatus.COMPLETED) {
             throw new IllegalArgumentException("Quick check requires a completed SSO round trip");
@@ -148,8 +153,12 @@ public final class QuickCheckService implements QuickCheckExecutor {
                 run.id(), plan.profile().role(), clock, plan.parameters(),
                 plan.interaction(),
                 run.targetToSuiteReachability(), transcript, true);
-        var snapshot = new AutomatedCaseRunner(registry, new CaseExecutionService(caseExecutions, new PlanRequestSigning(plans, runs, keys)))
-                .startReady(run.id(), requireProfileDefinition(plan), context);
+        var executionService = new CaseExecutionService(caseExecutions, new PlanRequestSigning(plans, runs, keys));
+        var snapshot = coverage == null
+                ? new AutomatedCaseRunner(registry, executionService)
+                        .startReady(run.id(), requireProfileDefinition(plan), context)
+                : new ApprovedCaseStarter(coverage, approvedDefinitions, registry, executionService,
+                        applicability, profileDefinitions).startApplicable(run, plan, context);
         return new QuickCheckResult(run.id(), DISCLAIMER, snapshot);
     }
 

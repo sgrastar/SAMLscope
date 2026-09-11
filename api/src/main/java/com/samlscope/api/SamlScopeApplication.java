@@ -175,6 +175,8 @@ public final class SamlScopeApplication {
             ConfigurationRoutes.register(javalin, m1::configure);
             BrowserCompletionRoutes.register(javalin, m1::completeBrowser);
             MilestoneRoutes.register(javalin, m1::startMilestone);
+            javalin.routes.post("/api/runs/{id}/tests/start", ctx ->
+                    ctx.json(m1.startTests(ctx.pathParam("id"))));
             EcpProbeRoutes.register(javalin, ecpProbe::execute);
             javalin.routes.get("/api/runs/{id}/active-probe", ctx ->
                     ctx.json(m1.activeProbeStatus(ctx.pathParam("id"))));
@@ -206,6 +208,8 @@ public final class SamlScopeApplication {
                         authorization.authorizeRun(ctx, true));
                 javalin.routes.before("/api/runs/{id}/events", ctx ->
                         authorization.authorizeRun(ctx, false));
+                javalin.routes.before("/api/runs/{id}/tests/start", ctx ->
+                        authorization.authorizeRun(ctx, true));
                 javalin.routes.before("/api/runs/{id}/quick-check", ctx ->
                         authorization.authorizeRun(ctx, true));
                 javalin.routes.before("/api/runs/{id}/active-probe", ctx ->

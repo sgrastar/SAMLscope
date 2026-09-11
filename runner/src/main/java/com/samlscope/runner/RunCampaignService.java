@@ -66,6 +66,9 @@ public final class RunCampaignService implements RunCampaignQuery {
         if (runId == null || runId.isBlank()) throw new IllegalArgumentException("runId must not be blank");
         var context = contexts.contextFor(runId);
         var classified = executions.list(runId).stream()
+                // ECP send fixtures carry evidence, but are not approved evaluative cases.
+                .filter(execution -> !com.samlscope.runner.outbox.EcpProbeService.requiredFixtureIds()
+                        .contains(execution.caseId()))
                 .map(execution -> classify(execution, context))
                 .toList();
 

@@ -28,6 +28,8 @@ public final class CaseRunProjection implements CaseRunProvider {
         if (runId == null || runId.isBlank()) throw new IllegalArgumentException("runId must not be blank");
         var projected = new ArrayList<CaseRun>();
         for (var execution : repository.list(runId)) {
+            // Known transport fixtures supply evidence but never enter verdict arithmetic.
+            if (com.samlscope.runner.outbox.EcpProbeService.requiredFixtureIds().contains(execution.caseId())) continue;
             if (!approvedCaseIds.contains(execution.caseId())) {
                 throw new IllegalArgumentException("Unknown approved case ID: " + execution.caseId());
             }

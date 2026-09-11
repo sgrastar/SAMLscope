@@ -107,6 +107,9 @@ class FunctionalProfileFlowTest {
             var preflight = post(base, "/api/runs/" + runId + "/preflight", null);
             assertEquals(200, preflight.statusCode(), preflight.body());
 
+            var premature = post(base, "/api/runs/" + runId + "/tests/start", null);
+            assertEquals(400, premature.statusCode(), premature.body());
+
             if (profile == FunctionalProfile.BROWSER_SSO_IDP) {
                 completeBrowserSsoIdpBaseline(base, planId, runId);
             } else {
@@ -119,8 +122,55 @@ class FunctionalProfileFlowTest {
                         existing.createdAt(), existing.updatedAt()));
             }
 
-            var started = post(base, "/api/runs/" + runId + "/milestones/M1/start", null);
+            var started = post(base, "/api/runs/" + runId + "/tests/start", null);
             assertEquals(200, started.statusCode(), started.body());
+            assertEquals(profile == FunctionalProfile.ECP_IDP,
+                    json.readTree(started.body()).path("ecpProbesRequired").asBoolean());
+            var executions = new com.samlscope.store.SqliteCaseExecutionRepository(
+                    new SqliteDatabase(dataDirectory), new JsonCodec());
+            var firstCaseIds = executions.list(runId).stream().map(value -> value.caseId())
+                    .collect(java.util.stream.Collectors.toSet());
+            assertTrue(!firstCaseIds.isEmpty());
+            var resumed = post(base, "/api/runs/" + runId + "/tests/start", null);
+            assertEquals(200, resumed.statusCode(), resumed.body());
+            assertEquals(firstCaseIds, executions.list(runId).stream().map(value -> value.caseId())
+                    .collect(java.util.stream.Collectors.toSet()));
+
+
+            // The old entry points must not discover any additional applicable cases.
+            for (var milestone : java.util.List.of("M1", "M2", "M3")) {
+                var legacy = post(base, "/api/runs/" + runId + "/milestones/" + milestone + "/start", null);
+                assertEquals(profile == FunctionalProfile.ECP_IDP && milestone.equals("M3") ? 400 : 200,
+                        legacy.statusCode(), legacy.body());
+            }
+            assertEquals(firstCaseIds, executions.list(runId).stream().map(value -> value.caseId())
+                    .collect(java.util.stream.Collectors.toSet()));
+
+            if (profile == FunctionalProfile.ECP_IDP) {
+                // Model completed outbox fixtures locally; never send credentials or network probes.
+                for (var fixture : com.samlscope.runner.outbox.EcpProbeService.requiredFixtureIds()) {
+                    var actionId = com.samlscope.runner.outbox.EcpProbeService.actionId(runId, fixture);
+                    var execution = new com.samlscope.core.caseexec.CaseExecution(runId, fixture, 0,
+                            com.samlscope.core.caseexec.CaseExecutionStatus.RUNNING,
+                            new com.samlscope.core.caseexec.CaseState("send-baseline", Map.of()),
+                            null, null, Instant.now());
+                    executions.apply(-1, execution, java.util.List.of(new com.samlscope.core.caseexec.OutboundAction(
+                            actionId, com.samlscope.core.caseexec.OutboundKind.ECP_SOAP,
+                            new byte[] { 1 }, URI.create("https://target.example/ecp"), true)));
+                    executions.transitionOutbox(actionId, com.samlscope.core.caseexec.OutboxStatus.PENDING,
+                            com.samlscope.core.caseexec.OutboxStatus.SENDING, Map.of(), null, Instant.now());
+                    executions.transitionOutbox(actionId, com.samlscope.core.caseexec.OutboxStatus.SENDING,
+                            com.samlscope.core.caseexec.OutboxStatus.SENT, Map.of(), null, Instant.now());
+                }
+                var continued = post(base, "/api/runs/" + runId + "/tests/start", null);
+                assertEquals(200, continued.statusCode(), continued.body());
+                assertEquals(false, json.readTree(continued.body()).path("ecpProbesRequired").asBoolean());
+                var afterEcp = executions.list(runId).stream().map(value -> value.caseId())
+                        .collect(java.util.stream.Collectors.toSet());
+                assertEquals(200, post(base, "/api/runs/" + runId + "/milestones/M3/start", null).statusCode());
+                assertEquals(afterEcp, executions.list(runId).stream().map(value -> value.caseId())
+                        .collect(java.util.stream.Collectors.toSet()));
+            }
 
             var result = get(base, "/api/runs/" + runId + "/result.json");
             assertEquals(200, result.statusCode(), result.body());
