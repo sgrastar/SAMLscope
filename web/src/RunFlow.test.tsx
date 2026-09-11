@@ -39,7 +39,7 @@ test('preflight explains readiness without presenting a conformance verdict', ()
   expect(screen.getByText(/not a SAML conformance verdict/)).toBeTruthy()
   expect(screen.getByText('Technical details').closest('details')?.open).toBe(false)
   rerender(<PreflightSummary report={report} roundTripComplete />)
-  expect(screen.getByText(/Continue with the initial checks/)).toBeTruthy()
+  expect(screen.getByText(/Select Start or resume tests/)).toBeTruthy()
   expect(screen.queryByText(/continue with login/)).toBeNull()
 })
 

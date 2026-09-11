@@ -87,6 +87,8 @@ final class M1Runtime {
     private final RunCampaignService campaigns;
     private final com.samlscope.runner.CampaignActionCompletionService campaignActions;
     private final PinnedFunctionalCaseDefinitionResolver profileDefinitions;
+    private final com.samlscope.core.evaluation.CoverageCatalog coverage;
+    private final com.samlscope.runner.ApplicabilityProvider applicability;
 
     private M1Runtime(
             AppConfig config,
@@ -113,7 +115,11 @@ final class M1Runtime {
             CaseTimeoutService timeouts,
             RunCampaignService campaigns,
             com.samlscope.runner.CampaignActionCompletionService campaignActions,
-            PinnedFunctionalCaseDefinitionResolver profileDefinitions) {
+            PinnedFunctionalCaseDefinitionResolver profileDefinitions,
+            com.samlscope.core.evaluation.CoverageCatalog coverage,
+            com.samlscope.runner.ApplicabilityProvider applicability) {
+        this.coverage = coverage;
+        this.applicability = applicability;
         this.config = config;
         this.quickCheck = quickCheck;
         this.results = results;
@@ -435,7 +441,7 @@ final class M1Runtime {
                 starters, pendingInteractions, bootstrapContracts, protocolEvidence, attestations,
                 configurations, browserCompletions, caseExecutions, publications,
                 reconciliationLimiter, hostedRunProvisioner, activeProbes, timeouts,
-                campaigns, campaignActions, profileDefinitions);
+                campaigns, campaignActions, profileDefinitions, coverage, applicability);
     }
 
     java.util.Set<com.samlscope.core.profile.FunctionalProfile> installedProfiles() {
@@ -447,9 +453,32 @@ final class M1Runtime {
         return profileDefinitions.identity(profile);
     }
 
+    record TestStartResult(boolean ecpProbesRequired) {}
+
+    TestStartResult startTests(String runId) {
+        return withManualEvidenceWork(runId, () -> {
+            var run = requireRun(runId);
+            var plan = requirePlan(run);
+            if (run.status() != com.samlscope.core.run.RunStatus.COMPLETED) {
+                throw new IllegalArgumentException("Complete the initial login before starting the profile tests");
+            }
+            quickCheck.executeApplicable(runId, coverage, applicability);
+            boolean ecpProbesRequired = plan.profile() == com.samlscope.core.profile.FunctionalProfile.ECP_IDP
+                    && !com.samlscope.runner.outbox.EcpProbeService.allRequiredFixturesSent(caseExecutions, runId);
+            for (var milestone : com.samlscope.core.casedef.CaseDefinitionCatalog.Milestone.values()) {
+                if (ecpProbesRequired
+                        && milestone == com.samlscope.core.casedef.CaseDefinitionCatalog.Milestone.M3) continue;
+                startInteractive(run, plan, milestone);
+            }
+            reconcileTranscriptEvidenceNow(runId);
+            if (results != null) results.generate(runId);
+            return new TestStartResult(ecpProbesRequired);
+        });
+    }
+
     QuickCheckService.QuickCheckResult quickCheck(String runId) {
         return withManualEvidenceWork(runId, () -> {
-            var value = quickCheck.execute(runId);
+            var value = quickCheck.executeApplicable(runId, coverage, applicability);
             var run = requireRun(runId);
             var plan = requirePlan(run);
             startInteractive(run, plan, com.samlscope.core.casedef.CaseDefinitionCatalog.Milestone.M1);
@@ -636,7 +665,7 @@ final class M1Runtime {
                     && !com.samlscope.runner.outbox.EcpProbeService.allRequiredFixturesSent(
                             caseExecutions, run.id())) {
                 throw new IllegalArgumentException(
-                        "Run the ECP, channel-binding, and SAML-EC probes before starting M3 for an ECP — IdP Run");
+                        "Run the ECP probes before continuing the ECP tests");
             }
             var started = startInteractive(run, plan, milestone);
             reconcileTranscriptEvidenceNow(runId);
@@ -794,7 +823,7 @@ final class M1Runtime {
             com.samlscope.core.plan.TestPlan plan,
             com.samlscope.core.casedef.CaseDefinitionCatalog.Milestone milestone) {
         if (run.status() != com.samlscope.core.run.RunStatus.COMPLETED) {
-            throw new IllegalArgumentException("Milestone execution requires a completed baseline SSO round trip");
+            throw new IllegalArgumentException("Complete the initial login before starting the profile tests");
         }
         var context = caseContext(run, plan);
         var started = new java.util.ArrayList<com.samlscope.core.caseexec.CaseExecution>();

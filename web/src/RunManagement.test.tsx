@@ -29,6 +29,32 @@ test('loads all evidence through one request without competing section reads', a
   expect(calls).toHaveLength(5)
 })
 
+test.each([false, true])('starts the whole profile and explains ECP prerequisites (%s)', async (ecpProbesRequired) => {
+  const posts: string[] = []
+  vi.stubGlobal('fetch', vi.fn(async (url: string, init?: RequestInit) => {
+    if (init?.method === 'POST') {
+      posts.push(url)
+      return json({ ecpProbesRequired })
+    }
+    if (url.endsWith('/workspace-evidence')) return json({
+      interactions: [], bootstrapContracts: [], protocolEvidence: protocolEvidence(),
+      activeProbe: { state: 'NOT_STARTED' }, campaigns: [],
+    })
+    if (url.endsWith('/metadata-lab')) return json(metadataLab())
+    if (url === '/api/health') return json({ mode: 'selfhosted' })
+    if (url === '/api/plans') return json([])
+    if (url === '/api/runs/run_test') return json({ id: 'run_test', planId: 'plan', status: 'COMPLETED', context: {} })
+    throw new Error(`Unexpected request: ${url}`)
+  }))
+  render(<RunManagement runId="run_test" />)
+  fireEvent.click(await screen.findByRole('button', { name: 'Start or resume tests' }))
+  expect(await screen.findByText(ecpProbesRequired
+    ? /Next: run the ECP probes below/
+    : /Profile tests started or resumed/)).toBeTruthy()
+  expect(posts).toEqual(['/api/runs/run_test/tests/start'])
+  expect(screen.queryByText(/M1|M2|M3/)).toBeNull()
+})
+
 test('blocks Run actions until the complete initial state loads and supports retry', async () => {
   let unavailable = true
   stubWorkspaceFetch(vi.fn(async (url: string) => {
@@ -51,7 +77,7 @@ test('blocks Run actions until the complete initial state loads and supports ret
 
   expect(await screen.findByRole('heading', { name: 'Run unavailable' })).toBeTruthy()
   expect(screen.queryByText('Run preflight')).toBeNull()
-  expect(screen.queryByText('Start or resume M1')).toBeNull()
+  expect(screen.queryByText('Start or resume tests')).toBeNull()
 
   unavailable = false
   fireEvent.click(screen.getByRole('button', { name: 'Retry loading Run' }))

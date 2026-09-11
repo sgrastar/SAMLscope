@@ -48,6 +48,8 @@ class OidcLoginIntegrationTest {
             }
             assertEquals(403, call("DELETE", "/api/plans/" + planId, null, bob, true).statusCode());
             assertEquals(403, call("POST", "/api/runs/" + runId + "/quick-check", "{}", bob, true).statusCode());
+            assertEquals(403, call("POST", "/api/runs/" + runId + "/tests/start", "{}", bob, true).statusCode());
+            assertEquals(403, call("POST", "/api/runs/" + runId + "/tests/start", "{}", alice, false).statusCode());
             assertEquals(403, call("POST", "/auth/logout", null, alice, false).statusCode());
             assertEquals(403, send("POST", "/auth/logout", null, alice.cookie(), alice.csrf(), "https://evil.example").statusCode());
             assertEquals(204, call("POST", "/auth/logout", null, alice, true).statusCode());

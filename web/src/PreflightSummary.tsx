@@ -10,7 +10,7 @@ export function PreflightSummary({ report, roundTripComplete = false }: { report
   const ready = !failed && checks.some(check => check.code === 'target_metadata' && check.status === 'PASS')
   return <section className="preflight-summary" aria-label="Preflight results">
     <h3>{failed ? 'Setup needs attention' : ready ? 'Setup checks completed' : 'Setup checks are incomplete'}</h3>
-    <p>{ready ? `Metadata is ready. ${roundTripComplete ? 'Continue with the initial checks (M1).' : 'Continue with the login step below.'} These setup checks are not a SAML conformance verdict.`
+    <p>{ready ? `Metadata is ready. ${roundTripComplete ? 'Select Start or resume tests.' : 'Continue with the login step below.'} These setup checks are not a SAML conformance verdict.`
       : 'Resolve the items below, then run preflight again. Do not start the round trip yet.'}</p>
     <ul>{checks.map((check, index) => <li key={`${check.code}-${index}`}>
       <strong>{names[check.code] ?? check.code}</strong>

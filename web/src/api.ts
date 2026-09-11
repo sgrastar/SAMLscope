@@ -428,6 +428,10 @@ export const api = {
     + `/actions/${encodeURIComponent(actionId)}/complete`, {
     method: 'POST', body: '{}', headers: csrfToken ? { 'X-CSRF-Token': csrfToken } : {},
   }),
+  startTests: (runId: string, csrfToken?: string) =>
+    request<{ ecpProbesRequired: boolean }>(`/api/runs/${runId}/tests/start`, {
+      method: 'POST', headers: csrfToken ? { 'X-CSRF-Token': csrfToken } : {},
+    }),
   startMilestone: (runId: string, milestone: 'M2' | 'M3', csrfToken?: string) =>
     request<unknown>(`/api/runs/${runId}/milestones/${milestone}/start`, {
       method: 'POST', headers: csrfToken ? { 'X-CSRF-Token': csrfToken } : {},

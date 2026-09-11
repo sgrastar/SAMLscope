@@ -305,11 +305,15 @@ export function RunManagement({ runId, csrfToken, focusCaseId, navigateTo }: {
     }
   }
 
-  const startM1 = async () => {
-    setBusy('quick-check')
+  const startTests = async () => {
+    setBusy('start-tests')
     setError('')
     try {
-      await api.quickCheck(runId, csrfToken)
+      setNotice('')
+      const result = await api.startTests(runId, csrfToken)
+      setNotice(result.ecpProbesRequired
+        ? 'Available tests have started. Next: run the ECP probes below to continue the remaining tests.'
+        : 'Profile tests started or resumed. Follow Pending interactions below to provide any required evidence.')
       await refresh()
     } catch (cause) {
       setError((cause as Error).message)
@@ -361,19 +365,6 @@ export function RunManagement({ runId, csrfToken, focusCaseId, navigateTo }: {
     }
   }
 
-  const startMilestone = async (milestone: 'M2' | 'M3') => {
-    setBusy(milestone)
-    setError('')
-    try {
-      await api.startMilestone(runId, milestone, csrfToken)
-      await refresh()
-    } catch (cause) {
-      setError((cause as Error).message)
-    } finally {
-      setBusy('')
-    }
-  }
-
   const runEcpProbe = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     const form = event.currentTarget
@@ -384,7 +375,11 @@ export function RunManagement({ runId, csrfToken, focusCaseId, navigateTo }: {
     try {
       await api.ecpProbe(runId, String(data.get('username') ?? ''), String(data.get('password') ?? ''), csrfToken)
       form.reset()
-      setNotice('The baseline ECP exchange, five channel-binding controls, and the SAML-EC session-key probe were recorded. M3 can now evaluate the transcript.')
+      const result = await api.startTests(runId, csrfToken)
+      setNotice(result.ecpProbesRequired
+        ? 'Some required ECP probes are still unavailable. Review the probe results and retry when ready.'
+        : 'ECP probes recorded and profile tests resumed. Follow Pending interactions below.')
+      await refresh()
     } catch (cause) {
       setError((cause as Error).message)
     } finally {
@@ -633,10 +628,12 @@ export function RunManagement({ runId, csrfToken, focusCaseId, navigateTo }: {
         <li><strong>Register the Test Peer.</strong> Follow the registration guide below in your target product.</li>
         <li><strong>Run preflight.</strong> Check that SAMLscope can retrieve the target metadata.</li>
         <li><strong>Complete one login.</strong> {profile.endsWith('_idp') ? 'Open the IdP, sign in with a test user, then return to this Run.' : 'Start login at your target SP and return to this Run after the response is recorded.'}</li>
-        <li><strong>Run the initial checks (M1).</strong> Then follow Pending interactions. M2 and M3 are additional test stages, not setup buttons.</li>
+        <li><strong>Start the profile tests.</strong> Follow Pending interactions for login, configuration changes, and evidence requests. Resume the tests after changing target capabilities.</li>
       </ol>
+      {profile === 'ecp_idp' && runSummary?.status === 'COMPLETED'
+        && <p><a href="#ecp-probes">Run ECP probes and continue tests</a> when requested. Use the test account registered in your IdP.</p>}
       <p className="notice">{runSummary?.status === 'COMPLETED'
-        ? 'Next: run the initial checks (M1), then complete the pending interactions. A recorded response is not a conformance PASS.'
+        ? 'Next: start or resume the profile tests, then follow Pending interactions below. A recorded response is not a conformance PASS.'
         : idpRoundTripReady(runSummary)
           ? 'Next: complete the login round trip. If you already opened the IdP, finish that login before starting another.'
           : 'Next: register the metadata below, then select Run preflight.'}</p>
@@ -648,12 +645,8 @@ export function RunManagement({ runId, csrfToken, focusCaseId, navigateTo }: {
           {busy === 'preflight' && <span className="button-spinner" aria-hidden="true" />}Run preflight</button>
         {plan && profile.endsWith('_idp') && idpRoundTripReady(runSummary) && runSummary?.status !== 'COMPLETED'
           && <RoundTripLink href={idpRoundTripUrl(plan, runId)} />}
-        <button disabled={busy !== '' || runSummary?.status !== 'COMPLETED'} onClick={() => void startM1()}>Start or resume M1</button>
-        <details className="additional-stages"><summary>Additional test stages (M2 / M3)</summary>
-          <p>Continue here after the initial round trip and M1. Follow each stage’s prerequisites and pending instructions.</p>
-          <button disabled={busy !== ''} onClick={() => void startMilestone('M2')}>Start or resume M2</button>
-          <button disabled={busy !== ''} onClick={() => void startMilestone('M3')}>Start or resume M3</button>
-        </details>
+        <button disabled={busy !== '' || runSummary?.status !== 'COMPLETED'} aria-busy={busy === 'start-tests'}
+          onClick={() => void startTests()}>Start or resume tests</button>
       </div>
       <div className="actions">
         <button className="button-secondary" onClick={() => void refresh()}>Refresh</button>
@@ -929,13 +922,13 @@ export function RunManagement({ runId, csrfToken, focusCaseId, navigateTo }: {
         </form>)}</div>
     </section>}
     <div className="section-heading"><div><p className="eyebrow">Evidence workflow</p><h2>Pending interactions</h2></div></div>
-    {profile === 'ecp_idp' && <form className="interaction" onSubmit={event => void runEcpProbe(event)}>
-      <fieldset disabled={busy === 'ecp-probe'}>
+    {profile === 'ecp_idp' && <form id="ecp-probes" className="interaction" onSubmit={event => void runEcpProbe(event)}>
+      <fieldset disabled={busy !== '' || runSummary?.status !== 'COMPLETED'}>
         <legend>ECP, channel-binding, and SAML-EC probes</legend>
         <p>Credentials are held in memory for this send only. They are never written to case state, the outbox, or the transcript.</p>
         <label>Username<input required name="username" autoComplete="username" /></label>
         <label>Password<input required name="password" type="password" autoComplete="current-password" /></label>
-        <button type="submit">Run seven ECP probes before M3</button>
+        <button type="submit">Run ECP probes and continue tests</button>
       </fieldset>
     </form>}
     {plan && profile.endsWith('_sp') && <p>Start login at the target SP after importing the Test Peer metadata.</p>}
