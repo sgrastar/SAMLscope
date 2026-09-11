@@ -15,7 +15,7 @@ Counting unit: Each source ID, exact Java/browser package version, or explicitly
 }
 ```
 
-| 素材 | 実際の利用箇所 | 利用形態 | 原権利者 | 根拠となる許諾 | 必要表示 | 公開判定 | 対応 |
+| Material | Actual location | Use | Rights holders | Permission evidence | Required notices | Publication status | Action |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | kantara-fedinterop-impl | tests/specs.yaml; tests/coverage.yaml / tests/cases.yaml; profiles, docs, UI and licensed exports via material-index | C | Internet2 and named contributors | https://kantarainitiative.github.io/SAMLprofiles/fedinterop.html | Title, edition, copyright, permission text and modification credit from source-notices.json | YELLOW | Requirement summaries, test instructions and source-comparison explanations incorporate source expression. Retain this document-specific notice, source/title/version and modification attribution in redistributable copies. |
 | IdPDisco | tests/specs.yaml; tests/coverage.yaml / tests/cases.yaml; profiles, docs, UI and licensed exports via material-index | C | OASIS and the document contributors | http://docs.oasis-open.org/security/saml/Post2.0/sstc-saml-idp-discovery-cs-01.pdf | Title, edition, copyright, permission text and modification credit from source-notices.json | YELLOW | Requirement summaries, test instructions and source-comparison explanations incorporate source expression. Retain this document-specific notice, source/title/version and modification attribution in redistributable copies. |

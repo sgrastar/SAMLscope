@@ -2,7 +2,7 @@
 
 ## Decision
 
-**公開可能 — 今回修正したリポジトリ、サイト静的成果物、アプリ、JAR、source JAR、ZIP/TAR、ライセンス付きexportとoffline reportについて。**
+**Publication permitted for the revised repository, static website, application, JAR/source JAR, ZIP/TAR, licensed exports and offline reports, subject to the conditions and container exclusion below.**
 
 This is a decision about the currently reviewed materials and retained conditions, not an approval
 of product conformance or operational release readiness. Keep the YELLOW notices with the outputs.
@@ -123,7 +123,7 @@ artifacts. This does not turn an uninspected future artifact into a cleared one.
 
 ## Output paths and exclusions
 
-| 対象 | 対応箇所 | 検証・未解決事項 |
+| Output | Implementation | Verification and remaining work |
 | --- | --- | --- |
 | GitHub repository | Root scope, source notices, material index, Java permission evidence and this audit | Signed inputs unchanged; no tracked independent XSD/RFC mirror; publish the complete repository with its licensing files |
 | App UI | `/licenses`, selected source links; expandable Java full notices/source availability | No consent modal or per-row long notices; lazy Java inventory; UI test checks safe text rendering |
