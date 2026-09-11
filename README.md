@@ -1,5 +1,9 @@
 # SAMLscope
 
+**[Try SAMLscope at samlscope.com](https://samlscope.com)**
+
+Explore the available SAML checks and [open the hosted application](https://app.samlscope.com) to try them with your IdP or SP. Follow the guided test workflow, inspect the evidence, and share a report. You can get started without building or running SAMLscope locally.
+
 SAMLscope is an open-source black-box conformance test suite for SAML identity providers (IdPs) and service providers (SPs). It currently targets the [Kantara SAML V2.0 Implementation Profile for Federation Interoperability v1.1](docs/04-requirement-coverage.md).
 
 SAMLscope drives standard SAML and metadata endpoints, records redacted Transcripts, and evaluates observable evidence. It does not use vendor administration APIs as conformance evidence and does not ask operators to decide PASS or FAIL. Evidence that cannot be obtained is reported as `NOT_VERIFIED`, not silently excluded or treated as target failure.
@@ -32,7 +36,7 @@ The signed G1 requirement catalog and signed G2 case design are complete. The ap
 
 External-observation coverage and reference implementation acceptance testing continue to improve. Capabilities that cannot be observed remain explicit `SELF_ATTESTED` or `NOT_VERIFIED` rather than being guessed.
 
-Current acceptance status and remaining launch work are tracked in the [release checklist](docs/13-release-readiness.md), [reference matrix](docs/14-reference-acceptance.md), and [operations preparation](docs/15-hosted-operations.md). Production hosting is not yet ready.
+Current acceptance status and remaining launch work are tracked in the [release checklist](docs/13-release-readiness.md), [reference matrix](docs/14-reference-acceptance.md), and [operations preparation](docs/15-hosted-operations.md). The [hosted application](https://app.samlscope.com) is available; the linked checklists track remaining acceptance and operational work.
 
 ## Requirements
 
@@ -130,7 +134,18 @@ See the [design index](docs/README.md), [security design](docs/08-suite-security
 
 ## License
 
-Original software and test code: Apache-2.0. SAMLscope-owned original prose and
-definition content: CC BY-SA 4.0. Third-party material retains its original terms;
-measured results are not automatically CC-licensed. See [licensing scope](LICENSING.md),
-[source review status](LICENSES/material-review.md) and [contribution terms](CONTRIBUTING.md).
+Original software and test code: [Apache-2.0](LICENSE). SAMLscope-owned original prose and
+definition content: [CC BY-SA 4.0](LICENSES/CC-BY-SA-4.0.txt). Third-party material retains
+its original terms; measured results are not automatically CC-licensed.
+
+Start with the [licensing guide](LICENSING.md) and [license and source index](LICENSES/README.md).
+
+- [Publication audit and retained conditions](LICENSES/publication-audit.md)
+- [Material-by-material decisions and required notices](LICENSES/publication-register.md)
+- [Original specification notices and attribution](LICENSES/source-notices.json)
+- [Java dependency notices and source availability](web/public/licenses/java-dependencies.json)
+- [Container licenses and corresponding-source downloads](LICENSES/container-publication.md)
+- [Contribution terms](CONTRIBUTING.md)
+
+The [application license page](https://app.samlscope.com/licenses) and
+[website license page](https://samlscope.com/licenses/) provide readable notices for their respective distributions.
