@@ -44,3 +44,17 @@ This follow-up changes the protected Dockerfile and build workflow. G2 renewal
 covers those distribution changes, preserving existing case approvals and all G1
 inputs. It does not assert a new case-design review. Negative tests reject a
 changed source download, changed runtime inventory and unreviewed architecture.
+
+## Production HTTP route review
+
+The PR review identified that the UI fetched source-membership and Java license JSON
+which was present in the built JAR but lacked production HTTP routes. Explicit
+routes now serve both packaged files. The HTTP integration test compares the
+response bytes with the actual classpath assets, so a development-server-only
+success cannot hide a missing production route. G2 renewal covers this application
+route change; specification interpretation and case approvals remain unchanged.
+
+The separate review concern about approval ancestry was checked against the real
+Git history: each renewal is a signed approval-only descendant of its target.
+Both externally pinned G2 verification and CI validate that boundary; PR-wide
+diff presentation does not collapse these commits into one implementation commit.

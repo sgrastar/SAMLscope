@@ -3,6 +3,8 @@ package com.samlscope.api;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.net.URI;
@@ -57,6 +59,17 @@ class SamlScopeApplicationTest {
                     HttpResponse.BodyHandlers.ofString());
             assertEquals(200, sourceNotices.statusCode());
             assertTrue(sourceNotices.body().contains("\"unresolved_sources\""));
+            for (var file : java.util.List.of("source-membership.json", "java-dependencies.json")) {
+                var inventory = client.send(HttpRequest.newBuilder(
+                        base.resolve("/licenses/" + file)).build(), HttpResponse.BodyHandlers.ofByteArray());
+                assertEquals(200, inventory.statusCode(), file);
+                assertTrue(inventory.headers().firstValue("Content-Type").orElseThrow()
+                        .startsWith("application/json"));
+                try (var expected = getClass().getResourceAsStream("/public/licenses/" + file)) {
+                    assertNotNull(expected, file);
+                    assertArrayEquals(expected.readAllBytes(), inventory.body(), file);
+                }
+            }
 
             var requestBody = """
                     {
