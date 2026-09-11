@@ -35,7 +35,7 @@ Use a target you own or are authorized to test, with a non-production test accou
 
 1. [Open SAMLscope](https://app.samlscope.com) and create a **Test Plan**. Choose the functional profile matching your target's IdP or SP role.
 2. Enter the target entity ID and metadata URL, or reuse a compatible saved target. Select the execution assistance you can provide. Where shown, keep the target's request-signing requirement fixed for the Plan.
-3. Open a Run and follow **What to do next**. Register the displayed SAMLscope Test Peer metadata in your target, then select **Run preflight**.
+3. Register the SAMLscope Test Peer metadata shown on the Plan page in your target. Open the existing Run, or select **Create Run and preflight** if no Run exists. In the Run workspace, follow **What to do next** and select **Run preflight** when requested.
 4. Complete the initial login round trip as instructed. Return to the Run after the response is recorded.
 5. Select **Start or resume M1** for the initial checks. Follow **Pending interactions** and use **Additional test stages (M2 / M3)** when their prerequisites are satisfied. Use a fresh/private browser session when requested.
 6. Open **Export / report** to inspect the current result or download `result.json` and the self-contained `report.html`.
