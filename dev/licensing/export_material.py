@@ -49,7 +49,7 @@ def attribution(path, payload):
         'scope': registry['original_content']['scope'],
         'original_content': registry['original_content'],
         'modifications': 'A notice wrapper has been added for redistribution. The original payload is preserved; this exported file is not itself a signed approval artifact.',
-        'review_status': 'Notice membership is derived from explicit references, not a legal clearance. Unmarked quotations, adaptations and code examples still require material review.',
+        'review_status': 'Notice membership is derived from explicit references. Per-source publication classifications apply to the audited uses; they do not grant new rights in upstream files.',
         'sources': [sources[k] for k in sorted(ids) if k in sources],
         'unresolved_sources': [{'id': k, 'reference': index['sources'][k]} for k in sorted(ids) if k not in sources],
     }

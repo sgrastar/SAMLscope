@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
-  "scope": "Retained notices from adopted specification documents. This does not assign a license to SAMLscope materials or represent complete attribution clearance.",
-  "extraction": "OASIS PDF notice-page text including page furniture, and Kantara HTML copyright/license paragraphs with the original license URL. Permission terms are not rewritten. IETF TXT copyright sections retain page furniture; W3C copyright paragraphs are whitespace-normalized with their linked document-use URL. Supplemental historical terms remain explicitly pending.",
+  "scope": "Source notices and actual-use classifications. GREEN reference entries do not grant a license in upstream files; dependency resources are assessed separately. G1 interpretation approval status is independent of this license review.",
+  "extraction": "OASIS PDF notice-page text including page furniture, and Kantara HTML copyright/license paragraphs with the original license URL. Permission terms are not rewritten. IETF TXT copyright sections retain page furniture; W3C copyright paragraphs are whitespace-normalized with their linked document-use URL. Historical notice extracts are retained as evidence. Actual-use review distinguishes source references from reproduced document content.",
   "sources": [
     {
       "id": "kantara-fedinterop-impl",
@@ -18,11 +18,30 @@
       "catalog_correction_pending": false,
       "raw_source_sha256": "6cbc97a652651d6a5cff26a41c51195b8b914ed59dc63ed1d6ce254e88edd13d",
       "notice_location": "Copyright Notice and License sections",
-      "notice_text_sha256": "0989e43d20c4546f83e437d71d6ce44d4c53350dcd9e9796c9063f6e11f513f7",
-      "notice_text": "SAML v2.0 Implementation Profile for Federation Interoperability ©2017 Internet2 and/or the respective contributors, used under license.  All rights reserved.\n\nThis work is licensed under the Creative Commons Attribution-ShareAlike 3.0 United States License.\nhttps://creativecommons.org/licenses/by-sa/3.0/us/\n",
+      "notice_text_sha256": "a11cf99bc4101872fd02a53d617fc64c576b64d40362a3c8d8aee596aa4e7d6b",
+      "notice_text": "SAML v2.0 Implementation Profile for Federation Interoperability ©2017 Internet2 and/or the respective contributors, used under license.  All rights reserved.\n\nThis work is licensed under the Creative Commons Attribution-ShareAlike 3.0 United States License.\nhttps://creativecommons.org/licenses/by-sa/3.0/us/\n\nContributors credited by the original document: Walter Hoehn (editor), Scott Cantor, Rainer Hörbe, Tom Scavo, Eric Goodman, Brett Bieber, Nick Roy, Barry Ribbeck, Judith E. Bush, Mike Grady.\nSAMLscope adapts and organizes the requirements; this is not an unmodified specification.\n",
       "license_url": "https://creativecommons.org/licenses/by-sa/3.0/us/",
       "notice_status": "RETAINED_SOURCE_TEXT",
-      "material_allocation_status": "PENDING_REVIEW"
+      "material_allocation_status": "QUOTATION_OR_IMPLEMENTATION_COMMENTARY",
+      "publication_status": "YELLOW",
+      "terms_review_status": "APPLICABLE_DOCUMENT_PERMISSION_CONFIRMED",
+      "usage_review": "Requirement summaries, test instructions and source-comparison explanations incorporate source expression. Retain this document-specific notice, source/title/version and modification attribution in redistributable copies.",
+      "adaptation_license": "CC-BY-SA-4.0 (CC BY-SA 3.0 US section 4(b) permits a later same-elements license; original source stays CC BY-SA 3.0 US)",
+      "contributors": [
+        "Walter Hoehn (editor)",
+        "Scott Cantor",
+        "Rainer Hörbe",
+        "Tom Scavo",
+        "Eric Goodman",
+        "Brett Bieber",
+        "Nick Roy",
+        "Barry Ribbeck",
+        "Judith E. Bush",
+        "Mike Grady"
+      ],
+      "extraction_note": "Original copyright/license notice plus the original contributor credits and a clearly identified SAMLscope modification statement.",
+      "resolved_by_implementation": true,
+      "rights_holder": "Internet2 and named contributors"
     },
     {
       "id": "IdPDisco",
@@ -42,7 +61,12 @@
       "notice_text_sha256": "c094dbec36d615645fbf64b6f528fea6165a3bc6d6f326e21e2dbfef09d623d9",
       "notice_text": "Notices\nCopyright © OASIS Open 2007. All Rights Reserved.\nAll capitalized terms in the following text have the meanings assigned to them in the OASIS Intellectual  \nProperty Rights Policy (the \"OASIS IPR Policy\"). The full Policy may be found at the OASIS website.\nThis document and translations of it may be copied and furnished to others, and derivative works that  \ncomment on or otherwise explain it or assist in its implementation may be prepared, copied, published,  \nand distributed, in whole or in part, without restriction of any kind, provided that the above copyright  \nnotice and this section are included on all such copies and derivative works. However, this document  \nitself may not be modified in any way, including by removing the copyright notice or references to OASIS,  \nexcept as needed for the purpose of developing any document or deliverable produced by an OASIS  \nTechnical Committee (in which case the rules applicable to copyrights, as set forth in the OASIS IPR  \nPolicy, must be followed) or as required to translate it into languages other than English.\nThe limited permissions granted above are perpetual and will not be revoked by OASIS or its successors  \nor assigns.\nThis document and the information contained herein is provided on an \"AS IS\" basis and OASIS  \nDISCLAIMS ALL WARRANTIES, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO ANY \nWARRANTY THAT THE USE OF THE INFORMATION HEREIN WILL NOT INFRINGE ANY \nOWNERSHIP RIGHTS OR ANY IMPLIED WARRANTIES OF MERCHANTABILITY OR FITNESS FOR A \nPARTICULAR PURPOSE.\nOASIS requests that any OASIS Party or any other party that believes it has patent claims that would  \nnecessarily be infringed by implementations of this OASIS Committee Specification or OASIS Standard,  \nto notify OASIS TC Administrator and provide an indication of its willingness to grant patent licenses to  \nsuch patent claims in a manner consistent with the IPR Mode of the OASIS Technical Committee that  \nproduced this specification.\nOASIS invites any party to contact the OASIS TC Administrator if it is aware of a claim of ownership of  \nany patent claims that would necessarily be infringed by implementations of this specification by a patent  \nholder that is not willing to provide a license to such patent claims in a manner consistent with the IPR  \nMode of the OASIS Technical Committee that produced this specification. OASIS may include such  \nclaims on its website, but disclaims any obligation to do so.\nOASIS takes no position regarding the validity or scope of any intellectual property or other rights that  \nmight be claimed to pertain to the implementation or use of the technology described in this document or  \nthe extent to which any license under such rights might or might not be available; neither does it  \nrepresent that it has made any effort to identify any such rights. Information on OASIS' procedures with  \nrespect to rights in any document or deliverable produced by an OASIS Technical Committee can be  \nfound on the OASIS website. Copies of claims of rights made available for publication and any  \nassurances of licenses to be made available, or the result of an attempt made to obtain a general license  \nor permission for the use of such proprietary rights by implementers or users of this OASIS Committee  \nSpecification or OASIS Standard, can be obtained from the OASIS TC Administrator. OASIS makes no  \nrepresentation that any information or list of intellectual property rights will at any time be complete, or  \nthat any claims in such list are, in fact, Essential Claims.\nThe name \"OASIS\" is a trademark of OASIS, the owner and developer of this specification, and should  \nbe used only to refer to the organization and its official outputs. OASIS welcomes reference to, and  \nimplementation and use of, specifications, while reserving the right to enforce its marks against  \nmisleading uses. Please see http://www.oasis-open.org/who/trademark.php for above guidance.\nSstc-saml-idp-discovery-cs-01 27 March 2008\nCopyright © OASIS Open 2007. All Rights Reserved. Page 3 of 13\n47\n48\n49\n50\n51\n52\n53\n54\n55\n56\n57\n58\n59\n60\n61\n62\n63\n64\n65\n66\n67\n68\n69\n70\n71\n72\n73\n74\n75\n76\n77\n78\n79\n80\n81\n82\n83\n84\n85\n86\n87\n88\n89\n90\n5\n6",
       "notice_status": "RETAINED_SOURCE_TEXT",
-      "material_allocation_status": "PENDING_REVIEW"
+      "material_allocation_status": "QUOTATION_OR_IMPLEMENTATION_COMMENTARY",
+      "publication_status": "YELLOW",
+      "terms_review_status": "APPLICABLE_DOCUMENT_PERMISSION_CONFIRMED",
+      "usage_review": "Requirement summaries, test instructions and source-comparison explanations incorporate source expression. Retain this document-specific notice, source/title/version and modification attribution in redistributable copies.",
+      "resolved_by_implementation": false,
+      "rights_holder": "OASIS and the document contributors"
     },
     {
       "id": "MetaAttr",
@@ -62,7 +86,12 @@
       "notice_text_sha256": "8ac6d20f69890a043905261870e4c5363a081ef2536e599d71af8ef2439bd2a2",
       "notice_text": "Notices\nCopyright © OASIS Open 2009. All Rights Reserved.\nAll capitalized terms in the following text have the meanings assigned to them in the OASIS Intellectual \nProperty Rights Policy (the \"OASIS IPR Policy\"). The full Policy may be found at the OASIS website.\nThis document and translations of it may be copied and furnished to others, and derivative works that \ncomment on or otherwise explain it or assist in its implementation may be prepared, copied, published, \nand distributed, in whole or in part, without restriction of any kind, provided that the above copyright notice \nand this section are included on all such copies and derivative works. However, this document itself may \nnot be modified in any way, including by removing the copyright notice or references to OASIS, except as \nneeded for the purpose of developing any document or deliverable produced by an OASIS Technical \nCommittee (in which case the rules applicable to copyrights, as set forth in the OASIS IPR Policy, must be \nfollowed) or as required to translate it into languages other than English.\nThe limited permissions granted above are perpetual and will not be revoked by OASIS or its successors \nor assigns.\nThis document and the information contained herein is provided on an \"AS IS\" basis and OASIS \nDISCLAIMS ALL WARRANTIES, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO ANY \nWARRANTY THAT THE USE OF THE INFORMATION HEREIN WILL NOT INFRINGE ANY \nOWNERSHIP RIGHTS OR ANY IMPLIED WARRANTIES OF MERCHANTABILITY OR FITNESS FOR A \nPARTICULAR PURPOSE.\nOASIS requests that any OASIS Party or any other party that believes it has patent claims that would \nnecessarily be infringed by implementations of this OASIS Committee Specification or OASIS Standard, \nto notify OASIS TC Administrator and provide an indication of its willingness to grant patent licenses to \nsuch patent claims in a manner consistent with the IPR Mode of the OASIS Technical Committee that \nproduced this specification.\nOASIS invites any party to contact the OASIS TC Administrator if it is aware of a claim of ownership of \nany patent claims that would necessarily be infringed by implementations of this specification by a patent \nholder that is not willing to provide a license to such patent claims in a manner consistent with the IPR \nMode of the OASIS Technical Committee that produced this specification. OASIS may include such \nclaims on its website, but disclaims any obligation to do so.\nOASIS takes no position regarding the validity or scope of any intellectual property or other rights that \nmight be claimed to pertain to the implementation or use of the technology described in this document or \nthe extent to which any license under such rights might or might not be available; neither does it \nrepresent that it has made any effort to identify any such rights. Information on OASIS' procedures with \nrespect to rights in any document or deliverable produced by an OASIS Technical Committee can be \nfound on the OASIS website. Copies of claims of rights made available for publication and any \nassurances of licenses to be made available, or the result of an attempt made to obtain a general license \nor permission for the use of such proprietary rights by implementers or users of this OASIS Committee \nSpecification or OASIS Standard, can be obtained from the OASIS TC Administrator. OASIS makes no \nrepresentation that any information or list of intellectual property rights will at any time be complete, or \nthat any claims in such list are, in fact, Essential Claims.\nThe name \"OASIS\" is a trademark of OASIS, the owner and developer of this specification, and should be \nused only to refer to the organization and its official outputs. OASIS welcomes reference to, and \nimplementation and use of, specifications, while reserving the right to enforce its marks against \nmisleading uses. Please see http://www.oasis-open.org/who/trademark.php for above guidance.\nSstc-metadata-attr-cs-01  4 August 2009\nCopyright © OASIS Open 2009. All Rights Reserved. Page 3 of 11\n44\n45\n46\n47\n48\n49\n50\n51\n52\n53\n54\n55\n56\n57\n58\n59\n60\n61\n62\n63\n64\n65\n66\n67\n68\n69\n70\n71\n72\n73\n74\n75\n76\n77\n78\n79\n80\n81\n82\n83\n84\n85\n86\n87\n5\n6",
       "notice_status": "RETAINED_SOURCE_TEXT",
-      "material_allocation_status": "PENDING_REVIEW"
+      "material_allocation_status": "QUOTATION_OR_IMPLEMENTATION_COMMENTARY",
+      "publication_status": "YELLOW",
+      "terms_review_status": "APPLICABLE_DOCUMENT_PERMISSION_CONFIRMED",
+      "usage_review": "Requirement summaries, test instructions and source-comparison explanations incorporate source expression. Retain this document-specific notice, source/title/version and modification attribution in redistributable copies.",
+      "resolved_by_implementation": false,
+      "rights_holder": "OASIS and the document contributors"
     },
     {
       "id": "MetaUi",
@@ -82,7 +111,12 @@
       "notice_text_sha256": "f87244a4f319a6dd6ff2b85d79eba62445b8fa7d414b8d6272c498b03b4c007e",
       "notice_text": "Notices\nCopyright © OASIS Open 2019. All Rights Reserved.\nAll capitalized terms in the following text have the meanings assigned to them in the OASIS Intellectual \nProperty Rights Policy (the \"OASIS IPR Policy\"). The full Policy may be found at the OASIS website.\nThis document and translations of it may be copied and furnished to others, and derivative works that \ncomment on or otherwise explain it or assist in its implementation may be prepared, copied, published, \nand distributed, in whole or in part, without restriction of any kind, provided that the above copyright notice \nand this section are included on all such copies and derivative works. However, this document itself may \nnot be modified in any way, including by removing the copyright notice or references to OASIS, except as \nneeded for the purpose of developing any document or deliverable produced by an OASIS Technical \nCommittee (in which case the rules applicable to copyrights, as set forth in the OASIS IPR Policy, must be \nfollowed) or as required to translate it into languages other than English.\nThe limited permissions granted above are perpetual and will not be revoked by OASIS or its successors \nor assigns.\nThis document and the information contained herein is provided on an \"AS IS\" basis and OASIS \nDISCLAIMS ALL WARRANTIES, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO ANY \nWARRANTY THAT THE USE OF THE INFORMATION HEREIN WILL NOT INFRINGE ANY \nOWNERSHIP RIGHTS OR ANY IMPLIED WARRANTIES OF MERCHANTABILITY OR FITNESS FOR A \nPARTICULAR PURPOSE.\nOASIS requests that any OASIS Party or any other party that believes it has patent claims that would \nnecessarily be infringed by implementations of this OASIS Committee Specification or OASIS Standard, to \nnotify OASIS TC Administrator and provide an indication of its willingness to grant patent licenses to such \npatent claims in a manner consistent with the IPR Mode of the OASIS Technical Committee that produced \nthis specification.\nOASIS invites any party to contact the OASIS TC Administrator if it is aware of a claim of ownership of any \npatent claims that would necessarily be infringed by implementations of this specification by a patent \nholder that is not willing to provide a license to such patent claims in a manner consistent with the IPR \nMode of the OASIS Technical Committee that produced this specification. OASIS may include such claims \non its website, but disclaims any obligation to do so.\nOASIS takes no position regarding the validity or scope of any intellectual property or other rights that \nmight be claimed to pertain to the implementation or use of the technology described in this document or \nthe extent to which any license under such rights might or might not be available; neither does it represent \nthat it has made any effort to identify any such rights. Information on OASIS' procedures with respect to \nrights in any document or deliverable produced by an OASIS Technical Committee can be found on the \nOASIS website. Copies of claims of rights made available for publication and any assurances of licenses \nto be made available, or the result of an attempt made to obtain a general license or permission for the \nuse of such proprietary rights by implementers or users of this OASIS Committee Specification or OASIS \nStandard, can be obtained from the OASIS TC Administrator. OASIS makes no representation that any \ninformation or list of intellectual property rights will at any time be complete, or that any claims in such list \nare, in fact, Essential Claims.\nThe name \"OASIS\" is a trademark of OASIS, the owner and developer of this specification, and should be \nused only to refer to the organization and its official outputs. OASIS welcomes reference to, and \nimplementation and use of, specifications, while reserving the right to enforce its marks against misleading \nuses. Please see https://www.oasis-open.org/policies-guidelines/trademark for above guidance.\nsstc-saml-metadata-ui-v1.0-os 24 October 2019\nStandards Track Work Product Copyright © OASIS Open 2019. All Rights Reserved. Page 3 of 18",
       "notice_status": "RETAINED_SOURCE_TEXT",
-      "material_allocation_status": "PENDING_REVIEW"
+      "material_allocation_status": "QUOTATION_OR_IMPLEMENTATION_COMMENTARY",
+      "publication_status": "YELLOW",
+      "terms_review_status": "APPLICABLE_DOCUMENT_PERMISSION_CONFIRMED",
+      "usage_review": "Requirement summaries, test instructions and source-comparison explanations incorporate source expression. Retain this document-specific notice, source/title/version and modification attribution in redistributable copies.",
+      "resolved_by_implementation": false,
+      "rights_holder": "OASIS and the document contributors"
     },
     {
       "id": "SAML2ASLO",
@@ -102,7 +136,12 @@
       "notice_text_sha256": "679c053d0da366ec3047fb4c325197f971fe57a56fb372277316aa9e0693bd28",
       "notice_text": "Notices\nCopyright © OASIS Open 2012. All Rights Reserved.\nAll capitalized terms in the following text have the meanings assigned to them in the OASIS Intellectual \nProperty Rights Policy (the \"OASIS IPR Policy\"). The full Policy may be found at the OASIS website.\nThis document and translations of it may be copied and furnished to others, and derivative works that \ncomment on or otherwise explain it or assist in its implementation may be prepared, copied, published, \nand distributed, in whole or in part, without restriction of any kind, provided that the above copyright notice \nand this section are included on all such copies and derivative works. However, this document itself may \nnot be modified in any way, including by removing the copyright notice or references to OASIS, except as \nneeded for the purpose of developing any document or deliverable produced by an OASIS Technical \nCommittee (in which case the rules applicable to copyrights, as set forth in the OASIS IPR Policy, must \nbe followed) or as required to translate it into languages other than English.\nThe limited permissions granted above are perpetual and will not be revoked by OASIS or its successors \nor assigns.\nThis document and the information contained herein is provided on an \"AS IS\" basis and OASIS \nDISCLAIMS ALL WARRANTIES, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO ANY \nWARRANTY THAT THE USE OF THE INFORMATION HEREIN WILL NOT INFRINGE ANY \nOWNERSHIP RIGHTS OR ANY IMPLIED WARRANTIES OF MERCHANTABILITY OR FITNESS FOR A \nPARTICULAR PURPOSE.\nOASIS requests that any OASIS Party or any other party that believes it has patent claims that would \nnecessarily be infringed by implementations of this OASIS Committee Specification or OASIS Standard, \nto notify OASIS TC Administrator and provide an indication of its willingness to grant patent licenses to \nsuch patent claims in a manner consistent with the IPR Mode of the OASIS Technical Committee that \nproduced this specification.\nOASIS invites any party to contact the OASIS TC Administrator if it is aware of a claim of ownership of \nany patent claims that would necessarily be infringed by implementations of this specification by a patent \nholder that is not willing to provide a license to such patent claims in a manner consistent with the IPR \nMode of the OASIS Technical Committee that produced this specification. OASIS may include such \nclaims on its website, but disclaims any obligation to do so.\nOASIS takes no position regarding the validity or scope of any intellectual property or other rights that \nmight be claimed to pertain to the implementation or use of the technology described in this document or \nthe extent to which any license under such rights might or might not be available; neither does it represent \nthat it has made any effort to identify any such rights. Information on OASIS' procedures with respect to \nrights in any document or deliverable produced by an OASIS Technical Committee can be found on the \nOASIS website. Copies of claims of rights made available for publication and any assurances of licenses \nto be made available, or the result of an attempt made to obtain a general license or permission for the \nuse of such proprietary rights by implementers or users of this OASIS Committee Specification or OASIS \nStandard, can be obtained from the OASIS TC Administrator. OASIS makes no representation that any \ninformation or list of intellectual property rights will at any time be complete, or that any claims in such list \nare, in fact, Essential Claims.\nThe name \"OASIS\" is a trademark of OASIS, the owner and developer of this specification, and should be \nused only to refer to the organization and its official outputs. OASIS welcomes reference to, and \nimplementation and use of, specifications, while reserving the right to enforce its marks against \nmisleading uses. Please see http://www.oasis-open.org/policies-guidelines/trademark for above guidance.\nsaml-async-slo-v1.0-cs01 22 November 2012\nStandards Track Work Product Copyright © OASIS Open 2012. All Rights Reserved. Page 3 of 10",
       "notice_status": "RETAINED_SOURCE_TEXT",
-      "material_allocation_status": "PENDING_REVIEW"
+      "material_allocation_status": "QUOTATION_OR_IMPLEMENTATION_COMMENTARY",
+      "publication_status": "YELLOW",
+      "terms_review_status": "APPLICABLE_DOCUMENT_PERMISSION_CONFIRMED",
+      "usage_review": "Requirement summaries, test instructions and source-comparison explanations incorporate source expression. Retain this document-specific notice, source/title/version and modification attribution in redistributable copies.",
+      "resolved_by_implementation": false,
+      "rights_holder": "OASIS and the document contributors"
     },
     {
       "id": "SAML2Bind",
@@ -122,7 +161,12 @@
       "notice_text_sha256": "6c959fab4f072de6480436a50d741ad8fe7c8b3c29c20abc7ae44b535b54b055",
       "notice_text": "Appendix C. Notices\nOASIS takes no position regarding the validity or scope of any intellectual property or other rights that\nmight be claimed to pertain to the implementation or use of the technology described in this document or\nthe extent to which any license under such rights might or might not be available; neither does it represent\nthat it has made any effort to identify any such rights. Information on OASIS's procedures with respect to\nrights in OASIS specifications can be found at the OASIS website. Copies of claims of rights made\navailable for publication and any assurances of licenses to be made available, or the result of an attempt\nmade to obtain a general license or permission for the use of such proprietary rights by implementors or\nusers of this specification, can be obtained from the OASIS Executive Director.\nOASIS invites any interested party to bring to its attention any copyrights, patents or patent applications, or\nother proprietary rights which may cover technology that may be required to implement this specification.\nPlease address the information to the OASIS Executive Director.\nCopyright  © OASIS Open 2005. All Rights Reserved.\nThis document and translations of it may be copied and furnished to others, and derivative works that\ncomment on or otherwise explain it or assist in its implementation may be prepared, copied, published and\ndistributed, in whole or in part, without restriction of any kind, provided that the above copyright notice and\nthis paragraph are included on all such copies and derivative works. However, this document itself may\nnot be modified in any way, such as by removing the copyright notice or references to OASIS, except as\nneeded for the purpose of developing OASIS specifications, in which case the procedures for copyrights\ndefined in the OASIS Intellectual Property Rights document must be followed, or as required to translate it\ninto languages other than English.\nThe limited permissions granted above are perpetual and will not be revoked by OASIS or its successors\nor assigns.\nThis document and the information contained herein is provided on an “AS IS” basis and OASIS\nDISCLAIMS ALL WARRANTIES, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO ANY\nWARRANTY THAT THE USE OF THE INFORMATION HEREIN WILL NOT INFRINGE ANY RIGHTS OR\nANY IMPLIED WARRANTIES OF MERCHANTABILITY OR FITNESS FOR A PARTICULAR PURPOSE.\nsaml-bindings-2.0-os 15 March 2005\nCopyright © OASIS Open 2005. All Rights Reserved. Page 46 of 46\n1725\n1726\n1727\n1728\n1729\n1730\n1731\n1732\n1733\n1734\n1735\n1736\n1737\n1738\n1739\n1740\n1741\n1742\n1743\n1744\n1745\n1746\n1747\n1748\n1749\n1750\n1751",
       "notice_status": "RETAINED_SOURCE_TEXT",
-      "material_allocation_status": "PENDING_REVIEW"
+      "material_allocation_status": "QUOTATION_OR_IMPLEMENTATION_COMMENTARY",
+      "publication_status": "YELLOW",
+      "terms_review_status": "APPLICABLE_DOCUMENT_PERMISSION_CONFIRMED",
+      "usage_review": "Requirement summaries, test instructions and source-comparison explanations incorporate source expression. Retain this document-specific notice, source/title/version and modification attribution in redistributable copies.",
+      "resolved_by_implementation": false,
+      "rights_holder": "OASIS and the document contributors"
     },
     {
       "id": "SAML2Core",
@@ -142,7 +186,12 @@
       "notice_text_sha256": "c230ac4b8e676c2c2053346b73cb376dd40d5b7f76aada9921bba55162fc9d56",
       "notice_text": "Appendix B. Notices\nOASIS takes no position regarding the validity or scope of any intellectual property or other rights that\nmight be claimed to pertain to the implementation or use of the technology described in this document or\nthe extent to which any license under such rights might or might not be available; neither does it represent\nthat it has made any effort to identify any such rights. Information on OASIS's procedures with respect to\nrights in OASIS specifications can be found at the OASIS website. Copies of claims of rights made\navailable for publication and any assurances of licenses to be made available, or the result of an attempt\nmade to obtain a general license or permission for the use of such proprietary rights by implementors or\nusers of this specification, can be obtained from the OASIS Executive Director.\nOASIS invites any interested party to bring to its attention any copyrights, patents or patent applications, or\nother proprietary rights which may cover technology that may be required to implement this specification.\nPlease address the information to the OASIS Executive Director.\nCopyright © OASIS Open 2005. All Rights Reserved.\nThis document and translations of it may be copied and furnished to others, and derivative works that\ncomment on or otherwise explain it or assist in its implementation may be prepared, copied, published and\ndistributed, in whole or in part, without restriction of any kind, provided that the above copyright notice and\nthis paragraph are included on all such copies and derivative works. However, this document itself may\nnot be modified in any way, such as by removing the copyright notice or references to OASIS, except as\nneeded for the purpose of developing OASIS specifications, in which case the procedures for copyrights\ndefined in the OASIS Intellectual Property Rights document must be followed, or as required to translate it\ninto languages other than English.\nThe limited permissions granted above are perpetual and will not be revoked by OASIS or its successors\nor assigns.\nThis document and the information contained herein is provided on an “AS IS” basis and OASIS\nDISCLAIMS ALL WARRANTIES, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO ANY\nWARRANTY THAT THE USE OF THE INFORMATION HEREIN WILL NOT INFRINGE ANY RIGHTS OR\nANY IMPLIED WARRANTIES OF MERCHANTABILITY OR FITNESS FOR A PARTICULAR PURPOSE.\nsaml-core-2.0-os 15 March 2005\nCopyright © OASIS Open 2005. All Rights Reserved. Page 86 of 86\n3569\n3570\n3571\n3572\n3573\n3574\n3575\n3576\n3577\n3578\n3579\n3580\n3581\n3582\n3583\n3584\n3585\n3586\n3587\n3588\n3589\n3590\n3591\n3592\n3593\n3594\n3595\n171\n172",
       "notice_status": "RETAINED_SOURCE_TEXT",
-      "material_allocation_status": "PENDING_REVIEW"
+      "material_allocation_status": "QUOTATION_OR_IMPLEMENTATION_COMMENTARY",
+      "publication_status": "YELLOW",
+      "terms_review_status": "APPLICABLE_DOCUMENT_PERMISSION_CONFIRMED",
+      "usage_review": "Requirement summaries, test instructions and source-comparison explanations incorporate source expression. Retain this document-specific notice, source/title/version and modification attribution in redistributable copies.",
+      "resolved_by_implementation": false,
+      "rights_holder": "OASIS and the document contributors"
     },
     {
       "id": "SAML2ECP",
@@ -162,7 +211,12 @@
       "notice_text_sha256": "0b656585a813d3594c435e26487f43ff49156a85ce5fa8e7d0170db17e642afb",
       "notice_text": "Notices\nCopyright © OASIS Open 2013. All Rights Reserved.\nAll capitalized terms in the following text have the meanings assigned to them in the OASIS Intellectual \nProperty Rights Policy (the \"OASIS IPR Policy\"). The full Policy may be found at the OASIS website.\nThis document and translations of it may be copied and furnished to others, and derivative works that \ncomment on or otherwise explain it or assist in its implementation may be prepared, copied, published, \nand distributed, in whole or in part, without restriction of any kind, provided that the above copyright notice \nand this section are included on all such copies and derivative works. However, this document itself may \nnot be modified in any way, including by removing the copyright notice or references to OASIS, except as \nneeded for the purpose of developing any document or deliverable produced by an OASIS Technical \nCommittee (in which case the rules applicable to copyrights, as set forth in the OASIS IPR Policy, must \nbe followed) or as required to translate it into languages other than English.\nThe limited permissions granted above are perpetual and will not be revoked by OASIS or its successors \nor assigns.\nThis document and the information contained herein is provided on an \"AS IS\" basis and OASIS \nDISCLAIMS ALL WARRANTIES, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO ANY \nWARRANTY THAT THE USE OF THE INFORMATION HEREIN WILL NOT INFRINGE ANY \nOWNERSHIP RIGHTS OR ANY IMPLIED WARRANTIES OF MERCHANTABILITY OR FITNESS FOR A \nPARTICULAR PURPOSE.\nOASIS requests that any OASIS Party or any other party that believes it has patent claims that would \nnecessarily be infringed by implementations of this OASIS Committee Specification or OASIS Standard, \nto notify OASIS TC Administrator and provide an indication of its willingness to grant patent licenses to \nsuch patent claims in a manner consistent with the IPR Mode of the OASIS Technical Committee that \nproduced this specification.\nOASIS invites any party to contact the OASIS TC Administrator if it is aware of a claim of ownership of \nany patent claims that would necessarily be infringed by implementations of this specification by a patent \nholder that is not willing to provide a license to such patent claims in a manner consistent with the IPR \nMode of the OASIS Technical Committee that produced this specification. OASIS may include such \nclaims on its website, but disclaims any obligation to do so.\nOASIS takes no position regarding the validity or scope of any intellectual property or other rights that \nmight be claimed to pertain to the implementation or use of the technology described in this document or \nthe extent to which any license under such rights might or might not be available; neither does it represent \nthat it has made any effort to identify any such rights. Information on OASIS' procedures with respect to \nrights in any document or deliverable produced by an OASIS Technical Committee can be found on the \nOASIS website. Copies of claims of rights made available for publication and any assurances of licenses \nto be made available, or the result of an attempt made to obtain a general license or permission for the \nuse of such proprietary rights by implementers or users of this OASIS Committee Specification or OASIS \nStandard, can be obtained from the OASIS TC Administrator. OASIS makes no representation that any \ninformation or list of intellectual property rights will at any time be complete, or that any claims in such list \nare, in fact, Essential Claims.\nThe name \"OASIS\" is a trademark of OASIS, the owner and developer of this specification, and should be \nused only to refer to the organization and its official outputs. OASIS welcomes reference to, and \nimplementation and use of, specifications, while reserving the right to enforce its marks against \nmisleading uses. Please see http://www.oasis-open.org/policies-guidelines/trademark for above guidance.\nsaml-ecp-v2.0-cs01 26 August 2013\nStandards Track Work Product Copyright © OASIS Open 2013. All Rights Reserved. Page 3 of 24",
       "notice_status": "RETAINED_SOURCE_TEXT",
-      "material_allocation_status": "PENDING_REVIEW"
+      "material_allocation_status": "QUOTATION_OR_IMPLEMENTATION_COMMENTARY",
+      "publication_status": "YELLOW",
+      "terms_review_status": "APPLICABLE_DOCUMENT_PERMISSION_CONFIRMED",
+      "usage_review": "Requirement summaries, test instructions and source-comparison explanations incorporate source expression. Retain this document-specific notice, source/title/version and modification attribution in redistributable copies.",
+      "resolved_by_implementation": false,
+      "rights_holder": "OASIS and the document contributors"
     },
     {
       "id": "SAML2Errata",
@@ -182,7 +236,12 @@
       "notice_text_sha256": "cb2a6bc2e2a3c28442b5a3bacb0678765bba8c52832983a8f65a7fd9a084b128",
       "notice_text": "Notices\nCopyright © OASIS Open 2012. All Rights Reserved.\nAll capitalized terms in the following text have the meanings assigned to them in the OASIS Intellectual \nProperty Rights Policy (the \"OASIS IPR Policy\"). The full Policy may be found at the OASIS website.\nThis document and translations of it may be copied and furnished to others, and derivative works that \ncomment on or otherwise explain it or assist in its implementation may be prepared, copied, published, \nand distributed, in whole or in part, without restriction of any kind, provided that the above copyright notice \nand this section are included on all such copies and derivative works. However, this document itself may \nnot be modified in any way, including by removing the copyright notice or references to OASIS, except as \nneeded for the purpose of developing any document or deliverable produced by an OASIS Technical \nCommittee (in which case the rules applicable to copyrights, as set forth in the OASIS IPR Policy, must \nbe followed) or as required to translate it into languages other than English.\nThe limited permissions granted above are perpetual and will not be revoked by OASIS or its successors \nor assigns.\nThis document and the information contained herein is provided on an \"AS IS\" basis and OASIS \nDISCLAIMS ALL WARRANTIES, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO ANY \nWARRANTY THAT THE USE OF THE INFORMATION HEREIN WILL NOT INFRINGE ANY \nOWNERSHIP RIGHTS OR ANY IMPLIED WARRANTIES OF MERCHANTABILITY OR FITNESS FOR A \nPARTICULAR PURPOSE.\nOASIS requests that any OASIS Party or any other party that believes it has patent claims that would \nnecessarily be infringed by implementations of this OASIS Committee Specification or OASIS Standard, \nto notify OASIS TC Administrator and provide an indication of its willingness to grant patent licenses to \nsuch patent claims in a manner consistent with the IPR Mode of the OASIS Technical Committee that \nproduced this specification.\nOASIS invites any party to contact the OASIS TC Administrator if it is aware of a claim of ownership of \nany patent claims that would necessarily be infringed by implementations of this specification by a patent \nholder that is not willing to provide a license to such patent claims in a manner consistent with the IPR \nMode of the OASIS Technical Committee that produced this specification. OASIS may include such \nclaims on its website, but disclaims any obligation to do so.\nOASIS takes no position regarding the validity or scope of any intellectual property or other rights that \nmight be claimed to pertain to the implementation or use of the technology described in this document or \nthe extent to which any license under such rights might or might not be available; neither does it represent \nthat it has made any effort to identify any such rights. Information on OASIS' procedures with respect to \nrights in any document or deliverable produced by an OASIS Technical Committee can be found on the \nOASIS website. Copies of claims of rights made available for publication and any assurances of licenses \nto be made available, or the result of an attempt made to obtain a general license or permission for the \nuse of such proprietary rights by implementers or users of this OASIS Committee Specification or OASIS \nStandard, can be obtained from the OASIS TC Administrator. OASIS makes no representation that any \ninformation or list of intellectual property rights will at any time be complete, or that any claims in such list \nare, in fact, Essential Claims.\nThe name \"OASIS\" is a trademark of OASIS, the owner and developer of this specification, and should be \nused only to refer to the organization and its official outputs. OASIS welcomes reference to, and \nimplementation and use of, specifications, while reserving the right to enforce its marks against \nmisleading uses. Please see http://www.oasis-open.org/who/trademark.php for above guidance.\nsaml-v2.0-errata05-os 01 May 2012\nStandards Track Work Product Copyright © OASIS Open 2012. All Rights Reserved. Page 3 of 44",
       "notice_status": "RETAINED_SOURCE_TEXT",
-      "material_allocation_status": "PENDING_REVIEW"
+      "material_allocation_status": "QUOTATION_OR_IMPLEMENTATION_COMMENTARY",
+      "publication_status": "YELLOW",
+      "terms_review_status": "APPLICABLE_DOCUMENT_PERMISSION_CONFIRMED",
+      "usage_review": "Requirement summaries, test instructions and source-comparison explanations incorporate source expression. Retain this document-specific notice, source/title/version and modification attribution in redistributable copies.",
+      "resolved_by_implementation": false,
+      "rights_holder": "OASIS and the document contributors"
     },
     {
       "id": "SAML2MDIOP",
@@ -202,7 +261,12 @@
       "notice_text_sha256": "4f201d95ba81a6880039f45f13bb92142e319e91cf76ca76ff8e4ad3daf716b2",
       "notice_text": "Notices\nCopyright © OASIS Open 2019. All Rights Reserved.\nAll capitalized terms in the following text have the meanings assigned to them in the OASIS Intellectual \nProperty Rights Policy (the \"OASIS IPR Policy\"). The full Policy may be found at the OASIS website.\nThis document and translations of it may be copied and furnished to others, and derivative works that \ncomment on or otherwise explain it or assist in its implementation may be prepared, copied, published, \nand distributed, in whole or in part, without restriction of any kind, provided that the above copyright notice \nand this section are included on all such copies and derivative works. However, this document itself may \nnot be modified in any way, including by removing the copyright notice or references to OASIS, except as \nneeded for the purpose of developing any document or deliverable produced by an OASIS Technical \nCommittee (in which case the rules applicable to copyrights, as set forth in the OASIS IPR Policy, must \nbe followed) or as required to translate it into languages other than English.\nThe limited permissions granted above are perpetual and will not be revoked by OASIS or its successors \nor assigns.\nThis document and the information contained herein is provided on an \"AS IS\" basis and OASIS \nDISCLAIMS ALL WARRANTIES, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO ANY \nWARRANTY THAT THE USE OF THE INFORMATION HEREIN WILL NOT INFRINGE ANY \nOWNERSHIP RIGHTS OR ANY IMPLIED WARRANTIES OF MERCHANTABILITY OR FITNESS FOR A \nPARTICULAR PURPOSE.\nOASIS requests that any OASIS Party or any other party that believes it has patent claims that would \nnecessarily be infringed by implementations of this OASIS Committee Specification or OASIS Standard, \nto notify OASIS TC Administrator and provide an indication of its willingness to grant patent licenses to \nsuch patent claims in a manner consistent with the IPR Mode of the OASIS Technical Committee that \nproduced this specification.\nOASIS invites any party to contact the OASIS TC Administrator if it is aware of a claim of ownership of \nany patent claims that would necessarily be infringed by implementations of this specification by a patent \nholder that is not willing to provide a license to such patent claims in a manner consistent with the IPR \nMode of the OASIS Technical Committee that produced this specification. OASIS may include such \nclaims on its website, but disclaims any obligation to do so.\nOASIS takes no position regarding the validity or scope of any intellectual property or other rights that \nmight be claimed to pertain to the implementation or use of the technology described in this document or \nthe extent to which any license under such rights might or might not be available; neither does it represent \nthat it has made any effort to identify any such rights. Information on OASIS' procedures with respect to \nrights in any document or deliverable produced by an OASIS Technical Committee can be found on the \nOASIS website. Copies of claims of rights made available for publication and any assurances of licenses \nto be made available, or the result of an attempt made to obtain a general license or permission for the \nuse of such proprietary rights by implementers or users of this OASIS Committee Specification or OASIS \nStandard, can be obtained from the OASIS TC Administrator. OASIS makes no representation that any \ninformation or list of intellectual property rights will at any time be complete, or that any claims in such list \nare, in fact, Essential Claims.\nThe name \"OASIS\" is a trademark of OASIS, the owner and developer of this specification, and should be \nused only to refer to the organization and its official outputs. OASIS welcomes reference to, and \nimplementation and use of, specifications, while reserving the right to enforce its marks against \nmisleading uses. Please see https://www.oasis-open.org/policies-guidelines/trademark for above \nguidance.\nsstc-metadata-iop-os 24 October 2019\nStandards Track Work Product Copyright © OASIS Open 2019. All Rights Reserved. Page 3 of 14",
       "notice_status": "RETAINED_SOURCE_TEXT",
-      "material_allocation_status": "PENDING_REVIEW"
+      "material_allocation_status": "QUOTATION_OR_IMPLEMENTATION_COMMENTARY",
+      "publication_status": "YELLOW",
+      "terms_review_status": "APPLICABLE_DOCUMENT_PERMISSION_CONFIRMED",
+      "usage_review": "Requirement summaries, test instructions and source-comparison explanations incorporate source expression. Retain this document-specific notice, source/title/version and modification attribution in redistributable copies.",
+      "resolved_by_implementation": false,
+      "rights_holder": "OASIS and the document contributors"
     },
     {
       "id": "SAML2Meta",
@@ -222,7 +286,12 @@
       "notice_text_sha256": "2877f3d3b6b0146a19c86e77a63ef44ebd324bc98ce62492d5577115bb478bb5",
       "notice_text": "Appendix C. Notices\nOASIS takes no position regarding the validity or scope of any intellectual property or other rights that\nmight be claimed to pertain to the implementation or use of the technology described in this document or\nthe extent to which any license under such rights might or might not be available; neither does it represent\nthat it has made any effort to identify any such rights. Information on OASIS's procedures with respect to\nrights in OASIS specifications can be found at the OASIS website. Copies of claims of rights made\navailable for publication and any assurances of licenses to be made available, or the result of an attempt\nmade to obtain a general license or permission for the use of such proprietary rights by implementors or\nusers of this specification, can be obtained from the OASIS Executive Director.\nOASIS invites any interested party to bring to its attention any copyrights, patents or patent applications, or\nother proprietary rights which may cover technology that may be required to implement this specification.\nPlease address the information to the OASIS Executive Director.\nCopyright © OASIS Open 2005. All Rights Reserved.\nThis document and translations of it may be copied and furnished to others, and derivative works that\ncomment on or otherwise explain it or assist in its implementation may be prepared, copied, published and\ndistributed, in whole or in part, without restriction of any kind, provided that the above copyright notice and\nthis paragraph are included on all such copies and derivative works. However, this document itself may\nnot be modified in any way, such as by removing the copyright notice or references to OASIS, except as\nneeded for the purpose of developing OASIS specifications, in which case the procedures for copyrights\ndefined in the OASIS Intellectual Property Rights document must be followed, or as required to translate it\ninto languages other than English.\nThe limited permissions granted above are perpetual and will not be revoked by OASIS or its successors\nor assigns.\nThis document and the information contained herein is provided on an “AS IS” basis and OASIS\nDISCLAIMS ALL WARRANTIES, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO ANY\nWARRANTY THAT THE USE OF THE INFORMATION HEREIN WILL NOT INFRINGE ANY RIGHTS OR\nANY IMPLIED WARRANTIES OF MERCHANTABILITY OR FITNESS FOR A PARTICULAR PURPOSE.\nsaml-metadata-2.0-os 15 March 2005\nCopyright © OASIS Open 2005 All Rights Reserved. Page 43 of 43\n1712\n1713\n1714\n1715\n1716\n1717\n1718\n1719\n1720\n1721\n1722\n1723\n1724\n1725\n1726\n1727\n1728\n1729\n1730\n1731\n1732\n1733\n1734\n1735\n1736\n1737\n1738",
       "notice_status": "RETAINED_SOURCE_TEXT",
-      "material_allocation_status": "PENDING_REVIEW"
+      "material_allocation_status": "QUOTATION_OR_IMPLEMENTATION_COMMENTARY",
+      "publication_status": "YELLOW",
+      "terms_review_status": "APPLICABLE_DOCUMENT_PERMISSION_CONFIRMED",
+      "usage_review": "Requirement summaries, test instructions and source-comparison explanations incorporate source expression. Retain this document-specific notice, source/title/version and modification attribution in redistributable copies.",
+      "resolved_by_implementation": false,
+      "rights_holder": "OASIS and the document contributors"
     },
     {
       "id": "SAML2MetaAlgSup",
@@ -242,7 +311,12 @@
       "notice_text_sha256": "e299218412e4dd2d121d239b3d6a9842422f79699515c9d9bdffd4afc357e12b",
       "notice_text": "Notices\nCopyright © OASIS Open 2011. All Rights Reserved.\nAll capitalized terms in the following text have the meanings assigned to them in the OASIS Intellectual  \nProperty Rights Policy (the \"OASIS IPR Policy\"). The full Policy may be found at the OASIS website.\nThis document and translations of it may be copied and furnished to others, and derivative works that  \ncomment on or otherwise explain it or assist in its implementation may be prepared, copied, published,  \nand distributed, in whole or in part, without restriction of any kind, provided that the above copyright  \nnotice and this section are included on all such copies and derivative works. However, this document  \nitself may not be modified in any way, including by removing the copyright notice or references to  \nOASIS, except as needed for the purpose of developing any document or deliverable produced by an  \nOASIS Technical Committee (in which case the rules applicable to copyrights, as set forth in the OASIS  \nIPR Policy, must be followed) or as required to translate it into languages other than English. \nThe limited permissions granted above are perpetual and will not be revoked by OASIS or its successors  \nor assigns. \nThis document and the information contained herein is provided on an \"AS IS\" basis and OASIS  \nDISCLAIMS ALL WARRANTIES, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO ANY  \nWARRANTY THAT THE USE OF THE INFORMATION HEREIN WILL NOT INFRINGE ANY  \nOWNERSHIP RIGHTS OR ANY IMPLIED WARRANTIES OF MERCHANTABILITY OR FITNESS FOR  \nA PARTICULAR PURPOSE. \nOASIS requests that any OASIS Party or any other party that believes it has patent claims that would  \nnecessarily be infringed by implementations of this OASIS Committee Specification or OASIS Standard,  \nto notify OASIS TC Administrator and provide an indication of its willingness to grant patent licenses to  \nsuch patent claims in a manner consistent with the IPR Mode of the OASIS Technical Committee that  \nproduced this specification.\nOASIS invites any party to contact the OASIS TC Administrator if it is aware of a claim of ownership of  \nany patent claims that would necessarily be infringed by implementations of this specification by a patent  \nholder that is not willing to provide a license to such patent claims in a manner consistent with the IPR  \nMode of the OASIS Technical Committee that produced this specification. OASIS may include such  \nclaims on its website, but disclaims any obligation to do so.\nOASIS takes no position regarding the validity or scope of any intellectual property or other rights that  \nmight be claimed to pertain to the implementation or use of the technology described in this document or  \nthe extent to which any license under such rights might or might not be available; neither does it  \nrepresent that it has made any effort to identify any such rights. Information on OASIS' procedures with  \nrespect to rights in any document or deliverable produced by an OASIS Technical Committee can be  \nfound on the OASIS website. Copies of claims of rights made available for publication and any  \nassurances of licenses to be made available, or the result of an attempt made to obtain a general license  \nor permission for the use of such proprietary rights by implementers or users of this OASIS Committee  \nSpecification or OASIS Standard, can be obtained from the OASIS TC Administrator. OASIS makes no  \nrepresentation that any information or list of intellectual property rights will at any time be complete, or  \nthat any claims in such list are, in fact, Essential Claims. \nThe names \"OASIS\" and “SAML” are trademarks of OASIS, the owner and developer of this \nspecification, and should be used only to refer to the organization and its official outputs. OASIS  \nwelcomes reference to, and implementation and use of, specifications, while reserving the right to  \nenforce its marks against misleading uses. Please see http://www.oasis-open.org/who/trademark.php for \nabove guidance.\nsstc-saml-metadata-algsupport-v1.0-cs01 21 February 2011\nCopyright © OASIS Open 2011. All Rights Reserved.           Standards Track Work Product Page 3 of 13",
       "notice_status": "RETAINED_SOURCE_TEXT",
-      "material_allocation_status": "PENDING_REVIEW"
+      "material_allocation_status": "QUOTATION_OR_IMPLEMENTATION_COMMENTARY",
+      "publication_status": "YELLOW",
+      "terms_review_status": "APPLICABLE_DOCUMENT_PERMISSION_CONFIRMED",
+      "usage_review": "Requirement summaries, test instructions and source-comparison explanations incorporate source expression. Retain this document-specific notice, source/title/version and modification attribution in redistributable copies.",
+      "resolved_by_implementation": false,
+      "rights_holder": "OASIS and the document contributors"
     },
     {
       "id": "SAML2Prof",
@@ -262,7 +336,12 @@
       "notice_text_sha256": "e81957d493498e87e435e63a30cdd6d0fecf1261385eadcad8553824c7cef0ad",
       "notice_text": "Appendix B. Notices\nOASIS takes no position regarding the validity or scope of any intellectual property or other rights that\nmight be claimed to pertain to the implementation or use of the technology described in this document or\nthe extent to which any license under such rights might or might not be available; neither does it represent\nthat it has made any effort to identify any such rights. Information on OASIS's procedures with respect to\nrights in OASIS specifications can be found at the OASIS website. Copies of claims of rights made\navailable for publication and any assurances of licenses to be made available, or the result of an attempt\nmade to obtain a general license or permission for the use of such proprietary rights by implementors or\nusers of this specification, can be obtained from the OASIS Executive Director.\nOASIS invites any interested party to bring to its attention any copyrights, patents or patent applications, or\nother proprietary rights which may cover technology that may be required to implement this specification.\nPlease address the information to the OASIS Executive Director.\nCopyright © OASIS Open 2005. All Rights Reserved.\nThis document and translations of it may be copied and furnished to others, and derivative works that\ncomment on or otherwise explain it or assist in its implementation may be prepared, copied, published and\ndistributed, in whole or in part, without restriction of any kind, provided that the above copyright notice and\nthis paragraph are included on all such copies and derivative works. However, this document itself may\nnot be modified in any way, such as by removing the copyright notice or references to OASIS, except as\nneeded for the purpose of developing OASIS specifications, in which case the procedures for copyrights\ndefined in the OASIS Intellectual Property Rights document must be followed, or as required to translate it\ninto languages other than English.\nThe limited permissions granted above are perpetual and will not be revoked by OASIS or its successors\nor assigns.\nThis document and the information contained herein is provided on an “AS IS” basis and OASIS\nDISCLAIMS ALL WARRANTIES, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO ANY\nWARRANTY THAT THE USE OF THE INFORMATION HEREIN WILL NOT INFRINGE ANY RIGHTS OR\nANY IMPLIED WARRANTIES OF MERCHANTABILITY OR FITNESS FOR A PARTICULAR PURPOSE.\nsaml-profiles-2.0-os 15 March 2005\nCopyright © OASIS Open 2005. All Rights Reserved. Page 66 of 66\n2291\n2292\n2293\n2294\n2295\n2296\n2297\n2298\n2299\n2300\n2301\n2302\n2303\n2304\n2305\n2306\n2307\n2308\n2309\n2310\n2311\n2312\n2313\n2314\n2315\n2316\n2317",
       "notice_status": "RETAINED_SOURCE_TEXT",
-      "material_allocation_status": "PENDING_REVIEW"
+      "material_allocation_status": "QUOTATION_OR_IMPLEMENTATION_COMMENTARY",
+      "publication_status": "YELLOW",
+      "terms_review_status": "APPLICABLE_DOCUMENT_PERMISSION_CONFIRMED",
+      "usage_review": "Requirement summaries, test instructions and source-comparison explanations incorporate source expression. Retain this document-specific notice, source/title/version and modification attribution in redistributable copies.",
+      "resolved_by_implementation": false,
+      "rights_holder": "OASIS and the document contributors"
     },
     {
       "id": "MDQ",
@@ -282,8 +361,11 @@
       "notice_text": "Copyright Notice\n\n   Copyright (c) 2017 IETF Trust and the persons identified as the\n   document authors.  All rights reserved.\n\n   This document is subject to BCP 78 and the IETF Trust's Legal\n   Provisions Relating to IETF Documents\n   (http://trustee.ietf.org/license-info) in effect on the date of\n   publication of this document.  Please review these documents\n   carefully, as they describe your rights and restrictions with respect\n   to this document.\n\n",
       "notice_text_sha256": "786f67ed0ff74010c43910998af6c97fdb87bac7d75192437f462eccc53781c2",
       "notice_status": "RETAINED_SOURCE_TEXT",
-      "material_allocation_status": "PENDING_REVIEW",
-      "terms_review_status": "PENDING_PUBLICATION_DATE_IETF_TRUST_TERMS"
+      "material_allocation_status": "REFERENCE_OR_INDEPENDENT_IMPLEMENTATION",
+      "terms_review_status": "NO_DOCUMENT_REPRODUCTION_PERMISSION_NEEDED",
+      "publication_status": "GREEN",
+      "usage_review": "Catalog IDs, technical facts, section selectors and independently written behavior descriptions; no adopted document body is distributed. Embedded library schemas are assessed separately in the dependency inventory.",
+      "resolved_by_implementation": false
     },
     {
       "id": "SAML-MDQ",
@@ -303,8 +385,11 @@
       "notice_text": "Copyright Notice\n\n   Copyright (c) 2017 IETF Trust and the persons identified as the\n   document authors.  All rights reserved.\n\n   This document is subject to BCP 78 and the IETF Trust's Legal\n   Provisions Relating to IETF Documents\n   (http://trustee.ietf.org/license-info) in effect on the date of\n   publication of this document.  Please review these documents\n   carefully, as they describe your rights and restrictions with respect\n   to this document.\n\n",
       "notice_text_sha256": "786f67ed0ff74010c43910998af6c97fdb87bac7d75192437f462eccc53781c2",
       "notice_status": "RETAINED_SOURCE_TEXT",
-      "material_allocation_status": "PENDING_REVIEW",
-      "terms_review_status": "PENDING_PUBLICATION_DATE_IETF_TRUST_TERMS"
+      "material_allocation_status": "REFERENCE_OR_INDEPENDENT_IMPLEMENTATION",
+      "terms_review_status": "NO_DOCUMENT_REPRODUCTION_PERMISSION_NEEDED",
+      "publication_status": "GREEN",
+      "usage_review": "Catalog IDs, technical facts, section selectors and independently written behavior descriptions; no adopted document body is distributed. Embedded library schemas are assessed separately in the dependency inventory.",
+      "resolved_by_implementation": false
     },
     {
       "id": "SAML-EC",
@@ -324,8 +409,11 @@
       "notice_text": "Copyright Notice\n\n   Copyright (c) 2017 IETF Trust and the persons identified as the\n   document authors.  All rights reserved.\n\n   This document is subject to BCP 78 and the IETF Trust's Legal\n   Provisions Relating to IETF Documents\n\n\n\nCantor & Josefsson       Expires April 27, 2018                 [Page 1]\n\f\nInternet-Draft     SAML ECP SASL & GSS-API Mechanisms       October 2017\n\n\n   (https://trustee.ietf.org/license-info) in effect on the date of\n   publication of this document.  Please review these documents\n   carefully, as they describe your rights and restrictions with respect\n   to this document.  Code Components extracted from this document must\n   include Simplified BSD License text as described in Section 4.e of\n   the Trust Legal Provisions and are provided without warranty as\n   described in the Simplified BSD License.\n\n",
       "notice_text_sha256": "5eca85658d48b337fa8687be0a95a901e7b8d41f203b42efc97d42ce5bfa03bc",
       "notice_status": "RETAINED_SOURCE_TEXT",
-      "material_allocation_status": "PENDING_REVIEW",
-      "terms_review_status": "PENDING_PUBLICATION_DATE_IETF_TRUST_TERMS"
+      "material_allocation_status": "REFERENCE_OR_INDEPENDENT_IMPLEMENTATION",
+      "terms_review_status": "NO_DOCUMENT_REPRODUCTION_PERMISSION_NEEDED",
+      "publication_status": "GREEN",
+      "usage_review": "Catalog IDs, technical facts, section selectors and independently written behavior descriptions; no adopted document body is distributed. Embedded library schemas are assessed separately in the dependency inventory.",
+      "resolved_by_implementation": false
     },
     {
       "id": "RFC2617",
@@ -345,8 +433,11 @@
       "notice_text": "Full Copyright Statement\n\n   Copyright (C) The Internet Society (1999).  All Rights Reserved.\n\n   This document and translations of it may be copied and furnished to\n   others, and derivative works that comment on or otherwise explain it\n   or assist in its implementation may be prepared, copied, published\n   and distributed, in whole or in part, without restriction of any\n   kind, provided that the above copyright notice and this paragraph are\n   included on all such copies and derivative works.  However, this\n   document itself may not be modified in any way, such as by removing\n   the copyright notice or references to the Internet Society or other\n   Internet organizations, except as needed for the purpose of\n   developing Internet standards in which case the procedures for\n   copyrights defined in the Internet Standards process must be\n   followed, or as required to translate it into languages other than\n   English.\n\n   The limited permissions granted above are perpetual and will not be\n   revoked by the Internet Society or its successors or assigns.\n\n   This document and the information contained herein is provided on an\n   \"AS IS\" basis and THE INTERNET SOCIETY AND THE INTERNET ENGINEERING\n   TASK FORCE DISCLAIMS ALL WARRANTIES, EXPRESS OR IMPLIED, INCLUDING\n   BUT NOT LIMITED TO ANY WARRANTY THAT THE USE OF THE INFORMATION\n   HEREIN WILL NOT INFRINGE ANY RIGHTS OR ANY IMPLIED WARRANTIES OF\n   MERCHANTABILITY OR FITNESS FOR A PARTICULAR PURPOSE.\n\nAcknowledgement\n\n   Funding for the RFC Editor function is currently provided by the\n   Internet Society.\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\nFranks, et al.              Standards Track                    [Page 34]\n\f\n",
       "notice_text_sha256": "aabd577c262b1085c513b833101b0f8f25f300d51f1ae2c0343c9fb2c9c3b17d",
       "notice_status": "RETAINED_SOURCE_TEXT",
-      "material_allocation_status": "PENDING_REVIEW",
-      "terms_review_status": "RETAINED_DOCUMENT_PERMISSION"
+      "material_allocation_status": "REFERENCE_OR_INDEPENDENT_IMPLEMENTATION",
+      "terms_review_status": "NO_DOCUMENT_REPRODUCTION_PERMISSION_NEEDED",
+      "publication_status": "GREEN",
+      "usage_review": "Catalog IDs, technical facts, section selectors and independently written behavior descriptions; no adopted document body is distributed. Embedded library schemas are assessed separately in the dependency inventory.",
+      "resolved_by_implementation": false
     },
     {
       "id": "RFC4051",
@@ -366,8 +457,11 @@
       "notice_text": "Full Copyright Statement\n\n   Copyright (C) The Internet Society (2005).\n\n   This document is subject to the rights, licenses and restrictions\n   contained in BCP 78, and except as set forth therein, the authors\n   retain all their rights.\n\n   This document and the information contained herein are provided on an\n   \"AS IS\" basis and THE CONTRIBUTOR, THE ORGANIZATION HE/SHE REPRESENTS\n   OR IS SPONSORED BY (IF ANY), THE INTERNET SOCIETY AND THE INTERNET\n   ENGINEERING TASK FORCE DISCLAIM ALL WARRANTIES, EXPRESS OR IMPLIED,\n   INCLUDING BUT NOT LIMITED TO ANY WARRANTY THAT THE USE OF THE\n   INFORMATION HEREIN WILL NOT INFRINGE ANY RIGHTS OR ANY IMPLIED\n   WARRANTIES OF MERCHANTABILITY OR FITNESS FOR A PARTICULAR PURPOSE.\n\nIntellectual Property\n\n   The IETF takes no position regarding the validity or scope of any\n   Intellectual Property Rights or other rights that might be claimed to\n   pertain to the implementation or use of the technology described in\n   this document or the extent to which any license under such rights\n   might or might not be available; nor does it represent that it has\n   made any independent effort to identify any such rights.  Information\n   on the procedures with respect to rights in RFC documents can be\n   found in BCP 78 and BCP 79.\n\n   Copies of IPR disclosures made to the IETF Secretariat and any\n   assurances of licenses to be made available, or the result of an\n   attempt made to obtain a general license or permission for the use of\n   such proprietary rights by implementers or users of this\n   specification can be obtained from the IETF on-line IPR repository at\n   http://www.ietf.org/ipr.\n\n   The IETF invites any interested party to bring to its attention any\n   copyrights, patents or patent applications, or other proprietary\n   rights that may cover technology that may be required to implement\n   this standard.  Please address the information to the IETF at ietf-\n   ipr@ietf.org.\n\nAcknowledgement\n\n   Funding for the RFC Editor function is currently provided by the\n   Internet Society.\n\n\n\n\n\n\n\nEastlake 3rd                Standards Track                    [Page 17]\n\f\n",
       "notice_text_sha256": "43336508ba2387f19768530d30e7fe88f374b5ddc3c31d5fdfeb0a17b0de5742",
       "notice_status": "RETAINED_SOURCE_TEXT",
-      "material_allocation_status": "PENDING_REVIEW",
-      "terms_review_status": "PENDING_HISTORICAL_BCP78_REVIEW"
+      "material_allocation_status": "REFERENCE_OR_INDEPENDENT_IMPLEMENTATION",
+      "terms_review_status": "NO_DOCUMENT_REPRODUCTION_PERMISSION_NEEDED",
+      "publication_status": "GREEN",
+      "usage_review": "Catalog IDs, technical facts, section selectors and independently written behavior descriptions; no adopted document body is distributed. Embedded library schemas are assessed separately in the dependency inventory.",
+      "resolved_by_implementation": false
     },
     {
       "id": "RFC7457",
@@ -387,8 +481,11 @@
       "notice_text": "Copyright Notice\n\n   Copyright (c) 2015 IETF Trust and the persons identified as the\n   document authors.  All rights reserved.\n\n   This document is subject to BCP 78 and the IETF Trust's Legal\n   Provisions Relating to IETF Documents\n   (http://trustee.ietf.org/license-info) in effect on the date of\n   publication of this document.  Please review these documents\n   carefully, as they describe your rights and restrictions with respect\n   to this document.  Code Components extracted from this document must\n   include Simplified BSD License text as described in Section 4.e of\n   the Trust Legal Provisions and are provided without warranty as\n   described in the Simplified BSD License.\n\n",
       "notice_text_sha256": "6999576ad028fdda182b907d2ac40f29ad45c3de0e9591caa3511f4ea7f13526",
       "notice_status": "RETAINED_SOURCE_TEXT",
-      "material_allocation_status": "PENDING_REVIEW",
-      "terms_review_status": "PENDING_PUBLICATION_DATE_IETF_TRUST_TERMS"
+      "material_allocation_status": "REFERENCE_OR_INDEPENDENT_IMPLEMENTATION",
+      "terms_review_status": "NO_DOCUMENT_REPRODUCTION_PERMISSION_NEEDED",
+      "publication_status": "GREEN",
+      "usage_review": "Catalog IDs, technical facts, section selectors and independently written behavior descriptions; no adopted document body is distributed. Embedded library schemas are assessed separately in the dependency inventory.",
+      "resolved_by_implementation": false
     },
     {
       "id": "XMLSig",
@@ -408,8 +505,11 @@
       "notice_text": "Copyright © 2013 The IETF Trust & W3C® (MIT, ERCIM, Keio, Beihang), All Rights Reserved. W3C liability, trademark and document use rules apply.\nDocument use rules linked by the adopted document: https://www.w3.org/Consortium/Legal/copyright-documents\n",
       "notice_text_sha256": "26e7df4b0485f7789c71ccc0ff9a9f0d66bca8ae6a73e44afe5baed0049fd74d",
       "notice_status": "RETAINED_SOURCE_TEXT",
-      "material_allocation_status": "PENDING_REVIEW",
-      "terms_review_status": "PENDING_HISTORICAL_DOCUMENT_USE_REVIEW"
+      "material_allocation_status": "REFERENCE_OR_INDEPENDENT_IMPLEMENTATION",
+      "terms_review_status": "NO_DOCUMENT_REPRODUCTION_PERMISSION_NEEDED",
+      "publication_status": "GREEN",
+      "usage_review": "Catalog IDs, technical facts, section selectors and independently written behavior descriptions; no adopted document body is distributed. Embedded library schemas are assessed separately in the dependency inventory.",
+      "resolved_by_implementation": false
     },
     {
       "id": "XMLEnc",
@@ -429,16 +529,122 @@
       "notice_text": "Copyright © 2013 W3C® (MIT, ERCIM, Keio, Beihang), All Rights Reserved. W3C liability, trademark and document use rules apply.\nDocument use rules linked by the adopted document: https://www.w3.org/Consortium/Legal/copyright-documents\n",
       "notice_text_sha256": "892f4a259781bfb5a05d886d4d7bab5aee419995d54e907511680f1de467a4ca",
       "notice_status": "RETAINED_SOURCE_TEXT",
-      "material_allocation_status": "PENDING_REVIEW",
-      "terms_review_status": "PENDING_HISTORICAL_DOCUMENT_USE_REVIEW"
+      "material_allocation_status": "REFERENCE_OR_INDEPENDENT_IMPLEMENTATION",
+      "terms_review_status": "NO_DOCUMENT_REPRODUCTION_PERMISSION_NEEDED",
+      "publication_status": "GREEN",
+      "usage_review": "Catalog IDs, technical facts, section selectors and independently written behavior descriptions; no adopted document body is distributed. Embedded library schemas are assessed separately in the dependency inventory.",
+      "resolved_by_implementation": false
+    },
+    {
+      "id": "BetterCrypto",
+      "title": "Applied Crypto Hardening",
+      "source_url": "https://bettercrypto.org",
+      "edition": "undated (living document)",
+      "date": "undated",
+      "catalog_entry": {
+        "title": "Applied Crypto Hardening",
+        "publisher": "BetterCrypto.org",
+        "version": "undated (living document)",
+        "date": "None",
+        "url": "https://bettercrypto.org",
+        "role": "referenced-unversioned",
+        "note": "Unversioned living document; cited only as background and never as verdict evidence."
+      },
+      "raw_source_sha256": "",
+      "notice_location": "Catalog reference only; no standalone source file is redistributed.",
+      "notice_text": "",
+      "notice_text_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "notice_status": "REFERENCE_ONLY",
+      "publication_status": "GREEN",
+      "material_allocation_status": "REFERENCE_OR_INDEPENDENT_IMPLEMENTATION",
+      "terms_review_status": "NO_DOCUMENT_REPRODUCTION_PERMISSION_NEEDED",
+      "usage_review": "Bibliographic URL only; no BetterCrypto prose or file is included in the executable catalog or published outputs.",
+      "catalog_correction_pending": false,
+      "resolved_by_implementation": false
+    },
+    {
+      "id": "SAML2-xsd",
+      "title": "SAML V2.0 Assertion Schema",
+      "source_url": "http://docs.oasis-open.org/security/saml/v2.0/saml-schema-assertion-2.0.xsd",
+      "edition": "2.0",
+      "date": "2005-03-15",
+      "catalog_entry": {
+        "title": "SAML V2.0 Assertion Schema",
+        "publisher": "OASIS",
+        "version": "2.0",
+        "date": "2005-03-15",
+        "url": "http://docs.oasis-open.org/security/saml/v2.0/saml-schema-assertion-2.0.xsd",
+        "role": "referenced",
+        "source_digest": "sha256:006eb7553843cb7baa9b08da2a9d444346c0e982fb9d9293babe08ede680924b"
+      },
+      "raw_source_sha256": "006eb7553843cb7baa9b08da2a9d444346c0e982fb9d9293babe08ede680924b",
+      "notice_location": "Catalog reference only; no standalone source file is redistributed.",
+      "notice_text": "",
+      "notice_text_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "notice_status": "REFERENCE_ONLY",
+      "publication_status": "GREEN",
+      "material_allocation_status": "REFERENCE_OR_INDEPENDENT_IMPLEMENTATION",
+      "terms_review_status": "NO_DOCUMENT_REPRODUCTION_PERMISSION_NEEDED",
+      "usage_review": "Identifiers, schema element/attribute names and official source references only in catalogs. Schema copies within unmodified dependency JARs are separate inventory items.",
+      "catalog_correction_pending": false,
+      "resolved_by_implementation": false
+    },
+    {
+      "id": "SAML2MD-xsd",
+      "title": "SAML V2.0 Metadata Schema",
+      "source_url": "http://docs.oasis-open.org/security/saml/v2.0/saml-schema-metadata-2.0.xsd",
+      "edition": "2.0",
+      "date": "2005-03-15",
+      "catalog_entry": {
+        "title": "SAML V2.0 Metadata Schema",
+        "publisher": "OASIS",
+        "version": "2.0",
+        "date": "2005-03-15",
+        "url": "http://docs.oasis-open.org/security/saml/v2.0/saml-schema-metadata-2.0.xsd",
+        "role": "referenced",
+        "source_digest": "sha256:204bc7991055dbb889307abbd2ff58022753897dd7064a4d1ca13eb737d2617a"
+      },
+      "raw_source_sha256": "204bc7991055dbb889307abbd2ff58022753897dd7064a4d1ca13eb737d2617a",
+      "notice_location": "Catalog reference only; no standalone source file is redistributed.",
+      "notice_text": "",
+      "notice_text_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "notice_status": "REFERENCE_ONLY",
+      "publication_status": "GREEN",
+      "material_allocation_status": "REFERENCE_OR_INDEPENDENT_IMPLEMENTATION",
+      "terms_review_status": "NO_DOCUMENT_REPRODUCTION_PERMISSION_NEEDED",
+      "usage_review": "Identifiers, schema element/attribute names and official source references only in catalogs. Schema copies within unmodified dependency JARs are separate inventory items.",
+      "catalog_correction_pending": false,
+      "resolved_by_implementation": false
+    },
+    {
+      "id": "SAML2P-xsd",
+      "title": "SAML V2.0 Protocol Schema",
+      "source_url": "http://docs.oasis-open.org/security/saml/v2.0/saml-schema-protocol-2.0.xsd",
+      "edition": "2.0",
+      "date": "2005-03-15",
+      "catalog_entry": {
+        "title": "SAML V2.0 Protocol Schema",
+        "publisher": "OASIS",
+        "version": "2.0",
+        "date": "2005-03-15",
+        "url": "http://docs.oasis-open.org/security/saml/v2.0/saml-schema-protocol-2.0.xsd",
+        "role": "referenced",
+        "source_digest": "sha256:554250583cd5eacc6ce5f094f6ff50fc2547972c436dc96e2e7eb41abf2c817e"
+      },
+      "raw_source_sha256": "554250583cd5eacc6ce5f094f6ff50fc2547972c436dc96e2e7eb41abf2c817e",
+      "notice_location": "Catalog reference only; no standalone source file is redistributed.",
+      "notice_text": "",
+      "notice_text_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "notice_status": "REFERENCE_ONLY",
+      "publication_status": "GREEN",
+      "material_allocation_status": "REFERENCE_OR_INDEPENDENT_IMPLEMENTATION",
+      "terms_review_status": "NO_DOCUMENT_REPRODUCTION_PERMISSION_NEEDED",
+      "usage_review": "Identifiers, schema element/attribute names and official source references only in catalogs. Schema copies within unmodified dependency JARs are separate inventory items.",
+      "catalog_correction_pending": false,
+      "resolved_by_implementation": false
     }
   ],
-  "unresolved_sources": [
-    "BetterCrypto",
-    "SAML2-xsd",
-    "SAML2MD-xsd",
-    "SAML2P-xsd"
-  ],
+  "unresolved_sources": [],
   "original_content": {
     "license": "CC-BY-SA-4.0",
     "attribution": "SAMLscope contributors; https://github.com/sgrastar/SAMLscope; identify changes",

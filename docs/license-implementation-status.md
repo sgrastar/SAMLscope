@@ -1,3 +1,5 @@
+> Superseded license-material decisions: see [the current publication audit](../LICENSES/publication-audit.md). This file retains the previous implementation and gate-validation record.
+
 # License implementation status
 
 Checked locally on 2026-09-11. Implementation and G2 renewal are complete for the

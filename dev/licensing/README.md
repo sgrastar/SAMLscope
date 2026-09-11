@@ -29,7 +29,7 @@ ZIP/TAR contents and nested JAR resources against the current source files.
 conformance evidence. `ResultDocumentAssemblerTest` owns the canonical golden
 result; update it only using its `SAMLSCOPE_UPDATE_RESULT_GOLDEN=true` mechanism.
 
-See `LICENSES/material-review.md` for unresolved permissions and output paths.
+See `LICENSES/publication-audit.md` for current actual-use decisions and output boundaries.
 
 Standalone redistributable copies (the approved source files are not changed):
 
@@ -59,3 +59,27 @@ The distribution verifier compares dependency inventory content against actual
 JARs, and website row source IDs against the shared index. Gradle inventory enforcement now runs before application resource packaging and
 checks. The owner authorized this G2-protected build change and its reapproval. `java_dependencies.py --inputs-json FILE` supports a
 JSON array of resolved local JAR paths for regeneration without a built archive.
+
+Publication audit regeneration:
+
+```sh
+.venv/bin/python dev/licensing/publication_audit.py
+.venv/bin/python dev/licensing/publication_audit.py --check
+```
+
+`LICENSES/java-permissions.json` is reviewed primary-source evidence, not a
+generated blanket license assignment. Each entry pins the binary hash, official
+POM/parent URL and hash, declared grants, required notices and (where applicable)
+the verified exact source archive URL/hash. To update a dependency, inspect those
+primary artifacts and embedded resource exceptions before updating its evidence.
+Do not carry a decision forward using only a filename or file extension. The
+inventory generator fails if an existing review's binary digest changes.
+`publication-other-materials.json` records the other actual-use decisions and
+owner-provided favicon provenance. The publication register is generated from
+these decisions, the source registry and the actual dependency inventory.
+
+Historical W3C terms were retrieved from the exact 1998/2002 URLs named by the
+embedded schemas and converted from HTML to plain text; permission paragraphs,
+conditions and disclaimers are retained in the supplemental notice entries.
+Only affected packages receive these notices. EPL exact-source availability is
+provided alongside the license text in both the package inventory and the UI.

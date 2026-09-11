@@ -1,6 +1,8 @@
 import io
+import json
 import tempfile
 import unittest
+from unittest.mock import patch
 import zipfile
 from pathlib import Path
 
@@ -8,6 +10,19 @@ from java_dependencies import inventory
 
 
 class DependencyInventoryTest(unittest.TestCase):
+    def test_changed_dependency_cannot_reuse_permission_review(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / 'LICENSES').mkdir()
+            (root / 'LICENSES/java-permissions.json').write_text(json.dumps({
+                'packages': {'example-1.jar': {'jar_sha256': 'old-reviewed-digest'}}}))
+            jar = root / 'example-1.jar'
+            with zipfile.ZipFile(jar, 'w') as archive:
+                archive.writestr('schema/example.xsd', '<schema/>')
+            with patch('java_dependencies.ROOT', root):
+                with self.assertRaisesRegex(ValueError, 'Stale reviewed permission evidence'):
+                    inventory(jar_paths=[jar])
+
     def test_actual_notice_declarations_and_schema_are_kept_separate(self):
         jar_bytes = io.BytesIO()
         with zipfile.ZipFile(jar_bytes, 'w') as jar:

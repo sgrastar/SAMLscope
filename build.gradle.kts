@@ -26,6 +26,7 @@ subprojects {
             componentFilter { it is ModuleComponentIdentifier }
         }.files
         val inventoryFile = rootProject.file("web/public/licenses/java-dependencies.json")
+        val permissionFile = rootProject.file("LICENSES/java-permissions.json")
         tasks.register("writeJavaLicenseInputs") {
             description = "Writes resolved external JAR paths for license inventory regeneration."
             doLast {
@@ -38,9 +39,29 @@ subprojects {
             description = "Rejects stale dependency notices before packaging the application."
             inputs.files(externalJars)
             inputs.file(inventoryFile)
+            inputs.file(permissionFile)
             doLast {
                 val inventory = JsonSlurper().parse(inventoryFile) as Map<*, *>
                 val packages = inventory["packages"] as List<*>
+                val reviewed = (JsonSlurper().parse(permissionFile) as Map<*, *>)["packages"] as Map<*, *>
+                packages.forEach {
+                    val entry = it as Map<*, *>
+                    val permission = entry["permission"] as? Map<*, *>
+                    check(permission != null && permission == reviewed[entry["file"]] &&
+                        permission["jar_sha256"] == entry["sha256"] &&
+                        permission["publication_status"] in listOf("GREEN", "YELLOW")) {
+                        "Java dependency permission review is missing or stale: ${entry["file"]}"
+                    }
+                    val resourceReviews = permission["resource_reviews"] as? Map<*, *>
+                    (entry["embedded_schemas"] as List<*>).forEach { value ->
+                        val schema = value as Map<*, *>
+                        val review = resourceReviews?.get(schema["file"]) as? Map<*, *>
+                        check(review != null && review["sha256"] == schema["sha256"] &&
+                            schema["review"] == review && schema["review_status"] == "REVIEWED_UPSTREAM_DISTRIBUTION_CONTEXT") {
+                            "Embedded resource review is missing or stale: ${entry["file"]}!${schema["file"]}"
+                        }
+                    }
+                }
                 val recorded = packages.associate {
                     val entry = it as Map<*, *>
                     entry["file"].toString() to entry["sha256"].toString()

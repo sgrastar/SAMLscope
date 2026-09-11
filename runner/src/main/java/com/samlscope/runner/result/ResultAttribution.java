@@ -41,7 +41,7 @@ final class ResultAttribution {
         result.put("original_content_attribution", "SAMLscope contributors — explanatory content; https://github.com/sgrastar/SAMLscope");
         result.put("original_content_license_text", contentLicense);
         result.put("modifications", "SAMLscope organizes specification references and adds test explanations and assessment results; this is not an unmodified specification or publisher certification.");
-        result.put("review_status", "Source notices are retained; material allocation and any supplemental terms marked pending remain under review.");
+        result.put("review_status", "Source notices and modification credits are retained. Reference-only entries do not grant rights in upstream files; dependency resources have separate package notices.");
         var retained = result.putArray("sources");
         var pending = result.putArray("unresolved_sources");
         for (var id : ids) {

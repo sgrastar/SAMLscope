@@ -1,3 +1,5 @@
+> Historical research snapshot. The current publication decision is in [publication-audit.md](publication-audit.md). Unresolved standalone-schema permission below does not describe the catalog's reference-only use or authorize schema extraction from dependencies.
+
 # Historical permission investigation
 
 Observed on 2026-09-11. This record distinguishes retrieved evidence from a
@@ -29,6 +31,7 @@ The historical TLP 4 location was
 https://trustee.ietf.org/license-info/IETF-Trust-License-Policy-20091228.htm;
 retrieval failure must not be treated as permission to use a newer policy.
 
-The registry continues to mark supplemental permission and material allocation
-as pending. These investigation references are not a substitute for distributing
+At the time of that earlier investigation, the registry marked supplemental
+permission and material allocation as pending. The current actual-use decisions
+in publication-audit.md supersede that status. These investigation references are not a substitute for distributing
 all text and notices required by the applicable permission once determined.

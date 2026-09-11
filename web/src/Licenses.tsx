@@ -33,11 +33,12 @@ export function Licenses() {
       <p><a href="/licenses/browser-dependencies.json" download>Download browser dependency notices</a></p>
     </section>
     <section><h2>Java runtime dependencies</h2>
-      <p>The application distribution also includes Java libraries. Their retained notices and embedded-schema review status are available in a separate inventory.</p>
+      <p>The application distribution also includes Java libraries. Their original package and resource notices are preserved. Source code for EPL components is available under EPL-2.0 through the version-specific links in the inventory.</p>
+      <JavaNotices />
       <p><a href="/licenses/java-dependencies.json" download>Download Java dependency notices and resource inventory</a></p>
     </section>
     <section><h2>Specification content</h2>
-      <p>Requirement summaries, test instructions and profile mappings use external specifications. Their original terms apply to incorporated material. Source notices are included in browser and standalone outputs; material-level attribution and sources marked as pending remain under review.</p>
+      <p>Requirement summaries, test instructions and profile mappings use external specifications. Their original terms apply to incorporated material. Source notices and modification credits are retained in browser and standalone outputs. Specification references are distinguished from copied material.</p>
       <p><a href="https://kantarainitiative.github.io/SAMLprofiles/fedinterop.html">Kantara SAML Implementation Profile</a> · <a href="https://docs.oasis-open.org/security/saml/v2.0/">OASIS SAML 2.0 specifications</a></p>
       <p>SAMLscope-owned original explanations and definitions are licensed under CC BY-SA 4.0; incorporated source material retains its original terms. Attribute original contributions to SAMLscope contributors and identify your changes.</p>
       <details><summary>CC BY-SA 4.0 — original content only</summary><pre className="license-text">{contentLicense}</pre></details>
@@ -104,9 +105,38 @@ function SpecificationNotices() {
       {source.license_url && <p><a href={source.license_url}>Original license terms</a></p>}
       {source.catalog_correction_pending && <p>The stored document’s edition or date differs from the catalog entry. The catalog correction is pending review.</p>}
       {source.terms_review_status?.startsWith("PENDING") && <p>Supplemental historical permission terms remain under review.</p>}
-      <pre className="license-text">{source.notice_text}</pre>
+      {source.notice_text && <pre className="license-text">{source.notice_text}</pre>}
     </details>)}
     {pending.length > 0 && <section><h3>Source notices still under review</h3><ul>{pending.filter(id => !context || !!selectionError || selected?.includes(id)).map(id => <li key={id} id={`source-${id}`}>{id} — notice review pending</li>)}</ul></section>}
     <p><a href="/licenses/source-notices.json" download>Download retained specification notices and source references</a></p>
   </>
+}
+
+function JavaNotices() {
+  const [packages, setPackages] = useState<Array<{file: string; notices?: Array<{file: string; text: string}>; permission?: {
+    supplemental_notices: Array<{license: string; text: string}>;
+    source_availability?: {url: string; statement: string};
+  }}>>()
+  const [error, setError] = useState('')
+  async function load(open: boolean) {
+    if (!open || packages) return
+    try {
+      const response = await fetch('/licenses/java-dependencies.json')
+      if (!response.ok) throw new Error('Java notices could not be loaded.')
+      const data = await response.json()
+      if (!Array.isArray(data.packages)) throw new Error('Java notices are unavailable.')
+      setError('')
+      setPackages(data.packages)
+    } catch (cause) { setError((cause as Error).message) }
+  }
+  return <details onToggle={event => void load(event.currentTarget.open)}>
+    <summary>Java copyright notices, license texts and source availability</summary>
+    {error && <p role="alert">{error}</p>}
+    {packages?.map(pkg => <details key={pkg.file}>
+      <summary>{pkg.file}</summary>
+      {pkg.notices?.map(notice => <pre className="license-text" key={notice.file}>{notice.text}</pre>)}
+      {pkg.permission?.source_availability && <p>{pkg.permission.source_availability.statement} <a href={pkg.permission.source_availability.url}>Upstream source code</a></p>}
+      {pkg.permission?.supplemental_notices.map((notice, index) => <pre className="license-text" key={index}>{notice.text}</pre>)}
+    </details>)}
+  </details>
 }

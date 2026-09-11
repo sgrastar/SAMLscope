@@ -66,7 +66,25 @@ def inventory_payloads(payloads):
                              'embedded_schemas': schemas})
     if not packages:
         raise ValueError('No third-party runtime packages found')
-    return {'scope': 'Third-party Java runtime packages in the SAMLscope application distribution. Package notices do not relicense embedded third-party schemas or complete resource-level permission review.',
+    permission_path = ROOT / 'LICENSES/java-permissions.json'
+    permissions = json.loads(permission_path.read_text())['packages'] if permission_path.exists() else {}
+    for package in packages:
+        permission = permissions.get(package['file'])
+        if permission is None:
+            continue
+        if permission['jar_sha256'] != package['sha256']:
+            raise ValueError('Stale reviewed permission evidence: ' + package['file'])
+        package['permission'] = permission
+        package['notice_status'] = 'UPSTREAM_PERMISSION_AND_NOTICES_RETAINED'
+        for schema in package['embedded_schemas']:
+            review = permission.get('resource_reviews', {}).get(schema['file'])
+            if review is None:
+                continue
+            if review['sha256'] != schema['sha256']:
+                raise ValueError('Stale resource review: ' + package['file'] + '!' + schema['file'])
+            schema['review_status'] = 'REVIEWED_UPSTREAM_DISTRIBUTION_CONTEXT'
+            schema['review'] = review
+    return {'scope': 'Third-party Java runtime packages in the SAMLscope application distribution. Package notices do not relicense embedded third-party schemas. Permission records apply to unchanged upstream package distribution only.',
             'generator': 'dev/licensing/java_dependencies.py', 'packages': packages}
 
 
@@ -88,7 +106,7 @@ def main():
         output.parent.mkdir(parents=True, exist_ok=True)
         output.write_text(text)
     print('Runtime packages:',len(result['packages']))
-    print('Packages without embedded notice or declaration evidence:',[p['file'] for p in result['packages'] if not p['notices'] and not p['declarations']])
+    print('Packages without embedded notice or declaration evidence:',[p['file'] for p in result['packages'] if not p['notices'] and not p['declarations'] and not p.get('permission')])
     print('Embedded schemas:',sum(len(p['embedded_schemas']) for p in result['packages']))
 
 

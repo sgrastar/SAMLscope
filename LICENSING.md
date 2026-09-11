@@ -17,8 +17,12 @@ source's applicable terms and required attribution. In particular, Internet2
 and the respective contributors remain credited for the Kantara Implementation
 Profile under its CC BY-SA 3.0 US notice. OASIS document permissions are not
 Creative Commons licenses. Historical document-specific terms are not replaced
-by current publisher policies. Material allocation and supplemental permissions
-listed as pending remain unresolved; see `LICENSES/material-review.md`.
+by current publisher policies. The publication audit distinguishes references from incorporated expression;
+see `LICENSES/material-review.md` and `LICENSES/publication-audit.md`.
+Kantara-derived adaptations use CC BY-SA 4.0 as allowed by section 4(b) of
+CC BY-SA 3.0 US, while original quoted material retains its original license.
+Internet2 and all named contributors, the source title, URL and modification
+credit are retained in the source registry.
 
 Measured values, verdicts, identifiers and target declarations are not assigned a
 Creative Commons license merely because they appear in an export. Public result

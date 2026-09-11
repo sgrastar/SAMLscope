@@ -30,3 +30,15 @@ is determined by the signed G2 verifier, not by this scope document.
 
 No public push or deployment is part of this approval. Unresolved source permissions
 and material allocation remain recorded in `LICENSES/material-review.md`.
+
+## Publication review renewal
+
+The owner subsequently requested review followed by publication and explicitly
+approved additional reapproval and signed commits. The new protected delta in
+`build.gradle.kts` adds canonical permission-record and per-resource evidence
+checks to the existing JAR hash inventory guard. This prevents missing, RED or
+stale package decisions and missing schema reviews from being packaged.
+See `docs/license-publication-review.md` for findings and scope. This renewal
+preserves case digests, source interpretation and the existing signer identity.
+The approval commit must follow its target with only `tests/approvals/g2.yaml`
+changed, as enforced by the externally pinned verifier.
