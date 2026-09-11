@@ -10,6 +10,7 @@
     "coverage", "requirements", "unresolved", "not_observable", "conformance_statement"
   ],
   "properties": {
+    "attribution": { "type": "object", "required": ["scope", "sources", "unresolved_sources", "original_content_license_text"], "properties": { "scope": {"type": "string"}, "sources": {"type": "array", "items": {"type": "object"}}, "unresolved_sources": {"type": "array", "items": {"type": "object"}}, "original_content_license_text": {"type": "string", "minLength": 1} } },
     "schema_version": { "const": "1" },
     "run": { "$ref": "#/$defs/run" },
     "suite": { "$ref": "#/$defs/suite" },
@@ -21,6 +22,7 @@
     "advisories": { "type": "array", "items": { "$ref": "#/$defs/advisory" } },
     "suite_incidents": { "type": "array", "items": { "$ref": "#/$defs/suiteIncident" } },
     "summary": { "$ref": "#/$defs/summary" },
+    "evidence_summary": { "type": "object", "additionalProperties": false, "properties": { "externally_verified": {"type": "integer", "minimum": 0}, "self_attested": {"type": "integer", "minimum": 0}, "not_verified": {"type": "integer", "minimum": 0}, "externally_verified_ratio": {"type": "number", "minimum": 0, "maximum": 1}, "self_attested_ratio": {"type": "number", "minimum": 0, "maximum": 1} } },
     "coverage": { "$ref": "#/$defs/coverage" },
     "requirements": { "type": "array", "items": { "$ref": "#/$defs/requirement" } },
     "unresolved": { "type": "array", "items": { "$ref": "#/$defs/unresolved" } },
@@ -115,7 +117,7 @@
       "additionalProperties": false,
       "required": ["id", "spec", "level_definition_note"],
       "properties": {
-        "id": { "enum": ["idp-core", "idp-full", "sp-core", "sp-full"] },
+        "id": { "$ref": "#/$defs/nonEmpty" },
         "spec": {
           "type": "object",
           "additionalProperties": false,
@@ -279,6 +281,7 @@
         "mode": { "enum": ["AUTOMATED", "BROWSER", "CONFIG", "ATTESTED", "NOT_OBSERVABLE"] },
         "reason_code": { "$ref": "#/$defs/nonEmpty" },
         "reason": { "$ref": "#/$defs/nonEmpty" },
+        "evidence_class": { "type": "string" },
         "attested": { "type": "boolean" },
         "evidence": { "type": "array", "items": { "$ref": "#/$defs/evidence" } },
         "definition_url": { "type": "string", "format": "uri-reference" }

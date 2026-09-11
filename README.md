@@ -125,4 +125,7 @@ See the [design index](docs/README.md), [security design](docs/08-suite-security
 
 ## License
 
-Apache License 2.0. Contributions use the Developer Certificate of Origin; no CLA is required.
+Original software and test code: Apache-2.0. SAMLscope-owned original prose and
+definition content: CC BY-SA 4.0. Third-party material retains its original terms;
+measured results are not automatically CC-licensed. See [licensing scope](LICENSING.md),
+[source review status](LICENSES/material-review.md) and [contribution terms](CONTRIBUTING.md).

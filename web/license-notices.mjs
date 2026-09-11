@@ -59,8 +59,9 @@ export function softwareLicenseText() {
     load(id) {
       if (id !== '\0samlscope-license') return null
       const license = readFileSync(new URL('../LICENSE', import.meta.url), 'utf8')
+      const content = JSON.parse(readFileSync(new URL('../LICENSES/source-notices.json', import.meta.url), 'utf8')).original_content.license_text
       const scope = readFileSync(new URL('../LICENSING.md', import.meta.url), 'utf8')
-      return `export const softwareLicense = ${JSON.stringify(license)}; export const licensingScope = ${JSON.stringify(scope)};`
+      return `export const softwareLicense = ${JSON.stringify(license)}; export const licensingScope = ${JSON.stringify(scope)}; export const contentLicense = ${JSON.stringify(content)};`
     },
   }
 }

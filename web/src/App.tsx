@@ -1,3 +1,4 @@
+import { SourceNoticeLink } from './SourceNoticeLink'
 import { FormEvent, useEffect, useMemo, useRef, useState } from 'react'
 import { AppShell } from './AppShell'
 import { api, type AuthSession, type Plan, type PlanInput, type Profile, type Run, type TargetConnection } from './api'
@@ -387,7 +388,7 @@ function PlanDetail({ plan, runs, createRun, canCreateRun, back }: {
 }) {
   return <>
     <button className="text-button back-link" onClick={back}>Back to Test Plans</button>
-    <header className="plan-detail-head"><div><p className="eyebrow">Test Plan / {profileLabel(plan.plan.profile)}</p><h1>{plan.plan.name}</h1>{profileRole(plan.plan.profile) === 'IDP' && <p>Request signing: {humanize(plan.plan.requestSigningMode ?? 'OPTIONAL')} · fixed for this Plan</p>}</div>
+    <header className="plan-detail-head"><div><p className="eyebrow">Test Plan / {profileLabel(plan.plan.profile)}</p><h1>{plan.plan.name}</h1><SourceNoticeLink kind="profile" id={plan.plan.profile} />{profileRole(plan.plan.profile) === 'IDP' && <p>Request signing: {humanize(plan.plan.requestSigningMode ?? 'OPTIONAL')} · fixed for this Plan</p>}</div>
       <span className="authorization-state"><span className="semantic-dot status-live" />Authorized target</span></header>
     <PeerRegistration plan={plan} />
     {canCreateRun && <button onClick={createRun}>Create Run and preflight</button>}

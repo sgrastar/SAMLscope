@@ -1,3 +1,4 @@
+import { SourceNoticeLink } from './SourceNoticeLink'
 import { useEffect, useMemo, useState } from 'react'
 import { AppShell } from './AppShell'
 import { api, type PublicResult } from './api'
@@ -86,7 +87,7 @@ export function ResultReport({ runId }: { runId: string }) {
         {requirements.length === 0 ? <div className="empty-state compact"><h3>No requirements match this filter</h3></div>
           : <div className="requirements">{requirements.map(requirement => <details key={requirement.id} className="requirement">
             <summary><span>{requirement.id}</span><strong className={`badge badge-${requirement.verdict.toLowerCase()}`}>{humanize(requirement.verdict)}</strong></summary>
-            <div className="requirement-body"><a href={requirement.specUrl}>Source requirement</a>
+            <div className="requirement-body"><a href={requirement.specUrl}>Source requirement</a> · <SourceNoticeLink kind="requirement" id={requirement.id} />
               <ul>{requirement.obligations.map(item => <li key={item.key}><code>{item.key}</code><span>{item.level} / {humanize(item.verdict)}</span></li>)}</ul>
             </div>
           </details>)}</div>}
