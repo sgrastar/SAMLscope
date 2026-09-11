@@ -437,7 +437,7 @@ export const api = {
       method: 'POST', headers: csrfToken ? { 'X-CSRF-Token': csrfToken } : {},
     }),
   ecpProbe: (runId: string, username: string, password: string, csrfToken?: string) =>
-    request<unknown>(`/api/runs/${runId}/ecp-probe`, {
+    request<Array<{ outboxStatus: 'PENDING' | 'SENDING' | 'UNKNOWN_DELIVERY' | 'BLOCKED_ON_CREDENTIAL' | 'SENT' }>>(`/api/runs/${runId}/ecp-probe`, {
       method: 'POST', body: JSON.stringify({ username, password }),
       headers: csrfToken ? { 'X-CSRF-Token': csrfToken } : {},
     }),

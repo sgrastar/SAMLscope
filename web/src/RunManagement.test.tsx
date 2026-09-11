@@ -55,6 +55,65 @@ test.each([false, true])('starts the whole profile and explains ECP prerequisite
   expect(screen.queryByText(/M1|M2|M3/)).toBeNull()
 })
 
+test.each(['ready', 'partial', 'probe-error', 'resume-error', 'start-error'])(
+  'handles profile continuation and refreshes partial progress: %s', async (scenario) => {
+    const posts: string[] = []
+    let evidenceReads = 0
+    vi.stubGlobal('fetch', vi.fn(async (url: string, init?: RequestInit) => {
+      if (init?.method === 'POST') {
+        posts.push(url)
+        if ((url.endsWith('/ecp-probe') && scenario === 'probe-error')
+          || (url.endsWith('/tests/start') && ['resume-error', 'start-error'].includes(scenario))) {
+          return new Response(JSON.stringify({ message: 'Temporary operation failure' }), {
+            status: 503, headers: { 'content-type': 'application/json' },
+          })
+        }
+        if (url.endsWith('/ecp-probe')) return json([
+          { outboxStatus: 'SENT' }, { outboxStatus: scenario === 'partial' ? 'UNKNOWN_DELIVERY' : 'SENT' },
+        ])
+        return json({ ecpProbesRequired: scenario === 'partial' })
+      }
+      if (url.endsWith('/workspace-evidence')) {
+        evidenceReads++
+        return json({ interactions: [], bootstrapContracts: [], protocolEvidence: protocolEvidence(),
+          activeProbe: { state: 'NOT_STARTED' }, campaigns: [] })
+      }
+      if (url.endsWith('/metadata-lab')) return json(metadataLab())
+      if (url === '/api/health') return json({ mode: 'selfhosted' })
+      if (url === '/api/plans') return json([{
+        plan: { id: 'plan', profile: 'ecp_idp', name: 'ECP target', target: { kind: 'IDP', entityId: 'https://target.example' } },
+        entityId: 'https://suite.example/p/plan', metadataUrl: 'https://suite.example/p/plan/metadata',
+        mdqUrl: 'https://suite.example/mdq', secondaryIdpEntityId: 'https://suite.example/secondary',
+        secondaryIdpMetadataUrl: 'https://suite.example/secondary/metadata',
+      }])
+      if (url === '/api/runs/run_test') return json({ id: 'run_test', planId: 'plan', status: 'COMPLETED', context: {} })
+      throw new Error(`Unexpected request: ${url}`)
+    }))
+    render(<RunManagement runId="run_test" />)
+    const start = await screen.findByRole('button', { name: 'Start or resume tests' })
+    if (scenario === 'start-error') fireEvent.click(start)
+    else {
+      fireEvent.change(screen.getByLabelText('Username'), { target: { value: 'test-user' } })
+      fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'test-password' } })
+      fireEvent.click(screen.getByRole('button', { name: 'Run ECP probes and continue tests' }))
+    }
+    await waitFor(() => expect(evidenceReads).toBe(2))
+    expect(posts).toEqual(scenario === 'start-error' ? ['/api/runs/run_test/tests/start']
+      : scenario === 'probe-error' ? ['/api/runs/run_test/ecp-probe']
+      : ['/api/runs/run_test/ecp-probe', '/api/runs/run_test/tests/start'])
+    if (scenario.endsWith('error')) expect(screen.getByRole('alert').textContent).toContain('Temporary operation failure')
+    if (scenario === 'partial') {
+      expect(screen.getByText('Delivery uncertain')).toBeTruthy()
+      expect(screen.getByText(/Uncertain delivery is not a target failure/)).toBeTruthy()
+    }
+    if (scenario === 'ready') expect(screen.getByText(/ECP probes recorded and profile tests resumed/)).toBeTruthy()
+    if (['ready', 'partial', 'resume-error'].includes(scenario)) {
+      expect((screen.getByLabelText('Password') as HTMLInputElement).value).toBe('')
+      expect(screen.getByLabelText('ECP probe delivery status')).toBeTruthy()
+    }
+  },
+)
+
 test('blocks Run actions until the complete initial state loads and supports retry', async () => {
   let unavailable = true
   stubWorkspaceFetch(vi.fn(async (url: string) => {

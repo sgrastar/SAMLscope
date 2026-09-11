@@ -32,6 +32,7 @@ export function RunManagement({ runId, csrfToken, focusCaseId, navigateTo }: {
   const [plan, setPlan] = useState<Plan>()
   const [runSummary, setRunSummary] = useState<Run>()
   const [notice, setNotice] = useState('')
+  const [ecpProbeResults, setEcpProbeResults] = useState<Awaited<ReturnType<typeof api.ecpProbe>>>([])
   const [preflightReport, setPreflightReport] = useState<Record<string, unknown>>()
   const [mode, setMode] = useState<'selfhosted' | 'hosted'>('selfhosted')
   const [pollingDelaySeconds, setPollingDelaySeconds] = useState(15)
@@ -126,6 +127,8 @@ export function RunManagement({ runId, csrfToken, focusCaseId, navigateTo }: {
   useEffect(() => {
     setInitialLoadComplete(false)
     setError('')
+    setNotice('')
+    setEcpProbeResults([])
     void refresh().then(() => setInitialLoadComplete(true)).catch(cause => setError((cause as Error).message))
   }, [runId])
 
@@ -316,7 +319,9 @@ export function RunManagement({ runId, csrfToken, focusCaseId, navigateTo }: {
         : 'Profile tests started or resumed. Follow Pending interactions below to provide any required evidence.')
       await refresh()
     } catch (cause) {
+      setNotice('')
       setError((cause as Error).message)
+      await refresh().catch(() => undefined)
     } finally {
       setBusy('')
     }
@@ -373,15 +378,19 @@ export function RunManagement({ runId, csrfToken, focusCaseId, navigateTo }: {
     setError('')
     setNotice('')
     try {
-      await api.ecpProbe(runId, String(data.get('username') ?? ''), String(data.get('password') ?? ''), csrfToken)
+      setEcpProbeResults([])
+      const probes = await api.ecpProbe(runId, String(data.get('username') ?? ''), String(data.get('password') ?? ''), csrfToken)
+      setEcpProbeResults(probes)
       form.reset()
       const result = await api.startTests(runId, csrfToken)
       setNotice(result.ecpProbesRequired
-        ? 'Some required ECP probes are still unavailable. Review the probe results and retry when ready.'
+        ? 'Some required ECP probes are still unavailable. Review the delivery status below and retry when ready. Uncertain delivery is not a target failure.'
         : 'ECP probes recorded and profile tests resumed. Follow Pending interactions below.')
       await refresh()
     } catch (cause) {
+      setNotice('')
       setError((cause as Error).message)
+      await refresh().catch(() => undefined)
     } finally {
       setBusy('')
     }
@@ -929,6 +938,14 @@ export function RunManagement({ runId, csrfToken, focusCaseId, navigateTo }: {
         <label>Username<input required name="username" autoComplete="username" /></label>
         <label>Password<input required name="password" type="password" autoComplete="current-password" /></label>
         <button type="submit">Run ECP probes and continue tests</button>
+        {ecpProbeResults.length > 0 && <div aria-label="ECP probe delivery status">
+          <p>Probe delivery status for the latest attempt:</p>
+          <ol>{ecpProbeResults.map((probe, index) => <li key={index}>{({
+            SENT: 'Sent', PENDING: 'Not sent', SENDING: 'Sending',
+            UNKNOWN_DELIVERY: 'Delivery uncertain', BLOCKED_ON_CREDENTIAL: 'Credentials required',
+          })[probe.outboxStatus]}</li>)}</ol>
+          <p>If continuing the tests failed after sending, select Start or resume tests to continue.</p>
+        </div>}
       </fieldset>
     </form>}
     {plan && profile.endsWith('_sp') && <p>Start login at the target SP after importing the Test Peer metadata.</p>}
