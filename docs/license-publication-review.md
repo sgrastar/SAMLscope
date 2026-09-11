@@ -26,3 +26,21 @@ The resource decision is intentionally limited to unmodified upstream package
 distribution using publisher publication evidence and retained file exceptions.
 An absent inline header is not an Apache/public-domain grant, and the review does
 not authorize independent extraction or modification of an upstream schema.
+
+## Runtime-source follow-up
+
+After the original PR checks passed, the publication review found a real missing
+condition in the publicly downloadable GHCR image: base licenses were retained,
+but a corresponding-source delivery mechanism had not been established. The
+source-delivery condition is not satisfied merely by successful CI or an upstream URL.
+
+The owner-authorized fix retains exact Ubuntu source packages and Temurin source,
+build scripts and configuration in a source-only GitHub release. A manifest binds
+them to the actual package inventory, JRE release and original legal-file bytes.
+The container job checks these and the full downloadable source hashes before
+publishing. Docker labels and README link directly to the source release.
+
+This follow-up changes the protected Dockerfile and build workflow. G2 renewal
+covers those distribution changes, preserving existing case approvals and all G1
+inputs. It does not assert a new case-design review. Negative tests reject a
+changed source download, changed runtime inventory and unreviewed architecture.

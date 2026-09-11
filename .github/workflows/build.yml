@@ -88,6 +88,8 @@ jobs:
         run: |
           docker build --tag samlscope:ci .
           echo "SAMLSCOPE_IMAGE_DIGEST=$(docker image inspect --format '{{.Id}}' samlscope:ci)" >> "$GITHUB_ENV"
+      - name: Verify runtime notices and corresponding-source download
+        run: python3 dev/licensing/container_sources.py --image samlscope:ci
       - name: Run pinned Keycloak SAML round trip
         env:
           SAMLSCOPE_IMAGE: samlscope:ci

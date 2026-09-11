@@ -2,7 +2,7 @@
 
 ## Decision
 
-**Publication permitted for the revised repository, static website, application, JAR/source JAR, ZIP/TAR, licensed exports and offline reports, subject to the conditions and container exclusion below.**
+**Publication permitted for the revised repository, static website, application, JAR/source JAR, ZIP/TAR, licensed exports and offline reports, subject to the retained-notice and corresponding-source conditions below.**
 
 This is a decision about the currently reviewed materials and retained conditions, not an approval
 of product conformance or operational release readiness. Keep the YELLOW notices with the outputs.
@@ -11,13 +11,14 @@ The complete requested table and counts are in [publication-register.md](publica
 Counts are by source ID / package version / named original-material group; the embedded XSD list is
 subordinate evidence and is not counted a second time.
 
-**Container image publication is excluded from this conclusion.** The Dockerfile/context and
-application install-distribution path were inspected, but the Docker daemon is unavailable. No
-actual image layers, OS package inventory or JRE source-availability package could be inspected.
-Before publishing an image, build the pinned image, inspect the final filesystem and retain the
-base image's copyright/license and corresponding-source mechanism. This is an uncompleted artifact
-verification, not a fabricated RED material or a presumption that all base packages are cleared.
-The current repository/website/archive release need not wait for an image release.
+**Container publication is conditional on the runtime-source gate.** The initial local audit
+could not inspect a running container. The publication review subsequently retrieved and
+hash-verified the pinned linux/amd64 base layers, publisher SBOM and build provenance.
+It identified the exact OS source-package versions and JRE release, retained their full source
+archives, patches and build scripts, and added actual-image inventory/legal-file and public
+source-download checks before image publication. See [container-publication.md](container-publication.md)
+and `container-source-manifest.json`. PR CI must pass this gate before merging to the publishing
+branch. Other architectures and future base/package versions require new evidence.
 
 ## Actual-use rationale
 
@@ -118,8 +119,8 @@ prose, nor as public domain. Independent extraction/modification of those resour
   Archivo's OFL text and copyright remain in the website's legal page/download.
 
 No material met all four conditions for a rights-holder inquiry. No inquiry draft or external
-message was necessary. No bounded legal question currently blocks the reviewed non-container
-artifacts. This does not turn an uninspected future artifact into a cleared one.
+message was necessary. No bounded legal question currently blocks the reviewed artifacts when their retained-notice
+and corresponding-source conditions are met. This does not turn an uninspected future artifact into a cleared one.
 
 ## Output paths and exclusions
 
@@ -132,7 +133,7 @@ artifacts. This does not turn an uninspected future artifact into a cleared one.
 | YAML / JSON / Markdown exports | `dev/licensing/export_material.py` | Regenerate redistributable standalone copies; protected originals are not rewritten; a raw GitHub file detached from licensing context is not the licensed-export format |
 | Binary/source JAR | `META-INF/samlscope` and API public-license resources | Actual module archives checked; dependency files remain unchanged |
 | ZIP / TAR | Complete `LICENSES` plus application/dependency JARs | Archive-byte verifier checks current texts and dependency inventory |
-| Docker context | `.dockerignore`, pinned multistage recipe and installDist copy | Local research caches/ignored authoring input excluded; final image/base layers unverified, excluded from release conclusion |
+| Docker context | `.dockerignore`, pinned multistage recipe and installDist copy | Local research caches/ignored authoring input excluded; Pinned linux/amd64 base layers inspected; runtime-source gate compares the actual built image and retained public source assets before publication |
 | npm/web assets | Vite notice generator, static site font downloads | Production built assets inspected; development node_modules is not a published npm package |
 | PDF / CSV | No production export route found in reviewed API/Runner | No artifact exists to verify; new routes require notice handling |
 | Diagnostic JSON / migration files | Original counters/status or derived catalog descriptions | Operational facts are not CC; descriptions follow the same source terms; use licensed standalone export when detached |

@@ -73,6 +73,11 @@ A SAMLscope report is a test result, not a certification. Neither Kantara nor OA
 
 ## Run with Docker
 
+Published linux/amd64 images retain the runtime's original licenses. Download their
+[corresponding OS and JRE sources](https://github.com/sgrastar/SAMLscope/releases/tag/runtime-sources-96975602e131)
+alongside the image; see [container licensing](LICENSES/container-publication.md) for exact versions
+and conditions. This is separate from SAMLscope's Apache-2.0 software license.
+
 ```bash
 docker build -t samlscope:0.1.0 .
 IMAGE_DIGEST="$(docker image inspect --format '{{.Id}}' samlscope:0.1.0)"
