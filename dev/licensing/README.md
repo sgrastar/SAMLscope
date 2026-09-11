@@ -46,7 +46,8 @@ explicit source/requirement references is a traceability mechanism, not a findin
 that unmarked quotations or adaptations do not exist. Older raw-file download
 paths are not retroactively wrapped.
 
-The common JAR packaging change requires independent G2 review/reapproval.
+The common JAR packaging and inventory-check change received owner-authorized
+signed G2 renewal; see `docs/license-g2-reapproval.md`.
 Running these helpers does not satisfy or bypass that gate.
 
 The source index now includes case/profile membership and numbered obligation
