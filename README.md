@@ -2,135 +2,115 @@
 
 **[Try SAMLscope at samlscope.com](https://samlscope.com)**
 
-Explore the available SAML checks and [open the hosted application](https://app.samlscope.com) to try them with your IdP or SP. Follow the guided test workflow, inspect the evidence, and share a report. You can get started without building or running SAMLscope locally.
+Explore the available SAML checks and [open the hosted application](https://app.samlscope.com) to try them with your IdP or SP. Follow the guided workflow, inspect the evidence, and export a report. You can get started without building or running SAMLscope locally.
 
-SAMLscope is an open-source black-box conformance test suite for SAML identity providers (IdPs) and service providers (SPs). It currently targets the [Kantara SAML V2.0 Implementation Profile for Federation Interoperability v1.1](docs/04-requirement-coverage.md).
+SAMLscope is an open-source black-box conformance test suite for SAML identity providers (IdPs) and service providers (SPs). It acts as the opposite side of the SAML exchange, observes protocol behavior, and connects each result to its requirement, test case and evidence. The current catalog targets the [Kantara SAML V2.0 Implementation Profile for Federation Interoperability v1.1](docs/04-requirement-coverage.md) and its referenced specifications.
 
-SAMLscope drives standard SAML and metadata endpoints, records redacted Transcripts, and evaluates observable evidence. It does not use vendor administration APIs as conformance evidence and does not ask operators to decide PASS or FAIL. Evidence that cannot be obtained is reported as `NOT_VERIFIED`, not silently excluded or treated as target failure.
+## What you can test
 
-## Test coverage
+Choose a functional profile for the target's role:
 
-- SAML requests, responses, assertions, identifiers, bindings, signatures, and encryption
-- browser SSO, ForceAuthn, IsPassive, NameIDPolicy, ACS selection, and proxy processing
-- single logout, ECP, channel binding, and SAML Enhanced Client extensions
-- metadata acquisition, trust, refresh, key rollover, MDQ, discovery, and algorithm declarations
-- IdP and SP Core and Full profiles
+| Profile | Target roles | Focus |
+| --- | --- | --- |
+| Web Browser SSO | IdP, SP | Browser sign-in, requests and responses, bindings, signatures, encryption and session behavior |
+| Metadata | IdP, SP | Metadata structure, acquisition, trust, refresh, key rollover and related declarations |
+| Single Logout | IdP, SP | Logout protocol and session behavior |
+| ECP | IdP | Enhanced Client or Proxy sign-in |
 
-Cases produce an `outcome`; the central Evaluator combines it with the approved requirement level to produce `PASS`, `WARNING`, `FAIL`, or an unresolved result. See the [test model](docs/03-test-model.md) and [case format](docs/05-test-definition-format.md).
+Profiles select existing approved cases. Conditional checks depend on the target's declared features and available evidence. See the [profile definitions](profiles/README.md) and [requirement coverage](docs/04-requirement-coverage.md) for exact scope.
 
-## Evidence plans
+**Execution assistance** is a separate choice from the functional profile:
 
-The plans are cumulative and differ only in evidence depth.
+| Assistance | How you participate |
+| --- | --- |
+| **Quick** | Complete browser login, consent, logout or continuation steps while SAMLscope observes protocol evidence. |
+| **Assisted** | Also perform requested configuration changes, metadata refreshes and other operator steps. |
+| **Assisted + attestation** | Also provide the requested declarations for behavior that cannot be established through external observation. |
 
-| Plan | Evidence | Operator involvement |
-|---|---|---|
-| **Quick** | Protocol-observed | Follow login, consent, logout, or Continue steps. SAMLscope evaluates the resulting SAML, metadata, browser result, and Transcript. |
-| **Standard** | Quick + operator-assisted | Make requested configuration or metadata-refresh changes. SAMLscope determines the outcome from subsequent observations. |
-| **Full** | Standard + self-attested | Supply grouped evidence only for behavior that standard external interfaces cannot establish. |
+Checks lacking the selected evidence method remain not verified. The UI distinguishes externally verified, self-attested and unresolved evidence and shows the remaining interactions.
 
-One action can provide evidence to multiple cases. The UI reports both case coverage and remaining deliberate user actions. Self-attested evidence is always shown separately from externally verified evidence.
+## Try your first test
 
-## Status
+Use a target you own or are authorized to test, with a non-production test account.
 
-The signed G1 requirement catalog and signed G2 case design are complete. The application implements IdP/SP Test Peers, browser and metadata workflows, SLO, ECP, evidence campaigns, result JSON, self-contained HTML reports, and hosted result publication controls.
+1. [Open SAMLscope](https://app.samlscope.com) and create a **Test Plan**. Choose the functional profile matching your target's IdP or SP role.
+2. Enter the target entity ID and metadata URL, or reuse a compatible saved target. Select the execution assistance you can provide. Where shown, keep the target's request-signing requirement fixed for the Plan.
+3. Open a Run and follow **What to do next**. Register the displayed SAMLscope Test Peer metadata in your target, then select **Run preflight**.
+4. Complete the initial login round trip as instructed. Return to the Run after the response is recorded.
+5. Select **Start or resume M1** for the initial checks. Follow **Pending interactions** and use **Additional test stages (M2 / M3)** when their prerequisites are satisfied. Use a fresh/private browser session when requested.
+6. Open **Export / report** to inspect the current result or download `result.json` and the self-contained `report.html`.
 
-External-observation coverage and reference implementation acceptance testing continue to improve. Capabilities that cannot be observed remain explicit `SELF_ATTESTED` or `NOT_VERIFIED` rather than being guessed.
+A successful login is only the starting point. SAMLscope determines case outcomes from correlated evidence; operators supply actions and evidence, not PASS/FAIL decisions.
 
-Current acceptance status and remaining launch work are tracked in the [release checklist](docs/13-release-readiness.md), [reference matrix](docs/14-reference-acceptance.md), and [operations preparation](docs/15-hosted-operations.md). The [hosted application](https://app.samlscope.com) is available; the linked checklists track remaining acceptance and operational work.
+## Understand and share results
 
-## Requirements
+Results trace specification → requirement → obligation → test → evidence → verdict. Requirement levels and case controls come from the signed catalogs, and the central Evaluator derives the verdict.
 
-- Java 21
-- Node.js 20.19 or later for frontend development
-- Docker or Apple Container, only when using a containerized deployment or the Keycloak fixture
+- **PASS / WARNING / FAIL** reflect the applicable requirement level and observed case outcomes.
+- **Externally verified** and **self-attested** evidence remain distinguishable.
+- **NOT_VERIFIED** means evidence could not be obtained. It is not treated as a target failure or silently excluded.
+- **INCOMPLETE** means applicable mandatory obligations still need evidence. Conformance and execution completeness are separate result dimensions.
 
-## Run from source
-
-```bash
-./gradlew check
-SAMLSCOPE_IMAGE_DIGEST="sha256:<digest-of-the-build-you-are-running>" \
-SAMLSCOPE_DATA_DIR="$PWD/data" ./gradlew :api:run
-```
-
-Open <http://localhost:8080>. Runtime state, generated Test Peer keys, cached metadata, and redacted Transcripts are stored below `SAMLSCOPE_DATA_DIR`.
-
-## Run a test
-
-1. Create a Test Plan for an IdP or SP that you are authorized to test.
-2. Enter its entity ID and metadata URL, then run **Preflight**.
-3. Register the displayed SAMLscope Test Peer metadata in the target.
-4. Start the initial browser round trip and use a non-production test account.
-5. Run or resume M1, M2, and M3 as required by the selected evidence plan.
-6. Follow the operation prompts. SAMLscope completes protocol-driven cases when correlated evidence arrives.
-7. Review the result and export `result.json` or the self-contained `report.html`.
-
-Use a fresh/private browser context when instructed. Positive and negative controls must both have sufficient evidence before an evaluative case can complete.
-
-### Result terminology
-
-- **Externally verified**: derived from Suite-observed SAML, browser, metadata, or Transcript evidence.
-- **Self-attested**: based on operator-supplied evidence for behavior that cannot be externally established.
-- **Not verified**: required evidence or configuration was unavailable or inconclusive.
-- **Incomplete**: applicable mandatory obligations remain unresolved.
+JSON and offline HTML exports retain the relevant license and source notices. Hosted Runs can also use the application's publication controls for shared result URLs; self-hosted result uploads are not supported. See [results and publication](docs/06-results-and-publication.md) for the trust model.
 
 A SAMLscope report is a test result, not a certification. Neither Kantara nor OASIS endorses an individual result.
 
-## Run with Docker
+## Current status
 
-Published linux/amd64 images retain the runtime's original licenses. Download their
-[corresponding OS and JRE sources](https://github.com/sgrastar/SAMLscope/releases/tag/runtime-sources-96975602e131)
-alongside the image; see [container licensing](LICENSES/container-publication.md) for exact versions
-and conditions. This is separate from SAMLscope's Apache-2.0 software license.
+The hosted application is available. Signed G1 requirements and G2 case/profile approvals are in place, and the release workflow verifies these boundaries before publishing a container. It also runs the pinned Keycloak SAML round trip and checks runtime notices and corresponding-source availability.
+
+Reference acceptance remains limited: the pinned Keycloak fixture supplies interoperability and regression evidence, while broader product/profile combinations and operator-led campaigns still need recorded acceptance evidence. Availability of a profile does not establish acceptance of every product or configuration. See the [release evidence and remaining work](docs/13-release-readiness.md) and [reference acceptance matrix](docs/14-reference-acceptance.md).
+
+## Run locally with Docker
+
+Docker builds the Java application and browser UI together. The following example uses the linux/amd64 runtime covered by the publication audit and listens only on the local machine:
 
 ```bash
-docker build -t samlscope:0.1.0 .
-IMAGE_DIGEST="$(docker image inspect --format '{{.Id}}' samlscope:0.1.0)"
-docker run --rm -p 8080:8080 -v samlscope-data:/data \
+docker build --platform linux/amd64 -t samlscope:local .
+SAMLSCOPE_LOCAL_IMAGE_DIGEST="$(docker image inspect --format '{{.Id}}' samlscope:local)"
+docker run --rm --platform linux/amd64 -p 127.0.0.1:8080:8080 -v samlscope-data:/data \
   -e SAMLSCOPE_PUBLIC_BASE_URL=http://localhost:8080 \
   -e SAMLSCOPE_PEER_BASE_URL=http://localhost:8080 \
-  -e SAMLSCOPE_IMAGE_DIGEST="$IMAGE_DIGEST" \
-  samlscope:0.1.0
+  -e SAMLSCOPE_IMAGE_DIGEST="$SAMLSCOPE_LOCAL_IMAGE_DIGEST" \
+  samlscope:local
 ```
 
-By default, self-hosted mode has no application authentication and must not be exposed directly to an untrusted network. Optional standard OIDC login is implemented with per-user Plan ownership; see [OIDC configuration and pending G2 reapproval](docs/17-oidc-authentication.md). Generated Test Peer private keys are test-only and must never be trusted by production systems.
+Open <http://localhost:8080>. The named volume retains runtime state, generated Test Peer keys, cached metadata and redacted Transcripts.
 
-## Deploy samlscope.com
+Remote targets need reachable peer URLs and appropriate TLS configuration; see [deployment and networking](docs/07-deployment-and-networking.md). Self-hosted mode has no application authentication by default. For access beyond the local machine, configure authentication and networking first. Standard OIDC login and per-user Plan ownership are supported; see [OIDC configuration](docs/17-oidc-authentication.md). Generated Test Peer keys are test-only.
 
-The initial production profile runs on one VPS with Caddy, a digest-pinned GHCR image, SQLite, and
-all persistent state mounted from `/srv/samlscope/data`. It serves administration from
-`https://app.samlscope.com` and Test Peer endpoints from `https://peer.samlscope.com`, as required by
-hosted mode. The version-controlled deployment manifests are in [`deploy/`](deploy/);
-operator-specific VPS and GitHub environment setup notes are kept outside the public repository.
+Published images retain their runtime's original licenses. Their
+[corresponding OS and JRE sources](https://github.com/sgrastar/SAMLscope/releases/tag/runtime-sources-96975602e131)
+are available alongside the image. See [container licensing](LICENSES/container-publication.md)
+for exact versions and redistribution conditions.
 
-## Keycloak acceptance fixture
+## Develop from source
 
-Docker:
+Use Java 21 and Node.js 24.11.1, matching the CI setup. The repository includes the Gradle wrapper; Gradle installs the locked frontend dependencies with `npm ci`.
+
+```bash
+./gradlew check
+SAMLSCOPE_DATA_DIR="$PWD/data" ./gradlew :api:run
+```
+
+This starts the development server at <http://localhost:8080>. Startup without `SAMLSCOPE_IMAGE_DIGEST` does not enable report generation. For local Runs that export reports, use the Docker instructions above, which supply the actual image digest. Do not substitute a made-up digest.
+
+The optional Keycloak fixture provisions a disposable target and prepares a Run:
 
 ```bash
 SAMLSCOPE_SMOKE_MANUAL=1 dev/keycloak/prepare-smoke.sh
 ```
 
-Apple Container on macOS:
+For Apple Container on macOS, use `python3 dev/keycloak/prepare-smoke-apple.py --manual`.
+Fixture administration APIs are used for setup, not as conformance evidence.
 
-```bash
-python3 dev/keycloak/prepare-smoke-apple.py --manual
-```
+Before publishing a release or OCI image, configure the immutable G1/G2 verifier commits and SSH allowed-signers file, then run `./gradlew releaseCheck`. Follow the [implementation rules](AGENTS.md), [licensing tools](dev/licensing/README.md) and [contribution terms](CONTRIBUTING.md).
 
-The fixture provisions a disposable Keycloak target and prepares a Run for browser testing. Keycloak-specific provisioning is setup only and is never used as conformance evidence.
+## Deployment and documentation
 
-## Development
+The production deployment uses Caddy, a digest-pinned GHCR image and SQLite. Administration is served at `app.samlscope.com` and Test Peer endpoints at `peer.samlscope.com`. See the [deployment manifests](deploy/) and [operations guide](docs/15-hosted-operations.md) for deployment, rollback, backup and retention procedures.
 
-```bash
-./gradlew check
-```
-
-Before publishing a release or OCI image, configure the immutable G1/G2 verifier commits and SSH allowed-signers file, then run:
-
-```bash
-./gradlew releaseCheck
-```
-
-See the [design index](docs/README.md), [security design](docs/08-suite-security.md), and [implementation rules](AGENTS.md).
+For implementation details, start with the [design index](docs/README.md), [test model](docs/03-test-model.md), [case format](docs/05-test-definition-format.md) and [security design](docs/08-suite-security.md).
 
 ## License
 
