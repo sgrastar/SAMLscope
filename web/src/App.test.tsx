@@ -245,6 +245,8 @@ test('explains how to fix metadata role and common metadata input errors', async
 
   try {
     render(<App />)
+    const profile = await screen.findByRole('radio', { name: /Metadata — SP/ })
+    await waitFor(() => expect((profile as HTMLInputElement).checked).toBe(true))
     fireEvent.change(await screen.findByLabelText('Plan name'), { target: { value: 'MockIdP as SP' } })
     fireEvent.change(screen.getByLabelText('Target SAML Entity ID'), { target: { value: 'https://mockidp.dev/entityid' } })
     fireEvent.change(screen.getByLabelText('Target metadata URL'), { target: { value: 'https://mockidp.dev/api/saml/metadata' } })
