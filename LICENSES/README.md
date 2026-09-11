@@ -1,27 +1,41 @@
-# Retained specification notices
+# License and source index
 
-`source-notices.json` is the shared source-notice registry. It preserves the
-notice-page text of the adopted OASIS PDF files and the Kantara Implementation
-Profile copyright/license paragraphs, with exact source/text hashes and notice
-locations. Page furniture is retained; permission terms are not rewritten.
-Kantara’s notice retains Internet2 and the respective contributors as named
-by the source, and links its CC BY-SA 3.0 US terms. Each entry distinguishes the observed edition from the signed catalog entry.
-A pending catalog correction is not silently applied to the approved definition.
+Start with the [licensing guide](../LICENSING.md) for the distinction between
+original software, original content, incorporated third-party material and measured
+results. The links below provide the complete terms, attribution and publication
+conditions for the reviewed distributions.
 
-This registry records source terms, not a license allocation to SAMLscope files.
-Its unresolved source list includes the other adopted documents and schemas whose
-notices are not yet included. The application exposes this registry alongside its
-license page, and standalone reports embed the same registry. Material-level
-attribution and the unresolved notices remain unfinished. Do not describe this
-partial registry as complete third-party clearance.
+| Document | What to find |
+| --- | --- |
+| [Apache-2.0](../LICENSE) | Original software, tools and test code |
+| [CC BY-SA 4.0](CC-BY-SA-4.0.txt) | SAMLscope-owned original prose and definitions only |
+| [Publication audit](publication-audit.md) | Actual-use rationale, publication decision, conditions and scope |
+| [Material register](publication-register.md) / [JSON](publication-register.json) | Per-material use, rights holders, permission evidence, required notices and GREEN/YELLOW/RED decisions |
+| [Specification source notices](source-notices.json) | Original copyright, permission text, exact editions, source URLs and modification credits |
+| [Material index](material-index.json) | Generated source membership for catalog obligations, tests and profiles |
+| [Java notices and source availability](../web/public/licenses/java-dependencies.json) | Full retained package/resource notices and exact source-download links |
+| [Java permission evidence](java-permissions.json) | Reviewed package and embedded-resource records bound to actual file hashes |
+| [Container publication conditions](container-publication.md) / [source manifest](container-source-manifest.json) | Runtime-specific notices, exact source versions and retained corresponding-source downloads |
+| [Publication review](../docs/license-publication-review.md) | Review findings, fixes, verification and signed-approval boundaries |
+| [Contribution terms](../CONTRIBUTING.md) | Conditions for contributing software, prose and definitions |
 
-Update source notices from the exact adopted source document, verify the full
-notice section and hashes, then regenerate consumers. Do not replace individual
-historical document terms with a newer general policy. The app and distribution
-copy this registry from here; generated copies must not be edited separately.
+Readable distribution-specific notices are also available in the
+[application](https://app.samlscope.com/licenses) and on the
+[website](https://samlscope.com/licenses/).
 
-The registry now also retains IETF TXT copyright sections and W3C copyright
-paragraphs. `terms_review_status` distinguishes retaining these sections from
-reviewing incorporated historical terms. See `material-review.md` for boundaries
-and `material-index.json` for generated per-obligation source membership.
-Run `.venv/bin/python dev/licensing/materials.py --check` before distribution.
+## Registry maintenance
+
+The source registry retains the adopted documents' own notices, including Internet2
+and named contributor credits for Kantara, individual historical OASIS permissions,
+and relevant IETF/W3C evidence. Retaining a notice is distinct from deciding how a
+material is used; the publication audit and register contain the current decisions.
+[Material review](material-review.md) explains those boundaries.
+[Historical term research](historical-term-review.md) is a research record, not the
+current list of unresolved materials.
+
+Update notices against the exact adopted document and verify its notice section
+and hashes. Do not substitute current general policies for historical document
+terms, relicense third-party material, or silently change signed catalog entries.
+Regenerate consumers instead of editing generated copies; see the
+[licensing tools](../dev/licensing/README.md). Run
+`.venv/bin/python dev/licensing/materials.py --check` before distribution.
