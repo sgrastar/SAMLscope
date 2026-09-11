@@ -4,6 +4,8 @@
 
 Explore the available SAML checks and [open the hosted application](https://app.samlscope.com) to try them with your IdP or SP. Follow the guided workflow, inspect the evidence, and export a report. You can get started without building or running SAMLscope locally.
 
+The hosted service is in **early access**. Use a dedicated test environment and non-production accounts; do not rely on it as the sole store of your test evidence.
+
 SAMLscope is an open-source black-box conformance test suite for SAML identity providers (IdPs) and service providers (SPs). It acts as the opposite side of the SAML exchange, observes protocol behavior, and connects each result to its requirement, test case and evidence. The current catalog targets the [Kantara SAML V2.0 Implementation Profile for Federation Interoperability v1.1](docs/04-requirement-coverage.md) and its referenced specifications.
 
 ## What you can test
@@ -57,9 +59,11 @@ A SAMLscope report is a test result, not a certification. Neither Kantara nor OA
 
 ## Current status
 
-The hosted application is available. Signed G1 requirements and G2 case/profile approvals are in place, and the release workflow verifies these boundaries before publishing a container. It also runs the pinned Keycloak SAML round trip and checks runtime notices and corresponding-source availability.
+The hosted application is available for evaluation. Signed G1 requirements and G2 case/profile approvals are in place, and the release workflow verifies these boundaries before publishing a container. It also runs the pinned Keycloak SAML round trip and checks runtime notices and corresponding-source availability.
 
 Reference acceptance remains limited: the pinned Keycloak fixture supplies interoperability and regression evidence, while broader product/profile combinations and operator-led campaigns still need recorded acceptance evidence. Availability of a profile does not establish acceptance of every product or configuration. See the [release evidence and remaining work](docs/13-release-readiness.md) and [reference acceptance matrix](docs/14-reference-acceptance.md).
+
+Operational acceptance is also in progress. Production restore, retention, deletion and publication/access acceptance are not all recorded as complete in the [operations guide](docs/15-hosted-operations.md). Deployment success does not establish those guarantees; retain your own exported evidence.
 
 ## Run locally with Docker
 
