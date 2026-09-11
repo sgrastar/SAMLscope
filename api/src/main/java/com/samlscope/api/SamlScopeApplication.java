@@ -347,6 +347,10 @@ public final class SamlScopeApplication {
                 serveClasspath(ctx, "/public/licenses/source-notices.json", "application/json; charset=utf-8"));
         javalin.routes.get("/licenses/browser-dependencies.json", ctx ->
                 serveClasspath(ctx, "/public/licenses/browser-dependencies.json", "application/json; charset=utf-8"));
+        javalin.routes.get("/licenses/source-membership.json", ctx ->
+                serveClasspath(ctx, "/public/licenses/source-membership.json", "application/json; charset=utf-8"));
+        javalin.routes.get("/licenses/java-dependencies.json", ctx ->
+                serveClasspath(ctx, "/public/licenses/java-dependencies.json", "application/json; charset=utf-8"));
         javalin.routes.get("/manage/{run}", SamlScopeApplication::serveIndex);
         javalin.routes.get("/browser/{run}/{caseId}", SamlScopeApplication::serveIndex);
         javalin.routes.get("/assets/{file}", SamlScopeApplication::serveAsset);

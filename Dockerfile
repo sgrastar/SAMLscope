@@ -17,6 +17,8 @@ COPY --from=web-build /src/web/build/dist /src/web/build/dist
 RUN ./gradlew :api:installDist -x :web:buildWeb --no-daemon
 
 FROM eclipse-temurin:21.0.12_8-jre-noble@sha256:96975602e131485862eb8cd32927face8a06d7591a5e865944b634a701d9df72
+LABEL org.opencontainers.image.source="https://github.com/sgrastar/SAMLscope" \
+      com.samlscope.runtime-sources="https://github.com/sgrastar/SAMLscope/releases/tag/runtime-sources-96975602e131"
 RUN groupadd --system --gid 10001 samlscope \
     && useradd --system --uid 10001 --gid samlscope --home-dir /opt/samlscope --shell /usr/sbin/nologin samlscope \
     && mkdir -p /opt/samlscope /data \

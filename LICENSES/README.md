@@ -19,3 +19,9 @@ Update source notices from the exact adopted source document, verify the full
 notice section and hashes, then regenerate consumers. Do not replace individual
 historical document terms with a newer general policy. The app and distribution
 copy this registry from here; generated copies must not be edited separately.
+
+The registry now also retains IETF TXT copyright sections and W3C copyright
+paragraphs. `terms_review_status` distinguishes retaining these sections from
+reviewing incorporated historical terms. See `material-review.md` for boundaries
+and `material-index.json` for generated per-obligation source membership.
+Run `.venv/bin/python dev/licensing/materials.py --check` before distribution.

@@ -1,0 +1,5814 @@
+{
+  "schema_version": 1,
+  "scope": "Source references of selected obligation definitions, tests and imported variants; this is attribution, not evaluation coverage or legal clearance.",
+  "input_sha256": {
+    "tests/specs.yaml": "acee5ce8c348fbc5e02f77bd2f5b8703a632dd69aea857b14b97812ff6cc39d9",
+    "tests/coverage.yaml": "2bee3db74c9be9908710bbe18935c73454f1ed4c5c0f06bdab1cf18deaef843c",
+    "tests/cases.yaml": "431d9aa863d5d882d37266667a8fd20547d1fe6d037274b8d59ff66347f5ecd4",
+    "tests/predicates.yaml": "ea0aec770d743d0c8315c706ae80fb5979a103021ebdc4fcf86187c052e90262",
+    "profiles/browser_sso_idp.json": "8841ab92288146c657efb5f3df5ded60970c890448459f0a80fd141eb7fd5c5f",
+    "profiles/browser_sso_sp.json": "159c8e15f6a3e06b434d2e2464c75d40829ed8f54b0de23e1b1f4d566aa3228b",
+    "profiles/ecp_idp.json": "f930459e44962ea682d00fc4b8efac5440682ddb550da4ac54c114d523281d5e",
+    "profiles/metadata_idp.json": "5b1e904ef9b19bc6267bca6d54f44e9ea06dcd76acb35dad39cb1b1a5f1198fd",
+    "profiles/metadata_sp.json": "3deeb97b95062dec6670aa5b5211a1c9b26406b28283047cf87788dba426dc93",
+    "profiles/single_logout_idp.json": "0158baceb4c032f36c8a9fdbeb89916163a3b61ae567e898b5cd6ed6df06f846",
+    "profiles/single_logout_sp.json": "4d8d77c4e0d22d69d6e44c2b896b4c4df45c46d2486311d4b519ae1ce9ebb92a"
+  },
+  "case_sources": {
+    "IIP-G01-a-idp-01": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-G01-a-sp-01": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-G02-a-idp-01": [
+      "SAML2Core",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-G02-a-sp-01": [
+      "SAML2Core",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-G02-b-sp-01": [
+      "SAML2Core",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-G02-c-idp-01": [
+      "SAML2Core",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-G03-a-idp-01": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-G03-a-sp-01": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-G03-b-idp-01": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-G03-b-sp-01": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD01-a-idp-01": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD01-b-sp-01": [
+      "MDQ",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD01-c-idp-01": [
+      "MDQ",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD01-c-sp-01": [
+      "MDQ",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD02-a-idp-01": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD02-a-sp-01": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD02-b-idp-01": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD02-b-sp-01": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD02-c-idp-01": [
+      "SAML2Meta",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD02-c-sp-01": [
+      "SAML2Meta",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD02-d-idp-01": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD02-d-sp-01": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD03-a-idp-01": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD03-a-sp-01": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD03-b-idp-01": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD03-b-sp-01": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD03-c-idp-01": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD03-c-sp-01": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD03-d-idp-01": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD03-d-sp-01": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD03-e-idp-01": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD03-e-sp-01": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD04-a-idp-01": [
+      "SAML2Meta",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD04-a-sp-01": [
+      "SAML2Meta",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD04-b-idp-01": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD04-b-sp-01": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD04-c-idp-01": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD04-c-sp-01": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-a-idp-01": [
+      "SAML2Meta",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-a-sp-01": [
+      "SAML2Meta",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-a1-idp-01": [
+      "SAML2Meta",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-a1-sp-01": [
+      "SAML2Meta",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-a2-idp-01": [
+      "SAML2Meta",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-a2-sp-01": [
+      "SAML2Meta",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-a3-idp-01": [
+      "SAML2Meta",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-a3-sp-01": [
+      "SAML2Meta",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-a4-idp-01": [
+      "SAML2Meta",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-a4-sp-01": [
+      "SAML2Meta",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-a5-idp-01": [
+      "SAML2Meta",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-a5-sp-01": [
+      "SAML2Meta",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-a6-idp-01": [
+      "SAML2Meta",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-a6-sp-01": [
+      "SAML2Meta",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-a7-idp-01": [
+      "SAML2Meta",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-a7-sp-01": [
+      "SAML2Meta",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-a8-idp-01": [
+      "SAML2Meta",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-a8-sp-01": [
+      "SAML2Meta",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-a9-idp-01": [
+      "SAML2Meta",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-a9-sp-01": [
+      "SAML2Meta",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-ab-idp-01": [
+      "SAML2Meta",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-ab-sp-01": [
+      "SAML2Meta",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-ac-idp-01": [
+      "SAML2Meta",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-ac-sp-01": [
+      "SAML2Meta",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-ad-idp-01": [
+      "SAML2Errata",
+      "SAML2Meta",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-ad-sp-01": [
+      "SAML2Errata",
+      "SAML2Meta",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-ae-idp-01": [
+      "SAML2Errata",
+      "SAML2Meta",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-ae-sp-01": [
+      "SAML2Errata",
+      "SAML2Meta",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-af-idp-01": [
+      "SAML2Meta",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-af-sp-01": [
+      "SAML2Meta",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-ag-idp-01": [
+      "SAML2Meta",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-ag-sp-01": [
+      "SAML2Meta",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-ah-idp-01": [
+      "SAML2Meta",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-ah-sp-01": [
+      "SAML2Meta",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-ai-idp-01": [
+      "SAML2Meta",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-ai-sp-01": [
+      "SAML2Meta",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-aj-idp-01": [
+      "SAML2Meta",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-aj-sp-01": [
+      "SAML2Meta",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-ak-idp-01": [
+      "SAML2Meta",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-ak-sp-01": [
+      "SAML2Meta",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-al-idp-01": [
+      "SAML2Meta",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-al-sp-01": [
+      "SAML2Meta",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-am-idp-01": [
+      "SAML2Meta",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-am-sp-01": [
+      "SAML2Meta",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-an-idp-01": [
+      "SAML2Meta",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-an-sp-01": [
+      "SAML2Meta",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-ao-idp-01": [
+      "SAML2Meta",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-ao-sp-01": [
+      "SAML2Meta",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-ap-idp-01": [
+      "SAML2Errata",
+      "SAML2Meta",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-ap-sp-01": [
+      "SAML2Errata",
+      "SAML2Meta",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-aq-idp-01": [
+      "SAML2Errata",
+      "SAML2Meta",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-aq-sp-01": [
+      "SAML2Errata",
+      "SAML2Meta",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-ar-idp-01": [
+      "SAML2Errata",
+      "SAML2Meta",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-ar-sp-01": [
+      "SAML2Errata",
+      "SAML2Meta",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-as-idp-01": [
+      "SAML2Errata",
+      "SAML2Meta",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-as-sp-01": [
+      "SAML2Errata",
+      "SAML2Meta",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-at-idp-01": [
+      "SAML2Errata",
+      "SAML2Meta",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-at-sp-01": [
+      "SAML2Errata",
+      "SAML2Meta",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-au-idp-01": [
+      "SAML2Errata",
+      "SAML2Meta",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-au-sp-01": [
+      "SAML2Errata",
+      "SAML2Meta",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-av-idp-01": [
+      "SAML2Errata",
+      "SAML2Meta",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-av-sp-01": [
+      "SAML2Errata",
+      "SAML2Meta",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-aw-idp-01": [
+      "SAML2Errata",
+      "SAML2Meta",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-aw-sp-01": [
+      "SAML2Errata",
+      "SAML2Meta",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-b-idp-01": [
+      "SAML2MD-xsd",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-b-sp-01": [
+      "SAML2MD-xsd",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-c-idp-01": [
+      "SAML2MDIOP",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-c-sp-01": [
+      "SAML2MDIOP",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-c1-idp-01": [
+      "SAML2MDIOP",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-c1-sp-01": [
+      "SAML2MDIOP",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-c2-idp-01": [
+      "SAML2MDIOP",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-c2-sp-01": [
+      "SAML2MDIOP",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-c3-idp-01": [
+      "SAML2MDIOP",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-c3-sp-01": [
+      "SAML2MDIOP",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-c4-idp-01": [
+      "SAML2MDIOP",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-c4-sp-01": [
+      "SAML2MDIOP",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-c5-idp-01": [
+      "SAML2MDIOP",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-c5-sp-01": [
+      "SAML2MDIOP",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-c6-idp-01": [
+      "SAML2MDIOP",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-c6-sp-01": [
+      "SAML2MDIOP",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-c7-idp-01": [
+      "SAML2MDIOP",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-c7-sp-01": [
+      "SAML2MDIOP",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-c8-idp-01": [
+      "SAML2MDIOP",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-c8-sp-01": [
+      "SAML2MDIOP",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-c9-idp-01": [
+      "SAML2MDIOP",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-c9-sp-01": [
+      "SAML2MDIOP",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-ca-idp-01": [
+      "SAML2MDIOP",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-ca-sp-01": [
+      "SAML2MDIOP",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-cb-idp-01": [
+      "SAML2MDIOP",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-cb-sp-01": [
+      "SAML2MDIOP",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-cc-idp-01": [
+      "SAML2MDIOP",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-cc-sp-01": [
+      "SAML2MDIOP",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-cd-idp-01": [
+      "SAML2MDIOP",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-cd-sp-01": [
+      "SAML2MDIOP",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-ce-idp-01": [
+      "SAML2MDIOP",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-ce-sp-01": [
+      "SAML2MDIOP",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-d-idp-01": [
+      "MetaAttr",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-d-sp-01": [
+      "MetaAttr",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-d1-idp-01": [
+      "MetaAttr",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-d1-sp-01": [
+      "MetaAttr",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-d2-idp-01": [
+      "MetaAttr",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-d2-sp-01": [
+      "MetaAttr",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-d3-idp-01": [
+      "MetaAttr",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-d3-sp-01": [
+      "MetaAttr",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-d4-idp-01": [
+      "MetaAttr",
+      "SAML2Core",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-d4-sp-01": [
+      "MetaAttr",
+      "SAML2Core",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-d5-idp-01": [
+      "MetaAttr",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-d5-sp-01": [
+      "MetaAttr",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-d6-idp-01": [
+      "MetaAttr",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-d6-sp-01": [
+      "MetaAttr",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-d7-idp-01": [
+      "MetaAttr",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-d7-sp-01": [
+      "MetaAttr",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-d8-idp-01": [
+      "MetaAttr",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-d8-sp-01": [
+      "MetaAttr",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-d9-idp-01": [
+      "MetaAttr",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-d9-sp-01": [
+      "MetaAttr",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-e-idp-01": [
+      "SAML2MetaAlgSup",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-e-sp-01": [
+      "SAML2MetaAlgSup",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-e1-idp-01": [
+      "SAML2MetaAlgSup",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-e1-sp-01": [
+      "SAML2MetaAlgSup",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-e2-idp-01": [
+      "SAML2MetaAlgSup",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-e2-sp-01": [
+      "SAML2MetaAlgSup",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-e3-idp-01": [
+      "SAML2MetaAlgSup",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-e3-sp-01": [
+      "SAML2MetaAlgSup",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-e4-idp-01": [
+      "SAML2MetaAlgSup",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-e4-sp-01": [
+      "SAML2MetaAlgSup",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-e5-idp-01": [
+      "SAML2MetaAlgSup",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-e5-sp-01": [
+      "SAML2MetaAlgSup",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-e6-idp-01": [
+      "SAML2MetaAlgSup",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-e6-sp-01": [
+      "SAML2MetaAlgSup",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-e7-idp-01": [
+      "SAML2MetaAlgSup",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-e7-sp-01": [
+      "SAML2MetaAlgSup",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-e8-idp-01": [
+      "SAML2MetaAlgSup",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-e8-sp-01": [
+      "SAML2MetaAlgSup",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-e9-idp-01": [
+      "SAML2MetaAlgSup",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-e9-sp-01": [
+      "SAML2MetaAlgSup",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-ea-idp-01": [
+      "SAML2MetaAlgSup",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-ea-sp-01": [
+      "SAML2MetaAlgSup",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-eb-idp-01": [
+      "SAML2MetaAlgSup",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-eb-sp-01": [
+      "SAML2MetaAlgSup",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-ec-idp-01": [
+      "SAML2MetaAlgSup",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-ec-sp-01": [
+      "SAML2MetaAlgSup",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-ed-idp-01": [
+      "SAML2MetaAlgSup",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-ed-sp-01": [
+      "SAML2MetaAlgSup",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-f-idp-01": [
+      "MetaUi",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-f-sp-01": [
+      "MetaUi",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-f1-idp-01": [
+      "MetaUi",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-f1-sp-01": [
+      "MetaUi",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-f2-idp-01": [
+      "MetaUi",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-f2-sp-01": [
+      "MetaUi",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-f3-idp-01": [
+      "MetaUi",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-f3-sp-01": [
+      "MetaUi",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-f4-idp-01": [
+      "MetaUi",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-f4-sp-01": [
+      "MetaUi",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-f5-idp-01": [
+      "MetaUi",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-f5-sp-01": [
+      "MetaUi",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-f6-sp-01": [
+      "MetaUi",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-f7-idp-01": [
+      "MetaUi",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-f8-idp-01": [
+      "MetaUi",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-f8-sp-01": [
+      "MetaUi",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-f9-idp-01": [
+      "MetaUi",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-f9-sp-01": [
+      "MetaUi",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-fa-idp-01": [
+      "MetaUi",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-fa-sp-01": [
+      "MetaUi",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-fb-idp-01": [
+      "MetaUi",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-fb-sp-01": [
+      "MetaUi",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-fc-idp-01": [
+      "MetaUi",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-fc-sp-01": [
+      "MetaUi",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-fd-idp-01": [
+      "MetaUi",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-fd-sp-01": [
+      "MetaUi",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-fe-idp-01": [
+      "MetaUi",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-fe-sp-01": [
+      "MetaUi",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-ff-idp-01": [
+      "MetaUi",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-ff-sp-01": [
+      "MetaUi",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-fg-idp-01": [
+      "MetaUi",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-fg-sp-01": [
+      "MetaUi",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-fh-idp-01": [
+      "MetaUi",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-fh-sp-01": [
+      "MetaUi",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-fi-idp-01": [
+      "MetaUi",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-fi-sp-01": [
+      "MetaUi",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-fj-idp-01": [
+      "MetaUi",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-fj-sp-01": [
+      "MetaUi",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-fk-idp-01": [
+      "MetaUi",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-fk-sp-01": [
+      "MetaUi",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-g-idp-01": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05-g-sp-01": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD06-a-idp-01": [
+      "SAML2MDIOP",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD06-a-sp-01": [
+      "SAML2MDIOP",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD06-a1-idp-01": [
+      "SAML2MDIOP",
+      "SAML2Meta",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD06-a1-sp-01": [
+      "SAML2MDIOP",
+      "SAML2Meta",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD06-a2-idp-01": [
+      "SAML2MDIOP",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD06-a2-sp-01": [
+      "SAML2MDIOP",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD06-a3-idp-01": [
+      "SAML2MDIOP",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD06-a3-sp-01": [
+      "SAML2MDIOP",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD06-a4-idp-01": [
+      "SAML2MDIOP",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD06-a4-sp-01": [
+      "SAML2MDIOP",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD06-a5-idp-01": [
+      "SAML2MDIOP",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD06-a5-sp-01": [
+      "SAML2MDIOP",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD06-a6-idp-01": [
+      "SAML2MDIOP",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD06-a6-sp-01": [
+      "SAML2MDIOP",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD06-a7-idp-01": [
+      "SAML2MDIOP",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD06-a7-sp-01": [
+      "SAML2MDIOP",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD06-a8-idp-01": [
+      "SAML2MDIOP",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD06-a8-sp-01": [
+      "SAML2MDIOP",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD06-a9-idp-01": [
+      "SAML2MDIOP",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD06-a9-sp-01": [
+      "SAML2MDIOP",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD06-aa-idp-01": [
+      "SAML2MDIOP",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD06-aa-sp-01": [
+      "SAML2MDIOP",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD06-ab-idp-01": [
+      "SAML2MDIOP",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD06-ab-sp-01": [
+      "SAML2MDIOP",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD06-b-idp-01": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD06-b-sp-01": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD06-c-idp-01": [
+      "SAML2MDIOP",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD06-c-sp-01": [
+      "SAML2MDIOP",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD07-a-idp-01": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD07-a-sp-01": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD07-b-idp-01": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD07-b-sp-01": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD08-a-idp-01": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD08-a-sp-01": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD09-a-idp-01": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD09-a-sp-01": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD09-b-idp-01": [
+      "SAML2MetaAlgSup",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD09-b-sp-01": [
+      "SAML2MetaAlgSup",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD10-a-idp-01": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD10-b-sp-01": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD11-a-idp-01": [
+      "SAML2Errata",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD11-a-sp-01": [
+      "SAML2Errata",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD12-a-idp-01": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD12-a-sp-01": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD12-b-idp-01": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD12-b-sp-01": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD12-c-idp-01": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD12-c-sp-01": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD12-d-idp-01": [
+      "SAML2MDIOP",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD12-d-sp-01": [
+      "SAML2MDIOP",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-a-idp-01": [
+      "SAML2Core",
+      "SAML2Errata",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-a-sp-01": [
+      "SAML2Core",
+      "SAML2Errata",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-b-sp-01": [
+      "SAML2Core",
+      "SAML2Errata",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-c-sp-01": [
+      "SAML2Core",
+      "SAML2Errata",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-d-idp-01": [
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-e-idp-01": [
+      "SAML2Core",
+      "SAML2Errata",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-f-idp-01": [
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-g-idp-01": [
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-h-idp-01": [
+      "SAML2Errata",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-h1-idp-01": [
+      "SAML2Errata",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-i-idp-01": [
+      "SAML2Core",
+      "SAML2Errata",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-i1-idp-01": [
+      "SAML2Errata",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-i2-idp-01": [
+      "SAML2Errata",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-j-idp-01": [
+      "SAML2Errata",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-k-idp-01": [
+      "SAML2Errata",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-k1-idp-01": [
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-k2-idp-01": [
+      "SAML2Core",
+      "SAML2Errata",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-l-idp-01": [
+      "SAML2Errata",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-l1-idp-01": [
+      "SAML2Errata",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-m-idp-01": [
+      "SAML2Errata",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-n-sp-01": [
+      "SAML2Bind",
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-o-sp-01": [
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-p-sp-01": [
+      "SAML2Errata",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-q-sp-01": [
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-r-sp-01": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-r1-sp-01": [
+      "SAML2Errata",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-s-sp-01": [
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-s1-sp-01": [
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-t-sp-01": [
+      "SAML2Errata",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-u-idp-01": [
+      "SAML2Core",
+      "SAML2Errata",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-u-sp-01": [
+      "SAML2Core",
+      "SAML2Errata",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-u1-idp-01": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-v-idp-01": [
+      "SAML2Errata",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-w-sp-01": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-x-idp-01": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-y-idp-01": [
+      "SAML2Core",
+      "SAML2Errata",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-y1-idp-01": [
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-z-idp-01": [
+      "SAML2Core",
+      "SAML2Errata",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-aa-sp-01": [
+      "SAML2Errata",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-ab-idp-01": [
+      "SAML2Bind",
+      "SAML2Errata",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-ab-sp-01": [
+      "SAML2Bind",
+      "SAML2Errata",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-ac-sp-01": [
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-ad-idp-01": [
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-ad-sp-01": [
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-ae-idp-01": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-af-sp-01": [
+      "SAML2Core",
+      "SAML2P-xsd",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-ag-idp-01": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-ah-idp-01": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-ah-sp-01": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-ai-idp-01": [
+      "SAML2Bind",
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-aj-idp-01": [
+      "SAML2Bind",
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-ak-idp-01": [
+      "SAML2Core",
+      "SAML2Errata",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-al-idp-01": [
+      "SAML2Bind",
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-am-sp-01": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-an-idp-01": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-ao-idp-01": [
+      "SAML2Core",
+      "SAML2P-xsd",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-ap-idp-01": [
+      "SAML2Core",
+      "SAML2Errata",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-aq-sp-01": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-ar-sp-01": [
+      "SAML2Bind",
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-as-sp-01": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-at-sp-01": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-au-idp-01": [
+      "SAML2Core",
+      "SAML2Errata",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-av-idp-01": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-av-sp-01": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-aw-idp-01": [
+      "SAML2Core",
+      "SAML2Errata",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-ax-idp-01": [
+      "SAML2Core",
+      "SAML2Errata",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-ay-idp-01": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-az-idp-01": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-ba-idp-01": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-bb-idp-01": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-bc-idp-01": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-bd-idp-01": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-be-idp-01": [
+      "SAML2Core",
+      "SAML2Errata",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-bf-idp-01": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-bg-idp-01": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-bh-idp-01": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-bi-idp-01": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-bj-idp-01": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-cc-idp-01": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-cc-sp-01": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-cd-idp-01": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-cd-sp-01": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-ce-idp-01": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-ce-sp-01": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-cf-idp-01": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-cf-sp-01": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-cg-sp-01": [
+      "SAML2Core",
+      "SAML2P-xsd",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-dv-idp-01": [
+      "SAML2Core",
+      "SAML2P-xsd",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-dw-idp-01": [
+      "SAML2-xsd",
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-dx-idp-01": [
+      "SAML2Core",
+      "SAML2P-xsd",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-ch-idp-01": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-ci-idp-01": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-cj-idp-01": [
+      "SAML2Core",
+      "SAML2Errata",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-ck-idp-01": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-cl-idp-01": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-cm-idp-01": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-cn-idp-01": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-co-sp-01": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-cp-sp-01": [
+      "SAML2Core",
+      "SAML2Errata",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-cq-sp-01": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-cr-sp-01": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-cs-sp-01": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-ct-idp-01": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-cu-idp-01": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-cv-idp-01": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-cw-idp-01": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-cx-sp-01": [
+      "SAML2-xsd",
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-cy-idp-01": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-cy-sp-01": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-cz-idp-01": [
+      "SAML2Core",
+      "SAML2Errata",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-da-idp-01": [
+      "SAML2-xsd",
+      "SAML2Core",
+      "SAML2MD-xsd",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-db-idp-01": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-dc-idp-01": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-dd-idp-01": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-de-idp-01": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-df-idp-01": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-dg-idp-01": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-dh-idp-01": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-di-idp-01": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-dj-idp-01": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-dk-idp-01": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-dl-idp-01": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-dm-idp-01": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-dn-idp-01": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-do-idp-01": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-dp-idp-01": [
+      "SAML2Bind",
+      "SAML2Core",
+      "SAML2Prof",
+      "XMLEnc",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-dq-idp-01": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-ds-idp-01": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-du-idp-01": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-dy-idp-01": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-dz-idp-01": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-dz-sp-01": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-ea-idp-01": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-ea-sp-01": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-eb-idp-01": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-eb-sp-01": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-ec-idp-01": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-ec-sp-01": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-ed-idp-01": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-ed-sp-01": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-ee-idp-01": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-ee-sp-01": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-ef-idp-01": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-ef-sp-01": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-eg-idp-01": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-eg-sp-01": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-eh-idp-01": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-eh-sp-01": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-ei-idp-01": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-ei-sp-01": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-ej-idp-01": [
+      "SAML2-xsd",
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-ek-sp-01": [
+      "SAML2-xsd",
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-el-sp-01": [
+      "SAML2Core",
+      "SAML2Errata",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-em-idp-01": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-en-idp-01": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-eo-idp-01": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-ep-idp-01": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-eq-idp-01": [
+      "SAML2Core",
+      "SAML2Errata",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-fg-sp-01": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-fh-sp-01": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-er-idp-01": [
+      "SAML2Bind",
+      "SAML2Core",
+      "SAML2Prof",
+      "XMLEnc",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-er-sp-01": [
+      "SAML2Bind",
+      "SAML2Core",
+      "SAML2Prof",
+      "XMLEnc",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-es-idp-01": [
+      "SAML2Core",
+      "SAML2Errata",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-et-idp-01": [
+      "SAML2Bind",
+      "SAML2Core",
+      "SAML2Errata",
+      "SAML2P-xsd",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-fj-sp-01": [
+      "SAML2Bind",
+      "SAML2Core",
+      "SAML2Prof",
+      "XMLEnc",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-eu-idp-01": [
+      "SAML2Core",
+      "SAML2P-xsd",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-eu-sp-01": [
+      "SAML2Core",
+      "SAML2P-xsd",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-ev-idp-01": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-ev-sp-01": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-ew-idp-01": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-ew-sp-01": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-ex-idp-01": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-ex-sp-01": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-ey-sp-01": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-fk-idp-01": [
+      "SAML2Core",
+      "SAML2Errata",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-ez-idp-01": [
+      "SAML2Bind",
+      "SAML2Core",
+      "SAML2Errata",
+      "SAML2Prof",
+      "XMLEnc",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-fd-idp-01": [
+      "SAML2Bind",
+      "SAML2Core",
+      "SAML2Errata",
+      "SAML2Prof",
+      "XMLEnc",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-fe-idp-01": [
+      "SAML2Bind",
+      "SAML2Core",
+      "SAML2Errata",
+      "SAML2Prof",
+      "XMLEnc",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-dr-idp-01": [
+      "SAML2Core",
+      "SAML2P-xsd",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-bk-idp-01": [
+      "SAML2Bind",
+      "SAML2Errata",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-y2-sp-01": [
+      "SAML2Bind",
+      "SAML2Errata",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-fl-sp-01": [
+      "SAML2Core",
+      "SAML2Errata",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-fm-idp-01": [
+      "SAML2Core",
+      "SAML2Errata",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-fn-sp-01": [
+      "SAML2Errata",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-fo-idp-01": [
+      "SAML2Core",
+      "SAML2Errata",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-fp-idp-01": [
+      "SAML2Errata",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-fr-idp-01": [
+      "SAML2Core",
+      "SAML2Errata",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-fs-idp-01": [
+      "SAML2Core",
+      "SAML2Errata",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-fs-sp-01": [
+      "SAML2Core",
+      "SAML2Errata",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-ft-sp-01": [
+      "SAML2Errata",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-fu-idp-01": [
+      "SAML2Errata",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-fv-idp-01": [
+      "SAML2Errata",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-fw-sp-01": [
+      "SAML2Errata",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-fx-idp-01": [
+      "SAML2Bind",
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-fy-sp-01": [
+      "SAML2Bind",
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-fz-sp-01": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-ga-idp-01": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-gb-idp-01": [
+      "SAML2Errata",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-gc-idp-01": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-gd-idp-01": [
+      "SAML2Errata",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-ge-idp-01": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-gf-idp-01": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-gg-idp-01": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-gh-idp-01": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-gi-idp-01": [
+      "SAML2Core",
+      "SAML2Errata",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01-gj-idp-01": [
+      "SAML2Errata",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO02-a-idp-01": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO02-a-sp-01": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO03-a-idp-01": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO03-a-sp-01": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO03-b-idp-01": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO03-b-sp-01": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO04-a-idp-01": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO04-a-sp-01": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO05-a-idp-01": [
+      "SAML2Core",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO05-a-sp-01": [
+      "SAML2Core",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO05-a1-idp-01": [
+      "SAML2Core",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO05-a2-idp-01": [
+      "SAML2Core",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO05-a3-idp-01": [
+      "SAML2Core",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO05-a5-idp-01": [
+      "SAML2Core",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO05-a6-idp-01": [
+      "SAML2Core",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO05-a7-idp-01": [
+      "SAML2Core",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO05-a8-idp-01": [
+      "SAML2Core",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO05-b-idp-01": [
+      "SAML2Core",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO05-b-sp-01": [
+      "SAML2Core",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO05-b1-idp-01": [
+      "SAML2Core",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO05-b2-idp-01": [
+      "SAML2Core",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO05-b3-sp-01": [
+      "SAML2Core",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO06-a-idp-01": [
+      "SAML2ECP",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO06-a-sp-01": [
+      "SAML2ECP",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO07-a-idp-01": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO07-a-sp-01": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO07-b-idp-01": [
+      "SAML2Core",
+      "SAML2Errata",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO07-b-sp-01": [
+      "SAML2Core",
+      "SAML2Errata",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-EXT01-a-idp-01": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-EXT01-a-sp-01": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-EXT01-b1-idp-01": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-EXT01-b1-sp-01": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-EXT01-b-idp-01": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-EXT01-b-sp-01": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-EXT01-c1-idp-01": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-EXT01-c1-sp-01": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-EXT01-c-idp-01": [
+      "SAML2-xsd",
+      "SAML2MD-xsd",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-EXT01-c-sp-01": [
+      "SAML2-xsd",
+      "SAML2MD-xsd",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-ALG01-a-idp-01": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-ALG01-a-sp-01": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-ALG02-a-idp-01": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-ALG02-a-sp-01": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-ALG03-a-idp-01": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-ALG03-a-sp-01": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-ALG04-a-idp-01": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-ALG04-a-sp-01": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-ALG04-b-idp-01": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-ALG04-b-sp-01": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-ALG05-a-idp-01": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-ALG05-a-sp-01": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-ALG05-b-idp-01": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-ALG05-b-sp-01": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-ALG06-a-idp-01": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-ALG06-a-sp-01": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-ALG06-b-idp-01": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-ALG06-b-sp-01": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-ALG06-c-idp-01": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-ALG06-c-sp-01": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-ALG06-d-idp-01": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-ALG06-d-sp-01": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-ALG07-a-idp-01": [
+      "RFC7457",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-ALG07-a-sp-01": [
+      "RFC7457",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-ALG08-a-idp-01": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-ALG08-a-sp-01": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-ALG08-b-idp-01": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-ALG08-b-sp-01": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-ALG08-c-idp-01": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-ALG08-c-sp-01": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP01-a-sp-01": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP02-a-sp-01": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP02-b-sp-01": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP02-c-sp-01": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP03-a-sp-01": [
+      "SAML2Errata",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP03-b-sp-01": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP04-a-sp-01": [
+      "IdPDisco",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP04-b-sp-01": [
+      "IdPDisco",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP04-c-sp-01": [
+      "IdPDisco",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP04-d-sp-01": [
+      "IdPDisco",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP04-e-sp-01": [
+      "IdPDisco",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP04-f-sp-01": [
+      "IdPDisco",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP04-g-sp-01": [
+      "IdPDisco",
+      "SAML2Meta",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP04-h-sp-01": [
+      "IdPDisco",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP04-i-sp-01": [
+      "IdPDisco",
+      "SAML2MD-xsd",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP05-a-sp-01": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP05-b-sp-01": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP06-a-sp-01": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP06-b-sp-01": [
+      "SAML2Core",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP07-a-sp-01": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP08-a-sp-01": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP08-b-sp-01": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP08-c-sp-01": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP09-a-sp-01": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP09-b-sp-01": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP10-a-sp-01": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP11-a-sp-01": [
+      "SAML2Core",
+      "SAML2Errata",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP12-a-sp-01": [
+      "SAML2Core",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP12-b-sp-01": [
+      "SAML2Core",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP13-a-sp-01": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP13-b-sp-01": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP14-a-sp-01": [
+      "SAML2Core",
+      "SAML2Errata",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP14-b-sp-01": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP14-c-sp-01": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP14-c1-sp-01": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP14-d-sp-01": [
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP14-e-sp-01": [
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP14-f-sp-01": [
+      "SAML2Errata",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP14-g-sp-01": [
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP14-h-sp-01": [
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP14-i-sp-01": [
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP14-j-sp-01": [
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP14-k-sp-01": [
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP14-l-sp-01": [
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP14-m-sp-01": [
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP14-n-sp-01": [
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP14-o-sp-01": [
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP14-p-sp-01": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP14-q-sp-01": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP14-r-sp-01": [
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP14-s-sp-01": [
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP14-t-sp-01": [
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP14-u-sp-01": [
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP14-v-sp-01": [
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP14-w-sp-01": [
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP14-x-sp-01": [
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP14-y-sp-01": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP14-z-sp-01": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP14-aa-sp-01": [
+      "SAML2Core",
+      "SAML2P-xsd",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP14-ab-sp-01": [
+      "SAML2Core",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP14-ac-sp-01": [
+      "SAML2Bind",
+      "SAML2Core",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP14-ad-sp-01": [
+      "SAML2Bind",
+      "SAML2Core",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP14-ae-sp-01": [
+      "SAML2Bind",
+      "SAML2Core",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP14-af-sp-01": [
+      "SAML2Core",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP14-ag-sp-01": [
+      "SAML2Bind",
+      "SAML2Core",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP14-ah-sp-01": [
+      "SAML2Bind",
+      "SAML2Core",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP14-ai-sp-01": [
+      "SAML2Core",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP14-aj-sp-01": [
+      "SAML2Core",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP14-ak-sp-01": [
+      "SAML2Core",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP14-al-sp-01": [
+      "SAML2Core",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP14-am-sp-01": [
+      "SAML2Core",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP14-an-sp-01": [
+      "SAML2Core",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP14-ao-sp-01": [
+      "SAML2ASLO",
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP14-ap-sp-01": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP14-aq-sp-01": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP14-ar-sp-01": [
+      "SAML2Core",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP14-as-sp-01": [
+      "SAML2Core",
+      "SAML2P-xsd",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP15-a-sp-01": [
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP15-b-sp-01": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP15-c-sp-01": [
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP15-d-sp-01": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP16-a-sp-01": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP16-b-sp-01": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP16-c-sp-01": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP17-a-sp-01": [
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP01-a-idp-01": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP02-a-idp-01": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP03-a-idp-01": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP04-a-idp-01": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP04-b-idp-01": [
+      "SAML2Core",
+      "SAML2Errata",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP05-a-idp-01": [
+      "SAML2Core",
+      "SAML2Errata",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP06-a-idp-01": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP06-b-idp-01": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP06-c-idp-01": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP07-a-idp-01": [
+      "SAML2Core",
+      "SAML2Errata",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP08-a-idp-01": [
+      "SAML2Core",
+      "SAML2Errata",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP09-a-idp-01": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP09-b-idp-01": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP10-a-idp-01": [
+      "SAML2Core",
+      "SAML2Errata",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP10-b-idp-01": [
+      "SAML2Core",
+      "SAML2Errata",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP10-c-idp-01": [
+      "SAML2Core",
+      "SAML2Errata",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP10-d-idp-01": [
+      "SAML2Core",
+      "SAML2Errata",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP11-a-idp-01": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP12-a-idp-01": [
+      "SAML2Core",
+      "SAML2Errata",
+      "SAML2Meta",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP12-e-idp-01": [
+      "SAML2Core",
+      "SAML2Errata",
+      "SAML2Meta",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP12-f-idp-01": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP12-b-idp-01": [
+      "SAML2Core",
+      "SAML2Errata",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP12-c-idp-01": [
+      "SAML2Core",
+      "SAML2Meta",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP12-d-idp-01": [
+      "SAML2Core",
+      "SAML2Errata",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP13-a-idp-01": [
+      "SAML2Core",
+      "SAML2ECP",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP13-e-idp-01": [
+      "SAML2ECP",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP13-f-idp-01": [
+      "SAML2ECP",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP13-g-idp-01": [
+      "SAML2ECP",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP13-h-idp-01": [
+      "SAML2ECP",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP13-i-idp-01": [
+      "SAML2ECP",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP13-j-idp-01": [
+      "SAML2ECP",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP13-k-idp-01": [
+      "SAML2ECP",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP13-l-idp-01": [
+      "SAML2ECP",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP13-m-idp-01": [
+      "SAML2ECP",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP13-n-idp-01": [
+      "SAML2ECP",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP13-o-idp-01": [
+      "SAML2ECP",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP13-p-idp-01": [
+      "SAML2ECP",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP13-q-idp-01": [
+      "SAML2ECP",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP13-r-idp-01": [
+      "SAML2ECP",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP13-b-idp-01": [
+      "SAML2ECP",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP13-c-idp-01": [
+      "SAML2Core",
+      "SAML2ECP",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP13-d-idp-01": [
+      "SAML2ECP",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP14-a-idp-01": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP14-b-idp-01": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP15-a-idp-01": [
+      "SAML-EC",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP16-a-idp-01": [
+      "SAML2ECP",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP17-a-idp-01": [
+      "SAML2Core",
+      "SAML2Errata",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP17-b-idp-01": [
+      "SAML2ASLO",
+      "SAML2Bind",
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP17-b1-idp-01": [
+      "SAML2ASLO",
+      "SAML2Core",
+      "SAML2Errata",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP17-b2-idp-01": [
+      "SAML2ASLO",
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP17-b3-idp-01": [
+      "SAML2ASLO",
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP17-b4-idp-01": [
+      "SAML2ASLO",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP17-c-idp-01": [
+      "SAML2Core",
+      "SAML2Errata",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP17-d-idp-01": [
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP17-e-idp-01": [
+      "SAML2ASLO",
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP17-f-idp-01": [
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP17-g-idp-01": [
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP17-h-idp-01": [
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP17-i-idp-01": [
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP17-j-idp-01": [
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP17-k-idp-01": [
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP17-l-idp-01": [
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP17-m-idp-01": [
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP17-n-idp-01": [
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP17-o-idp-01": [
+      "SAML2ASLO",
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP17-p-idp-01": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP17-q-idp-01": [
+      "SAML2Core",
+      "SAML2Errata",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP17-r-idp-01": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP17-s-idp-01": [
+      "SAML2ASLO",
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP17-t-idp-01": [
+      "SAML2Core",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP17-u-idp-01": [
+      "SAML2Core",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP17-v-idp-01": [
+      "SAML2Core",
+      "SAML2P-xsd",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP17-w-idp-01": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP17-x-idp-01": [
+      "SAML2Bind",
+      "SAML2Core",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP17-y-idp-01": [
+      "SAML2Bind",
+      "SAML2Core",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP17-z-idp-01": [
+      "SAML2Bind",
+      "SAML2Core",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP17-aa-idp-01": [
+      "SAML2ASLO",
+      "SAML2Core",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP17-ab-idp-01": [
+      "SAML2Bind",
+      "SAML2Core",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP17-ac-idp-01": [
+      "SAML2Bind",
+      "SAML2Core",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP17-ad-idp-01": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP17-ae-idp-01": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP17-af-idp-01": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP17-ag-idp-01": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP17-ah-idp-01": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP17-ai-idp-01": [
+      "SAML2Core",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP17-aj-idp-01": [
+      "SAML2Core",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP17-ak-idp-01": [
+      "SAML2Core",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP17-al-idp-01": [
+      "SAML2Core",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP17-am-idp-01": [
+      "SAML2Core",
+      "SAML2P-xsd",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP17-an-idp-01": [
+      "SAML2Core",
+      "SAML2Errata",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP18-a-idp-01": [
+      "SAML2Core",
+      "SAML2Errata",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP18-b-idp-01": [
+      "SAML2Core",
+      "SAML2Errata",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP18-c-idp-01": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP18-d-idp-01": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP19-a-idp-01": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP19-b-idp-01": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP19-c-idp-01": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP20-a-idp-01": [
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP21-a-idp-01": [
+      "kantara-fedinterop-impl"
+    ]
+  },
+  "profile_sources": {
+    "browser_sso_idp": [
+      "RFC7457",
+      "SAML2-xsd",
+      "SAML2Bind",
+      "SAML2Core",
+      "SAML2ECP",
+      "SAML2Errata",
+      "SAML2MD-xsd",
+      "SAML2Meta",
+      "SAML2P-xsd",
+      "SAML2Prof",
+      "XMLEnc",
+      "kantara-fedinterop-impl"
+    ],
+    "browser_sso_sp": [
+      "IdPDisco",
+      "RFC7457",
+      "SAML2-xsd",
+      "SAML2Bind",
+      "SAML2Core",
+      "SAML2ECP",
+      "SAML2Errata",
+      "SAML2MD-xsd",
+      "SAML2Meta",
+      "SAML2P-xsd",
+      "SAML2Prof",
+      "XMLEnc",
+      "kantara-fedinterop-impl"
+    ],
+    "ecp_idp": [
+      "RFC7457",
+      "SAML-EC",
+      "SAML2-xsd",
+      "SAML2Core",
+      "SAML2ECP",
+      "SAML2MD-xsd",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "metadata_idp": [
+      "MDQ",
+      "MetaAttr",
+      "MetaUi",
+      "RFC7457",
+      "SAML2-xsd",
+      "SAML2ASLO",
+      "SAML2Core",
+      "SAML2Errata",
+      "SAML2MD-xsd",
+      "SAML2MDIOP",
+      "SAML2Meta",
+      "SAML2MetaAlgSup",
+      "kantara-fedinterop-impl"
+    ],
+    "metadata_sp": [
+      "IdPDisco",
+      "MDQ",
+      "MetaAttr",
+      "MetaUi",
+      "RFC7457",
+      "SAML2-xsd",
+      "SAML2Core",
+      "SAML2Errata",
+      "SAML2MD-xsd",
+      "SAML2MDIOP",
+      "SAML2Meta",
+      "SAML2MetaAlgSup",
+      "kantara-fedinterop-impl"
+    ],
+    "single_logout_idp": [
+      "RFC7457",
+      "SAML2-xsd",
+      "SAML2ASLO",
+      "SAML2Bind",
+      "SAML2Core",
+      "SAML2Errata",
+      "SAML2MD-xsd",
+      "SAML2P-xsd",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "single_logout_sp": [
+      "RFC7457",
+      "SAML2-xsd",
+      "SAML2ASLO",
+      "SAML2Bind",
+      "SAML2Core",
+      "SAML2Errata",
+      "SAML2MD-xsd",
+      "SAML2P-xsd",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ]
+  },
+  "obligation_sources": {
+    "IIP-ALG01.a": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-ALG02.a": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-ALG03.a": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-ALG04.a": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-ALG04.b": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-ALG05.a": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-ALG05.b": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-ALG06.a": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-ALG06.b": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-ALG06.c": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-ALG06.d": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-ALG07.a": [
+      "RFC7457",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-ALG08.a": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-ALG08.b": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-ALG08.c": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-EXT01.a": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-EXT01.b": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-EXT01.b1": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-EXT01.c": [
+      "SAML2-xsd",
+      "SAML2MD-xsd",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-EXT01.c1": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-G01.a": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-G02.a": [
+      "SAML2Core",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-G02.b": [
+      "SAML2Core",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-G02.c": [
+      "SAML2Core",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-G03.a": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-G03.b": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP01.a": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP02.a": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP03.a": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP04.a": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP04.b": [
+      "SAML2Core",
+      "SAML2Errata",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP05.a": [
+      "SAML2Core",
+      "SAML2Errata",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP06.a": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP06.b": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP06.c": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP07.a": [
+      "SAML2Core",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP08.a": [
+      "SAML2Core",
+      "SAML2Errata",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP09.a": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP09.b": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP10.a": [
+      "SAML2Core",
+      "SAML2Errata",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP10.b": [
+      "SAML2Core",
+      "SAML2Errata",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP10.c": [
+      "SAML2Core",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP10.d": [
+      "SAML2Core",
+      "SAML2Errata",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP11.a": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP12.a": [
+      "SAML2Core",
+      "SAML2Errata",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP12.b": [
+      "SAML2Core",
+      "SAML2Errata",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP12.c": [
+      "SAML2Core",
+      "SAML2Meta",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP12.d": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP12.e": [
+      "SAML2Core",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP12.f": [
+      "SAML2Core",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP13.a": [
+      "SAML2ECP",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP13.b": [
+      "SAML2ECP",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP13.c": [
+      "SAML2Core",
+      "SAML2ECP",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP13.d": [
+      "SAML2ECP",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP13.e": [
+      "SAML2ECP",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP13.f": [
+      "SAML2ECP",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP13.g": [
+      "SAML2ECP",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP13.h": [
+      "SAML2ECP",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP13.i": [
+      "SAML2ECP",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP13.j": [
+      "SAML2ECP",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP13.k": [
+      "SAML2ECP",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP13.l": [
+      "SAML2ECP",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP13.m": [
+      "SAML2ECP",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP13.n": [
+      "SAML2ECP",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP13.o": [
+      "SAML2ECP",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP13.p": [
+      "SAML2ECP",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP13.q": [
+      "SAML2ECP",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP13.r": [
+      "SAML2ECP",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP14.a": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP14.b": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP15.a": [
+      "SAML-EC",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP16.a": [
+      "SAML2ECP",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP17.a": [
+      "SAML2Core",
+      "SAML2Errata",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP17.aa": [
+      "SAML2Core",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP17.ab": [
+      "SAML2Core",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP17.ac": [
+      "SAML2Bind",
+      "SAML2Core",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP17.ad": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP17.ae": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP17.af": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP17.ag": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP17.ah": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP17.ai": [
+      "SAML2Core",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP17.aj": [
+      "SAML2Core",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP17.ak": [
+      "SAML2Core",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP17.al": [
+      "SAML2Core",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP17.am": [
+      "SAML2Core",
+      "SAML2P-xsd",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP17.an": [
+      "SAML2Core",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP17.b": [
+      "SAML2ASLO",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP17.b1": [
+      "SAML2ASLO",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP17.b2": [
+      "SAML2ASLO",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP17.b3": [
+      "SAML2ASLO",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP17.b4": [
+      "SAML2ASLO",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP17.c": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP17.d": [
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP17.e": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP17.f": [
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP17.g": [
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP17.h": [
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP17.i": [
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP17.j": [
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP17.k": [
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP17.l": [
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP17.m": [
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP17.n": [
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP17.o": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP17.p": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP17.q": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP17.r": [
+      "SAML2Core",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP17.s": [
+      "SAML2Core",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP17.t": [
+      "SAML2Core",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP17.u": [
+      "SAML2Core",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP17.v": [
+      "SAML2Core",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP17.w": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP17.x": [
+      "SAML2Bind",
+      "SAML2Core",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP17.y": [
+      "SAML2Bind",
+      "SAML2Core",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP17.z": [
+      "SAML2Core",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP18.a": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP18.b": [
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP18.c": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP18.d": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP19.a": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP19.b": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP19.c": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP20.a": [
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-IDP21.a": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD01.a": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD01.b": [
+      "MDQ",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD01.c": [
+      "MDQ",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD02.a": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD02.b": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD02.c": [
+      "SAML2Meta",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD02.d": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD03.a": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD03.b": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD03.c": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD03.d": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD03.e": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD04.a": [
+      "SAML2Meta",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD04.b": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD04.c": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05.a": [
+      "SAML2Meta",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05.a1": [
+      "SAML2Meta",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05.a2": [
+      "SAML2Meta",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05.a3": [
+      "SAML2Meta",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05.a4": [
+      "SAML2Meta",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05.a5": [
+      "SAML2Meta",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05.a6": [
+      "SAML2Meta",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05.a7": [
+      "SAML2Meta",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05.a8": [
+      "SAML2Meta",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05.a9": [
+      "SAML2Meta",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05.ab": [
+      "SAML2Meta",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05.ac": [
+      "SAML2Meta",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05.ad": [
+      "SAML2Errata",
+      "SAML2Meta",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05.ae": [
+      "SAML2Errata",
+      "SAML2Meta",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05.af": [
+      "SAML2Meta",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05.ag": [
+      "SAML2Meta",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05.ah": [
+      "SAML2Meta",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05.ai": [
+      "SAML2Meta",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05.aj": [
+      "SAML2Meta",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05.ak": [
+      "SAML2Meta",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05.al": [
+      "SAML2Meta",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05.am": [
+      "SAML2Meta",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05.an": [
+      "SAML2Meta",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05.ao": [
+      "SAML2Meta",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05.ap": [
+      "SAML2Errata",
+      "SAML2Meta",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05.aq": [
+      "SAML2Errata",
+      "SAML2Meta",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05.ar": [
+      "SAML2Errata",
+      "SAML2Meta",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05.as": [
+      "SAML2Errata",
+      "SAML2Meta",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05.at": [
+      "SAML2Errata",
+      "SAML2Meta",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05.au": [
+      "SAML2Errata",
+      "SAML2Meta",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05.av": [
+      "SAML2Errata",
+      "SAML2Meta",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05.aw": [
+      "SAML2Errata",
+      "SAML2Meta",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05.b": [
+      "SAML2MD-xsd",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05.c": [
+      "SAML2MDIOP",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05.c1": [
+      "SAML2MDIOP",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05.c2": [
+      "SAML2MDIOP",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05.c3": [
+      "SAML2MDIOP",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05.c4": [
+      "SAML2MDIOP",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05.c5": [
+      "SAML2MDIOP",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05.c6": [
+      "SAML2MDIOP",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05.c7": [
+      "SAML2MDIOP",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05.c8": [
+      "SAML2MDIOP",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05.c9": [
+      "SAML2MDIOP",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05.ca": [
+      "SAML2MDIOP",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05.cb": [
+      "SAML2MDIOP",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05.cc": [
+      "SAML2MDIOP",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05.cd": [
+      "SAML2MDIOP",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05.ce": [
+      "SAML2MDIOP",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05.d": [
+      "MetaAttr",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05.d1": [
+      "MetaAttr",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05.d2": [
+      "MetaAttr",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05.d3": [
+      "MetaAttr",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05.d4": [
+      "MetaAttr",
+      "SAML2Core",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05.d5": [
+      "MetaAttr",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05.d6": [
+      "MetaAttr",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05.d7": [
+      "MetaAttr",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05.d8": [
+      "MetaAttr",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05.d9": [
+      "MetaAttr",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05.e": [
+      "SAML2MetaAlgSup",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05.e1": [
+      "SAML2MetaAlgSup",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05.e2": [
+      "SAML2MetaAlgSup",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05.e3": [
+      "SAML2MetaAlgSup",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05.e4": [
+      "SAML2MetaAlgSup",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05.e5": [
+      "SAML2MetaAlgSup",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05.e6": [
+      "SAML2MetaAlgSup",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05.e7": [
+      "SAML2MetaAlgSup",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05.e8": [
+      "SAML2MetaAlgSup",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05.e9": [
+      "SAML2MetaAlgSup",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05.ea": [
+      "SAML2MetaAlgSup",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05.eb": [
+      "SAML2MetaAlgSup",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05.ec": [
+      "SAML2MetaAlgSup",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05.ed": [
+      "SAML2MetaAlgSup",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05.f": [
+      "MetaUi",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05.f1": [
+      "MetaUi",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05.f2": [
+      "MetaUi",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05.f3": [
+      "MetaUi",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05.f4": [
+      "MetaUi",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05.f5": [
+      "MetaUi",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05.f6": [
+      "MetaUi",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05.f7": [
+      "MetaUi",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05.f8": [
+      "MetaUi",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05.f9": [
+      "MetaUi",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05.fa": [
+      "MetaUi",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05.fb": [
+      "MetaUi",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05.fc": [
+      "MetaUi",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05.fd": [
+      "MetaUi",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05.fe": [
+      "MetaUi",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05.ff": [
+      "MetaUi",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05.fg": [
+      "MetaUi",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05.fh": [
+      "MetaUi",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05.fi": [
+      "MetaUi",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05.fj": [
+      "MetaUi",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05.fk": [
+      "MetaUi",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD05.g": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD06.a": [
+      "SAML2MDIOP",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD06.a1": [
+      "SAML2MDIOP",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD06.a2": [
+      "SAML2MDIOP",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD06.a3": [
+      "SAML2MDIOP",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD06.a4": [
+      "SAML2MDIOP",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD06.a5": [
+      "SAML2MDIOP",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD06.a6": [
+      "SAML2MDIOP",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD06.a7": [
+      "SAML2MDIOP",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD06.a8": [
+      "SAML2MDIOP",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD06.a9": [
+      "SAML2MDIOP",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD06.aa": [
+      "SAML2MDIOP",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD06.ab": [
+      "SAML2MDIOP",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD06.b": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD06.c": [
+      "SAML2MDIOP",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD07.a": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD07.b": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD08.a": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD09.a": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD09.b": [
+      "SAML2MetaAlgSup",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD10.a": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD10.b": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD11.a": [
+      "SAML2Errata",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD12.a": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD12.b": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD12.c": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-MD12.d": [
+      "SAML2MDIOP",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP01.a": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP02.a": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP02.b": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP02.c": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP03.a": [
+      "SAML2Errata",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP03.b": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP04.a": [
+      "IdPDisco",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP04.b": [
+      "IdPDisco",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP04.c": [
+      "IdPDisco",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP04.d": [
+      "IdPDisco",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP04.e": [
+      "IdPDisco",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP04.f": [
+      "IdPDisco",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP04.g": [
+      "IdPDisco",
+      "SAML2Meta",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP04.h": [
+      "IdPDisco",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP04.i": [
+      "IdPDisco",
+      "SAML2MD-xsd",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP05.a": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP05.b": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP06.a": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP06.b": [
+      "SAML2Core",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP07.a": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP08.a": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP08.b": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP08.c": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP09.a": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP09.b": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP10.a": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP11.a": [
+      "SAML2Core",
+      "SAML2Errata",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP12.a": [
+      "SAML2Core",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP12.b": [
+      "SAML2Core",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP13.a": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP13.b": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP14.a": [
+      "SAML2Errata",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP14.aa": [
+      "SAML2Core",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP14.ab": [
+      "SAML2Core",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP14.ac": [
+      "SAML2Bind",
+      "SAML2Core",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP14.ad": [
+      "SAML2Bind",
+      "SAML2Core",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP14.ae": [
+      "SAML2Core",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP14.af": [
+      "SAML2Core",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP14.ag": [
+      "SAML2Core",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP14.ah": [
+      "SAML2Bind",
+      "SAML2Core",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP14.ai": [
+      "SAML2Core",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP14.aj": [
+      "SAML2Core",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP14.ak": [
+      "SAML2Core",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP14.al": [
+      "SAML2Core",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP14.am": [
+      "SAML2Core",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP14.an": [
+      "SAML2Core",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP14.ao": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP14.ap": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP14.aq": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP14.ar": [
+      "SAML2Core",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP14.as": [
+      "SAML2Core",
+      "SAML2P-xsd",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP14.b": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP14.c": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP14.c1": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP14.d": [
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP14.e": [
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP14.f": [
+      "SAML2Errata",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP14.g": [
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP14.h": [
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP14.i": [
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP14.j": [
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP14.k": [
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP14.l": [
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP14.m": [
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP14.n": [
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP14.o": [
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP14.p": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP14.q": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP14.r": [
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP14.s": [
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP14.t": [
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP14.u": [
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP14.v": [
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP14.w": [
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP14.x": [
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP14.y": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP14.z": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP15.a": [
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP15.b": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP15.c": [
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP15.d": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP16.a": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP16.b": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP16.c": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SP17.a": [
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.a": [
+      "SAML2Core",
+      "SAML2Errata",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.aa": [
+      "SAML2Errata",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.ab": [
+      "SAML2Bind",
+      "SAML2Errata",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.ac": [
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.ad": [
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.ae": [
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.af": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.ag": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.ah": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.ai": [
+      "SAML2Bind",
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.aj": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.ak": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.al": [
+      "SAML2Bind",
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.am": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.an": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.ao": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.ap": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.aq": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.ar": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.as": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.at": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.au": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.av": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.aw": [
+      "SAML2Core",
+      "SAML2Errata",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.ax": [
+      "SAML2Core",
+      "SAML2Errata",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.ay": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.az": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.b": [
+      "SAML2Core",
+      "SAML2Errata",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.ba": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.bb": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.bc": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.bd": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.be": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.bf": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.bg": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.bh": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.bi": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.bj": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.bk": [
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.c": [
+      "SAML2Core",
+      "SAML2Errata",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.cc": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.cd": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.ce": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.cf": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.cg": [
+      "SAML2Core",
+      "SAML2P-xsd",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.ch": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.ci": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.cj": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.ck": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.cl": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.cm": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.cn": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.co": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.cp": [
+      "SAML2Core",
+      "SAML2Errata",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.cq": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.cr": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.cs": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.ct": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.cu": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.cv": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.cw": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.cx": [
+      "SAML2-xsd",
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.cy": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.cz": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.d": [
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.da": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.db": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.dc": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.dd": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.de": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.df": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.dg": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.dh": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.di": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.dj": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.dk": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.dl": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.dm": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.dn": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.do": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.dp": [
+      "SAML2Core",
+      "SAML2Prof",
+      "XMLEnc",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.dq": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.dr": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.ds": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.du": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.dv": [
+      "SAML2Core",
+      "SAML2P-xsd",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.dw": [
+      "SAML2-xsd",
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.dx": [
+      "SAML2Core",
+      "SAML2P-xsd",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.dy": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.dz": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.e": [
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.ea": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.eb": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.ec": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.ed": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.ee": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.ef": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.eg": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.eh": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.ei": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.ej": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.ek": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.el": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.em": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.en": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.eo": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.ep": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.eq": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.er": [
+      "SAML2Bind",
+      "SAML2Core",
+      "SAML2Prof",
+      "XMLEnc",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.es": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.et": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.eu": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.ev": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.ew": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.ex": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.ey": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.ez": [
+      "SAML2Core",
+      "SAML2Errata",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.f": [
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.fd": [
+      "SAML2Core",
+      "SAML2Errata",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.fe": [
+      "SAML2Core",
+      "SAML2Errata",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.fg": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.fh": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.fj": [
+      "SAML2Bind",
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.fk": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.fl": [
+      "SAML2Core",
+      "SAML2Errata",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.fm": [
+      "SAML2Core",
+      "SAML2Errata",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.fn": [
+      "SAML2Errata",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.fo": [
+      "SAML2Core",
+      "SAML2Errata",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.fp": [
+      "SAML2Errata",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.fr": [
+      "SAML2Core",
+      "SAML2Errata",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.fs": [
+      "SAML2Core",
+      "SAML2Errata",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.ft": [
+      "SAML2Errata",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.fu": [
+      "SAML2Errata",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.fv": [
+      "SAML2Errata",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.fw": [
+      "SAML2Errata",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.fx": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.fy": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.fz": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.g": [
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.ga": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.gb": [
+      "SAML2Errata",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.gc": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.gd": [
+      "SAML2Errata",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.ge": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.gf": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.gg": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.gh": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.gi": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.gj": [
+      "SAML2Errata",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.h": [
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.h1": [
+      "SAML2Errata",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.i": [
+      "SAML2Errata",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.i1": [
+      "SAML2Errata",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.i2": [
+      "SAML2Errata",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.j": [
+      "SAML2Errata",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.k": [
+      "SAML2Errata",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.k1": [
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.k2": [
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.l": [
+      "SAML2Errata",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.l1": [
+      "SAML2Errata",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.m": [
+      "SAML2Errata",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.n": [
+      "SAML2Bind",
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.o": [
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.p": [
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.q": [
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.r": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.r1": [
+      "SAML2Errata",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.s": [
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.s1": [
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.t": [
+      "SAML2Errata",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.u": [
+      "SAML2Core",
+      "SAML2Errata",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.u1": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.v": [
+      "SAML2Errata",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.w": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.x": [
+      "SAML2Core",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.y": [
+      "SAML2Core",
+      "SAML2Errata",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.y1": [
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.y2": [
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO01.z": [
+      "SAML2Core",
+      "SAML2Errata",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO02.a": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO03.a": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO03.b": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO04.a": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO05.a": [
+      "SAML2Core",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO05.a1": [
+      "SAML2Core",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO05.a2": [
+      "SAML2Core",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO05.a3": [
+      "SAML2Core",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO05.a4": [
+      "SAML2Core",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO05.a5": [
+      "SAML2Core",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO05.a6": [
+      "SAML2Core",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO05.a7": [
+      "SAML2Core",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO05.a8": [
+      "SAML2Core",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO05.b": [
+      "SAML2Core",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO05.b1": [
+      "SAML2Core",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO05.b2": [
+      "SAML2Core",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO05.b3": [
+      "SAML2Core",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO06.a": [
+      "SAML2ECP",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO07.a": [
+      "kantara-fedinterop-impl"
+    ],
+    "IIP-SSO07.b": [
+      "SAML2Core",
+      "SAML2Errata",
+      "SAML2Prof",
+      "kantara-fedinterop-impl"
+    ]
+  },
+  "sources": {
+    "kantara-fedinterop-impl": {
+      "title": "SAML V2.0 Implementation Profile for Federation Interoperability",
+      "publisher": "Kantara Initiative",
+      "version": "1.1",
+      "url": "https://kantarainitiative.github.io/SAMLprofiles/fedinterop.html"
+    },
+    "SAML2Core": {
+      "title": "Assertions and Protocols for the OASIS SAML V2.0",
+      "publisher": "OASIS",
+      "version": "2.0 (saml-core-2.0-os)",
+      "url": "http://docs.oasis-open.org/security/saml/v2.0/saml-core-2.0-os.pdf"
+    },
+    "SAML2Prof": {
+      "title": "Profiles for the OASIS SAML V2.0",
+      "publisher": "OASIS",
+      "version": "2.0 (saml-profiles-2.0-os)",
+      "url": "http://docs.oasis-open.org/security/saml/v2.0/saml-profiles-2.0-os.pdf"
+    },
+    "SAML2Bind": {
+      "title": "Bindings for the OASIS SAML V2.0",
+      "publisher": "OASIS",
+      "version": "2.0 (saml-bindings-2.0-os)",
+      "url": "http://docs.oasis-open.org/security/saml/v2.0/saml-bindings-2.0-os.pdf"
+    },
+    "SAML2Meta": {
+      "title": "Metadata for the OASIS SAML V2.0",
+      "publisher": "OASIS",
+      "version": "2.0 (saml-metadata-2.0-os)",
+      "url": "http://docs.oasis-open.org/security/saml/v2.0/saml-metadata-2.0-os.pdf"
+    },
+    "SAML2Errata": {
+      "title": "SAML Version 2.0 Errata 05",
+      "publisher": "OASIS",
+      "version": "Errata 05",
+      "url": "https://docs.oasis-open.org/security/saml/v2.0/errata05/os/saml-v2.0-errata05-os.pdf"
+    },
+    "SAML2MD-xsd": {
+      "title": "SAML V2.0 Metadata Schema",
+      "publisher": "OASIS",
+      "version": "2.0",
+      "url": "http://docs.oasis-open.org/security/saml/v2.0/saml-schema-metadata-2.0.xsd"
+    },
+    "SAML2P-xsd": {
+      "title": "SAML V2.0 Protocol Schema",
+      "publisher": "OASIS",
+      "version": "2.0",
+      "url": "http://docs.oasis-open.org/security/saml/v2.0/saml-schema-protocol-2.0.xsd"
+    },
+    "SAML2-xsd": {
+      "title": "SAML V2.0 Assertion Schema",
+      "publisher": "OASIS",
+      "version": "2.0",
+      "url": "http://docs.oasis-open.org/security/saml/v2.0/saml-schema-assertion-2.0.xsd"
+    },
+    "SAML2MDIOP": {
+      "title": "SAML V2.0 Metadata Interoperability Profile",
+      "publisher": "OASIS",
+      "version": "1.0 (CS)",
+      "url": "http://docs.oasis-open.org/security/saml/Post2.0/sstc-metadata-iop.pdf"
+    },
+    "SAML2MetaAlgSup": {
+      "title": "SAML V2.0 Metadata Profile for Algorithm Support",
+      "publisher": "OASIS",
+      "version": "1.0 (cs01)",
+      "url": "http://docs.oasis-open.org/security/saml/Post2.0/sstc-saml-metadata-algsupport-v1.0-cs01.pdf"
+    },
+    "SAML2ECP": {
+      "title": "SAML V2.0 Enhanced Client or Proxy Profile",
+      "publisher": "OASIS",
+      "version": "2.0 (cs01)",
+      "url": "http://docs.oasis-open.org/security/saml/Post2.0/saml-ecp/v2.0/cs01/saml-ecp-v2.0-cs01.pdf"
+    },
+    "MetaUi": {
+      "title": "SAML V2.0 Metadata Extensions for Login and Discovery User Interface",
+      "publisher": "OASIS",
+      "version": "1.0 (CS)",
+      "url": "http://docs.oasis-open.org/security/saml/Post2.0/sstc-saml-metadata-ui/v1.0/sstc-saml-metadata-ui-v1.0.pdf"
+    },
+    "MetaAttr": {
+      "title": "SAML V2.0 Metadata Extension for Entity Attributes",
+      "publisher": "OASIS",
+      "version": "1.0 (cs-01)",
+      "url": "http://docs.oasis-open.org/security/saml/Post2.0/sstc-metadata-attr-cs-01.pdf"
+    },
+    "SAML2ASLO": {
+      "title": "SAML V2.0 Asynchronous Single Logout Profile Extension",
+      "publisher": "OASIS",
+      "version": "1.0 (cs01)",
+      "url": "http://docs.oasis-open.org/security/saml/Post2.0/saml-async-slo/v1.0/cs01/saml-async-slo-v1.0-cs01.pdf"
+    },
+    "MDQ": {
+      "title": "Metadata Query Protocol",
+      "publisher": "IETF",
+      "version": "draft-young-md-query-07",
+      "url": "https://www.ietf.org/archive/id/draft-young-md-query-07.txt"
+    },
+    "SAML-MDQ": {
+      "title": "SAML Profile for the Metadata Query Protocol",
+      "publisher": "IETF",
+      "version": "draft-young-md-query-saml-07",
+      "url": "https://www.ietf.org/archive/id/draft-young-md-query-saml-07.txt"
+    },
+    "IdPDisco": {
+      "title": "Identity Provider Discovery Service Protocol and Profile",
+      "publisher": "OASIS",
+      "version": "1.0 (CS)",
+      "url": "http://docs.oasis-open.org/security/saml/Post2.0/sstc-saml-idp-discovery.pdf"
+    },
+    "SAML-EC": {
+      "title": "SAML Enhanced Client SASL and GSS-API Mechanisms",
+      "publisher": "IETF",
+      "version": "draft-ietf-kitten-sasl-saml-ec-16",
+      "url": "https://www.ietf.org/archive/id/draft-ietf-kitten-sasl-saml-ec-16.txt"
+    },
+    "RFC2617": {
+      "title": "HTTP Authentication: Basic and Digest Access Authentication",
+      "publisher": "IETF",
+      "version": "RFC 2617",
+      "url": "https://www.ietf.org/rfc/rfc2617.txt"
+    },
+    "XMLSig": {
+      "title": "XML-Signature Syntax and Processing 1.1",
+      "publisher": "W3C",
+      "version": "1.1",
+      "url": "https://www.w3.org/TR/xmldsig-core1/"
+    },
+    "XMLEnc": {
+      "title": "XML Encryption Syntax and Processing 1.1",
+      "publisher": "W3C",
+      "version": "1.1",
+      "url": "https://www.w3.org/TR/xmlenc-core1/"
+    },
+    "RFC4051": {
+      "title": "Additional XML Security Uniform Resource Identifiers",
+      "publisher": "IETF",
+      "version": "RFC 4051",
+      "url": "https://www.ietf.org/rfc/rfc4051.txt"
+    },
+    "RFC7457": {
+      "title": "Summarizing Known Attacks on TLS and DTLS",
+      "publisher": "IETF",
+      "version": "RFC 7457",
+      "url": "https://www.ietf.org/rfc/rfc7457.txt"
+    },
+    "BetterCrypto": {
+      "title": "Applied Crypto Hardening",
+      "publisher": "BetterCrypto.org",
+      "version": "undated (living document)",
+      "url": "https://bettercrypto.org"
+    }
+  }
+}

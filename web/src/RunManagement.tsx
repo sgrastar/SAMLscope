@@ -1,3 +1,4 @@
+import { SourceNoticeLink } from './SourceNoticeLink'
 import { FormEvent, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import {
@@ -848,6 +849,7 @@ export function RunManagement({ runId, csrfToken, focusCaseId, navigateTo }: {
           <h2 id="case-drawer-title">{selectedCase.caseId}</h2></div>
           <button ref={caseDrawerCloseRef} type="button" className="button-secondary" onClick={closeCaseDrawer}
             aria-label="Close case details">Close</button></header>
+        <p><SourceNoticeLink kind="case" id={selectedCase.caseId} /></p>
         <dl><dt>Campaign</dt><dd>{selectedCaseCampaign.title}</dd>
           <dt>Assistance</dt><dd>{assistanceLabel(selectedCase.plan)}</dd>
           <dt>Evidence</dt><dd><span className={`evidence-label evidence-${selectedCase.evidenceClass.toLowerCase()}`}>
@@ -937,6 +939,7 @@ export function RunManagement({ runId, csrfToken, focusCaseId, navigateTo }: {
       </fieldset>
     </form>}
     {plan && profile.endsWith('_sp') && <p>Start login at the target SP after importing the Test Peer metadata.</p>}
+    {focusCaseId && <p><SourceNoticeLink kind="case" id={focusCaseId} /></p>}
     {focusCaseId && <div className="actions"><a className="button" href={`/manage/${runId}`}>Back to Run management</a></div>}
     {visibleInteractions.length === 0 ? <p className="quiet-success">
       {focusCaseId ? `No pending interaction for ${focusCaseId}.`

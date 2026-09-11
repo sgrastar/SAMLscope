@@ -32,4 +32,5 @@ test('renders the authoritative determination and its non-certification boundary
   expect(screen.queryByText('IDP / IDP')).toBeNull()
   expect(screen.getAllByText(/This is a test result, not a certification/)).toHaveLength(2)
   expect(screen.getByText('IIP-G03')).toBeTruthy()
+  expect(screen.getByRole('link', { name: 'Sources and license notices' }).getAttribute('href')).toBe('/licenses?requirement=IIP-G03')
 })
