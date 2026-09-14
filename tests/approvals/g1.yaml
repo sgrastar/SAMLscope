@@ -1,13 +1,13 @@
-target_commit: d3dfc41c0195ce8fbc61e7d569010289f90b4cdc
+target_commit: f4daa528174f9bffe7cccf9833b1e779001236bb
 artifact_digests:
-  tests/coverage.yaml: sha256:2bee3db74c9be9908710bbe18935c73454f1ed4c5c0f06bdab1cf18deaef843c
+  tests/coverage.yaml: sha256:b3dec82159dffa396d21068c0e5bbc82dedec31dc2510ee2a56ce8322c3bc271
   tests/specs.yaml: sha256:acee5ce8c348fbc5e02f77bd2f5b8703a632dd69aea857b14b97812ff6cc39d9
   tests/predicates.yaml: sha256:ea0aec770d743d0c8315c706ae80fb5979a103021ebdc4fcf86187c052e90262
 evidence:
   kind: signed-commit
   reviewers:
   - hoshina@gmail.com
-  evidence_url: https://github.com/sgrastar/samlier/commit/d3dfc41c0195ce8fbc61e7d569010289f90b4cdc
+  evidence_url: https://github.com/sgrastar/SAMLscope/blob/f4daa528174f9bffe7cccf9833b1e779001236bb/docs/24-nameid-suite-reapproval.md
 approvals:
 - obligation: IIP-G01.a
   obligation_digest: sha256:f09a9126ad949769b762fc416b84f712ca47d6759a8117658314c773471ada91
@@ -1854,9 +1854,9 @@ approvals:
   reviewer: hoshina@gmail.com
   approved_at: '2026-08-29T06:49:09+09:00'
 - obligation: IIP-IDP10.d
-  obligation_digest: sha256:87779c53c05743ad8b4f7f7f4dbc5526234db07aa05ec898c810adb0e61f7286
+  obligation_digest: sha256:1cc7011a3b9f2b6d0e0145aa3469979f233acaf1b11a034b4dbcc3559231db07
   reviewer: hoshina@gmail.com
-  approved_at: '2026-08-29T06:49:09+09:00'
+  approved_at: '2026-09-14T10:08:52+00:00'
 - obligation: IIP-IDP11.a
   obligation_digest: sha256:13414971e1dee7303319977f3358a0b5f9414ad10a35711a368c743003a38ed6
   reviewer: hoshina@gmail.com
