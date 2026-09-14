@@ -168,6 +168,12 @@ public final class SpPeerService {
             activeProbeResponses.accept(
                     run.id(), activeProbe.orElseThrow().actionId(), rawMessage.xml(),
                     new EvidenceRef("transcript", transcriptEntry.id()));
+        } else if (metadataProbe && Boolean.TRUE.equals(analyzedSummary.get("metadataProbeAccepted"))
+                && actual.equals(run.context().get("active_metadata_request_id"))
+                && run.status() == RunStatus.WAITING_BROWSER) {
+            // Completing this correlated exchange releases the browser wait. The next
+            // campaign member enters WAITING_BROWSER when dispatched; this is no verdict.
+            runService.update(run, RunStatus.COMPLETED, run.targetToSuiteReachability(), run.context());
         } else if (!metadataProbe) {
             var context = new LinkedHashMap<String, Object>(run.context());
             context.put("m0RoundTrip", "completed");

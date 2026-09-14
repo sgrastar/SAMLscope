@@ -87,6 +87,52 @@ class IdpNameIdPolicyScenarioTestCaseTest {
     }
 
     @Test
+    void implicitSameSpQualifierRemainsUnresolvedWhileExplicitMismatchStillFails() {
+        assertQualifierOutcome(null, Outcome.NOT_VERIFIED);
+        assertQualifierOutcome("https://wrong.example/sp", Outcome.VIOLATED);
+    }
+
+    private void assertQualifierOutcome(String returnedQualifier, Outcome expected) {
+        var testCase = testCase(IdpNameIdPolicyScenarioTestCase.CONFORMANCE_CASE);
+        CaseStep step = testCase.start(context());
+        while (step instanceof CaseStep.AwaitInbound waiting) {
+            var document = SecureXml.parse(waiting.actions().getFirst().payload());
+            var policy = (org.w3c.dom.Element) document.getElementsByTagNameNS(
+                    "urn:oasis:names:tc:SAML:2.0:protocol", "NameIDPolicy").item(0);
+            step = testCase.resume(context(), waiting.next(), inbound(waiting.next(), response(
+                    waiting.next(), "Success", policy.getAttribute("Format"),
+                    policy.hasAttribute("SPNameQualifier") ? returnedQualifier : null)));
+        }
+        assertEquals(expected, assertInstanceOf(CaseStep.Finish.class, step).outcome().outcome());
+    }
+
+    @Test
+    void omittedQualifierRequiresDirectAndExclusiveSpScope() {
+        assertImplicitScope("https://suite.example/acs", "https://suite.example/sp", Outcome.SATISFIED);
+        assertImplicitScope("https://other.example/acs", "https://suite.example/sp", Outcome.NOT_VERIFIED);
+        assertImplicitScope("https://suite.example/acs", "https://other.example/sp", Outcome.NOT_VERIFIED);
+        assertImplicitScope("https://suite.example/acs", null, Outcome.NOT_VERIFIED);
+        assertImplicitScope("https://suite.example/acs", "https://suite.example/sp</saml:Audience><saml:Audience>https://other.example/sp", Outcome.NOT_VERIFIED);
+    }
+
+    private void assertImplicitScope(String destination, String audience, Outcome expected) {
+        var testCase = testCase(IdpNameIdPolicyScenarioTestCase.CONFORMANCE_CASE);
+        CaseStep step = testCase.start(context());
+        while (step instanceof CaseStep.AwaitInbound waiting) {
+            var document = SecureXml.parse(waiting.actions().getFirst().payload());
+            var policy = (org.w3c.dom.Element) document.getElementsByTagNameNS(
+                    "urn:oasis:names:tc:SAML:2.0:protocol", "NameIDPolicy").item(0);
+            var xml = response(waiting.next(), "Success", policy.getAttribute("Format"), null)
+                    .replace("InResponseTo=", "Destination=\"" + destination + "\" InResponseTo=");
+            if (audience != null) xml = xml.replace("</saml:Assertion>",
+                    "<saml:Conditions><saml:AudienceRestriction><saml:Audience>" + audience
+                    + "</saml:Audience></saml:AudienceRestriction></saml:Conditions></saml:Assertion>");
+            step = testCase.resume(context(), waiting.next(), inbound(waiting.next(), xml));
+        }
+        assertEquals(expected, assertInstanceOf(CaseStep.Finish.class, step).outcome().outcome());
+    }
+
+    @Test
     void absentSamlResponseCanOnlyBecomeNotVerified() {
         var testCase = testCase(IdpNameIdPolicyScenarioTestCase.PROCESSING_CASE);
         var waiting = (CaseStep.AwaitInbound) testCase.start(context());

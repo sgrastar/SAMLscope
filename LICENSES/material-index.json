@@ -3,8 +3,8 @@
   "scope": "Source references of selected obligation definitions, tests and imported variants; this is attribution, not evaluation coverage or legal clearance.",
   "input_sha256": {
     "tests/specs.yaml": "acee5ce8c348fbc5e02f77bd2f5b8703a632dd69aea857b14b97812ff6cc39d9",
-    "tests/coverage.yaml": "2bee3db74c9be9908710bbe18935c73454f1ed4c5c0f06bdab1cf18deaef843c",
-    "tests/cases.yaml": "431d9aa863d5d882d37266667a8fd20547d1fe6d037274b8d59ff66347f5ecd4",
+    "tests/coverage.yaml": "b3dec82159dffa396d21068c0e5bbc82dedec31dc2510ee2a56ce8322c3bc271",
+    "tests/cases.yaml": "56761becdf8779a8a4764f26263584f35958f9fded86ffbcdaaf7c5be5cc3fb1",
     "tests/predicates.yaml": "ea0aec770d743d0c8315c706ae80fb5979a103021ebdc4fcf86187c052e90262",
     "profiles/browser_sso_idp.json": "8841ab92288146c657efb5f3df5ded60970c890448459f0a80fd141eb7fd5c5f",
     "profiles/browser_sso_sp.json": "159c8e15f6a3e06b434d2e2464c75d40829ed8f54b0de23e1b1f4d566aa3228b",

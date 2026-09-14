@@ -654,6 +654,7 @@ public final class SamlScopeApplication {
             requests.put(flow.variant().id(), requestId);
             var context = new LinkedHashMap<String, Object>(run.context());
             context.put("metadata_polling_requests", Map.copyOf(requests));
+            context.put("active_metadata_request_id", requestId);
             runService.update(run, RunStatus.WAITING_BROWSER, run.targetToSuiteReachability(), context);
             transcript.record(new com.samlscope.core.transcript.TranscriptInput(
                     run.id(), com.samlscope.core.transcript.Direction.OUTBOUND, clock.instant(),
@@ -725,6 +726,7 @@ public final class SamlScopeApplication {
             requests.put(flow.variant().id(), requestId);
             var context = new LinkedHashMap<String, Object>(run.context());
             context.put("metadata_preloaded_requests", Map.copyOf(requests));
+            context.put("active_metadata_request_id", requestId);
             runService.update(run, RunStatus.WAITING_BROWSER, run.targetToSuiteReachability(), context);
             transcript.record(new com.samlscope.core.transcript.TranscriptInput(
                     run.id(), com.samlscope.core.transcript.Direction.OUTBOUND, clock.instant(),
@@ -959,13 +961,21 @@ public final class SamlScopeApplication {
         var nonceBytes = new byte[18];
         NONCE_RANDOM.nextBytes(nonceBytes);
         var nonce = Base64.getUrlEncoder().withoutPadding().encodeToString(nonceBytes);
-        ctx.header("Content-Security-Policy", "default-src 'none'; script-src 'nonce-" + nonce
-                        + "'; form-action " + origin(result.response().destination())
-                        + "; frame-ancestors 'none'; base-uri 'none'; object-src 'none'");
+        ctx.header("Content-Security-Policy", sloPostContentSecurityPolicy(
+                result.response().destination(), nonce));
         ctx.header("Cache-Control", "no-store").contentType("text/html; charset=utf-8")
                 .result(HtmlPostPage.render(
                         result.response().destination(), result.response().base64(),
                         result.response().relayState(), nonce).replace("SAMLResponse", "SAMLResponse"));
+    }
+
+    static String sloPostContentSecurityPolicy(URI metadataDestination, String nonce) {
+        // SloPeerService resolves this endpoint from the configured target metadata,
+        // never from a request-supplied return URL. IdP logout may use an iframe.
+        var targetOrigin = origin(metadataDestination);
+        return "default-src 'none'; script-src 'nonce-" + nonce
+                + "'; form-action " + targetOrigin + "; frame-ancestors " + targetOrigin
+                + "; base-uri 'none'; object-src 'none'";
     }
 
     private static void serveIdp(Context ctx, IdpPeerService service) {

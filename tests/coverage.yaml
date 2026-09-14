@@ -16928,7 +16928,7 @@ requirements:
           - id: v-898a349947
             description_en: "Request Format=transient; returned NameID/@Format equals the requested value."
           - id: v-e2c03ed209
-            description_en: "Specify SPNameQualifier; returned NameID/@SPNameQualifier equals the specified value."
+            description_en: "Specify SPNameQualifier; returned NameID/@SPNameQualifier equals the specified value, or persistent/transient NameID omits it when the message is intended only for direct consumption by that SP and the implicit value equals that SP identifier (Core 8.3.7-8.3.8)."
           - id: v-534e8baf05
             description_en: "Control: detect silent return of a Format different from the request—a successful response with the wrong Format."
           - id: v-96ea6f9410
@@ -16946,7 +16946,7 @@ requirements:
           state: PENDING_REVIEW
           reviewer: null
           approved_at: null
-          obligation_digest: "sha256:87779c53c05743ad8b4f7f7f4dbc5526234db07aa05ec898c810adb0e61f7286"
+          obligation_digest: "sha256:1cc7011a3b9f2b6d0e0145aa3469979f233acaf1b11a034b4dbcc3559231db07"
           source_spec: kantara-fedinterop-impl
           spec_version: "1.1"
           source_selector: "#IIP-IDP10"

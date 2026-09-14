@@ -47246,7 +47246,7 @@ cases:
 - id: IIP-IDP10-d-idp-01
   authored_by: samlier-g2-builder
   obligation: IIP-IDP10.d
-  obligation_digest: sha256:87779c53c05743ad8b4f7f7f4dbc5526234db07aa05ec898c810adb0e61f7286
+  obligation_digest: sha256:1cc7011a3b9f2b6d0e0145aa3469979f233acaf1b11a034b4dbcc3559231db07
   role: idp
   mode: BROWSER
   milestone: M1
@@ -47280,7 +47280,7 @@ cases:
   - reference: IIP-IDP10.d#v-e2c03ed209
     applicability: owner_condition
     treatment: verdict
-    instruction_en: Specify SPNameQualifier; returned NameID/@SPNameQualifier equals the specified value.
+    instruction_en: Specify SPNameQualifier; returned NameID/@SPNameQualifier equals the specified value, or persistent/transient NameID omits it when the message is intended only for direct consumption by that SP and the implicit value equals that SP identifier (Core 8.3.7-8.3.8).
   - reference: IIP-IDP10.d#v-e4467623ff
     applicability: owner_condition
     treatment: verdict
@@ -47343,7 +47343,7 @@ cases:
     state: PENDING_REVIEW
     reviewer: null
     approved_at: null
-  case_digest: sha256:eac0ed91cf492475301d9a3ea651749ad9cf0228a240fb918497b170e6ba4fca
+  case_digest: sha256:a02075559dff2bf93b50bcc17a601f9037093d5405a9ee93ff5f7f0e80fa346a
 - id: IIP-IDP11-a-idp-01
   authored_by: samlier-g2-builder
   obligation: IIP-IDP11.a

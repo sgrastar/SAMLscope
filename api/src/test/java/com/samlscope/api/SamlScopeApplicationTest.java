@@ -22,6 +22,16 @@ class SamlScopeApplicationTest {
     @TempDir Path dataDirectory;
 
     @Test
+    void logoutPostAllowsOnlyTheConfiguredTargetOriginToEmbedTheResponse() {
+        var policy = SamlScopeApplication.sloPostContentSecurityPolicy(
+                URI.create("https://idp.example:8443/idp/profile/SAML2/POST/SLO"), "test-nonce");
+        assertEquals("default-src 'none'; script-src 'nonce-test-nonce'; "
+                + "form-action https://idp.example:8443; frame-ancestors https://idp.example:8443; "
+                + "base-uri 'none'; object-src 'none'", policy);
+        assertFalse(policy.contains("*"));
+    }
+
+    @Test
     void createsPlanAndPublishesSignedMetadata() throws Exception {
         var config = new AppConfig(AppConfig.Mode.SELFHOSTED,
                 URI.create("http://127.0.0.1:8080"), URI.create("http://127.0.0.1:8080"),
