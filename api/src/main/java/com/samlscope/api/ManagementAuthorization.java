@@ -1,6 +1,5 @@
 package com.samlscope.api;
 
-import com.samlscope.api.auth.OidcConfig.AccessPolicy;
 import com.samlscope.api.auth.OidcRoutes;
 import com.samlscope.api.auth.OidcSessions;
 import com.samlscope.core.plan.PlanRepository;
@@ -12,11 +11,10 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Optional;
 
-/** Account ownership and the existing per-Run capability are independent authorization paths. */
+/** OIDC uses account authorization exclusively. Secret capabilities only apply with OIDC disabled. */
 final class ManagementAuthorization {
     private final OidcRoutes oidc;
     private final SqlitePlanOwnerRepository owners;
@@ -34,7 +32,7 @@ final class ManagementAuthorization {
     }
     Optional<OidcSessions.Session> session(Context ctx) {
         var session = oidc.session(ctx);
-        if (oidc.config().enabled() && oidc.config().accessPolicy() == AccessPolicy.REQUIRED && session.isEmpty()) {
+        if (oidc.config().enabled() && session.isEmpty()) {
             throw new SecurityException("Sign in to manage Runs");
         }
         return session;
@@ -42,9 +40,6 @@ final class ManagementAuthorization {
     String creationOwner(Context ctx, String anonymousOwner) {
         var session = session(ctx);
         if (oidc.config().enabled()) {
-            if (session.isEmpty() && oidc.config().accessPolicy() == AccessPolicy.NEW_PLANS) {
-                throw new SecurityException("Sign in to create a Plan");
-            }
             oidc.requireOrigin(ctx);
             session.ifPresent(s -> oidc.requireMutation(ctx, s));
         }
@@ -67,6 +62,10 @@ final class ManagementAuthorization {
             if (mutation) oidc.requireMutation(ctx, current.orElseThrow());
             return;
         }
+        if (oidc.config().enabled()) {
+            if (!mutation && isAdmin(current)) return;
+            throw new SecurityException("Owner access required");
+        }
         if (mutation) legacy.authorizeMutation(ctx.pathParam("id"),
                 ctx.cookie(ManagementSessionRoutes.COOKIE_NAME), ctx.header("X-CSRF-Token"));
         else legacy.authorize(ctx.pathParam("id"), ctx.cookie(ManagementSessionRoutes.COOKIE_NAME));
@@ -77,22 +76,32 @@ final class ManagementAuthorization {
             if (mutation) oidc.requireMutation(ctx, current.orElseThrow());
             return;
         }
+        if (oidc.config().enabled()) {
+            if (isAdmin(current) && (!mutation || ctx.method().name().equals("DELETE"))) {
+                if (mutation) oidc.requireMutation(ctx, current.orElseThrow());
+                return;
+            }
+            throw new SecurityException("Owner access required");
+        }
         if (mutation) legacy.authorizePlanMutation(ctx.pathParam("id"),
                 ctx.cookie(ManagementSessionRoutes.COOKIE_NAME), ctx.header("X-CSRF-Token"));
         else legacy.authorizePlan(ctx.pathParam("id"), ctx.cookie(ManagementSessionRoutes.COOKIE_NAME));
     }
     List<TestPlan> list(Context ctx) {
         if (!oidc.config().enabled()) return legacy.authorizedPlans(ctx.cookie(ManagementSessionRoutes.COOKIE_NAME));
-        var result = new LinkedHashMap<String, TestPlan>();
-        session(ctx).ifPresent(s -> owners.ownedPlans(s.identity().ownerId()).forEach(id ->
-                plans.find(id).ifPresent(plan -> result.put(plan.id(), plan))));
-        try {
-            legacy.authorizedPlans(ctx.cookie(ManagementSessionRoutes.COOKIE_NAME))
-                    .forEach(plan -> result.put(plan.id(), plan));
-        } catch (SecurityException noCapability) {
-            // A new account or anonymous visitor has no visible Plans until one is created.
-        }
-        return List.copyOf(result.values());
+        var current = session(ctx);
+        if (isAdmin(current)) return plans.list();
+        return owners.ownedPlans(current.orElseThrow().identity().ownerId()).stream()
+                .map(plans::find).flatMap(Optional::stream).toList();
+    }
+    boolean isAdmin(Optional<OidcSessions.Session> session) {
+        return session.isPresent() && oidc.user(session.orElseThrow()).role() == com.samlscope.store.SqliteUserRepository.Role.ADMIN;
+    }
+    OidcSessions.Session requireAdmin(Context ctx, boolean mutation) {
+        var current = session(ctx);
+        if (!isAdmin(current)) throw new SecurityException("Admin access required");
+        if (mutation) oidc.requireMutation(ctx, current.orElseThrow());
+        return current.orElseThrow();
     }
     private boolean owns(Optional<OidcSessions.Session> current, String planId) {
         return current.isPresent() && owners.ownedPlans(current.get().identity().ownerId()).contains(planId);

@@ -22,7 +22,8 @@ import com.samlscope.core.transcript.Direction;
 
 /** Evaluates accept/reject metadata fixtures using fetches plus Run-correlated SAML traffic. */
 public final class MetadataFixtureObservationTestCase
-        implements TestCase, ConfigurationPrompt, ProtocolEvidenceCase, com.samlscope.runner.EvidenceCampaignCase {
+        implements TestCase, ConfigurationPrompt, ProtocolEvidenceCase, com.samlscope.runner.EvidenceCampaignCase,
+        com.samlscope.runner.RecordedEvidenceReevaluation {
     private static final String PHASE = "await-metadata-fixture-probe";
     private static final String CONTROL = "control";
     private final String id;
@@ -48,6 +49,16 @@ public final class MetadataFixtureObservationTestCase
             }
             if (!ids.add(fixture.variant())) throw new IllegalArgumentException("Duplicate fixture variant");
         }
+    }
+
+    @Override public boolean supportsRecordedEvidenceReevaluation(CaseOutcome previous) {
+        return previous != null && previous.outcome() == Outcome.NOT_VERIFIED
+                && "metadata.fixture-probe.incomplete".equals(previous.reasonCode());
+    }
+
+    @Override public java.util.Optional<CaseOutcome> reevaluateRecordedEvidence(CaseContext context, CaseOutcome previous) {
+        if (!supportsRecordedEvidenceReevaluation(previous) || !context.transcriptComplete()) return java.util.Optional.empty();
+        return com.samlscope.runner.RecordedEvidenceReevaluation.conclusiveUpdate(previous, evaluate(context, false));
     }
 
     @Override public String id() { return id; }
@@ -140,6 +151,11 @@ public final class MetadataFixtureObservationTestCase
         return new EvidenceStatus(observation.ready(), required, completed, observation.details());
     }
 
+    /** Read-only snapshot for a parent case that must retain the supporting transcript refs. */
+    CaseOutcome recordedObservation(CaseContext context) {
+        return evaluate(context, false);
+    }
+
     private CaseOutcome evaluate(CaseContext context, boolean attemptsConfirmed) {
         var observation = observe(context);
         // An operator confirming that an attempt was made cannot replace the missing protocol
@@ -154,8 +170,8 @@ public final class MetadataFixtureObservationTestCase
         var mismatches = new ArrayList<String>();
         for (var fixture : fixtures) {
             var used = observation.used().contains(fixture.variant());
-            if (fixture.behavior() == Behavior.ACCEPT && !used) {
-                mismatches.add(fixture.variant() + ":expected_acceptance");
+            if (observation.wrongEndpoints().contains(fixture.variant())) {
+                mismatches.add(fixture.variant() + ":wrong_default_acs");
             } else if (fixture.behavior() == Behavior.REJECT && used) {
                 mismatches.add(fixture.variant() + ":expected_rejection");
             }
@@ -177,6 +193,7 @@ public final class MetadataFixtureObservationTestCase
         fixtures.forEach(fixture -> relevant.add(fixture.variant()));
         var fetched = new LinkedHashSet<String>();
         var used = new LinkedHashSet<String>();
+        var wrongEndpoints = new LinkedHashSet<String>();
         var evidence = new ArrayList<EvidenceRef>();
         for (var entry : context.transcript().list(context.runId())) {
             if (entry.direction() != Direction.INBOUND) continue;
@@ -201,9 +218,16 @@ public final class MetadataFixtureObservationTestCase
                     || !"urn:oasis:names:tc:SAML:2.0:status:Success".equals(
                             entry.samlSummary().get("statusCode"))) continue;
             for (var variant : relevant) {
-                if (entry.url().contains("mdv=" + variant)
-                        && entry.url().contains("run=" + context.runId())) {
-                    used.add(variant);
+                if (fetched.contains(variant)
+                        && MetadataProbeCorrelation.matches(entry.url(), context.runId(), variant)) {
+                    var fixture = fixtures.stream().filter(value -> value.variant().equals(variant)).findFirst();
+                    var expectedIndex = fixture.map(Fixture::expectedAcsIndex).orElse(null);
+                    if (expectedIndex != null && !java.net.URI.create(entry.url()).getPath()
+                            .endsWith("/sp/acs/" + expectedIndex)) {
+                        wrongEndpoints.add(variant);
+                    } else {
+                        used.add(variant);
+                    }
                     evidence.add(new EvidenceRef("transcript", "transcript:" + entry.id()));
                 }
             }
@@ -211,7 +235,16 @@ public final class MetadataFixtureObservationTestCase
         var details = Map.<String, Object>of(
                 "fixtures", fixtures.stream().map(Fixture::variant).toList(),
                 "fetched_variants", List.copyOf(fetched),
-                "used_variants", List.copyOf(used));
+                "used_variants", List.copyOf(used),
+                "missing_fetches", relevant.stream().filter(value -> !fetched.contains(value)).toList(),
+                "missing_acceptance", relevant.stream().filter(value -> CONTROL.equals(value)
+                        || fixtures.stream().anyMatch(fixture -> fixture.variant().equals(value)
+                                && fixture.behavior() == Behavior.ACCEPT))
+                        .filter(value -> !used.contains(value)).toList(),
+                "unresolved_rejection", fixtures.stream().filter(value -> value.behavior() == Behavior.REJECT)
+                        .map(Fixture::variant).filter(value -> !used.contains(value)).toList(),
+                "wrong_endpoint_variants", List.copyOf(wrongEndpoints),
+                "transcript_complete", context.transcriptComplete());
         var allFetched = fixtures.stream().allMatch(value -> fetched.contains(value.variant()));
         var acceptedObserved = fixtures.stream()
                 .filter(value -> value.behavior() == Behavior.ACCEPT)
@@ -221,11 +254,11 @@ public final class MetadataFixtureObservationTestCase
         // might not have attempted the flow yet. A reject-only branch becomes conclusive only on
         // the positive counter-observation that the target used forbidden metadata (VIOLATED).
         var forbiddenUseObserved = rejected.stream().anyMatch(value -> used.contains(value.variant()));
-        var conclusive = forbiddenUseObserved || (rejected.isEmpty() && acceptedObserved);
+        var conclusive = forbiddenUseObserved || !wrongEndpoints.isEmpty() || (rejected.isEmpty() && acceptedObserved);
         return new Observation(
                 fetched.contains(CONTROL) && used.contains(CONTROL)
-                        && allFetched && conclusive,
-                fetched, used, distinct(evidence), details);
+                        && allFetched && conclusive && context.transcriptComplete(),
+                fetched, used, wrongEndpoints, distinct(evidence), details);
     }
 
     private static List<EvidenceRef> distinct(List<EvidenceRef> evidence) {
@@ -239,11 +272,17 @@ public final class MetadataFixtureObservationTestCase
 
     public enum Behavior { ACCEPT, REJECT }
 
-    public record Fixture(String variant, Behavior behavior, String purpose) {
+    public record Fixture(String variant, Behavior behavior, String purpose, Integer expectedAcsIndex) {
+        public Fixture(String variant, Behavior behavior, String purpose) {
+            this(variant, behavior, purpose, null);
+        }
         public Fixture {
             variant = text(variant, "variant");
             behavior = Objects.requireNonNull(behavior, "behavior");
             purpose = text(purpose, "purpose");
+            if (expectedAcsIndex != null && (expectedAcsIndex < 0 || behavior != Behavior.ACCEPT)) {
+                throw new IllegalArgumentException("ACS expectation requires an accepting endpoint fixture");
+            }
         }
     }
 
@@ -251,6 +290,7 @@ public final class MetadataFixtureObservationTestCase
             boolean ready,
             Set<String> fetched,
             Set<String> used,
+            Set<String> wrongEndpoints,
             List<EvidenceRef> evidence,
             Map<String, Object> details) {}
 }

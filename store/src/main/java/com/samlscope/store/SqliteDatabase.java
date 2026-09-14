@@ -71,6 +71,8 @@ public final class SqliteDatabase {
             if (applyMigration(connection, 11, "/db/migration/V011__target_revision_summaries.sql")) {
                 SqliteTargetConnectionRepository.backfillSummaries(connection, new JsonCodec());
             }
+            applyMigration(connection, 12, "/db/migration/V012__application_users.sql");
+            applyMigration(connection, 13, "/db/migration/V013__supplemental_decryption_keys.sql");
             connection.commit();
         } catch (SQLException | IOException e) {
             throw new StoreException("Could not apply database migrations", e);

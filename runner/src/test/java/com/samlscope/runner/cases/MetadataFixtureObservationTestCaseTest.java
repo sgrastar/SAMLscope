@@ -129,6 +129,41 @@ class MetadataFixtureObservationTestCaseTest {
                 fetch("control", 1), use("control", 2), fetch("accepted", 3), error, mismatch)));
     }
 
+    @Test
+    void defaultSelectionRequiresActualEndpointAndRetainsCounterexamples() {
+        var testCase = new MetadataFixtureObservationTestCase("default-acs", TargetRole.IDP,
+                List.of(new MetadataFixtureObservationTestCase.Fixture("second",
+                        MetadataFixtureObservationTestCase.Behavior.ACCEPT, "select second", 1)),
+                ConfigurationFailureSemantics.TEST_PRECONDITION);
+        var prefix = List.of(fetch("control", 1), use("control", 2), fetch("second", 3));
+        var correct = entry(4, "https://suite.example/p/plan/sp/acs/1?mdv=second&run=" + RUN,
+                10, use("second", 4).samlSummary());
+        var entries = new java.util.ArrayList<>(prefix);
+        assertEquals(Outcome.NOT_VERIFIED, evaluate(testCase, entries));
+        entries.add(correct);
+        assertEquals(Outcome.SATISFIED, evaluate(testCase, entries));
+        entries.add(use("second", 5));
+        assertEquals(Outcome.VIOLATED, evaluate(testCase, entries));
+        assertEquals(Outcome.NOT_VERIFIED, evaluate(testCase, List.of(fetch("second", 3), use("second", 5))));
+    }
+
+    @Test
+    void staleUseAndPrefixCollisionCannotCompleteARequiredFixture() {
+        var testCase = new MetadataFixtureObservationTestCase("exact", TargetRole.IDP,
+                List.of(new MetadataFixtureObservationTestCase.Fixture("accepted",
+                        MetadataFixtureObservationTestCase.Behavior.ACCEPT, "positive")),
+                ConfigurationFailureSemantics.TEST_PRECONDITION);
+        assertEquals(Outcome.NOT_VERIFIED, evaluate(testCase, List.of(
+                fetch("control", 1), use("control", 2), use("accepted", 3), fetch("accepted", 4))));
+        for (var query : List.of("mdv=accepted-other&run=" + RUN,
+                "mdv=accepted&run=" + RUN + "-other", "mdv=accepted&run=" + RUN + "&run=" + RUN)) {
+            var collision = entry(4, "https://suite.example/p/plan/sp/acs/0?" + query,
+                    10, use("accepted", 4).samlSummary());
+            assertEquals(Outcome.NOT_VERIFIED, evaluate(testCase, List.of(
+                    fetch("control", 1), use("control", 2), fetch("accepted", 3), collision)));
+        }
+    }
+
     private MetadataFixtureObservationTestCase testCase() {
         return testCase(ConfigurationFailureSemantics.TEST_PRECONDITION);
     }

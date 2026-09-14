@@ -40,6 +40,22 @@ class SamlStringValueCaseTest {
                 """))).outcome());
     }
 
+    @Test
+    void observesNameIdSimpleContentAndDoesNotApplyAttributeValueEmptyExceptionToIt() {
+        for (var fixture : com.samlscope.saml.normal.SamlTypedStringFixtures.matrix()) {
+            if (fixture.placement() != com.samlscope.saml.normal.SamlTypedStringFixtures.Placement.PERSISTENT_NAMEID
+                    && fixture.placement() != com.samlscope.saml.normal.SamlTypedStringFixtures.Placement.TRANSIENT_NAMEID) continue;
+            var root = fixture.create();
+            var xml = new String(com.samlscope.saml.normal.SecureXml.serialize(root.getOwnerDocument()), StandardCharsets.UTF_8);
+            assertEquals(Outcome.SATISFIED, rule.evaluate(List.of(message(fixture.id(), xml))).outcome(), fixture.id());
+            for (var invalid : List.of("", " \t\n")) {
+                root.setTextContent(invalid);
+                xml = new String(com.samlscope.saml.normal.SecureXml.serialize(root.getOwnerDocument()), StandardCharsets.UTF_8);
+                assertEquals(Outcome.VIOLATED, rule.evaluate(List.of(message(fixture.id(), xml))).outcome(), fixture.id());
+            }
+        }
+    }
+
     private String response(String version, String statusMessage) {
         return """
                 <samlp:Response xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol"

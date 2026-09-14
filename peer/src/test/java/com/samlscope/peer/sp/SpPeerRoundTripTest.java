@@ -97,18 +97,33 @@ class SpPeerRoundTripTest {
 
         var normalRequestId = request.parsed().document().getDocumentElement().getAttribute("ID");
         var probeBody = "SAMLResponse=" + URLEncoder.encode(response.base64(), StandardCharsets.UTF_8);
+        runService.update(completed, RunStatus.WAITING_BROWSER,
+                completed.targetToSuiteReachability(), completed.context());
         peer.consume(plan.id(), probeBody.getBytes(StandardCharsets.UTF_8), Map.of(),
                 "https://peer.example/p/" + plan.id() + "/sp/acs/0?mdv=no-key-info&run=" + run.id());
+        assertEquals(RunStatus.WAITING_BROWSER, runs.find(run.id()).orElseThrow().status(),
+                "an uncorrelated response must not release the browser wait");
         assertEquals(3, recorder.list(run.id()).size());
         assertEquals(false, recorder.list(run.id()).stream()
                 .filter(entry -> entry.url().contains("mdv=no-key-info"))
                 .findFirst().orElseThrow().samlSummary().get("metadataProbeAccepted"));
         var probeContext = new java.util.LinkedHashMap<String, Object>(
                 runs.find(run.id()).orElseThrow().context());
+        // A previous preloaded attempt for the same variant must not shadow polling.
+        probeContext.put("metadata_preloaded_requests", Map.of("no-key-info", "_older-preloaded-request"));
         probeContext.put("metadata_polling_requests", Map.of("no-key-info", normalRequestId));
+        probeContext.put("active_metadata_request_id", "_different-current-request");
+        var beforeStaleProbe = runs.find(run.id()).orElseThrow();
+        runService.update(beforeStaleProbe, RunStatus.WAITING_BROWSER,
+                beforeStaleProbe.targetToSuiteReachability(), probeContext);
+        peer.consume(plan.id(), probeBody.getBytes(StandardCharsets.UTF_8), Map.of(),
+                "https://peer.example/p/" + plan.id() + "/sp/acs/0?mdv=no-key-info&run=" + run.id());
+        assertEquals(RunStatus.WAITING_BROWSER, runs.find(run.id()).orElseThrow().status(),
+                "a correlated older fixture must not complete a newer browser wait");
+        probeContext.put("active_metadata_request_id", normalRequestId);
         var beforeCorrelatedProbe = runs.find(run.id()).orElseThrow();
         runService.update(
-                beforeCorrelatedProbe, beforeCorrelatedProbe.status(),
+                beforeCorrelatedProbe, RunStatus.WAITING_BROWSER,
                 beforeCorrelatedProbe.targetToSuiteReachability(), probeContext);
         peer.consume(plan.id(), probeBody.getBytes(StandardCharsets.UTF_8), Map.of(),
                 "https://peer.example/p/" + plan.id() + "/sp/acs/0?mdv=no-key-info&run=" + run.id());

@@ -61,6 +61,8 @@ import com.samlscope.store.SqliteHostedRunProvisioner;
 
 /** Phase 1 execution composition kept outside the HTTP root so its boundaries remain independently testable. */
 final class M1Runtime {
+    private final com.samlscope.runner.SupplementalDecryptionKeyService supplementalKeys;
+    private final java.util.function.Function<String, com.samlscope.runner.SupplementalDecryptionKeyService.Scope> supplementalKeyScopes;
     private final AppConfig config;
     private final QuickCheckService quickCheck;
     private final ResultPublicationService results;
@@ -117,7 +119,11 @@ final class M1Runtime {
             com.samlscope.runner.CampaignActionCompletionService campaignActions,
             PinnedFunctionalCaseDefinitionResolver profileDefinitions,
             com.samlscope.core.evaluation.CoverageCatalog coverage,
-            com.samlscope.runner.ApplicabilityProvider applicability) {
+            com.samlscope.runner.ApplicabilityProvider applicability,
+            com.samlscope.runner.SupplementalDecryptionKeyService supplementalKeys,
+            java.util.function.Function<String, com.samlscope.runner.SupplementalDecryptionKeyService.Scope> supplementalKeyScopes) {
+        this.supplementalKeys = supplementalKeys;
+        this.supplementalKeyScopes = supplementalKeyScopes;
         this.coverage = coverage;
         this.applicability = applicability;
         this.config = config;
@@ -211,11 +217,31 @@ final class M1Runtime {
             var run = runs.find(runId).orElseThrow(() -> new IllegalArgumentException("Unknown Run"));
             return metadataCache.getRunSnapshot(run.id(), run.planId());
         };
+        java.util.function.Function<String, com.samlscope.runner.SupplementalDecryptionKeyService.Scope> supplementalKeyScopes = runId -> {
+            var run = runs.find(runId).orElseThrow(() -> new IllegalArgumentException("Unknown Run"));
+            var plan = plans.find(run.planId()).orElseThrow(() -> new IllegalStateException("Run has no Test Plan"));
+            if (plan.profile() != com.samlscope.core.profile.FunctionalProfile.SINGLE_LOGOUT_IDP) {
+                throw new IllegalArgumentException("Supplemental decryption keys require the IdP logout profile");
+            }
+            var metadata = runMetadata.apply(runId);
+            String digest;
+            try {
+                digest = java.util.HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256").digest(metadata));
+            } catch (java.security.NoSuchAlgorithmException impossible) {
+                throw new IllegalStateException("SHA-256 is unavailable");
+            }
+            return new com.samlscope.runner.SupplementalDecryptionKeyService.Scope(
+                    plan.target().entityId(), digest, !caseExecutions.list(runId).isEmpty(),
+                    new com.samlscope.saml.metadata.TargetEncryptionKeys().rsaKeys(metadata, plan.target().entityId(), plan.profile().role()));
+        };
+        var supplementalKeys = new com.samlscope.runner.SupplementalDecryptionKeyService(
+                new com.samlscope.store.SqliteSupplementalDecryptionKeys(database, json), supplementalKeyScopes, clock);
         var targetCertificates = new CachedTargetSigningCertificateProvider(metadataCache, metadataParser);
         java.util.function.BiFunction<com.samlscope.core.plan.TestPlan, String, IdpErrorProbeConfiguration> probeConfigurations = (plan, runId) -> {
             var inactive = config.peerBaseUrl().resolve("/p/" + plan.id() + "/inactive-idp-probe");
             var endpoint = inactive;
             var responseLocationKnown = false;
+            java.util.List<java.security.PublicKey> encryptionKeys = java.util.List.of();
             try {
                 var targetMetadata = metadataParser.parse(runMetadata.apply(runId), plan.target().entityId());
                 endpoint = targetMetadata.singleSignOnServices().stream()
@@ -225,6 +251,13 @@ final class M1Runtime {
                 responseLocationKnown = !endpoint.equals(inactive);
             } catch (RuntimeException unavailable) {
                 responseLocationKnown = false;
+            }
+            try {
+                encryptionKeys = new com.samlscope.saml.metadata.TargetEncryptionKeys().rsaKeys(
+                        runMetadata.apply(runId), plan.target().entityId(), com.samlscope.core.plan.TargetRole.IDP);
+            } catch (RuntimeException unavailable) {
+                // Missing or ambiguous encryption material must not disable ordinary controls.
+                encryptionKeys = java.util.List.of();
             }
             return new IdpErrorProbeConfiguration(
                     endpoint,
@@ -238,7 +271,7 @@ final class M1Runtime {
                     java.time.Duration.ofHours(2),
                     plan.interaction().allowBrowserSteps(),
                     responseLocationKnown,
-                    true);
+                    true, encryptionKeys);
         };
         var quickCheck = new QuickCheckService(
                 plans, runs, transcript, transcriptContent, caseExecutions, keys, targetCertificates,
@@ -313,6 +346,9 @@ final class M1Runtime {
                     return probeConfigurations.apply(plan, runId);
                 },
                 runId -> java.util.Optional.empty());
+        m2Browser = ApprovedBrowserCaseRegistry.withPublishedMetadata(m2Browser, runMetadata,
+                runId -> runs.find(runId).flatMap(run -> plans.find(run.planId()))
+                        .map(plan -> plan.target().entityId()));
         var m2Automated = M2AutomatedCaseRegistry.create(runId -> {
             try {
                 return runMetadata.apply(runId);
@@ -333,6 +369,12 @@ final class M1Runtime {
                 });
         var m3Config = ApprovedConfigCaseRegistry.create(
                 definitions, com.samlscope.core.casedef.CaseDefinitionCatalog.Milestone.M3);
+        m3Config = ApprovedConfigCaseRegistry.withMultipleDecryptionKeys(m3Config, runId -> {
+            var run = runs.find(runId).orElseThrow(() -> new IllegalArgumentException("Unknown Run"));
+            var plan = plans.find(run.planId()).orElseThrow(() -> new IllegalStateException("Run has no Test Plan"));
+            return new com.samlscope.saml.metadata.TargetEncryptionKeys().rsaKeys(
+                    runMetadata.apply(runId), plan.target().entityId(), plan.profile().role());
+        }, caseExecutions::find);
         var m3Browser = ApprovedBrowserCaseRegistry.create(
                 definitions, config.publicBaseUrl(),
                 com.samlscope.core.casedef.CaseDefinitionCatalog.Milestone.M3,
@@ -352,6 +394,41 @@ final class M1Runtime {
                 },
                 runId -> java.util.Optional.of(keys.getOrCreate(
                         runs.find(runId).orElseThrow().planId())));
+        m3Browser = ApprovedBrowserCaseRegistry.withLogoutScenarios(m3Browser, (caseId, runId) -> {
+            var run = runs.find(runId).orElseThrow(() -> new IllegalArgumentException("Unknown Run"));
+            var plan = plans.find(run.planId()).orElseThrow(() -> new IllegalStateException("Run has no Test Plan"));
+            java.net.URI endpoint = null;
+            var binding = com.samlscope.runner.BrowserFrontChannelScenario.Binding.HTTP_POST;
+            java.security.PublicKey encryptionKey = null;
+            java.util.List<java.security.PublicKey> encryptionKeys = java.util.List.of();
+            java.util.List<java.security.cert.X509Certificate> certificates = java.util.List.of();
+            try {
+                var endpoints = metadataParser.parse(runMetadata.apply(runId), plan.target().entityId()).singleLogoutServices();
+                if (!com.samlscope.runner.cases.IdpBasicLogoutScenarioTestCase.REDIRECT_ID.equals(caseId))
+                    endpoint = endpoints.stream().filter(value -> com.samlscope.saml.metadata.MetadataService.POST.equals(value.binding()))
+                            .map(com.samlscope.saml.metadata.TargetMetadata.Endpoint::location).findFirst().orElse(null);
+                if (endpoint == null) {
+                    endpoint = endpoints.stream().filter(value -> com.samlscope.saml.metadata.MetadataService.REDIRECT.equals(value.binding()))
+                            .map(com.samlscope.saml.metadata.TargetMetadata.Endpoint::location).findFirst().orElse(null);
+                    binding = com.samlscope.runner.BrowserFrontChannelScenario.Binding.SIGNED_REDIRECT;
+                }
+                certificates = targetCertificates.certificatesFor(plan, runId);
+                if (com.samlscope.runner.cases.IdpBasicLogoutScenarioTestCase.ENCRYPTED_ID.equals(caseId)
+                        || com.samlscope.runner.cases.IdpBasicLogoutScenarioTestCase.MULTI_KEY_ID.equals(caseId)) {
+                    encryptionKeys = new com.samlscope.saml.metadata.TargetEncryptionKeys().rsaKeys(
+                            runMetadata.apply(runId),plan.target().entityId(),plan.profile().role());
+                    var suitePublicKey = keys.getOrCreate(plan.id()).certificate().getPublicKey().getEncoded();
+                    if (!encryptionKeys.isEmpty() && encryptionKeys.stream().noneMatch(k -> java.util.Arrays.equals(k.getEncoded(),suitePublicKey)))
+                        encryptionKey = encryptionKeys.getFirst();
+                }
+            } catch (RuntimeException unavailable) {
+                // Missing transport or signing metadata is an unmet Suite test precondition.
+            }
+            return new com.samlscope.runner.cases.IdpBasicLogoutScenarioTestCase.Configuration(
+                    probeConfigurations.apply(plan, runId), endpoint,
+                    config.peerBaseUrl().resolve("/p/" + plan.id() + "/sp/slo"), plan.target().entityId(),
+                    keys.getOrCreate(plan.id()), certificates, binding, encryptionKey, encryptionKeys);
+        });
         var m3Automated = M3AutomatedCaseRegistry.create(
                 runId -> {
                     try { return runMetadata.apply(runId); }
@@ -378,7 +455,8 @@ final class M1Runtime {
                 runId, plans, runs, transcript, clock);
         var activeProbes = new ActiveProbeCoordinator(
                 config.peerBaseUrl(), plans, runs, caseExecutions, outboundDispatcher,
-                transcript, caseContexts, probeConfigurations, interactiveRegistry, clock, executionService);
+                transcript, caseContexts, probeConfigurations, interactiveRegistry, clock, executionService,
+                runId -> keys.getOrCreate(runs.find(runId).orElseThrow().planId()));
         var starters = Map.of(
                 com.samlscope.core.casedef.CaseDefinitionCatalog.Milestone.M1, List.of(
                         new ApprovedCaseStarter(coverage, definitions, m1Attested, executionService, applicability, definitionForPlan),
@@ -441,7 +519,7 @@ final class M1Runtime {
                 starters, pendingInteractions, bootstrapContracts, protocolEvidence, attestations,
                 configurations, browserCompletions, caseExecutions, publications,
                 reconciliationLimiter, hostedRunProvisioner, activeProbes, timeouts,
-                campaigns, campaignActions, profileDefinitions, coverage, applicability);
+                campaigns, campaignActions, profileDefinitions, coverage, applicability, supplementalKeys, supplementalKeyScopes);
     }
 
     java.util.Set<com.samlscope.core.profile.FunctionalProfile> installedProfiles() {
@@ -453,6 +531,26 @@ final class M1Runtime {
         return profileDefinitions.identity(profile);
     }
 
+    record SupplementalKeyView(String targetEntityId, String metadataSha256, boolean testsStarted,
+            com.samlscope.core.caseexec.SupplementalDecryptionKeys input) {}
+
+    SupplementalKeyView supplementalKeys(String runId) {
+        var scope = supplementalKeyScopes.apply(runId);
+        return new SupplementalKeyView(scope.targetEntityId(), scope.metadataSha256(), scope.testsStarted(),
+                supplementalKeys.inspect(runId).orElse(null));
+    }
+
+    com.samlscope.core.caseexec.SupplementalDecryptionKeys submitSupplementalKeys(String runId,
+            com.samlscope.runner.SupplementalDecryptionKeyService.Submission submission) {
+        return withManualEvidenceWork(runId, () -> supplementalKeys.submit(runId, submission));
+    }
+
+    private void freezeSupplementalKeys(TestRun run, com.samlscope.core.plan.TestPlan plan) {
+        if (plan.profile() == com.samlscope.core.profile.FunctionalProfile.SINGLE_LOGOUT_IDP) {
+            supplementalKeys.freeze(run.id());
+        }
+    }
+
     record TestStartResult(boolean ecpProbesRequired) {}
 
     TestStartResult startTests(String runId) {
@@ -462,6 +560,7 @@ final class M1Runtime {
             if (run.status() != com.samlscope.core.run.RunStatus.COMPLETED) {
                 throw new IllegalArgumentException("Complete the initial login before starting the profile tests");
             }
+            freezeSupplementalKeys(run, plan);
             quickCheck.executeApplicable(runId, coverage, applicability);
             boolean ecpProbesRequired = plan.profile() == com.samlscope.core.profile.FunctionalProfile.ECP_IDP
                     && !com.samlscope.runner.outbox.EcpProbeService.allRequiredFixturesSent(caseExecutions, runId);
@@ -478,9 +577,10 @@ final class M1Runtime {
 
     QuickCheckService.QuickCheckResult quickCheck(String runId) {
         return withManualEvidenceWork(runId, () -> {
-            var value = quickCheck.executeApplicable(runId, coverage, applicability);
             var run = requireRun(runId);
             var plan = requirePlan(run);
+            freezeSupplementalKeys(run, plan);
+            var value = quickCheck.executeApplicable(runId, coverage, applicability);
             startInteractive(run, plan, com.samlscope.core.casedef.CaseDefinitionCatalog.Milestone.M1);
             reconcileTranscriptEvidenceNow(runId);
             if (results != null) results.generate(runId);
@@ -536,6 +636,16 @@ final class M1Runtime {
             byte[] decodedSaml,
             com.samlscope.core.evaluation.EvidenceRef evidence) {
         var status = activeProbes.accept(runId, actionId, decodedSaml, evidence);
+        return publishActiveProbeResponse(runId, actionId, status);
+    }
+
+    ActiveProbeCoordinator.Status acceptActiveSloProbe(String runId, String actionId, byte[] decodedSaml,
+            com.samlscope.core.evaluation.EvidenceRef evidence) {
+        return publishActiveProbeResponse(runId, actionId, activeProbes.acceptLogout(runId, actionId, decodedSaml, evidence));
+    }
+
+    private ActiveProbeCoordinator.Status publishActiveProbeResponse(String runId, String actionId,
+            ActiveProbeCoordinator.Status status) {
         if (results != null) {
             // The coordinator may already be reporting the next case in the chain.
             // Publish the outcome of the case that received this response instead
@@ -825,6 +935,7 @@ final class M1Runtime {
         if (run.status() != com.samlscope.core.run.RunStatus.COMPLETED) {
             throw new IllegalArgumentException("Complete the initial login before starting the profile tests");
         }
+        freezeSupplementalKeys(run, plan);
         var context = caseContext(run, plan);
         var started = new java.util.ArrayList<com.samlscope.core.caseexec.CaseExecution>();
         starters.getOrDefault(milestone, List.of()).forEach(starter ->

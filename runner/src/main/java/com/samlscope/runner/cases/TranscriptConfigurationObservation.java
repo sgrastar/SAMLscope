@@ -39,7 +39,7 @@ final class TranscriptConfigurationObservation {
         var parsed = parse(messages);
         if (parsed.isEmpty()) return Optional.empty();
         return switch (caseId) {
-            case "IIP-IDP09-a-idp-01" -> encryptedAssertionCapability(parsed);
+            case "IIP-IDP09-a-idp-01" -> encryptedAssertionCapability(parsed, decryptionKey, decrypter);
             case "IIP-SSO01-ez-idp-01" -> encryptedAssertionPlacement(parsed);
             case "IIP-SSO01-fd-idp-01" -> encryptedChildPlacement(
                     parsed, decryptionKey, decrypter, "EncryptedID", "NameID", "Subject",
@@ -51,9 +51,29 @@ final class TranscriptConfigurationObservation {
         };
     }
 
-    private static Optional<CaseOutcome> encryptedAssertionCapability(List<Parsed> messages) {
-        var observed = messages.stream().filter(value ->
-                !elements(value.document(), ASSERTION, "EncryptedAssertion").isEmpty()).toList();
+    private static Optional<CaseOutcome> encryptedAssertionCapability(List<Parsed> messages,
+            PrivateKey key, SamlElementDecrypter decrypter) {
+        if (key == null) return Optional.empty();
+        var observed = new ArrayList<Parsed>();
+        for (var message : messages) {
+            var root = message.document().getDocumentElement();
+            var status = directElements(root, PROTOCOL, "Status");
+            if (status.size() != 1) continue;
+            var codes = directElements(status.getFirst(), PROTOCOL, "StatusCode");
+            if (codes.size() != 1 || !"urn:oasis:names:tc:SAML:2.0:status:Success".equals(
+                    codes.getFirst().getAttribute("Value"))) continue;
+            for (var wrapper : directElements(root, ASSERTION, "EncryptedAssertion")) {
+                try {
+                    var plaintext = decrypter.decrypt(wrapper, key);
+                    if (ASSERTION.equals(plaintext.getNamespaceURI()) && "Assertion".equals(plaintext.getLocalName())) {
+                        observed.add(message);
+                        break;
+                    }
+                } catch (SamlException unavailable) {
+                    // Missing or unusable encrypted content proves no capability and no failure.
+                }
+            }
+        }
         if (observed.isEmpty()) return Optional.empty();
         return Optional.of(outcome(
                 Outcome.SATISFIED, "configuration.passive.assertion-encryption-capability",

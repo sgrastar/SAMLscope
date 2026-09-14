@@ -22,6 +22,32 @@ public final class ApprovedBrowserCaseRegistry {
 
     private ApprovedBrowserCaseRegistry() {}
 
+    public static TestCaseRegistry withBasicLogout(TestCaseRegistry registry,
+            java.util.function.Function<String, IdpBasicLogoutScenarioTestCase.Configuration> configurations) {
+        return new TestCaseRegistry(registry.all().stream().map(testCase ->
+                IdpBasicLogoutScenarioTestCase.ID.equals(testCase.id())
+                        ? (com.samlscope.core.caseexec.TestCase)new IdpBasicLogoutScenarioTestCase(configurations)
+                        : testCase).toList());
+    }
+
+    public static TestCaseRegistry withLogoutScenarios(TestCaseRegistry registry,
+            java.util.function.BiFunction<String, String, IdpBasicLogoutScenarioTestCase.Configuration> configurations) {
+        return new TestCaseRegistry(registry.all().stream().map(testCase ->
+                java.util.Set.of(IdpBasicLogoutScenarioTestCase.ID, IdpBasicLogoutScenarioTestCase.REDIRECT_ID, IdpBasicLogoutScenarioTestCase.ENCRYPTED_ID, IdpBasicLogoutScenarioTestCase.MULTI_KEY_ID).contains(testCase.id())
+                        ? (com.samlscope.core.caseexec.TestCase)new IdpBasicLogoutScenarioTestCase(testCase.id(),
+                                runId -> configurations.apply(testCase.id(), runId))
+                        : testCase).toList());
+    }
+
+    public static TestCaseRegistry withPublishedMetadata(TestCaseRegistry registry,
+            java.util.function.Function<String, byte[]> metadata,
+            java.util.function.Function<String, java.util.Optional<String>> entityIds) {
+        return new TestCaseRegistry(registry.all().stream().map(testCase ->
+                PublishedUiUrlTestCase.ID.equals(testCase.id())
+                        ? (com.samlscope.core.caseexec.TestCase) new PublishedUiUrlTestCase(metadata, entityIds)
+                        : testCase).toList());
+    }
+
     public static TestCaseRegistry create(CaseDefinitionCatalog definitions, URI publicBase) {
         return create(definitions, publicBase, Milestone.M1, null);
     }
@@ -161,6 +187,17 @@ public final class ApprovedBrowserCaseRegistry {
             java.util.function.Function<String, List<X509Certificate>> targetSigningCertificates,
             java.util.function.Function<String, IdpErrorProbeConfiguration> idpScenarioConfigurations,
             SamlPlanCredentialsProvider suiteCredentials) {
+        if (EcSignatureSupportTestCase.ID.equals(definition.id())) return new EcSignatureSupportTestCase();
+        if ("IIP-IDP12-c-idp-01".equals(definition.id())) {
+            return new MetadataFixtureObservationTestCase(definition.id(), definition.role(), List.of(
+                    new MetadataFixtureObservationTestCase.Fixture("default-acs-first",
+                            MetadataFixtureObservationTestCase.Behavior.ACCEPT, "select the first explicit default", 0),
+                    new MetadataFixtureObservationTestCase.Fixture("default-acs-second",
+                            MetadataFixtureObservationTestCase.Behavior.ACCEPT, "follow the changed explicit default", 1),
+                    new MetadataFixtureObservationTestCase.Fixture("default-acs-implicit",
+                            MetadataFixtureObservationTestCase.Behavior.ACCEPT, "select the first endpoint when defaults are omitted", 0)),
+                    com.samlscope.core.caseexec.ConfigurationFailureSemantics.TEST_PRECONDITION);
+        }
         if (List.of(
                 "IIP-SSO01-bk-idp-01", "IIP-EXT01-b1-idp-01",
                 "IIP-EXT01-c1-idp-01", "IIP-ALG05-a-idp-01").contains(definition.id())) {
@@ -186,7 +223,7 @@ public final class ApprovedBrowserCaseRegistry {
         if (idpScenarioConfigurations != null
                 && IdpExecutableBrowserFixtureScenarioTestCase.CASE_IDS.contains(definition.id())) {
             return new IdpExecutableBrowserFixtureScenarioTestCase(
-                    definition.id(), idpScenarioConfigurations);
+                    definition.id(), idpScenarioConfigurations, decryptionKeys);
         }
         if (idpScenarioConfigurations != null
                 && IdpVersionScenarioTestCase.CASE_ID.equals(definition.id())) {
@@ -257,10 +294,7 @@ public final class ApprovedBrowserCaseRegistry {
             return new AutoBrowserEvidenceTestCase(
                     fallback, transcriptContent, decryptionKeys, targetEntityIds, targetSigningCertificates);
         }
-        if (SharedBrowserPolicyTestCase.supports(definition.id())) {
-            return new SharedBrowserPolicyTestCase(fallback);
-        }
-        return fallback;
+        return new UnavailableBrowserOracleTestCase(definition.id(), definition.role());
     }
 
     private static String browserPrompt(CaseDefinition definition, boolean transcriptDriven) {

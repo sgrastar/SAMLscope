@@ -40,6 +40,7 @@ public final class ActiveProbeCoordinator {
     private final TestCaseRegistry scenarioCases;
     private final Clock clock;
     private final CaseExecutionService executionService;
+    private final java.util.function.Function<String, com.samlscope.saml.crypto.PlanCredentials> redirectCredentials;
 
     public ActiveProbeCoordinator(
             URI publicBase,
@@ -76,6 +77,18 @@ public final class ActiveProbeCoordinator {
             TranscriptRecorder transcript, CaseContextProvider contexts,
             BiFunction<TestPlan, String, IdpErrorProbeConfiguration> configurations,
             TestCaseRegistry scenarioCases, Clock clock, CaseExecutionService executionService) {
+        this(publicBase, plans, runs, repository, dispatcher, transcript, contexts, configurations,
+                scenarioCases, clock, executionService, runId -> { throw new IllegalStateException("Redirect signing is not configured"); });
+    }
+
+    public ActiveProbeCoordinator(
+            URI publicBase, PlanRepository plans, RunRepository runs,
+            CaseExecutionRepository repository, OutboundDispatcher dispatcher,
+            TranscriptRecorder transcript, CaseContextProvider contexts,
+            BiFunction<TestPlan, String, IdpErrorProbeConfiguration> configurations,
+            TestCaseRegistry scenarioCases, Clock clock, CaseExecutionService executionService,
+            java.util.function.Function<String, com.samlscope.saml.crypto.PlanCredentials> redirectCredentials) {
+        this.redirectCredentials = Objects.requireNonNull(redirectCredentials, "redirectCredentials");
         this.executionService = Objects.requireNonNull(executionService, "executionService");
         this.publicBase = Objects.requireNonNull(publicBase, "publicBase");
         this.plans = Objects.requireNonNull(plans, "plans");
@@ -91,11 +104,16 @@ public final class ActiveProbeCoordinator {
 
     public Status status(String runId) {
         var run = requireRun(runId);
+        // Cases are reserved by the profile starter, but only the selected browser case
+        // gets a request timestamp and timeout. Do not rewrite an existing outbox intent.
+        while (true) {
         var candidates = repository.list(runId).stream()
-                .filter(value -> value.status() == CaseExecutionStatus.WAITING_INBOUND)
+                .filter(value -> value.status() == CaseExecutionStatus.WAITING_INBOUND
+                        || CaseExecutionService.isQueuedFrontChannel(value))
                 .filter(value -> scenario(value.caseId(), run).isPresent())
                 .sorted(java.util.Comparator.comparingInt((CaseExecution value) ->
-                                IdpErrorResponseTestCase.CASE_ID.equals(value.caseId()) ? 0 : 1)
+                                value.status() == CaseExecutionStatus.WAITING_INBOUND ? 0 : 1)
+                        .thenComparingInt(value -> IdpErrorResponseTestCase.CASE_ID.equals(value.caseId()) ? 0 : 1)
                         .thenComparing(CaseExecution::caseId))
                 .toList();
         if (candidates.isEmpty()) {
@@ -114,6 +132,10 @@ public final class ActiveProbeCoordinator {
         }
         var current = candidates.get(0);
         var testCase = scenario(current.caseId(), run).orElseThrow();
+        if (CaseExecutionService.isQueuedFrontChannel(current)) {
+            executionService.activateFrontChannel(runId, testCase, contexts.contextFor(runId));
+            continue; // Preconditions may have finished this case without creating an action.
+        }
         var action = repository.listOutbox(runId).stream()
                 .filter(value -> value.caseId().equals(current.caseId()))
                 .filter(value -> value.action().actionId().equals(
@@ -128,6 +150,7 @@ public final class ActiveProbeCoordinator {
         return new Status(run.planId(), state, action.action().actionId(), startUrl,
                 browserScenario.requiresFreshSession(current.state()), null,
                 current.caseId(), browserScenario.instructionsEn(current.state()));
+        }
     }
 
     /** Expires this coordinator's Plan-specific case without exposing it to a static registry. */
@@ -161,16 +184,28 @@ public final class ActiveProbeCoordinator {
         requireRun(runId);
         var current = repository.findOutbox(actionId).orElseThrow();
         var execution = repository.find(runId, current.caseId()).orElseThrow();
+        var binding = ((BrowserFrontChannelScenario) scenario(current.caseId(), requireRun(runId)).orElseThrow())
+                .outboundBinding(execution.state());
+        var redirect = new com.samlscope.saml.binding.SignedRedirectEncoder.Encoded[1];
         var dispatch = dispatcher.dispatchFrontChannel(actionId, action -> {
             var encodedRequest = Base64.getEncoder().encodeToString(action.payload());
             var body = "SAMLRequest=" + url(encodedRequest) + "&RelayState=" + url(relayState);
             var summary = new java.util.LinkedHashMap<String, Object>();
-            summary.put("type", "AuthnRequest");
+            summary.put("type", action.kind() == com.samlscope.core.caseexec.OutboundKind.LOGOUT_REQUEST
+                    ? "LogoutRequest" : "AuthnRequest");
             summary.put("active_probe", true);
             summary.put("action_id", action.actionId());
             summary.put("scenario_case_id", current.caseId());
             var fixtureId = execution.state().data().get("fixture_id");
             if (fixtureId != null) summary.put("fixture_id", fixtureId);
+            if (binding == BrowserFrontChannelScenario.Binding.SIGNED_REDIRECT) {
+                redirect[0] = new com.samlscope.saml.binding.SignedRedirectEncoder().encode(
+                        action.target(), action.payload(), relayState, redirectCredentials.apply(runId));
+                return transcript.record(new TranscriptInput(
+                        runId, Direction.OUTBOUND, clock.instant(), action.actionId(), "GET",
+                        redirect[0].destination().toString(), null, Map.of(), new byte[0], null,
+                        redirect[0].rawQuery(), redirect[0].decodedXml(), Map.copyOf(summary))).id();
+            }
             return transcript.record(new TranscriptInput(
                     runId, Direction.OUTBOUND, clock.instant(), action.actionId(), "POST",
                     action.target().toString(), null,
@@ -183,7 +218,7 @@ public final class ActiveProbeCoordinator {
                 dispatch.action().target(),
                 Base64.getEncoder().encodeToString(dispatch.action().payload()),
                 relayState,
-                dispatch.transcriptEntryId());
+                dispatch.transcriptEntryId(), redirect[0] == null ? null : redirect[0].destination());
     }
 
     public Status accept(
@@ -191,12 +226,24 @@ public final class ActiveProbeCoordinator {
             String actionId,
             byte[] decodedSaml,
             EvidenceRef evidence) {
+        return accept(runId, actionId, decodedSaml, evidence, com.samlscope.core.caseexec.OutboundKind.AUTHN_REQUEST);
+    }
+
+    public Status acceptLogout(String runId, String actionId, byte[] decodedSaml, EvidenceRef evidence) {
+        return accept(runId, actionId, decodedSaml, evidence, com.samlscope.core.caseexec.OutboundKind.LOGOUT_REQUEST);
+    }
+
+    private Status accept(String runId, String actionId, byte[] decodedSaml, EvidenceRef evidence,
+            com.samlscope.core.caseexec.OutboundKind expectedKind) {
         requireRun(runId);
         var outbox = repository.findOutbox(actionId)
                 .orElseThrow(() -> new IllegalArgumentException("Unknown active-probe action"));
         var run = requireRun(runId);
         if (!outbox.runId().equals(runId) || scenario(outbox.caseId(), run).isEmpty()) {
             throw new IllegalArgumentException("Active-probe correlation belongs to another execution");
+        }
+        if (outbox.action().kind() != expectedKind) {
+            throw new IllegalArgumentException("Active-probe response arrived on another protocol endpoint");
         }
         if (outbox.status() == OutboxStatus.UNKNOWN_DELIVERY) {
             dispatcher.confirmInboundDelivery(actionId, evidence.reference());
@@ -297,7 +344,10 @@ public final class ActiveProbeCoordinator {
             URI destination,
             String samlRequest,
             String relayState,
-            String transcriptEntryId) {
+            String transcriptEntryId, URI redirectDestination) {
+        public PreparedProbe(URI destination, String samlRequest, String relayState, String transcriptEntryId) {
+            this(destination, samlRequest, relayState, transcriptEntryId, null);
+        }
         public PreparedProbe {
             Objects.requireNonNull(destination, "destination");
             if (samlRequest == null || samlRequest.isBlank()) throw new IllegalArgumentException("samlRequest is required");

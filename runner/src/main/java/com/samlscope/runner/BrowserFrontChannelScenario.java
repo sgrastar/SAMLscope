@@ -6,6 +6,10 @@ import com.samlscope.core.caseexec.CaseState;
 
 /** Marker and presentation contract for a persisted scenario delivered through a real browser. */
 public interface BrowserFrontChannelScenario extends EvidenceCampaignCase {
+    enum Binding { HTTP_POST, SIGNED_REDIRECT }
+
+    default Binding outboundBinding(CaseState state) { return Binding.HTTP_POST; }
+
     default boolean requiresFreshSession(CaseState state) { return false; }
 
     /** True when any fixture in this scenario crosses an empty-session boundary. */

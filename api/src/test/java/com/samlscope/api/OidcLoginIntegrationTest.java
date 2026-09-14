@@ -106,27 +106,8 @@ class OidcLoginIntegrationTest {
         } finally { app.stop(); }
     }
 
-    @Test void optionalAnonymousRunsAreNotClaimedByLoginAndSecretLinksStillWork() throws Exception {
-        start(AppConfig.Mode.HOSTED, OidcConfig.AccessPolicy.OPTIONAL);
-        try {
-            var created = call("POST", "/api/plans", plan("anonymous"), null, true);
-            assertEquals(201, created.statusCode());
-            var node = json.readTree(created.body());
-            var runId = node.at("/initialRun/run/id").asText();
-            var management = URI.create(node.at("/initialRun/managementUrl").asText());
-            var alice = login("alice");
-            assertEquals("[]", call("GET", "/api/plans", null, alice, false).body());
-            assertEquals(403, call("GET", "/api/runs/" + runId, null, alice, false).statusCode());
-            var exchanged = call("POST", "/api/manage/session", json.writeValueAsString(Map.of(
-                    "runId", runId, "token", management.getFragment().substring(2))), null, true);
-            assertEquals(200, exchanged.statusCode());
-            assertEquals(200, send("GET", "/api/runs/" + runId, null,
-                    cookie(exchanged, ManagementSessionRoutes.COOKIE_NAME), null, null).statusCode());
-        } finally { app.stop(); }
-    }
-
-    @ParameterizedTest @EnumSource(value = OidcConfig.AccessPolicy.class, names = {"NEW_PLANS", "REQUIRED"})
-    void enforcesConfiguredLoginRequirement(OidcConfig.AccessPolicy policy) throws Exception {
+    @ParameterizedTest @EnumSource(OidcConfig.AccessPolicy.class)
+    void oidcAlwaysRequiresAccountsAndRejectsSecretSessions(OidcConfig.AccessPolicy policy) throws Exception {
         start(AppConfig.Mode.HOSTED, policy);
         try {
             assertEquals(403, call("POST", "/api/plans", plan("anonymous"), null, true).statusCode());
@@ -136,9 +117,72 @@ class OidcLoginIntegrationTest {
             var node = json.readTree(created.body());
             var runId = node.at("/initialRun/run/id").asText();
             var management = URI.create(node.at("/initialRun/managementUrl").asText());
-            var exchange = call("POST", "/api/manage/session", json.writeValueAsString(Map.of(
-                    "runId", runId, "token", management.getFragment().substring(2))), null, true);
-            assertEquals(policy == OidcConfig.AccessPolicy.REQUIRED ? 403 : 200, exchange.statusCode());
+            assertNull(management.getFragment());
+            for (var account : new Account[]{null, alice}) {
+                for (var body : new String[]{"{\"runId\":\"" + runId + "\",\"token\":\"old-secret\"}",
+                        "{\"runId\":\"" + runId + "\",\"resume\":true}"}) {
+                    assertEquals(403, call("POST", "/api/manage/session", body, account, true).statusCode());
+                }
+            }
+            try (var db = new com.samlscope.store.SqliteDatabase(data).open();
+                 var statement = db.createStatement(); var rows = statement.executeQuery("SELECT revoked FROM run_access_grants")) {
+                assertTrue(rows.next()); assertEquals(1, rows.getInt(1));
+            }
+            // Even a still-valid legacy grant and cookie cannot bypass OIDC ownership.
+            var database = new com.samlscope.store.SqliteDatabase(data);
+            var legacy = new com.samlscope.runner.access.RunAccessService(publicBase,
+                    new com.samlscope.store.SqliteRunRepository(database, new com.samlscope.store.JsonCodec()),
+                    new com.samlscope.store.SqliteRunAccessGrantRepository(database), java.time.Clock.systemUTC());
+            var oldToken = legacy.issue(runId).managementUrl().getFragment().substring(2);
+            var oldSession = legacy.exchange(runId, oldToken);
+            var bob = login("bob");
+            var combinedCookie = bob.cookie() + "; " + ManagementSessionRoutes.COOKIE_NAME + "=" + oldSession.sessionToken();
+            assertEquals(403, send("GET", "/api/runs/" + runId, null, combinedCookie, null, null).statusCode());
+            assertEquals("[]", send("GET", "/api/plans", null, combinedCookie, null, null).body());
+            assertEquals(403, call("POST", "/api/manage/session", json.writeValueAsString(Map.of(
+                    "runId", runId, "token", oldToken)), bob, true).statusCode());
+        } finally { app.stop(); }
+    }
+
+    @Test void adminManagesAccountsAndReadsButCannotMutateOtherUsersRuns() throws Exception {
+        start(AppConfig.Mode.HOSTED, OidcConfig.AccessPolicy.REQUIRED, "admin");
+        try {
+            var admin = login("admin");
+            var alice = login("alice");
+            var created = call("POST", "/api/plans", plan("alice"), alice, true);
+            assertEquals(201, created.statusCode(), created.body());
+            var node = json.readTree(created.body());
+            var planId = node.at("/plan/plan/id").asText();
+            var runId = node.at("/initialRun/run/id").asText();
+            var aliceId = new OidcIdentity(provider.config(OidcConfig.AccessPolicy.REQUIRED).issuer().toString(), "alice", "").ownerId();
+            var adminId = new OidcIdentity(provider.config(OidcConfig.AccessPolicy.REQUIRED).issuer().toString(), "admin", "").ownerId();
+            assertEquals(403, call("GET", "/api/admin/users", null, alice, false).statusCode());
+            assertEquals(403, call("GET", "/api/admin/plans", null, null, false).statusCode());
+            assertEquals(200, call("GET", "/api/admin/users", null, admin, false).statusCode());
+            assertEquals(1, json.readTree(call("GET", "/api/admin/plans", null, admin, false).body()).size());
+            assertEquals(200, call("GET", "/api/plans/" + planId, null, admin, false).statusCode());
+            assertEquals(200, call("GET", "/api/runs/" + runId, null, admin, false).statusCode());
+            assertEquals(403, call("POST", "/api/runs/" + runId + "/tests/start", "{}", admin, true).statusCode());
+            assertEquals(403, call("POST", "/api/plans/" + planId + "/runs", null, admin, true).statusCode());
+            var update = "{\"displayName\":\"Local name\",\"role\":\"ANONYMOUS\",\"version\":0}";
+            assertEquals(403, call("PUT", "/api/admin/users/" + aliceId, update, alice, true).statusCode());
+            assertEquals(403, call("PUT", "/api/admin/users/" + aliceId, update, admin, false).statusCode());
+            assertEquals(200, call("PUT", "/api/admin/users/" + aliceId, update, admin, true).statusCode());
+            assertEquals(409, call("PUT", "/api/admin/users/" + aliceId, update, admin, true).statusCode());
+            var session = json.readTree(call("GET", "/auth/session", null, alice, false).body());
+            assertEquals("ANONYMOUS", session.path("role").asText());
+            assertEquals("Local name", session.path("displayName").asText());
+            assertEquals(409, call("DELETE", "/api/admin/users/" + adminId, "{\"version\":0}", admin, true).statusCode());
+            assertEquals(204, call("DELETE", "/api/admin/users/" + aliceId, "{\"version\":1}", admin, true).statusCode());
+            assertEquals(403, call("GET", "/api/plans", null, alice, false).statusCode());
+            assertEquals("[]", call("GET", "/api/admin/plans", null, admin, false).body());
+            // Deleted identities cannot recreate the application account by logging in.
+            var response = call("GET", "/auth/login", null, null, false);
+            var authorization = URI.create(response.headers().firstValue("Location").orElseThrow());
+            var state = OidcProviderFixture.query(authorization.getRawQuery()).get("state");
+            var code = provider.authorize(authorization, "alice");
+            assertEquals(400, send("GET", "/auth/callback?state=" + state + "&code=" + code, null,
+                    cookie(response, OidcRoutes.LOGIN_COOKIE), null, null).statusCode());
         } finally { app.stop(); }
     }
 
@@ -156,14 +200,18 @@ class OidcLoginIntegrationTest {
         } finally { app.stop(); }
     }
 
-    void start(AppConfig.Mode mode, OidcConfig.AccessPolicy policy) throws Exception {
+    void start(AppConfig.Mode mode, OidcConfig.AccessPolicy policy) throws Exception { start(mode, policy, ""); }
+    void start(AppConfig.Mode mode, OidcConfig.AccessPolicy policy, String bootstrapSubject) throws Exception {
         int port;
         try (var socket = new ServerSocket(0)) { port = socket.getLocalPort(); }
         base = URI.create("http://127.0.0.1:" + port);
         publicBase = URI.create("https://127.0.0.1:" + port);
         provider = new OidcProviderFixture();
+        var fixtureConfig = provider.config(policy);
+        var oidcConfig = new OidcConfig(fixtureConfig.issuer(), fixtureConfig.clientId(), fixtureConfig.clientSecret(),
+                fixtureConfig.clientAuthMethod(), fixtureConfig.signingAlgorithm(), policy, bootstrapSubject);
         var config = new AppConfig(mode, publicBase, URI.create("https://localhost:" + port), data, port,
-                mode == AppConfig.Mode.SELFHOSTED, false, true, "sha256:" + "a".repeat(64), "127.0.0.1", provider.config(policy));
+                mode == AppConfig.Mode.SELFHOSTED, false, true, "sha256:" + "a".repeat(64), "127.0.0.1", oidcConfig);
         app = FunctionalProfileTestInstallation.create(
                 config, new OidcClient(config.oidc(), publicBase.resolve("/auth/callback"), provider)).start(port);
     }

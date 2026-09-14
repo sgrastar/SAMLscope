@@ -51,7 +51,7 @@ class LogoutTranscriptProfileCaseTest {
         var redirectSigned = fixture(inbound("response",
                 response("_response", "2.0", "_request", success()).replace(
                         "Version=\"2.0\"", "Version=\"2.0\" Consent=\"urn:consent\""), "Signature=abc"));
-        assertEquals(Outcome.NOT_VERIFIED, redirectSigned.evaluate(LogoutTranscriptProfileCase.Rule.CONSENT_SIGNATURE));
+        assertEquals(Outcome.VIOLATED, redirectSigned.evaluate(LogoutTranscriptProfileCase.Rule.CONSENT_SIGNATURE));
         var secondaryAtTop = fixture(inbound("response",
                 response("_response", "2.0", "_request", "urn:oasis:names:tc:SAML:2.0:status:PartialLogout"), null));
         assertEquals(Outcome.VIOLATED, secondaryAtTop.evaluate(LogoutTranscriptProfileCase.Rule.TOP_LEVEL_STATUS));
@@ -214,10 +214,124 @@ class LogoutTranscriptProfileCaseTest {
     @Test
     void redirectLogoutRequestIsAcceptedOnlyWhenACorrelatedSuccessReturns() {
         var fixture = fixture(
-                outboundRedirect("request", request("_request", "2.0", ""), "SAMLRequest=abc"),
+                outboundRedirect("request", request("_request", "2.0", ""), redirectQuery(request("_request", "2.0", ""))),
                 inbound("response", response("_response", "2.0", "_request", success()), null));
         assertEquals(Outcome.SATISFIED, fixture.evaluate(
                 LogoutTranscriptProfileCase.Rule.REDIRECT_LOGOUT_REQUEST_ACCEPTED));
+    }
+
+    private String redirectQuery(String xml) {
+        try {
+            var output = new java.io.ByteArrayOutputStream();
+            var deflater = new java.util.zip.Deflater(-1,true);
+            try(var stream=new java.util.zip.DeflaterOutputStream(output,deflater)){stream.write(xml.getBytes(StandardCharsets.UTF_8));}
+            finally{deflater.end();}
+            return "SAMLRequest="+java.net.URLEncoder.encode(java.util.Base64.getEncoder().encodeToString(output.toByteArray()),StandardCharsets.UTF_8);
+        } catch(java.io.IOException failure){throw new RuntimeException(failure);}
+    }
+
+    @Test void receiverRejectedSoapCannotBecomeSuccessfulPassiveEvidence() {
+        var xml=request("_request","2.0","");
+        for(var rule:LogoutTranscriptProfileCase.Rule.values())for(var payload:List.of(xml,
+                "<s:Envelope xmlns:s='http://www.w3.org/2003/05/soap-envelope'><s:Body>"+xml+"</s:Body></s:Envelope>")) {
+            var fixture=fixture(new Entry("rejected",Direction.INBOUND,"POST",payload,null,
+                    Map.of("transport","SOAP","type","unparsed","parseStatus","invalid-soap-message-scope")));
+            var result=fixture.result(rule,null);
+            assertEquals(Outcome.NOT_VERIFIED,result.outcome());
+            assertEquals("slo.evidence.incomplete",result.reasonCode());
+            assertEquals(List.of("logout_message_scope_unresolved"),result.details().get("evidence_issues"));
+        }
+    }
+
+    @Test void everyRuleRejectsDisagreementBetweenRedirectWireAndRecordedXmlAsSuiteUncertainty() {
+        for(var rule:LogoutTranscriptProfileCase.Rule.values())for(var fault:List.of("different-xml","bad-deflate","two-messages")) {
+            var xml=request("_request","2.0","");
+            var query=switch(fault) {
+                case "different-xml" -> redirectQuery(request("_other","2.0",""));
+                case "bad-deflate" -> "SAMLRequest=abc";
+                default -> redirectQuery(xml)+"&SAMLResponse=abc";
+            };
+            var fixture=fixture(outboundRedirect("request",xml,query),inbound("response",response("_response","2.0","_request",success()),null));
+            var result=fixture.result(rule,null);
+            assertEquals(Outcome.NOT_VERIFIED,result.outcome());
+            assertEquals("slo.evidence.incomplete",result.reasonCode());
+            assertEquals(List.of("redirect_message_mismatch"),result.details().get("evidence_issues"));
+        }
+    }
+
+    @Test
+    void everyRuleRequiresCompleteReadableRunScopedEvidence() {
+        for (var rule : LogoutTranscriptProfileCase.Rule.values()) {
+            for (var fault : List.of("missing", "length", "malformed", "foreign-run", "duplicate-id",
+                    "missing-reference", "missing-logout-bytes", "history-limit", "type-mismatch")) {
+                var fixture = fixture(inbound("response", response("_response", "2.0", "_request", success()), null));
+                var original = fixture.entries.getFirst();
+                switch (fault) {
+                    case "missing" -> fixture.content.clear();
+                    case "length" -> fixture.content.put(original.decodedSamlRef(), new byte[] {1});
+                    case "malformed" -> {
+                        var bytes = fixture.content.get(original.decodedSamlRef()).clone();
+                        bytes[0] = '!'; fixture.content.put(original.decodedSamlRef(), bytes);
+                    }
+                    case "foreign-run" -> fixture.entries.set(0, altered(original, "another-run",
+                            original.decodedSamlRef(), original.decodedSamlBytes(), original.samlSummary()));
+                    case "duplicate-id" -> fixture.entries.add(original);
+                    case "missing-reference" -> fixture.entries.set(0, altered(original, original.runId(),
+                            null, original.decodedSamlBytes(), original.samlSummary()));
+                    case "missing-logout-bytes" -> fixture.entries.set(0, altered(original, original.runId(),
+                            null, 0, Map.of("type", "LogoutResponse")));
+                    case "history-limit" -> fixture.historyUnavailable = true;
+                    case "type-mismatch" -> fixture.entries.set(0, altered(original, original.runId(),
+                            original.decodedSamlRef(), original.decodedSamlBytes(), Map.of("type", "LogoutRequest")));
+                }
+                var result = fixture.result(rule, null);
+                assertEquals(Outcome.NOT_VERIFIED, result.outcome(), rule + ":" + fault);
+                assertEquals("slo.evidence.incomplete", result.reasonCode(), rule + ":" + fault);
+                if (fault.equals("foreign-run")) assertEquals(List.of(), result.evidence());
+            }
+        }
+    }
+
+    @Test
+    void unreadableCompanionCannotBeDiscardedWhileTheRemainingResponsePasses() {
+        var fixture = fixture(inbound("good", response("_good", "2.0", "_request", success()), null),
+                inbound("bad", response("_bad", "2.0", "_request", success()), null));
+        assertEquals(Outcome.SATISFIED, fixture.evaluate(LogoutTranscriptProfileCase.Rule.TOP_LEVEL_STATUS));
+        fixture.content.remove("decoded-bad");
+        assertEquals(Outcome.NOT_VERIFIED, fixture.evaluate(LogoutTranscriptProfileCase.Rule.TOP_LEVEL_STATUS));
+    }
+
+    @Test
+    void soapUsesExactlyOneDirectBodyMessageAndIgnoresHeaderDecoys() {
+        var good = response("_response", "2.0", "_request", success());
+        var bad = response("_bad", "2.0", "_request", "urn:unexpected");
+        for (var ns : List.of("http://schemas.xmlsoap.org/soap/envelope/", "http://www.w3.org/2003/05/soap-envelope")) {
+            var start = "<e:Envelope xmlns:e=\"" + ns + "\">";
+            var end = "</e:Envelope>";
+            assertEquals(Outcome.SATISFIED, fixture(inbound("soap", start + "<e:Header>" + bad
+                    + "</e:Header><e:Body>" + good + "</e:Body>" + end, null))
+                    .evaluate(LogoutTranscriptProfileCase.Rule.TOP_LEVEL_STATUS));
+            assertEquals(Outcome.VIOLATED, fixture(inbound("soap", start + "<e:Header>" + good
+                    + "</e:Header><e:Body>" + bad + "</e:Body>" + end, null))
+                    .evaluate(LogoutTranscriptProfileCase.Rule.TOP_LEVEL_STATUS));
+            for (var middle : List.of("<e:Header>" + good + "</e:Header><e:Body/>",
+                    "<e:Body><wrapper>" + good + "</wrapper></e:Body>",
+                    "<e:Body>" + good + bad + "</e:Body>",
+                    "<e:Body>" + good + "</e:Body><e:Body>" + bad + "</e:Body>")) {
+                for (var rule : LogoutTranscriptProfileCase.Rule.values())
+                    assertEquals(Outcome.NOT_VERIFIED, fixture(inbound("soap", start + middle + end, null))
+                            .evaluate(rule), ns + ":" + rule);
+            }
+        }
+        for (var rule : LogoutTranscriptProfileCase.Rule.values()) {
+            assertEquals(Outcome.NOT_VERIFIED, fixture(inbound("wrapped", "<wrapper>" + good + "</wrapper>", null))
+                    .evaluate(rule), rule.name());
+        }
+    }
+
+    private TranscriptEntry altered(TranscriptEntry e, String run, String decodedRef, int bytes, Map<String, Object> summary) {
+        return new TranscriptEntry(e.id(), run, e.direction(), e.timestamp(), e.correlationId(), e.method(), e.url(),
+                e.status(), e.headers(), e.bodyRef(), e.bodyBytes(), decodedRef, bytes, e.contentType(), e.rawQuery(), summary);
     }
 
     private Fixture fixture(Entry... entries) { return new Fixture(List.of(entries)); }
@@ -262,6 +376,7 @@ class LogoutTranscriptProfileCaseTest {
         private static final String RUN = "run_0123456789ABCDEFGHJKMNPQRS";
         private final List<TranscriptEntry> entries = new ArrayList<>();
         private final Map<String, byte[]> content = new HashMap<>();
+        private boolean historyUnavailable;
 
         private Fixture(List<Entry> values) {
             var sequence = 0;
@@ -281,17 +396,24 @@ class LogoutTranscriptProfileCaseTest {
         }
 
         private Outcome evaluate(LogoutTranscriptProfileCase.Rule rule, String entityId) {
+            return result(rule, entityId).outcome();
+        }
+
+        private com.samlscope.core.evaluation.CaseOutcome result(LogoutTranscriptProfileCase.Rule rule, String entityId) {
             TranscriptRecorder recorder = new TranscriptRecorder() {
                 @Override public TranscriptEntry record(TranscriptInput input) { throw new UnsupportedOperationException(); }
                 @Override public TranscriptEntry updateSamlAnalysis(
                         String entryId, String correlationId, Map<String, Object> samlSummary) {
                     throw new UnsupportedOperationException();
                 }
-                @Override public List<TranscriptEntry> list(String runId) { return entries; }
+                @Override public List<TranscriptEntry> list(String runId) {
+                    if (historyUnavailable) throw new com.samlscope.core.transcript.TranscriptHistoryLimitExceeded(runId, 1);
+                    return entries;
+                }
             };
             TranscriptContentReader reader = entry -> content.get(entry.decodedSamlRef());
             return new LogoutTranscriptProfileCase(rule, List.of(), entityId)
-                    .evaluate(RUN, recorder, reader).outcome();
+                    .evaluate(RUN, recorder, reader);
         }
     }
 }

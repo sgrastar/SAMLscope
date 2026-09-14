@@ -49,19 +49,29 @@ public final class FilePlanKeyStore {
     }
 
     public synchronized PlanCredentials getOrCreate(String planId, String keyAlias) {
+        return getOrCreate(planId, keyAlias, false);
+    }
+
+    /** An isolated EC signing key; existing RSA and encryption keys keep their paths. */
+    public synchronized PlanCredentials getOrCreateEc(String planId, String keyAlias) {
+        return getOrCreate(planId, keyAlias, true);
+    }
+
+    private PlanCredentials getOrCreate(String planId, String keyAlias, boolean ec) {
         if (keyAlias == null || !keyAlias.matches("[a-z][a-z0-9-]{0,31}")) {
             throw new IllegalArgumentException("Invalid key alias");
         }
         var planDirectory = safePlanDirectory(planId);
         if (!"primary".equals(keyAlias)) planDirectory = planDirectory.resolve(keyAlias);
+        if (ec) planDirectory = planDirectory.resolve("ec-p256");
         var keyPath = planDirectory.resolve("signing-key.pk8");
         var certificatePath = planDirectory.resolve("signing-certificate.der");
         try {
             if (!Files.exists(keyPath) || !Files.exists(certificatePath)) {
                 Files.createDirectories(planDirectory);
-                generate(planId, keyAlias, keyPath, certificatePath);
+                generate(planId, keyAlias, keyPath, certificatePath, ec);
             }
-            var privateKey = KeyFactory.getInstance("RSA")
+            var privateKey = KeyFactory.getInstance(ec ? "EC" : "RSA")
                     .generatePrivate(new PKCS8EncodedKeySpec(Files.readAllBytes(keyPath)));
             var certificate = (X509Certificate) CertificateFactory.getInstance("X.509")
                     .generateCertificate(new ByteArrayInputStream(Files.readAllBytes(certificatePath)));
@@ -71,9 +81,10 @@ public final class FilePlanKeyStore {
         }
     }
 
-    private void generate(String planId, String keyAlias, Path keyPath, Path certificatePath) throws Exception {
-        var generator = KeyPairGenerator.getInstance("RSA");
-        generator.initialize(3072, new SecureRandom());
+    private void generate(String planId, String keyAlias, Path keyPath, Path certificatePath, boolean ec) throws Exception {
+        var generator = KeyPairGenerator.getInstance(ec ? "EC" : "RSA");
+        if (ec) generator.initialize(new java.security.spec.ECGenParameterSpec("secp256r1"), new SecureRandom());
+        else generator.initialize(3072, new SecureRandom());
         var pair = generator.generateKeyPair();
         var now = clock.instant();
         var name = new X500Name("CN=samlscope " + keyAlias + " test key (DO NOT TRUST),OU="
@@ -87,8 +98,8 @@ public final class FilePlanKeyStore {
                 pair.getPublic());
         certificateBuilder.addExtension(Extension.basicConstraints, true, new BasicConstraints(false));
         certificateBuilder.addExtension(Extension.keyUsage, true,
-                new KeyUsage(KeyUsage.digitalSignature | KeyUsage.keyEncipherment));
-        var signer = new JcaContentSignerBuilder("SHA256withRSA")
+                new KeyUsage(ec ? KeyUsage.digitalSignature : KeyUsage.digitalSignature | KeyUsage.keyEncipherment));
+        var signer = new JcaContentSignerBuilder(ec ? "SHA256withECDSA" : "SHA256withRSA")
                 .setProvider(BouncyCastleProvider.PROVIDER_NAME)
                 .build(pair.getPrivate());
         var certificate = new JcaX509CertificateConverter()

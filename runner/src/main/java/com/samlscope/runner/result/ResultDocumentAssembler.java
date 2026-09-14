@@ -187,7 +187,7 @@ public final class ResultDocumentAssembler {
                 evidenceClass(value.id(), source, evidenceClasses),
                 outcome == null ? List.of() : outcome.evidence().stream()
                         .map(ref -> new EvidenceView(ref.kind(), ref.reference())).toList(),
-                required(definitionUrls, value.id(), "case definition URL"));
+                required(definitionUrls, value.id(), "case definition URL"), PublicCaseDiagnostics.from(outcome));
     }
 
     private static ResultDocument.EvidenceSummaryView evidenceSummary(

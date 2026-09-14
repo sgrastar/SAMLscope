@@ -249,6 +249,14 @@ public final class IdpNameIdPolicyScenarioTestCase
                 if (expected.format() != null && !expected.format().equals(nameId.getAttribute("Format"))) {
                     return FixtureObservation.VIOLATED;
                 }
+                if (configuration.suiteIssuer().equals(expected.spNameQualifier())
+                        && !nameId.hasAttribute("SPNameQualifier")) {
+                    // Core 8.3.7/8.3.8 permits implicit same-SP qualification. The approved
+                    // variant currently requires literal equality: do not issue a false
+                    // violation or silently approve that interpretation. Keep it unresolved
+                    // until the protected catalog is reconciled and independently approved.
+                    return FixtureObservation.NOT_VERIFIED;
+                }
                 if (expected.spNameQualifier() != null
                         && !expected.spNameQualifier().equals(nameId.getAttribute("SPNameQualifier"))) {
                     return FixtureObservation.VIOLATED;

@@ -6,7 +6,11 @@ import java.util.Set;
 
 /** Operator-supplied, single-issuer OIDC configuration. Never log the client secret. */
 public record OidcConfig(URI issuer, String clientId, String clientSecret,
-                         String clientAuthMethod, String signingAlgorithm, AccessPolicy accessPolicy) {
+                         String clientAuthMethod, String signingAlgorithm, AccessPolicy accessPolicy, String bootstrapAdminSubject) {
+    public OidcConfig(URI issuer, String clientId, String clientSecret, String clientAuthMethod,
+                      String signingAlgorithm, AccessPolicy accessPolicy) {
+        this(issuer, clientId, clientSecret, clientAuthMethod, signingAlgorithm, accessPolicy, "");
+    }
     public enum AccessPolicy { OPTIONAL, NEW_PLANS, REQUIRED }
 
     public OidcConfig {
@@ -23,6 +27,7 @@ public record OidcConfig(URI issuer, String clientId, String clientSecret,
                 throw new IllegalArgumentException("OIDC signing algorithm must be RS256, PS256, or ES256");
             }
         }
+        if (bootstrapAdminSubject == null) bootstrapAdminSubject = "";
         if (accessPolicy == null) throw new IllegalArgumentException("OIDC access policy is required");
     }
 
@@ -39,7 +44,8 @@ public record OidcConfig(URI issuer, String clientId, String clientSecret,
                 env.getOrDefault("SAMLSCOPE_OIDC_CLIENT_AUTH_METHOD", "client_secret_basic"),
                 env.getOrDefault("SAMLSCOPE_OIDC_SIGNING_ALGORITHM", "RS256"),
                 AccessPolicy.valueOf(env.getOrDefault("SAMLSCOPE_OIDC_ACCESS_POLICY", "optional")
-                        .toUpperCase(java.util.Locale.ROOT)));
+                        .toUpperCase(java.util.Locale.ROOT)),
+                env.getOrDefault("SAMLSCOPE_OIDC_BOOTSTRAP_ADMIN_SUBJECT", ""));
     }
     public static void requireHttps(URI uri) {
         if (uri == null || !"https".equals(uri.getScheme()) || uri.getHost() == null

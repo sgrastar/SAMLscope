@@ -154,9 +154,8 @@ public final class SpPeerService {
             // The Run and fixture are correlated by the Suite-generated ACS URL. This flag says
             // only that a syntactically valid SAML Response reached that controlled endpoint; it
             // does not claim that the target accepted metadata or satisfied any obligation.
-            var expectedProbe = metadataProbeRequestId(run.context(), variant);
             analyzedSummary.put("metadataProbeAccepted",
-                    expectedProbe != null && expectedProbe.equals(actual));
+                    matchesMetadataProbeRequest(run.context(), variant, actual));
         } else if (!metadataProbe) {
             analyzedSummary.put("normalFlowAccepted", !expected.isBlank() && expected.equals(actual));
         }
@@ -168,6 +167,12 @@ public final class SpPeerService {
             activeProbeResponses.accept(
                     run.id(), activeProbe.orElseThrow().actionId(), rawMessage.xml(),
                     new EvidenceRef("transcript", transcriptEntry.id()));
+        } else if (metadataProbe && Boolean.TRUE.equals(analyzedSummary.get("metadataProbeAccepted"))
+                && actual.equals(run.context().get("active_metadata_request_id"))
+                && run.status() == RunStatus.WAITING_BROWSER) {
+            // Completing this correlated exchange releases the browser wait. The next
+            // campaign member enters WAITING_BROWSER when dispatched; this is no verdict.
+            runService.update(run, RunStatus.COMPLETED, run.targetToSuiteReachability(), run.context());
         } else if (!metadataProbe) {
             var context = new LinkedHashMap<String, Object>(run.context());
             context.put("m0RoundTrip", "completed");
@@ -183,14 +188,18 @@ public final class SpPeerService {
                 rawMessage.relayState());
     }
 
-    private String metadataProbeRequestId(Map<String, Object> context, String variant) {
+    private boolean matchesMetadataProbeRequest(
+            Map<String, Object> context, String variant, String actual) {
+        if (actual == null || actual.isBlank()) return false;
+        // Both ingestion modes may have issued this variant in the same Run. An older
+        // preloaded request must not shadow a later polling request (or vice versa).
+        // Only the active request may release the browser wait; that check is separate.
         for (var key : java.util.List.of("metadata_preloaded_requests", "metadata_polling_requests")) {
             var value = context.get(key);
             if (!(value instanceof Map<?, ?> requests)) continue;
-            var expected = requests.get(variant);
-            if (expected instanceof String text && !text.isBlank()) return text;
+            if (actual.equals(requests.get(variant))) return true;
         }
-        return null;
+        return false;
     }
 
     private String queryParameter(String requestUrl, String name) {

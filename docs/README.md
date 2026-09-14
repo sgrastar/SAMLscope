@@ -1,6 +1,6 @@
 # SAMLscope — SAML Conformance Test Suite
 
-**Design documentation** / Created: 2026-08-25 / Status: v0.1 implementation complete; operational reference runs remain release evidence
+**Design documentation** / Created: 2026-08-25 / Status: v0.1 implementation and reference acceptance incomplete; release blocked
 
 An OSS tool that allows anyone to verify any SAML IdP / SP implementation under the same conditions, based on requirements in published specifications.
 It aims to be the SAML equivalent of the OIDF Conformance Suite.
@@ -15,7 +15,7 @@ It aims to be the SAML equivalent of the OIDF Conformance Suite.
 | Trust model for published results | **Level 0 (local export) + Level 2 (shared URLs only for Hosted Runs)**. Uploading self-hosted results is not adopted |
 | Backend | **Java 21 + Javalin/Jetty + OpenSAML 5 + Apache Santuario + SQLite** |
 | Frontend | **React + Vite (TypeScript)**. `report.html` is also a static build of the same application |
-| Hosted-version administrative access | **Per-Run secret URLs + optional standard OIDC**; integration pending renewed G2 approval ([17](17-oidc-authentication.md)) |
+| Hosted-version administrative access | **Secret URLs when OIDC is off; account-only access and admin roles when OIDC is on**; integration pending renewed G2 approval ([17](17-oidc-authentication.md)) |
 | Reference implementation results | **Published as version-pinned samples**. Run in CI, but do not publish continuously |
 | Build / repository | **Gradle (Kotlin DSL)** / **single repository** |
 | Quoting specification source text | **ID + original summary + link to the original-text anchor**. Do not reproduce the full text (inquiry to Kantara in parallel) |
@@ -59,7 +59,7 @@ M0   Skeleton implementation      ✅ Peer, transcript, preflight, API, and UI s
   ↓
 G2   Test design                  ✅ Role-specific cases, controls, counterexamples, mutants, and feasibility spikes have signed independent approval
   ↓                               Also include the verification infrastructure (schema / g2_validate / approvals/g2.yaml / CI)
-M1–M4 Evaluation and publication ✅ Approved cases, evidence workflows, protocol probes, result JSON, report HTML, and hosted publication controls are implemented
+M1–M4 Evaluation and publication ⚠ Runtime framework exists; missing or partial case oracles remain release blockers (docs/26, docs/27)
 ```
 
 The conventions for implementation agents (such as Codex) are in [`AGENTS.md`](../AGENTS.md).
@@ -118,3 +118,9 @@ not by differences in reference-implementation results ([00 §5](00-concept.md))
 2. **Three evaluation paths**. Automated (back channel only) / Browser-assisted (through the user’s browser) / Attested (the user attests to behavior on the Target side). SAML black-box tests may be unable to mechanically observe “the other party rejected it”; unless this is incorporated into the design, the resulting numbers have no meaning. → [03](03-test-model.md)
 3. **Metadata requirements require reconfiguration on the test-target side**. IIP-MD01–MD04 and similar requirements cannot be verified unless the Target is configured to retrieve the Suite’s metadata. Give the Test Plan a metadata distribution method (manual / HTTP / MDQ). In the manual case, these become
 **`NOT_VERIFIED(plan_configuration)`** (**not** `NOT_APPLICABLE`). They remain in the denominator, and the result becomes `conformance = INDETERMINATE` / `completeness = INCOMPLETE`. → [04](04-requirement-coverage.md)
+
+- [Reference per-test comparison and Suite fixes](23-reference-test-comparison.md) — reviewed local IdP results, attribution, and remaining approval/browser limitations.
+- [Unverified case inventory](26-unverified-case-inventory.md) — all remaining observations, Suite implementation gaps, supplemental retests, and evidence provenance.
+- [Interaction execution and setup cost](25-interaction-execution-cost.md) — measured configuration changes, delegated operations, result deltas, and work-reduction priorities.
+
+- [Additional implementation and retests](27-additional-implementation.md) — implemented observations, automation fixes, verified results, and remaining release blockers.

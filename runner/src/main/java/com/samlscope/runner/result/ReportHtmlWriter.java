@@ -37,6 +37,7 @@ public final class ReportHtmlWriter {
                 <section class="grid" id="summary"></section>
                 <section class="card"><h2>Conformance statement</h2><p class="statement" id="statement"></p></section>
                 <section><h2>Requirements</h2><table><thead><tr><th>Requirement</th><th>Verdict</th><th>Obligations</th><th>Cases</th></tr></thead><tbody id="requirements"></tbody></table></section>
+                <section><h2>Case observations</h2><p>Partial observations support the recorded verdict; they do not independently prove conformance.</p><div id="case-observations"></div></section>
                 <details><summary>Embedded authoritative result.json</summary><pre id="json"></pre></details>
                 <section class="card"><h2>Licenses and sources</h2><p>The software license and retained specification notices travel with this standalone report.</p>
                 <details><summary>Licensing scope</summary><pre class="notice-text" id="licensing-scope"></pre></details>
@@ -51,6 +52,16 @@ public final class ReportHtmlWriter {
                 const attribution=r.attribution ?? JSON.parse(decode('__SAMLSCOPE_SOURCE_NOTICES_BASE64__'));
                 const notices=document.querySelector('#source-notices');
                 const paragraph=(parent,tag,text)=>{const e=document.createElement(tag);e.textContent=text;parent.append(e);return e};
+                const caseObservations=document.querySelector('#case-observations');
+                for(const requirement of r.requirements ?? [])for(const item of requirement.cases ?? []){
+                  const detail=document.createElement('details');paragraph(detail,'summary',`${item.id} — ${item.verdict}`);
+                  paragraph(detail,'p',item.reason ?? item.reason_code ?? '');
+                  for(const [key,values] of Object.entries(item.diagnostics ?? {})){
+                    paragraph(detail,'h3',key.replaceAll('_',' '));
+                    const list=document.createElement('ul');for(const value of values)paragraph(list,'li',value);detail.append(list);
+                  }
+                  caseObservations.append(detail);
+                }
                 if(attribution.scope)paragraph(notices,'p',attribution.scope);
                 if(attribution.original_content_attribution)paragraph(notices,'p',attribution.original_content_attribution);
                 if(attribution.modifications)paragraph(notices,'p',attribution.modifications);

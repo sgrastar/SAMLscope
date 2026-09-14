@@ -27,6 +27,12 @@ class SamlSignedRequestFactoryTest {
                     fixture, "_request", URI.create("https://idp.example/sso"),
                     "https://suite.example/sp", URI.create("https://suite.example/sp/acs/0"),
                     NOW, credentials));
+            if (fixture == SamlSignedRequestFactory.Fixture.DEFAULT_ACS) {
+                for (var attribute : java.util.List.of("AssertionConsumerServiceURL",
+                        "AssertionConsumerServiceIndex", "ProtocolBinding")) {
+                    assertFalse(document.getDocumentElement().hasAttribute(attribute), attribute);
+                }
+            }
             var valid = verifier.hasValidEnvelopedSignature(
                     document.getDocumentElement(), credentials.certificate());
             var deliberatelyInvalid = java.util.Set.of(

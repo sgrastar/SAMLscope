@@ -101,6 +101,12 @@ class EcpTranscriptProfileCaseTest {
                 EcpTranscriptProfileCase.Rule.GENERATED_KEY));
     }
 
+    @Test
+    void missingSamlEcResponseIsNotAProductViolation() {
+        assertEquals(Outcome.NOT_VERIFIED, fixture(samlEcRequest()).evaluate(
+                EcpTranscriptProfileCase.Rule.GENERATED_KEY));
+    }
+
     private Fixture fixture(Soap... values) { return new Fixture(List.of(values)); }
 
     private Soap request() {

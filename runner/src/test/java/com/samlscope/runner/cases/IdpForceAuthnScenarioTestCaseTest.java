@@ -11,6 +11,7 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.Map;
 import org.junit.jupiter.api.Test;
 import com.samlscope.core.caseexec.CaseContext;
 import com.samlscope.core.caseexec.CaseEvent;
@@ -47,7 +48,7 @@ class IdpForceAuthnScenarioTestCaseTest {
     }
 
     @Test
-    void reusingTheExistingAuthenticationInstantIsAViolation() {
+    void sameReportedInstantCannotProveSessionReuse() {
         var testCase = testCase();
         var baseline = assertInstanceOf(CaseStep.AwaitInbound.class, testCase.start(context()));
         var omitted = next(testCase, baseline, response(baseline.next(), "2026-08-30T00:00:00Z"));
@@ -56,7 +57,29 @@ class IdpForceAuthnScenarioTestCaseTest {
         var finish = assertInstanceOf(CaseStep.Finish.class, testCase.resume(
                 context(), explicitTrue.next(),
                 inbound(response(explicitTrue.next(), "2026-08-30T00:00:00Z"))));
-        assertEquals(Outcome.VIOLATED, finish.outcome().outcome());
+        assertEquals(Outcome.NOT_VERIFIED, finish.outcome().outcome());
+    }
+
+    @Test
+    void reportedPrecisionDoesNotTurnFreshAuthenticationIntoAViolation() {
+        assertFinalOutcome("2026-09-14T07:16:51Z", "2026-09-14T07:16:52.479385919Z",
+                "2026-09-14T07:16:52Z", Outcome.NOT_VERIFIED);
+        assertFinalOutcome("2026-09-14T07:16:51Z", "2026-09-14T07:16:52.479385919Z",
+                "2026-09-14T07:16:52.479Z", Outcome.NOT_VERIFIED);
+        assertFinalOutcome("2026-09-14T07:16:51Z", "2026-09-14T07:16:52.479385919Z",
+                "2026-09-14T07:16:53Z", Outcome.SATISFIED);
+        assertFinalOutcome("2026-09-14T07:16:51Z", "2026-09-14T07:16:52.479385919Z",
+                "2026-09-14T07:16:51Z", Outcome.VIOLATED);
+    }
+
+    private void assertFinalOutcome(String baseline, String request, String authn, Outcome expected) {
+        var state = new CaseState("await-force-authn-true-with-session", Map.of(
+                "stage_index", 3, "stage", "true-with-session",
+                "expected_response_correlation", "_request", "request_issue_instant", request,
+                "baseline_authn_instant", baseline, "evidence", java.util.List.of("control")));
+        var finish = assertInstanceOf(CaseStep.Finish.class,
+                testCase().resume(context(), state, inbound(response(state, authn))));
+        assertEquals(expected, finish.outcome().outcome());
     }
 
     private IdpForceAuthnScenarioTestCase testCase() {

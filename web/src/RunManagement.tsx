@@ -960,7 +960,8 @@ export function RunManagement({ runId, csrfToken, focusCaseId, navigateTo }: {
           : 'No pending interactions.'}
     </p> :
       <div className="interaction-list">{visibleInteractions.map(interactionCard)}</div>}
-    {mode === 'hosted' && <div className="actions"><button disabled={busy === 'publish'} onClick={() => void publish()}>Publish hosted result</button></div>}
+    {mode === 'hosted' && <><p>For anonymous accounts, published reports also expire after 30 days without application use. Expired public links stop working.</p>
+      <div className="actions"><button disabled={busy === 'publish'} onClick={() => void publish()}>Publish hosted result</button></div></>}
   </section>
 }
 

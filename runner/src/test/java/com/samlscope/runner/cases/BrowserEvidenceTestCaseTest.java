@@ -351,6 +351,26 @@ class BrowserEvidenceTestCaseTest {
                 testCase.start(context(new FixedTranscript(List.of()))));
     }
 
+    @Test
+    void incompleteSloEvidenceFinishesWithDiagnosticsInsteadOfRequestingAnotherBrowserAction() {
+        var testCase = new LogoutBrowserEvidenceTestCase(
+                browserCase("IIP-IDP17-g-idp-01"), ignored -> { throw new AssertionError("Must not read incomplete evidence"); },
+                ignored -> java.util.Optional.of("https://idp.example/entity"), ignored -> List.of());
+        var complete = context();
+        var incomplete = new DefaultCaseContext(complete.runId(), complete.targetRole(), complete.clock(),
+                complete.parameters(), complete.interaction(), complete.reachability(), complete.transcript(), false);
+        var finish = assertInstanceOf(CaseStep.Finish.class, testCase.start(incomplete));
+        assertEquals(Outcome.NOT_VERIFIED, finish.outcome().outcome());
+        assertEquals(List.of("history_incomplete"), finish.outcome().details().get("evidence_issues"));
+        assertEquals(true, testCase.evidenceStatus(incomplete).ready());
+        assertEquals(List.of(), testCase.evidenceStatus(incomplete).completedObservations());
+        for (var id : LogoutTranscriptTestCase.approvedIds()) {
+            var passive = new LogoutTranscriptTestCase(id, ignored -> { throw new AssertionError(); }, ignored -> List.of());
+            var result = assertInstanceOf(CaseStep.Finish.class, passive.start(incomplete));
+            assertEquals(Outcome.NOT_VERIFIED, result.outcome().outcome(), id);
+        }
+    }
+
     private BrowserEvidenceTestCase browserCase(String id) {
         var evidence = new AttestedOutcomeTestCase(
                 id, TargetRole.IDP, "browser.evidence", "Review browser evidence.",

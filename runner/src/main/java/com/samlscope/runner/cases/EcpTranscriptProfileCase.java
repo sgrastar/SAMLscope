@@ -252,7 +252,7 @@ public final class EcpTranscriptProfileCase {
                 .filter(value -> has(value.document(), SAML_EC, "SessionKey")).toList();
         if (samlEcRequests.isEmpty()) return notVerified("saml_ec_session_key_probe_not_observed");
         var invalid = new ArrayList<String>();
-        var observed = 0;
+        var missingResponses = new ArrayList<Envelope>();
         var undecryptable = new ArrayList<EvidenceRef>();
         var scopedResponses = new ArrayList<Envelope>();
         for (var request : samlEcRequests) {
@@ -260,7 +260,7 @@ public final class EcpTranscriptProfileCase {
                     .filter(value -> request.entry().correlationId().equals(value.entry().correlationId()))
                     .findFirst().orElse(null);
             if (response == null) {
-                invalid.add(request.reference() + "#saml-ec-response-missing");
+                missingResponses.add(request);
                 continue;
             }
             scopedResponses.add(response);
@@ -276,7 +276,6 @@ public final class EcpTranscriptProfileCase {
                 invalid.add(response.reference() + "#GeneratedKey-missing");
                 continue;
             }
-            observed += headerValues.size() + visibleAdviceValues.size();
             for (var value : headerValues) {
                 try {
                     if (Base64.getDecoder().decode(value).length < 16) {
@@ -314,6 +313,11 @@ public final class EcpTranscriptProfileCase {
             if (decrypted && headerValues.stream().noneMatch(adviceValues::contains)) {
                 invalid.add(response.reference() + "#GeneratedKey-advice-copy-missing-or-different");
             }
+        }
+        if (invalid.isEmpty() && !missingResponses.isEmpty()) {
+            return new CaseOutcome(Outcome.NOT_VERIFIED, "saml_ec_response_unavailable",
+                    "saml-ec.generated-key.response-unavailable", "saml-ec.generated-key.response-unavailable",
+                    evidence(missingResponses), Map.of("missing_responses", missingResponses.size()));
         }
         if (invalid.isEmpty() && !undecryptable.isEmpty()) {
             return new CaseOutcome(Outcome.NOT_VERIFIED, "encrypted_content_not_decryptable",

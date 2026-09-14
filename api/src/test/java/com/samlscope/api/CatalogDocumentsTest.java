@@ -59,10 +59,19 @@ class CatalogDocumentsTest {
         var browser = ApprovedBrowserCaseRegistry.create(cases, java.net.URI.create("https://suite.example"));
         assertEquals(151, browser.ids().size());
         CaseImplementationAudit.requireExact(cases, browser, Milestone.M1, ExecutionMode.BROWSER);
-        var browserCase = (BrowserEvidenceTestCase) browser.require("IIP-ALG01-a-idp-01");
-        assertTrue(browserCase.browserInstructionsEn().contains("target instruction"));
-        assertFalse(browserCase.browserInstructionsEn().contains("Required controls"));
-        assertFalse(browserCase.browserInstructionsEn().contains("role-specific mutant"));
+        var unavailable = org.junit.jupiter.api.Assertions.assertInstanceOf(
+                com.samlscope.runner.cases.UnavailableBrowserOracleTestCase.class,
+                browser.require("IIP-ALG01-a-idp-01"));
+        var finished = org.junit.jupiter.api.Assertions.assertInstanceOf(
+                com.samlscope.core.caseexec.CaseStep.Finish.class, unavailable.start(null));
+        assertEquals(com.samlscope.core.evaluation.Outcome.NOT_VERIFIED, finished.outcome().outcome());
+        assertEquals("browser.oracle-unavailable", finished.outcome().reasonCode());
+        var publisherBase = ApprovedBrowserCaseRegistry.create(cases, java.net.URI.create("https://suite.example"), Milestone.M2);
+        var publisherRegistry = ApprovedBrowserCaseRegistry.withPublishedMetadata(publisherBase,
+                ignored -> new byte[0], ignored -> java.util.Optional.empty());
+        assertEquals(publisherBase.ids(), publisherRegistry.ids());
+        org.junit.jupiter.api.Assertions.assertInstanceOf(com.samlscope.runner.cases.PublishedUiUrlTestCase.class,
+                publisherRegistry.require("IIP-MD05-fi-idp-01"));
         assertEquals(12, ApprovedAttestedCaseRegistry.create(cases, Milestone.M2).ids().size());
         assertEquals(214, ApprovedConfigCaseRegistry.create(cases, Milestone.M2).ids().size());
         assertEquals(20, ApprovedBrowserCaseRegistry.create(
@@ -85,6 +94,30 @@ class CatalogDocumentsTest {
     }
 
     @Test
+    void metadataKeysAndDefaultAcsHaveConnectedEvidenceCampaigns() {
+        var cases = CaseDefinitionCatalogMapper.fromDocument(CatalogDocuments.load().parsed("tests/cases.yaml"));
+        var config = ApprovedConfigCaseRegistry.create(cases, Milestone.M2);
+        for (var id : java.util.List.of("IIP-MD05-ad-idp-01", "IIP-MD06-a5-idp-01",
+                "IIP-MD06-a7-idp-01", "IIP-MD06-a9-idp-01", "IIP-MD07-a-idp-01")) {
+            var implementation = org.junit.jupiter.api.Assertions.assertInstanceOf(
+                    com.samlscope.runner.cases.MetadataFixtureObservationTestCase.class, config.require(id));
+            assertEquals("control", implementation.evidenceActionKeys().getFirst());
+            for (var variant : implementation.evidenceActionKeys()) {
+                com.samlscope.saml.metadata.MetadataService.Variant.parse(variant);
+            }
+        }
+        var browser = ApprovedBrowserCaseRegistry.create(cases, java.net.URI.create("https://suite.example"));
+        var defaults = org.junit.jupiter.api.Assertions.assertInstanceOf(
+                com.samlscope.runner.cases.MetadataFixtureObservationTestCase.class,
+                browser.require("IIP-IDP12-c-idp-01"));
+        assertEquals(java.util.List.of("control", "default-acs-first", "default-acs-second", "default-acs-implicit"),
+                defaults.evidenceActionKeys());
+        assertTrue(com.samlscope.saml.metadata.MetadataService.preloadedCampaignVariants().stream()
+                .noneMatch(com.samlscope.saml.metadata.MetadataService.Variant::defaultAcsProbe),
+                "Changing the default requires refreshing the same entity, not separate preloaded identities");
+    }
+
+    @Test
     void browserAutomationCannotSilentlyRegressBackToQuestionnaires() {
         var cases = CaseDefinitionCatalogMapper.fromDocument(
                 CatalogDocuments.load().parsed("tests/cases.yaml"));
@@ -101,8 +134,13 @@ class CatalogDocumentsTest {
                 value instanceof ProtocolEvidenceCase
                         || (value instanceof BrowserFrontChannelScenario
                             && !(value instanceof IdpExecutableBrowserFixtureScenarioTestCase))).count();
-        assertEquals(59, automatedM1Idp,
+        assertEquals(61, automatedM1Idp,
                 "Update this explicit automatic-oracle inventory when adding or removing an oracle");
+        var ec = org.junit.jupiter.api.Assertions.assertInstanceOf(
+                com.samlscope.runner.cases.EcSignatureSupportTestCase.class,
+                m1.require("IIP-ALG03-a-idp-01"));
+        assertEquals(java.util.List.of("control", "ecdsa-sha256", "ecdsa-sha256-invalid-signature"),
+                ec.evidenceActionKeys());
         assertTrue(m1.forRole(TargetRole.IDP).stream().noneMatch(AttestationPrompt.class::isInstance),
                 "A browser action must never be followed by an operator-supplied verdict");
 
@@ -196,13 +234,13 @@ class CatalogDocumentsTest {
         var questionnaireFree = automated + browserActions + conclusiveAttested + conclusiveConfig;
 
         assertEquals(413, totalIdpFull);
-        assertEquals(223, conclusive,
+        assertEquals(230, conclusive,
                 "Update this explicit IDP Full automatic-oracle inventory when an oracle changes: automated="
                         + automated + ", browser=" + conclusiveBrowser + ", attested="
                         + conclusiveAttested + ", config=" + conclusiveConfig);
         assertTrue(conclusive * 2 > totalIdpFull,
                 "At least half of IDP Full must conclude without an operator-supplied verdict");
-        assertEquals(280, questionnaireFree,
+        assertEquals(285, questionnaireFree,
                 "Update this explicit IDP Full no-questionnaire inventory when an interaction changes");
     }
 

@@ -99,6 +99,10 @@ public final class SqliteHostedRunProvisioner {
                     return false;
                 }
                 if (insertPlan) {
+                    try (var check = connection.prepareStatement("SELECT 1 FROM deleted_user_ids WHERE id = ? UNION ALL SELECT 1 FROM application_users WHERE id = ? AND status = 'DELETING'")) {
+                        check.setString(1, ownerId); check.setString(2, ownerId);
+                        try (var rows = check.executeQuery()) { if (rows.next()) throw new SecurityException("Account unavailable"); }
+                    }
                     insertPlan(connection, currentPlan);
                     insertOwner(connection, currentPlan.id(), ownerId);
                 }

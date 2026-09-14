@@ -17,6 +17,7 @@ public final class SamlSignedRequestFactory {
 
     public enum Fixture {
         VALID,
+        DEFAULT_ACS,
         TAMPERED_ACS,
         BAD_REFERENCE,
         BAD_SIGNATURE_VALUE,
@@ -54,8 +55,10 @@ public final class SamlSignedRequestFactory {
         request.setAttribute("Version", "2.0");
         request.setAttribute("IssueInstant", DateTimeFormatter.ISO_INSTANT.format(issueInstant));
         request.setAttribute("Destination", destination.toString());
-        request.setAttribute("AssertionConsumerServiceURL", acs.toString());
-        request.setAttribute("ProtocolBinding", "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST");
+        if (fixture != Fixture.DEFAULT_ACS) {
+            request.setAttribute("AssertionConsumerServiceURL", acs.toString());
+            request.setAttribute("ProtocolBinding", "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST");
+        }
         document.appendChild(request);
         var issuerElement = document.createElementNS(ASSERTION, "saml:Issuer");
         issuerElement.setTextContent(issuer);
@@ -70,7 +73,7 @@ public final class SamlSignedRequestFactory {
         }
         signer.sign(request, credentials, policy, signatureOptions(fixture));
         switch (fixture) {
-            case VALID -> { }
+            case VALID, DEFAULT_ACS -> { }
             case TAMPERED_ACS -> request.setAttribute(
                     "AssertionConsumerServiceURL", alternateAcs(acs).toString());
             case BAD_REFERENCE -> {

@@ -205,8 +205,21 @@ public record ResultDocument(
             boolean attested,
             String evidenceClass,
             List<EvidenceView> evidence,
-            String definitionUrl) {
-        public CaseView { evidence = List.copyOf(evidence); }
+            String definitionUrl,
+            @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_EMPTY)
+            Map<String, List<String>> diagnostics) {
+        public CaseView {
+            evidence = List.copyOf(evidence);
+            var copy = new java.util.LinkedHashMap<String,List<String>>();
+            if (diagnostics != null) diagnostics.forEach((key, values) -> copy.put(key, List.copyOf(values)));
+            diagnostics = java.util.Collections.unmodifiableMap(copy);
+        }
+        public CaseView(String id, String obligation, Outcome outcome, Verdict verdict, String mode,
+                String reasonCode, String reason, boolean attested, String evidenceClass,
+                List<EvidenceView> evidence, String definitionUrl) {
+            this(id, obligation, outcome, verdict, mode, reasonCode, reason, attested, evidenceClass,
+                    evidence, definitionUrl, Map.of());
+        }
     }
 
     public record UnresolvedView(

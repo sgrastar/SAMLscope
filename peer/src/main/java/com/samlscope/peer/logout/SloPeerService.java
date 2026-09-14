@@ -10,6 +10,8 @@ import com.samlscope.core.run.RunRepository;
 import com.samlscope.core.transcript.Direction;
 import com.samlscope.core.transcript.TranscriptInput;
 import com.samlscope.core.transcript.TranscriptRecorder;
+import com.samlscope.core.evaluation.EvidenceRef;
+import com.samlscope.runner.ActiveProbeCorrelation;
 import com.samlscope.saml.metadata.MetadataService;
 import com.samlscope.saml.metadata.TargetMetadataParser;
 import com.samlscope.saml.normal.SamlException;
@@ -25,7 +27,20 @@ public final class SloPeerService {
             String runId,
             String messageType,
             SamlProtocolService.ResponseMessage response,
-            String responseBinding) {}
+            String responseBinding,
+            String activeProbeActionId,
+            Map<String, Object> summary) {
+        public Result(String runId, String messageType, SamlProtocolService.ResponseMessage response, String responseBinding) {
+            this(runId, messageType, response, responseBinding, null, Map.of());
+        }
+        public Result { summary = Map.copyOf(summary); }
+        public boolean activeProbe() { return activeProbeActionId != null; }
+    }
+
+    @FunctionalInterface
+    public interface ActiveProbeResponseHandler {
+        void accept(String runId, String actionId, byte[] xml, EvidenceRef evidence);
+    }
 
     private final PlanRepository plans;
     private final RunRepository runs;
@@ -34,6 +49,7 @@ public final class SloPeerService {
     private final SamlProtocolService saml;
     private final TranscriptRecorder transcript;
     private final Clock clock;
+    private final ActiveProbeResponseHandler activeProbeResponses;
 
     public SloPeerService(
             PlanRepository plans,
@@ -43,6 +59,13 @@ public final class SloPeerService {
             SamlProtocolService saml,
             TranscriptRecorder transcript,
             Clock clock) {
+        this(plans, runs, metadata, parser, saml, transcript, clock,
+                (run, action, xml, evidence) -> { throw new IllegalStateException("SLO active-probe handler is not configured"); });
+    }
+
+    public SloPeerService(PlanRepository plans, RunRepository runs, MetadataCache metadata,
+            TargetMetadataParser parser, SamlProtocolService saml, TranscriptRecorder transcript,
+            Clock clock, ActiveProbeResponseHandler activeProbeResponses) {
         this.plans = java.util.Objects.requireNonNull(plans, "plans");
         this.runs = java.util.Objects.requireNonNull(runs, "runs");
         this.metadata = java.util.Objects.requireNonNull(metadata, "metadata");
@@ -50,6 +73,7 @@ public final class SloPeerService {
         this.saml = java.util.Objects.requireNonNull(saml, "saml");
         this.transcript = java.util.Objects.requireNonNull(transcript, "transcript");
         this.clock = java.util.Objects.requireNonNull(clock, "clock");
+        this.activeProbeResponses = java.util.Objects.requireNonNull(activeProbeResponses, "activeProbeResponses");
     }
 
     public Result consume(
@@ -61,23 +85,70 @@ public final class SloPeerService {
             Map<String, List<String>> headers,
             String requestUrl) {
         var plan = plans.find(planId).orElseThrow(() -> new IllegalArgumentException("Unknown Test Plan"));
-        var decoded = transport == Transport.SOAP ? decodeSoap(rawBody) : decodeFront(method, rawQuery, rawBody);
+        final Decoded decoded;
+        try {
+            decoded = transport == Transport.SOAP ? decodeSoap(rawBody) : decodeFront(method, rawQuery, rawBody);
+        } catch (SamlException invalid) {
+            if (transport == Transport.SOAP) {
+                var candidate = queryParameter(requestUrl, "run");
+                if (candidate != null && runs.find(candidate).filter(run -> planId.equals(run.planId())).isPresent())
+                    transcript.record(new TranscriptInput(candidate, Direction.INBOUND, clock.instant(), null,
+                            method, requestUrl, null, sanitized(headers), rawBody, "text/xml", rawQuery, rawBody,
+                            Map.of("type", "unparsed", "transport", "SOAP", "parseStatus", "invalid-soap-message-scope")));
+            }
+            throw invalid;
+        }
+        var activeProbe = ActiveProbeCorrelation.parse(decoded.message().relayState());
         var runId = queryParameter(requestUrl, "run");
+        if (activeProbe.isPresent()) {
+            if (runId != null && !runId.equals(activeProbe.orElseThrow().runId()))
+                throw new SamlException("SLO Run parameter conflicts with active-probe correlation");
+            runId = activeProbe.orElseThrow().runId();
+        }
         if (runId == null) runId = decoded.message().relayState();
         if (runId == null || runId.isBlank()) throw new SamlException("SLO message has no Run correlation");
         var run = runs.find(runId).orElseThrow(() -> new SamlException("Unknown correlated Run"));
         if (!planId.equals(run.planId())) throw new SamlException("Correlated Run belongs to another Test Plan");
 
+        // Retain abnormal responses before parsing. The waiting case owns InResponseTo/status judgments.
+        if (activeProbe.isPresent()) {
+            var correlation = activeProbe.orElseThrow();
+            var entry = transcript.record(new TranscriptInput(run.id(), Direction.INBOUND, clock.instant(),
+                    correlation.actionId(), method, requestUrl, 200, sanitized(headers), rawBody, contentType(method),
+                    rawQuery, decoded.message().xml(), Map.of("type", "SAMLResponse", "parseStatus", "not-yet-parsed")));
+            Map<String, Object> summary;
+            String type;
+            try {
+                var parsed = saml.parse(decoded.message());
+                var root = parsed.parsed().document().getDocumentElement();
+                type = root.getLocalName();
+                var values = new java.util.LinkedHashMap<String, Object>(parsed.parsed().summary());
+                values.put("transport", transport.name());
+                values.put("activeProbeAccepted", "urn:oasis:names:tc:SAML:2.0:protocol".equals(root.getNamespaceURI())
+                        && "LogoutResponse".equals(type)
+                        && ("_" + correlation.actionId()).equals(root.getAttribute("InResponseTo")));
+                summary = Map.copyOf(values);
+            } catch (SamlException malformed) {
+                type = "unparsed";
+                summary = Map.of("parseStatus", "error", "errorCategory", "malformed-slo-response");
+            }
+            transcript.updateSamlAnalysis(entry.id(), correlation.actionId(), summary);
+            activeProbeResponses.accept(run.id(), correlation.actionId(), decoded.message().xml(),
+                    new EvidenceRef("transcript", entry.id()));
+            return new Result(run.id(), type, null, null, correlation.actionId(), summary);
+        }
+
         var parsed = saml.parse(decoded.message());
         var root = parsed.parsed().document().getDocumentElement();
         var messageType = root.getLocalName();
-        if (!"LogoutRequest".equals(messageType) && !"LogoutResponse".equals(messageType)) {
+        if (!"urn:oasis:names:tc:SAML:2.0:protocol".equals(root.getNamespaceURI())
+                || (!"LogoutRequest".equals(messageType) && !"LogoutResponse".equals(messageType))) {
             throw new SamlException("Not a SAML logout message");
         }
         var transcriptXml = transport == Transport.SOAP ? rawBody : decoded.message().xml();
         transcript.record(new TranscriptInput(
                 run.id(), Direction.INBOUND, clock.instant(), root.getAttribute("ID"), method,
-                requestUrl, 200, headers, rawBody,
+                requestUrl, 200, sanitized(headers), rawBody,
                 transport == Transport.SOAP ? "text/xml" : contentType(method),
                 rawQuery, transcriptXml, Map.of("type", messageType, "transport", transport.name())));
         if ("LogoutResponse".equals(messageType)) return new Result(run.id(), messageType, null, null);
@@ -133,14 +204,42 @@ public final class SloPeerService {
 
     private Decoded decodeSoap(byte[] body) {
         var document = SecureXml.parse(body);
-        for (var name : List.of("LogoutRequest", "LogoutResponse")) {
-            var nodes = document.getElementsByTagNameNS("urn:oasis:names:tc:SAML:2.0:protocol", name);
-            if (nodes.getLength() == 0) continue;
-            var inner = SecureXml.newDocument();
-            inner.appendChild(inner.importNode((Element) nodes.item(0), true));
-            return new Decoded(new SamlProtocolService.RawDecodedMessage(SecureXml.serialize(inner), null));
+        var envelope = document.getDocumentElement();
+        var soap = "http://schemas.xmlsoap.org/soap/envelope/";
+        if (!soap.equals(envelope.getNamespaceURI()) || !"Envelope".equals(envelope.getLocalName()))
+            throw new SamlException("SLO SOAP transport requires a SOAP 1.1 Envelope");
+        var bodies = childElements(envelope).stream()
+                .filter(e -> soap.equals(e.getNamespaceURI()) && "Body".equals(e.getLocalName())).toList();
+        if (bodies.size() != 1) throw new SamlException("SLO SOAP Envelope must have one direct Body");
+        var messages = childElements(bodies.getFirst());
+        if (messages.size() != 1) throw new SamlException("SLO SOAP Body must have one direct message");
+        var message = messages.getFirst();
+        if (!"urn:oasis:names:tc:SAML:2.0:protocol".equals(message.getNamespaceURI())
+                || !List.of("LogoutRequest", "LogoutResponse").contains(message.getLocalName()))
+            throw new SamlException("SLO SOAP Body does not contain a direct logout message");
+        var inner = SecureXml.newDocument();
+        var copied = (Element) inner.importNode(message, true);
+        // Keep in-scope names, including prefixes used only in QName-valued content.
+        for (var ancestor = message; ancestor != null;
+                ancestor = ancestor.getParentNode() instanceof Element parent ? parent : null) {
+            var attributes = ancestor.getAttributes();
+            for (int i = 0; i < attributes.getLength(); i++) {
+                var attr = attributes.item(i);
+                if ((javax.xml.XMLConstants.XMLNS_ATTRIBUTE_NS_URI.equals(attr.getNamespaceURI())
+                        || javax.xml.XMLConstants.XML_NS_URI.equals(attr.getNamespaceURI()))
+                        && !copied.hasAttributeNS(attr.getNamespaceURI(), attr.getLocalName()))
+                    copied.setAttributeNS(attr.getNamespaceURI(), attr.getNodeName(), attr.getNodeValue());
+            }
         }
-        throw new SamlException("SOAP body has no LogoutRequest or LogoutResponse");
+        inner.appendChild(copied);
+        return new Decoded(new SamlProtocolService.RawDecodedMessage(SecureXml.serialize(inner), null));
+    }
+
+    private List<Element> childElements(Element parent) {
+        var children = new java.util.ArrayList<Element>();
+        for (var node = parent.getFirstChild(); node != null; node = node.getNextSibling())
+            if (node instanceof Element element) children.add(element);
+        return List.copyOf(children);
     }
 
     private byte[] soap(byte[] message) {
@@ -158,15 +257,25 @@ public final class SloPeerService {
     private String queryParameter(String requestUrl, String name) {
         var query = URI.create(requestUrl).getRawQuery();
         if (query == null) return null;
+        String result = null;
         for (var part : query.split("&")) {
             var separator = part.indexOf('=');
             var key = separator < 0 ? part : part.substring(0, separator);
             if (name.equals(java.net.URLDecoder.decode(key, StandardCharsets.UTF_8))) {
-                return separator < 0 ? "" : java.net.URLDecoder.decode(
+                if (result != null) throw new SamlException("Duplicate SLO Run correlation parameter");
+                result = separator < 0 ? "" : java.net.URLDecoder.decode(
                         part.substring(separator + 1), StandardCharsets.UTF_8);
             }
         }
-        return null;
+        return result;
+    }
+    private Map<String, List<String>> sanitized(Map<String, List<String>> headers) {
+        var result = new java.util.LinkedHashMap<String, List<String>>();
+        headers.forEach((name, values) -> {
+            if (!"Authorization".equalsIgnoreCase(name) && !"Cookie".equalsIgnoreCase(name))
+                result.put(name, List.copyOf(values));
+        });
+        return Map.copyOf(result);
     }
     private String contentType(String method) {
         return "GET".equalsIgnoreCase(method) ? null : "application/x-www-form-urlencoded";

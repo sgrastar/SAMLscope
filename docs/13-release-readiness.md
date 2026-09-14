@@ -1,6 +1,6 @@
 # Phase 1 release readiness
 
-Implementation milestones M0–M4 are recorded as complete. The hosting provider and
+Earlier records marked implementation milestones M0–M4 complete. The reference audit found missing and partial case oracles; Phase 1 is not release-ready. See [the full inventory](26-unverified-case-inventory.md) and [additional implementation](27-additional-implementation.md). The hosting provider and
 production environment are available. Deployment and production smoke verification
 of the new functional-profile release remain separate release actions and require
 explicit authorization.
@@ -10,12 +10,12 @@ explicit authorization.
 The seven functional-profile artifacts are exact, independently approved case sets.
 The runtime, normal Plan/Run path, shared target metadata, presets, result output and
 license/source display use existing approved cases as their only execution units.
-No case split or missing implementation input remains in the case-level inventory.
+Exact case registration does not establish executable input generation or detection power. Missing or partial browser oracles remain in the case-level inventory.
 Their memberships have independent G2 approval and their digests are installed in
 `profiles/release-pins.properties`. The normal product path loads only those pinned
 definitions.
 
-| Work | Latest state |
+| Work | Historical baseline state (superseded by the audit above) |
 |---|---|
 | Existing implementation and signed specifications | Full release verification passed for the runtime fixes |
 | Local Keycloak and reproducibility | Independent current-image Runs completed the registered active chain; M2/M3 exports match and contain no not_implemented reasons |
@@ -23,7 +23,7 @@ definitions.
 | Progress and operations preparation | Documentation reconciled; isolated restore, persisted Plan-file deletion and Hosted authorization tested; offline retention and CI added |
 | Phase 2 | Scope draft available; no new verdict implementation authorized by that draft |
 
-The functional-profile implementation and approval boundary are complete. Production
+Functional-profile membership approval is distinct from implementation completeness. The implementation remains incomplete. Production
 deployment, smoke verification and operational acceptance remain separate release
 actions. Stable reference
 outputs can still be incomplete or contain failure candidates; reproducibility is

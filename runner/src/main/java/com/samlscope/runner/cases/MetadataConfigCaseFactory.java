@@ -69,6 +69,35 @@ final class MetadataConfigCaseFactory {
                     accept("entity-root", "resolve the tested entity from an EntityDescriptor root"),
                     accept("entities-root-one", "resolve it from an EntitiesDescriptor root"),
                     accept("nested-entities", "resolve it through nested EntitiesDescriptor elements"))),
+            Map.entry("IIP-MD05.ad", List.of(
+                    accept("multiple-signing-keys-first", "sign with the first of two signing keys"),
+                    accept("multiple-signing-keys", "sign with the second of two signing keys"),
+                    accept("multiple-omitted-keys-first", "sign with the first key with use omitted"),
+                    accept("multiple-omitted-keys-second", "sign with the second key with use omitted"))),
+            Map.entry("IIP-MD06.a5", List.of(
+                    accept("certificate-expired", "use the same public key with different runtime certificate validity and serial"),
+                    accept("certificate-unknown-ca", "use the same public key with a different runtime certificate issuer"),
+                    accept("certificate-no-digital-signature", "use the same public key with different runtime certificate usage"),
+                    accept("keyvalue-only", "match the runtime key to the metadata KeyValue"))),
+            Map.entry("IIP-MD06.a7", List.of(
+                    accept("keyvalue-only", "consume ds:KeyValue independently"),
+                    accept("entity-root", "consume ds:X509Certificate independently"))),
+            Map.entry("IIP-MD06.a9", List.of(
+                    accept("certificate-expired", "ignore expiration after metadata acceptance"),
+                    accept("certificate-not-yet-valid", "ignore notBefore after metadata acceptance"),
+                    accept("certificate-empty-subject", "consume an arbitrary certificate subject"),
+                    accept("certificate-unknown-ca", "consume an arbitrary certificate issuer"),
+                    accept("certificate-critical-extension", "ignore critical certificate extensions"),
+                    accept("certificate-noncritical-extension", "ignore non-critical certificate extensions"),
+                    accept("certificate-no-digital-signature", "ignore certificate KeyUsage"),
+                    accept("certificate-unrelated-eku", "ignore certificate ExtendedKeyUsage"))),
+            Map.entry("IIP-MD07.a", List.of(
+                    accept("entity-root", "use a single signing key"),
+                    accept("multiple-signing-keys-first", "use the first of two signing keys"),
+                    accept("multiple-signing-keys", "use the second of two signing keys"),
+                    accept("three-signing-keys-first", "use the first of three signing keys"),
+                    accept("three-signing-keys-second", "use the second of three signing keys"),
+                    accept("three-signing-keys", "use the third of three signing keys"))),
             Map.entry("IIP-MD12.a", List.of(
                     accept("entity-root", "consume one self-signed end-entity certificate"),
                     accept("three-signing-keys", "consume three long-lived self-signed end-entity certificates"),
@@ -92,6 +121,11 @@ final class MetadataConfigCaseFactory {
     private MetadataConfigCaseFactory() {}
 
     static Optional<com.samlscope.core.caseexec.TestCase> create(CaseDefinition definition) {
+        if (definition.role() != com.samlscope.core.plan.TargetRole.IDP
+                && java.util.Set.of("IIP-MD05.ad", "IIP-MD06.a5", "IIP-MD06.a7",
+                        "IIP-MD06.a9", "IIP-MD07.a").contains(definition.obligation())) {
+            return Optional.empty();
+        }
         var fixtures = FIXTURES.get(definition.obligation());
         return fixtures == null ? Optional.empty() : Optional.of(new MetadataFixtureObservationTestCase(
                 definition.id(), definition.role(), fixtures, definition.configurationFailureSemantics()));

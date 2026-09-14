@@ -32,12 +32,22 @@ public final class ProtocolEvidenceAutomationService {
         var cases = new ArrayList<CaseStatus>();
         for (var execution : executions.list(runId)) {
             if (execution.status() != CaseExecutionStatus.WAITING_CONFIG
-                    && execution.status() != CaseExecutionStatus.WAITING_BROWSER) continue;
-            var testCase = registry.require(execution.caseId());
+                    && execution.status() != CaseExecutionStatus.WAITING_BROWSER
+                    && execution.status() != CaseExecutionStatus.FINISHED) continue;
+            var testCase = execution.status() == CaseExecutionStatus.FINISHED
+                    ? registry.find(execution.caseId()).orElse(null) : registry.require(execution.caseId());
+            if (testCase == null) continue;
+            boolean reconsider = execution.status() == CaseExecutionStatus.FINISHED
+                    && testCase instanceof RecordedEvidenceReevaluation observer
+                    && observer.supportsRecordedEvidenceReevaluation(execution.outcome());
+            if (execution.status() != CaseExecutionStatus.WAITING_CONFIG
+                    && execution.status() != CaseExecutionStatus.WAITING_BROWSER && !reconsider) continue;
             if (!(testCase instanceof ProtocolEvidenceCase evidenceCase)) continue;
             var evidence = evidenceCase.evidenceStatus(context);
+            boolean ready = evidence.ready() && (!reconsider
+                    || ((RecordedEvidenceReevaluation) testCase).reevaluateRecordedEvidence(context, execution.outcome()).isPresent());
             cases.add(new CaseStatus(
-                    execution.caseId(), evidence.ready(), evidence.requiredObservations(),
+                    execution.caseId(), ready, evidence.requiredObservations(),
                     evidence.completedObservations(), evidence.details()));
         }
         cases.sort(java.util.Comparator.comparing(CaseStatus::caseId));
@@ -66,6 +76,13 @@ public final class ProtocolEvidenceAutomationService {
             if (!candidate.ready() && !attemptsConfirmed) continue;
             var testCase = registry.require(candidate.caseId());
             var beforeExecution = executions.find(runId, candidate.caseId()).orElseThrow();
+            if (beforeExecution.status() == CaseExecutionStatus.FINISHED) {
+                var revised = transitions.reevaluateRecordedEvidence(runId, testCase, context);
+                if (revised.revision() > beforeExecution.revision()) {
+                    completed.add(new CompletedCase(revised.caseId(), revised.outcome().outcome()));
+                }
+                continue;
+            }
             if (attemptsConfirmed && beforeExecution.status() != CaseExecutionStatus.WAITING_CONFIG) continue;
             var event = beforeExecution.status() == CaseExecutionStatus.WAITING_BROWSER
                     ? new CaseEvent.TranscriptReady()

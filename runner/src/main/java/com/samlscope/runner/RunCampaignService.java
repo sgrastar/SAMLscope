@@ -76,6 +76,13 @@ public final class RunCampaignService implements RunCampaignQuery {
         for (var value : classified) {
             grouped.computeIfAbsent(value.campaignId(), ignored -> new MutableCampaign(value))
                     .add(value);
+            var implementation = registry.find(value.caseId()).orElse(null);
+            if (implementation instanceof EvidenceCampaignCase source) {
+                for (var supplemental : source.supplementalEvidenceCampaigns()) {
+                    var extra = supplemental(value, supplemental, context);
+                    grouped.computeIfAbsent(extra.campaignId(), ignored -> new MutableCampaign(extra)).add(extra);
+                }
+            }
         }
         var campaigns = grouped.values().stream().map(MutableCampaign::freeze).toList();
         campaigns = optimizeMetadataActions(runId, campaigns);
@@ -101,6 +108,20 @@ public final class RunCampaignService implements RunCampaignQuery {
                         value.actionKind(), value.freshSessionRequired(), value.resolved(),
                         value.outcome(), value.expectedEvidence())).toList(),
                 externallyVerified, selfAttested, notVerified);
+    }
+
+    private ClassifiedCase supplemental(ClassifiedCase owner, EvidenceCampaignCase source, CaseContext context) {
+        var evidence = source instanceof ProtocolEvidenceCase protocol ? protocol.evidenceStatus(context) : null;
+        var evidenceClass = EvidenceClass.OPERATOR_ASSISTED;
+        var kind = source.evidenceActionKind();
+        var shared = source.sharesDeliberateAction();
+        var campaignId = evidenceClass.name().toLowerCase(java.util.Locale.ROOT) + "-"
+                + kind.name().toLowerCase(java.util.Locale.ROOT) + "-" + (shared ? "shared-" : "") + source.evidenceCampaignId();
+        boolean ready = evidence != null && evidence.ready();
+        return new ClassifiedCase(owner.caseId(), evidenceClass, Plan.STANDARD, campaignId,
+                source.evidenceCampaignTitle(), kind, false, shared, kind == ActionKind.NONE ? 0 : 1,
+                source.evidenceActionKeys(), ready, ready, owner.outcome(),
+                evidence == null ? List.of() : evidence.requiredObservations());
     }
 
     private List<Campaign> optimizeMetadataActions(String runId, List<Campaign> campaigns) {
@@ -198,7 +219,10 @@ public final class RunCampaignService implements RunCampaignQuery {
             return fallback.resolvedFromExternalEvidence(execution)
                     ? EvidenceClass.PROTOCOL_OBSERVED : EvidenceClass.SELF_ATTESTED;
         }
-        if (testCase instanceof OperatorAssistedCase) return EvidenceClass.OPERATOR_ASSISTED;
+        if (testCase instanceof OperatorAssistedCase
+                || testCase instanceof EvidenceCampaignCase source && !source.supplementalEvidenceCampaigns().isEmpty()) {
+            return EvidenceClass.OPERATOR_ASSISTED;
+        }
         if (definition.mode() == ExecutionMode.CONFIG && testCase instanceof ProtocolEvidenceCase) {
             return EvidenceClass.OPERATOR_ASSISTED;
         }

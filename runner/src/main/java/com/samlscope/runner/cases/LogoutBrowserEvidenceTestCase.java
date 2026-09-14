@@ -74,17 +74,21 @@ public final class LogoutBrowserEvidenceTestCase
     @Override public EvidenceStatus evidenceStatus(CaseContext context) {
         var result = observed(context);
         var required = List.of("target-emitted-slo:" + id());
-        return new EvidenceStatus(result.isPresent(), required, result.isPresent() ? required : List.of(),
+        var incomplete = result.map(value -> "slo.evidence.incomplete".equals(value.reasonCode())).orElse(false);
+        return new EvidenceStatus(result.isPresent(), required, result.isPresent() && !incomplete ? required : List.of(),
                 result.<Map<String, Object>>map(value -> Map.of(
-                        "outcome", value.outcome().name(), "evidence_count", value.evidence().size()))
+                        "outcome", value.outcome().name(), "evidence_count", value.evidence().size(),
+                        "evidence_issues", value.details().getOrDefault("evidence_issues", List.of())))
                         .orElseGet(Map::of));
     }
 
     private Optional<com.samlscope.core.evaluation.CaseOutcome> observed(CaseContext context) {
+        if (!context.transcriptComplete()) return Optional.of(LogoutTranscriptProfileCase.incompleteHistory());
         var outcome = new LogoutTranscriptProfileCase(
                 RULES.get(id()), signingCertificates.apply(context.runId()),
                 targetEntityIds.apply(context.runId()).orElse(null))
                 .evaluate(context.runId(), context.transcript(), content);
-        return outcome.evidence().isEmpty() ? Optional.empty() : Optional.of(outcome);
+        return outcome.evidence().isEmpty() && !"slo.evidence.incomplete".equals(outcome.reasonCode())
+                ? Optional.empty() : Optional.of(outcome);
     }
 }

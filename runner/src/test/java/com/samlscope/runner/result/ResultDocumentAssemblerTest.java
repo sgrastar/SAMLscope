@@ -115,6 +115,31 @@ class ResultDocumentAssemblerTest {
                 "not-a-digest", source.testDefinitions(), source.specsYaml(), "1", "1"));
     }
 
+    @Test
+    void addsSafePartialObservationsWithoutChangingTheEvaluatedResult() throws Exception {
+        var fixture = fixture();
+        var cases = new java.util.ArrayList<>(fixture.cases());
+        var original = cases.getFirst();
+        var o = original.outcome();
+        cases.set(0, CaseRun.completed(original.id(), original.obligationKey(), new CaseOutcome(
+                o.outcome(), o.notVerifiedReason(), o.reasonCode(), o.reasonMessageKey(), o.evidence(),
+                Map.of("confirmed_character_fixtures", List.of("string-ascii-255"),
+                        "remaining_conditions", List.of("persistent-nameid"),
+                        "private_note", "do-not-publish-this-value"))));
+        var baseline = ResultDocumentAssembler.assemble(fixture.catalog(), fixture.plan(), fixture.run(),
+                fixture.evaluation(), fixture.cases(), context());
+        var document = ResultDocumentAssembler.assemble(fixture.catalog(), fixture.plan(), fixture.run(),
+                fixture.evaluation(), cases, context());
+        assertEquals(baseline.summary(), document.summary());
+        assertEquals(baseline.coverage(), document.coverage());
+        assertEquals(baseline.conformanceStatement(), document.conformanceStatement());
+        var json = new ResultJsonWriter().write(document);
+        assertTrue(json.contains("confirmed_character_fixtures"));
+        assertTrue(json.contains("string-ascii-255"));
+        assertTrue(json.contains("persistent-nameid"));
+        assertFalse(json.contains("do-not-publish-this-value"));
+    }
+
     private Fixture fixture() {
         var catalog = new CoverageCatalog(List.of(
                 obligation("REQ.a", "REQ", Rfc2119Level.MUST, Testability.AUTOMATED, null),

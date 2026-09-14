@@ -35,6 +35,34 @@ public final class RedirectSignatureVerifier {
         }
     }
 
+    /** Verify the original query, then bind its compressed message to the exact XML being evaluated. */
+    public boolean isValidForMessage(String rawQuery, X509Certificate certificate, byte[] expectedXml) {
+        return isValid(rawQuery, certificate) && matchesMessage(rawQuery, expectedXml);
+    }
+
+    public boolean matchesMessage(String rawQuery, byte[] expectedXml) {
+        if (rawQuery == null || expectedXml == null || expectedXml.length == 0 || expectedXml.length > 5 * 1024 * 1024) return false;
+        try {
+            String encoded = null;
+            for (var pair : rawQuery.split("&", -1)) {
+                var equals = pair.indexOf('=');
+                if (equals < 0) continue;
+                var name = pair.substring(0, equals);
+                if (name.equals("SAMLRequest") || name.equals("SAMLResponse")) {
+                    if (encoded != null) return false;
+                    encoded = pair.substring(equals + 1);
+                }
+            }
+            if (encoded == null) return false;
+            var compressed = Base64.getDecoder().decode(decode(encoded));
+            var inflater = new java.util.zip.Inflater(true);
+            try (var input = new java.util.zip.InflaterInputStream(new java.io.ByteArrayInputStream(compressed), inflater)) {
+                var actual = input.readNBytes(expectedXml.length + 1);
+                return inflater.finished() && java.util.Arrays.equals(expectedXml, actual);
+            } finally { inflater.end(); }
+        } catch (Exception invalid) { return false; }
+    }
+
     private Map<String, String> signedParameters(String rawQuery) {
         if (rawQuery == null) throw new IllegalArgumentException("rawQuery is required");
         var result = new LinkedHashMap<String, String>();

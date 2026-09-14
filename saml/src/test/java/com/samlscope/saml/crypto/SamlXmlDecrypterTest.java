@@ -68,6 +68,29 @@ class SamlXmlDecrypterTest {
         assertEquals("_keycloak", plaintext.getAttribute("ID"));
     }
 
+    @Test
+    void refusesUnencryptedDecoysAndNestedOrDuplicateEncryptedData() throws Exception {
+        var generator = KeyPairGenerator.getInstance("RSA"); generator.initialize(2048);
+        var keys = generator.generateKeyPair();
+        for (String mutation : java.util.List.of("prefix", "suffix", "nested", "duplicate", "text", "foreign-wrapper")) {
+            var wrapper = encryptedWrapper("EncryptedID", "<saml:NameID xmlns:saml='urn:oasis:names:tc:SAML:2.0:assertion'>real</saml:NameID>", keys.getPublic());
+            var doc = wrapper.getOwnerDocument();
+            var data = wrapper.getElementsByTagNameNS("http://www.w3.org/2001/04/xmlenc#", "EncryptedData").item(0);
+            var decoy = doc.createElementNS("urn:oasis:names:tc:SAML:2.0:assertion", "saml:NameID");
+            decoy.setTextContent("unencrypted-decoy");
+            switch (mutation) {
+                case "prefix" -> wrapper.insertBefore(decoy, data);
+                case "suffix" -> wrapper.appendChild(decoy);
+                case "nested" -> { wrapper.replaceChild(decoy, data); decoy.appendChild(data); }
+                case "duplicate" -> wrapper.appendChild(data.cloneNode(true));
+                case "text" -> wrapper.insertBefore(doc.createTextNode("unexpected"), data);
+                case "foreign-wrapper" -> doc.renameNode(wrapper, "urn:foreign", "bad:EncryptedID");
+                default -> throw new AssertionError();
+            }
+            assertThrows(SamlException.class, () -> new SamlXmlDecrypter().decrypt(wrapper, keys.getPrivate()), mutation);
+        }
+    }
+
     static Element encryptedWrapper(String wrapperName, String plaintextXml, java.security.PublicKey publicKey) throws Exception {
         return encryptedWrapper(
                 wrapperName,

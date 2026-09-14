@@ -22,7 +22,8 @@ import com.samlscope.core.transcript.Direction;
  * verdict is derived from Suite-recorded fetches and variant-correlated inbound SAML only.
  */
 public final class MetadataConsumerObservationTestCase
-        implements TestCase, ConfigurationPrompt, ProtocolEvidenceCase, com.samlscope.runner.EvidenceCampaignCase {
+        implements TestCase, ConfigurationPrompt, ProtocolEvidenceCase, com.samlscope.runner.EvidenceCampaignCase,
+        com.samlscope.runner.RecordedEvidenceReevaluation {
     public enum Rule { PERMITTED_IDENTITY_TRANSFORM, EXCLUDED_CONTENT, OMITTED_KEY_INFO }
 
     private static final String CONFIGURATION_PHASE = "await-metadata-consumer-probe";
@@ -46,6 +47,16 @@ public final class MetadataConsumerObservationTestCase
             case OMITTED_KEY_INFO -> List.of("no-key-info");
         };
         this.instructionEn = instruction(rule, variants);
+    }
+
+    @Override public boolean supportsRecordedEvidenceReevaluation(CaseOutcome previous) {
+        return previous != null && previous.outcome() == Outcome.NOT_VERIFIED
+                && "metadata.consumer-probe.incomplete".equals(previous.reasonCode());
+    }
+
+    @Override public java.util.Optional<CaseOutcome> reevaluateRecordedEvidence(CaseContext context, CaseOutcome previous) {
+        if (!supportsRecordedEvidenceReevaluation(previous) || !context.transcriptComplete()) return java.util.Optional.empty();
+        return com.samlscope.runner.RecordedEvidenceReevaluation.conclusiveUpdate(previous, evaluate(context, false));
     }
 
     @Override public String id() { return id; }
@@ -90,7 +101,7 @@ public final class MetadataConsumerObservationTestCase
         var used = observation.used();
         var evidence = observation.evidence();
         var details = observation.details();
-        var ready = observation.ready() || attemptsConfirmed && observation.attemptPrerequisitesComplete();
+        var ready = observation.ready();
         if (!ready) {
             return new CaseOutcome(
                     Outcome.NOT_VERIFIED, "metadata_consumer_probe_incomplete",
@@ -167,7 +178,7 @@ public final class MetadataConsumerObservationTestCase
                 }
                 if (entry.samlSummary().get("variants") instanceof List<?> aggregate) {
                     for (var item : aggregate) {
-                        if (item instanceof String value && variants.contains(value)) fetched.add(value);
+                        if (item instanceof String value && (CONTROL.equals(value) || variants.contains(value))) fetched.add(value);
                     }
                     if (aggregate.stream().anyMatch(item -> item instanceof String value
                             && variants.contains(value))) {
@@ -182,8 +193,8 @@ public final class MetadataConsumerObservationTestCase
                             entry.samlSummary().get("statusCode"));
             if (entry.decodedSamlBytes() > 0 && entry.url() != null && (requestUse || responseUse)) {
                 for (var variant : union(CONTROL, variants)) {
-                    if (entry.url().contains("mdv=" + variant)
-                            && entry.url().contains("run=" + context.runId())) {
+                    if (fetched.contains(variant)
+                            && MetadataProbeCorrelation.matches(entry.url(), context.runId(), variant)) {
                         used.add(variant);
                         evidence.add(new EvidenceRef("transcript", "transcript:" + entry.id()));
                     }
@@ -193,7 +204,12 @@ public final class MetadataConsumerObservationTestCase
         var details = Map.<String, Object>of(
                 "required_variants", variants,
                 "fetched_variants", List.copyOf(fetched),
-                "used_variants", List.copyOf(used));
+                "used_variants", List.copyOf(used),
+                "missing_fetches", union(CONTROL, variants).stream()
+                        .filter(value -> !fetched.contains(value)).toList(),
+                "missing_protocol_observations", union(CONTROL, variants).stream()
+                        .filter(value -> !used.contains(value)).toList(),
+                "transcript_complete", context.transcriptComplete());
         var conclusiveVariantObservation = rule == Rule.EXCLUDED_CONTENT
                 ? variants.stream().anyMatch(used::contains)
                 : used.containsAll(variants);
@@ -202,7 +218,7 @@ public final class MetadataConsumerObservationTestCase
         // excluded-content rule and the permitted/satisfied path for the other two rules.
         return new Observation(
                 fetched.contains(CONTROL) && used.contains(CONTROL)
-                        && fetched.containsAll(variants) && conclusiveVariantObservation,
+                        && fetched.containsAll(variants) && conclusiveVariantObservation && context.transcriptComplete(),
                 fetched.contains(CONTROL) && used.contains(CONTROL)
                         && fetched.containsAll(variants),
                 fetched, used, distinct(evidence), details);

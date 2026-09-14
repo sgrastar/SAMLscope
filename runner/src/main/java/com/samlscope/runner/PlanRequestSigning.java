@@ -50,7 +50,7 @@ public final class PlanRequestSigning implements BiFunction<String, OutboundActi
             }
         }
         new XmlSigner().sign(root, keys.getOrCreate(plan.id()), before);
-        return new OutboundAction(action.actionId(), action.kind(), SecureXml.serialize(document),
+        return new OutboundAction(action.actionId(), action.kind(), com.samlscope.saml.normal.ProviderNameWireFormat.preserve(action.payload(), SecureXml.serialize(document)),
                 action.target(), action.requiresEphemeralCredential());
     }
 }

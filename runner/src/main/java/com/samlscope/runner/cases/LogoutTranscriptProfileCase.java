@@ -64,7 +64,12 @@ public final class LogoutTranscriptProfileCase {
 
     public CaseOutcome evaluate(
             String runId, TranscriptRecorder transcript, TranscriptContentReader content) {
-        var all = messages(runId, transcript, content);
+        var snapshot = messages(runId, transcript, content);
+        if (!snapshot.issues().isEmpty()) return new CaseOutcome(
+                Outcome.NOT_VERIFIED, "logout_evidence_incomplete",
+                "slo.evidence.incomplete", "slo.evidence.incomplete",
+                snapshot.evidence(), Map.of("evidence_issues", snapshot.issues()));
+        var all = snapshot.messages();
         var target = all.stream().filter(value -> value.entry().direction() == Direction.INBOUND).toList();
         var targetLogout = target.stream().filter(value -> value.logout() != null).toList();
         if (targetLogout.isEmpty()) return absent();
@@ -93,6 +98,12 @@ public final class LogoutTranscriptProfileCase {
             case REQUEST_NOT_ON_OR_AFTER_BOUND -> requestNotOnOrAfterBound(targetLogout, all);
             case REDIRECT_LOGOUT_REQUEST_ACCEPTED -> redirectLogoutRequestAccepted(targetLogout, all);
         };
+    }
+
+    static CaseOutcome incompleteHistory() {
+        return new CaseOutcome(Outcome.NOT_VERIFIED, "logout_evidence_incomplete",
+                "slo.evidence.incomplete", "slo.evidence.incomplete", List.of(),
+                Map.of("evidence_issues", List.of("history_incomplete")));
     }
 
     private CaseOutcome requestIdentifierMatches(List<Message> targetLogout, List<Message> all) {
@@ -311,7 +322,7 @@ public final class LogoutTranscriptProfileCase {
         var unverifiable = new ArrayList<String>();
         for (var message : scoped) {
             var xml = direct(message.logout(), DS, "Signature") != null;
-            var redirect = message.entry().rawQuery() != null
+            var redirect = "GET".equalsIgnoreCase(message.entry().method()) && message.entry().rawQuery() != null
                     && message.entry().rawQuery().matches("(^|.*&)Signature=[^&]+(&.*|$)");
             if (!xml && !redirect) {
                 violations.add(message.reference());
@@ -323,7 +334,7 @@ public final class LogoutTranscriptProfileCase {
             }
             var valid = verificationKeys.stream().anyMatch(certificate ->
                     xml && xmlSignatures.hasValidEnvelopedSignature(message.logout(), certificate)
-                            || redirect && redirectSignatures.isValid(message.entry().rawQuery(), certificate));
+                            || redirect && redirectSignatures.isValidForMessage(message.entry().rawQuery(), certificate, message.xml()));
             if (!valid) violations.add(message.reference());
         }
         if (violations.isEmpty() && !unverifiable.isEmpty()) return new CaseOutcome(
@@ -383,7 +394,7 @@ public final class LogoutTranscriptProfileCase {
         var unverifiable = new ArrayList<String>();
         for (var message : scoped) {
             var xmlSignature = message.logout().getElementsByTagNameNS(DS, "Signature").getLength() > 0;
-            var bindingSignature = message.entry().rawQuery() != null
+            var bindingSignature = "GET".equalsIgnoreCase(message.entry().method()) && message.entry().rawQuery() != null
                     && message.entry().rawQuery().matches("(^|.*&)Signature=[^&]+(&.*|$)");
             if (!xmlSignature && !bindingSignature) {
                 violations.add(message.reference());
@@ -396,7 +407,7 @@ public final class LogoutTranscriptProfileCase {
             var xmlValid = xmlSignature && verificationKeys.stream().anyMatch(
                     certificate -> xmlSignatures.hasValidEnvelopedSignature(message.logout(), certificate));
             var redirectValid = bindingSignature && verificationKeys.stream().anyMatch(
-                    certificate -> redirectSignatures.isValid(message.entry().rawQuery(), certificate));
+                    certificate -> redirectSignatures.isValidForMessage(message.entry().rawQuery(), certificate, message.xml()));
             if (!xmlValid && !redirectValid) violations.add(message.reference());
         }
         if (violations.isEmpty() && !unverifiable.isEmpty()) return new CaseOutcome(
@@ -592,30 +603,79 @@ public final class LogoutTranscriptProfileCase {
         catch (RuntimeException invalid) { return new int[] {-1}; }
     }
 
-    private List<Message> messages(String runId, TranscriptRecorder transcript, TranscriptContentReader content) {
+    private Snapshot messages(String runId, TranscriptRecorder transcript, TranscriptContentReader content) {
         var result = new ArrayList<Message>();
-        for (var entry : transcript.list(runId)) {
-            if (entry.decodedSamlRef() == null || entry.decodedSamlBytes() == 0) continue;
+        var issues = new java.util.LinkedHashSet<String>();
+        var refs = new ArrayList<EvidenceRef>();
+        final List<TranscriptEntry> entries;
+        try { entries = List.copyOf(transcript.list(runId)); }
+        catch (RuntimeException unavailable) {
+            return new Snapshot(List.of(), List.of("history_unavailable"), List.of());
+        }
+        var ids = new java.util.HashSet<String>();
+        for (var entry : entries) {
+            if (!runId.equals(entry.runId())) { issues.add("run_mismatch"); continue; }
+            if (entry.id() == null || entry.id().isBlank() || !ids.add(entry.id())) {
+                issues.add("ambiguous_entry_id"); continue;
+            }
+            if ("SOAP".equals(entry.samlSummary().get("transport"))
+                    && "invalid-soap-message-scope".equals(entry.samlSummary().get("parseStatus"))) {
+                refs.add(new EvidenceRef("transcript", "transcript:" + entry.id()));
+                issues.add("logout_message_scope_unresolved"); continue;
+            }
+            var recordedType = entry.samlSummary().get("type");
+            boolean recordedLogout = "LogoutRequest".equals(recordedType) || "LogoutResponse".equals(recordedType);
+            if (entry.decodedSamlRef() == null && entry.decodedSamlBytes() == 0 && !recordedLogout) continue;
+            refs.add(new EvidenceRef("transcript", "transcript:" + entry.id()));
+            if (entry.decodedSamlRef() == null || entry.decodedSamlBytes() <= 0) {
+                issues.add("decoded_content_missing"); continue;
+            }
             try {
                 var xml = content.readDecodedSaml(entry);
+                if (xml == null || xml.length != entry.decodedSamlBytes()) {
+                    issues.add("decoded_content_size_mismatch"); continue;
+                }
+                if ("GET".equalsIgnoreCase(entry.method()) && entry.rawQuery() != null
+                        && entry.rawQuery().matches("(^|.*&)(SAMLRequest|SAMLResponse)=.*")
+                        && !redirectSignatures.matchesMessage(entry.rawQuery(), xml)) {
+                    issues.add("redirect_message_mismatch"); continue;
+                }
                 var document = SecureXml.parse(xml);
                 Element logout = null;
                 var root = document.getDocumentElement();
-                if (PROTOCOL.equals(root.getNamespaceURI())
-                        && ("LogoutRequest".equals(root.getLocalName()) || "LogoutResponse".equals(root.getLocalName()))) {
+                if (is(root, "LogoutRequest") || is(root, "LogoutResponse")) {
                     logout = root;
                 } else {
-                    var requests = document.getElementsByTagNameNS(PROTOCOL, "LogoutRequest");
-                    var responses = document.getElementsByTagNameNS(PROTOCOL, "LogoutResponse");
-                    if (requests.getLength() > 0) logout = (Element) requests.item(0);
-                    else if (responses.getLength() > 0) logout = (Element) responses.item(0);
+                    // A descendant of an arbitrary extension/Advice/header is not an exchanged message.
+                    var soap = root.getNamespaceURI();
+                    if ("Envelope".equals(root.getLocalName()) &&
+                            ("http://schemas.xmlsoap.org/soap/envelope/".equals(soap)
+                            || "http://www.w3.org/2003/05/soap-envelope".equals(soap))) {
+                        var bodies = directElements(root, soap, "Body");
+                        if (bodies.size() == 1) {
+                            var children = new ArrayList<Element>();
+                            for (var node = bodies.getFirst().getFirstChild(); node != null; node = node.getNextSibling())
+                                if (node instanceof Element element) children.add(element);
+                            if (children.size() == 1 && (is(children.getFirst(), "LogoutRequest")
+                                    || is(children.getFirst(), "LogoutResponse"))) logout = children.getFirst();
+                        }
+                    }
+                    if (logout == null && (recordedLogout
+                            || document.getElementsByTagNameNS(PROTOCOL, "LogoutRequest").getLength() > 0
+                            || document.getElementsByTagNameNS(PROTOCOL, "LogoutResponse").getLength() > 0)) {
+                        issues.add("logout_message_scope_unresolved"); continue;
+                    }
                 }
-                result.add(new Message(entry, document, logout, "transcript:" + entry.id(), sha256(xml)));
+                if (recordedLogout && logout != null && !recordedType.equals(logout.getLocalName())) {
+                    issues.add("logout_type_mismatch"); continue;
+                }
+                result.add(new Message(entry, document, logout, "transcript:" + entry.id(), sha256(xml), xml.clone()));
             } catch (RuntimeException unreadable) {
-                // Another passive case owns malformed non-SLO messages.
+                // Missing/unparseable evidence cannot silently disappear from a successful snapshot.
+                issues.add("decoded_content_unreadable");
             }
         }
-        return List.copyOf(result);
+        return new Snapshot(List.copyOf(result), List.copyOf(issues), List.copyOf(refs));
     }
 
     private Element direct(Element parent, String namespace, String localName) {
@@ -644,6 +704,7 @@ public final class LogoutTranscriptProfileCase {
     }
 
     private record Message(
-            TranscriptEntry entry, org.w3c.dom.Document document, Element logout, String reference, String digest) {}
+            TranscriptEntry entry, org.w3c.dom.Document document, Element logout, String reference, String digest, byte[] xml) {}
+    private record Snapshot(List<Message> messages, List<String> issues, List<EvidenceRef> evidence) {}
     private record IssuedSessionIdentifier(String identifierKey, Set<String> sessionIndexes) {}
 }

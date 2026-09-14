@@ -27,6 +27,22 @@ public final class SamlErrorProbeRequestFactory {
         UNKNOWN_ANY_ATTRIBUTE,
         STRING_BOUNDARY_255,
         STRING_BOUNDARY_256,
+        STRING_ASCII_255,
+        STRING_ASCII_256,
+        STRING_CJK_255,
+        STRING_CJK_256,
+        STRING_COMBINING_255,
+        STRING_COMBINING_256,
+        STRING_XML_SPECIAL_255,
+        STRING_XML_SPECIAL_256,
+        STRING_TAB_REFERENCE_255,
+        STRING_TAB_REFERENCE_256,
+        STRING_LF_REFERENCE_255,
+        STRING_LF_REFERENCE_256,
+        STRING_SUPPLEMENTARY_255,
+        STRING_SUPPLEMENTARY_256,
+        STRING_TAB_LITERAL_255, STRING_TAB_LITERAL_256, STRING_LF_LITERAL_255, STRING_LF_LITERAL_256,
+
         DTD_AUTHN_REQUEST,
         DTD_EXTERNAL_ENTITY_AUTHN_REQUEST,
         ACS_SELECTION_OMITTED,
@@ -62,9 +78,8 @@ public final class SamlErrorProbeRequestFactory {
             request.setAttribute("AssertionConsumerServiceURL", acs.toString());
             request.setAttribute("ProtocolBinding", "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST");
         }
-        if (probe == Probe.STRING_BOUNDARY_255 || probe == Probe.STRING_BOUNDARY_256) {
-            var length = probe == Probe.STRING_BOUNDARY_255 ? 255 : 256;
-            request.setAttribute("ProviderName", "\u0416".repeat(length));
+        if (stringProbes().contains(probe)) {
+            request.setAttribute("ProviderName", stringValue(probe));
         }
         if (probe == Probe.PASSIVE_WITHOUT_SESSION || probe == Probe.PASSIVE_WITH_SESSION
                 || probe == Probe.FORCE_AUTHN_PASSIVE) request.setAttribute("IsPassive", "true");
@@ -137,6 +152,22 @@ public final class SamlErrorProbeRequestFactory {
             case BASELINE_SUCCESS -> { }
             case STRING_BOUNDARY_255 -> { }
             case STRING_BOUNDARY_256 -> { }
+            case STRING_ASCII_255 -> { }
+            case STRING_ASCII_256 -> { }
+            case STRING_CJK_255 -> { }
+            case STRING_CJK_256 -> { }
+            case STRING_COMBINING_255 -> { }
+            case STRING_COMBINING_256 -> { }
+            case STRING_XML_SPECIAL_255 -> { }
+            case STRING_XML_SPECIAL_256 -> { }
+            case STRING_TAB_REFERENCE_255 -> { }
+            case STRING_TAB_REFERENCE_256 -> { }
+            case STRING_LF_REFERENCE_255 -> { }
+            case STRING_LF_REFERENCE_256 -> { }
+            case STRING_SUPPLEMENTARY_255 -> { }
+            case STRING_SUPPLEMENTARY_256 -> { }
+            case STRING_TAB_LITERAL_255, STRING_TAB_LITERAL_256, STRING_LF_LITERAL_255, STRING_LF_LITERAL_256 -> { }
+
             case DTD_AUTHN_REQUEST -> { }
             case DTD_EXTERNAL_ENTITY_AUTHN_REQUEST -> { }
             case ACS_SELECTION_OMITTED -> { }
@@ -154,7 +185,38 @@ public final class SamlErrorProbeRequestFactory {
                     : insertion + xml;
             return xml.getBytes(java.nio.charset.StandardCharsets.UTF_8);
         }
-        return serialized;
+        return probe.name().contains("_LITERAL_") ? ProviderNameWireFormat.literalWhitespace(serialized) : serialized;
+    }
+
+    /** Every category spans the boundary; Java UTF-16 units are not character counts. */
+    public static java.util.List<Probe> stringProbes() {
+        return java.util.Arrays.stream(Probe.values()).filter(value -> value.name().startsWith("STRING_")).toList();
+    }
+
+    public static String parsedStringValue(Probe probe) {
+        var value = stringValue(probe);
+        return probe.name().contains("_LITERAL_") ? value.replace('\t', ' ').replace('\n', ' ') : value;
+    }
+
+    public static String stringValue(Probe probe) {
+        if (!stringProbes().contains(probe)) throw new IllegalArgumentException("Not a string fixture");
+        var length = probe.name().endsWith("_255") ? 255 : 256;
+        var category = probe.name().substring("STRING_".length(), probe.name().length() - 4);
+        var sample = switch (category) {
+            case "BOUNDARY" -> "\u0416";
+            case "ASCII" -> "aZ09";
+            case "CJK" -> "漢字";
+            case "COMBINING" -> "e\u0301";
+            case "XML_SPECIAL" -> "<&\"'>";
+            case "TAB_REFERENCE", "TAB_LITERAL" -> "a\tb";
+            case "LF_REFERENCE", "LF_LITERAL" -> "a\nb";
+            case "SUPPLEMENTARY" -> "\uD83D\uDE00\uD840\uDC00";
+            default -> throw new IllegalArgumentException("Unknown string category: " + category);
+        };
+        var points = sample.codePoints().toArray();
+        var value = new StringBuilder();
+        for (int index = 0; index < length; index++) value.appendCodePoint(points[index % points.length]);
+        return value.toString();
     }
 
     public String unknownNameIdFormat(String requestId) {

@@ -209,6 +209,15 @@ public final class MetadataLabService {
         return advanceAttemptedFlow(runId, planId, campaignToken, index, true, false);
     }
 
+    /** Readiness is based on the current fixture's fetch, never an elapsed delay. */
+    public boolean automaticStartReady(String runId, String planId, String campaignToken, int index) {
+        var access = requireAutomaticAccess(runId, planId, campaignToken);
+        var lab = labContext(access.run().context());
+        var size = campaignVariants(lab).size();
+        return index >= 0 && index < size && campaignIndex(lab, size) == index
+                && attemptedIndex(lab, size) == index && fetchedIndex(lab, size) == index;
+    }
+
     /**
      * Advances after the Target fetched a fixture but kept the browser on its own result page.
      * This is orchestration only: it records no satisfied/violated outcome and creates no target

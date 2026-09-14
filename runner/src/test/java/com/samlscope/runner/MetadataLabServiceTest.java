@@ -46,6 +46,7 @@ class MetadataLabServiceTest {
                 () -> service.requireAutomaticCompletedFlow("run", "plan", token, 0),
                 "a fetch before the signed browser attempt must not be correlated");
         var firstFlow = service.requireAutomaticStartFlow("run", "plan", token, 0);
+        assertEquals(false, service.automaticStartReady("run", "plan", token, 0));
         assertEquals("control", firstFlow.variant().id());
         assertEquals(17, firstFlow.pollingDelaySeconds());
         assertThrows(IllegalArgumentException.class,
@@ -59,6 +60,10 @@ class MetadataLabServiceTest {
         assertEquals(0, untrusted.campaignIndex());
 
         var fetched = service.recordLiveFetch("run", "plan", "control", null);
+        assertEquals(true, service.automaticStartReady("run", "plan", token, 0));
+        service.requireAutomaticStartFlow("run", "plan", token, 0);
+        assertEquals(true, service.automaticStartReady("run", "plan", token, 0),
+                "refreshing the waiting page must preserve retrieval evidence");
         assertEquals("control", fetched.selectedVariant());
         assertEquals(0, fetched.campaignIndex());
         var duplicateFetch = service.recordLiveFetch("run", "plan", "control", null);
@@ -74,6 +79,8 @@ class MetadataLabServiceTest {
         assertEquals(1, second.campaignIndex());
         assertEquals("expired", service.requireAutomaticStartFlow(
                 "run", "plan", token, 1).variant().id());
+        assertEquals(false, service.automaticStartReady("run", "plan", token, 1),
+                "the previous fixture's retrieval cannot release the next request");
         assertThrows(IllegalArgumentException.class,
                 () -> service.requireAutomaticStartFlow("run", "plan", token, 0));
 

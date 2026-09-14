@@ -22,6 +22,117 @@ class MetadataServiceTest {
     @TempDir java.nio.file.Path directory;
 
     @Test
+    void multiKeyProbesActuallyExerciseEveryAdvertisedKeyInBothIngestionModes() throws Exception {
+        var clock = Clock.fixed(Instant.parse("2026-08-29T00:00:00Z"), ZoneOffset.UTC);
+        var store = new FilePlanKeyStore(directory, clock);
+        var plan = SamlTestFixtures.idpPlan();
+        var service = new MetadataService(URI.create("https://peer.example"), store, new XmlSigner(), clock);
+        var selected = java.util.Map.of(
+                MetadataService.Variant.MULTIPLE_SIGNING_KEYS_FIRST, 0,
+                MetadataService.Variant.MULTIPLE_SIGNING_KEYS, 1,
+                MetadataService.Variant.MULTIPLE_OMITTED_KEYS_FIRST, 0,
+                MetadataService.Variant.MULTIPLE_OMITTED_KEYS_SECOND, 1,
+                MetadataService.Variant.THREE_SIGNING_KEYS_FIRST, 0,
+                MetadataService.Variant.THREE_SIGNING_KEYS_SECOND, 1,
+                MetadataService.Variant.THREE_SIGNING_KEYS, 2);
+        for (boolean polling : new boolean[] {false, true}) {
+            for (var item : selected.entrySet()) {
+                var variant = item.getKey();
+                var metadata = SecureXml.parse(polling
+                        ? service.generatePolling(plan, variant, "run_probe")
+                        : service.generate(plan, variant, "run_probe"));
+                var role = (org.w3c.dom.Element) metadata.getElementsByTagNameNS(
+                        MetadataService.MD, "SPSSODescriptor").item(0);
+                var descriptors = role.getElementsByTagNameNS(MetadataService.MD, "KeyDescriptor");
+                var keys = new java.util.ArrayList<java.security.cert.X509Certificate>();
+                for (int i = 0; i < descriptors.getLength(); i++) {
+                    var descriptor = (org.w3c.dom.Element) descriptors.item(i);
+                    if (descriptor.getAttribute("use").equals("encryption")) continue;
+                    assertEquals(variant.id().contains("omitted") ? "" : "signing", descriptor.getAttribute("use"));
+                    var encoded = descriptor.getElementsByTagNameNS(MetadataService.DS, "X509Certificate")
+                            .item(0).getTextContent();
+                    keys.add((java.security.cert.X509Certificate) java.security.cert.CertificateFactory
+                            .getInstance("X.509").generateCertificate(new java.io.ByteArrayInputStream(
+                                    java.util.Base64.getMimeDecoder().decode(encoded))));
+                }
+                assertEquals(variant.id().startsWith("three") ? 3 : 2, keys.size());
+                var credentials = polling ? service.credentialsForPollingVariant(plan, variant)
+                        : service.credentialsForVariant(plan, variant);
+                var request = SecureXml.parse(new com.samlscope.saml.normal.SamlSignedRequestFactory().build(
+                        com.samlscope.saml.normal.SamlSignedRequestFactory.Fixture.VALID,
+                        "_probe", URI.create("https://idp.example/sso"), "https://peer.example",
+                        URI.create("https://peer.example/acs"), clock.instant(), credentials));
+                request.getDocumentElement().setIdAttribute("ID", true);
+                var signature = new XMLSignature((org.w3c.dom.Element) request.getElementsByTagNameNS(
+                        MetadataService.DS, "Signature").item(0), "");
+                for (int i = 0; i < keys.size(); i++) {
+                    assertEquals(i == item.getValue(), signature.checkSignatureValue(keys.get(i)),
+                            variant.id() + " polling=" + polling + " key=" + i);
+                }
+            }
+        }
+    }
+
+    @Test
+    void runtimeCertificateDiffersFromMetadataButPublicKeyIsIdentical() throws Exception {
+        var clock = Clock.fixed(Instant.parse("2026-08-29T00:00:00Z"), ZoneOffset.UTC);
+        var store = new FilePlanKeyStore(directory, clock);
+        var plan = SamlTestFixtures.idpPlan();
+        var service = new MetadataService(URI.create("https://peer.example"), store, new XmlSigner(), clock);
+        for (boolean polling : new boolean[] {false, true}) {
+            for (var variant : MetadataService.Variant.values()) {
+                if (!variant.certificateVariant()) continue;
+                var document = SecureXml.parse(polling ? service.generatePolling(plan, variant, "run_probe")
+                        : service.generate(plan, variant, "run_probe"));
+                var role = (org.w3c.dom.Element) document.getElementsByTagNameNS(MetadataService.MD, "SPSSODescriptor").item(0);
+                var encoded = role.getElementsByTagNameNS(MetadataService.DS, "X509Certificate").item(0).getTextContent();
+                var certificate = (java.security.cert.X509Certificate) java.security.cert.CertificateFactory.getInstance("X.509")
+                        .generateCertificate(new java.io.ByteArrayInputStream(java.util.Base64.getMimeDecoder().decode(encoded)));
+                var runtime = polling ? service.credentialsForPollingVariant(plan, variant) : service.credentialsForVariant(plan, variant);
+                org.junit.jupiter.api.Assertions.assertArrayEquals(certificate.getPublicKey().getEncoded(), runtime.certificate().getPublicKey().getEncoded());
+                assertFalse(java.util.Arrays.equals(certificate.getEncoded(), runtime.certificate().getEncoded()), variant.id());
+            }
+        }
+    }
+
+    @Test
+    void pollingRolloverKeysCannotBeReusedFromAnEarlierFixture() {
+        var clock = Clock.fixed(Instant.parse("2026-08-29T00:00:00Z"), ZoneOffset.UTC);
+        var store = new FilePlanKeyStore(directory, clock);
+        var plan = SamlTestFixtures.idpPlan();
+        var service = new MetadataService(URI.create("https://peer.example"), store, new XmlSigner(), clock);
+        var seen = new java.util.HashSet<String>();
+        for (var variant : java.util.List.of(MetadataService.Variant.MULTIPLE_SIGNING_KEYS,
+                MetadataService.Variant.MULTIPLE_OMITTED_KEYS_SECOND,
+                MetadataService.Variant.THREE_SIGNING_KEYS_SECOND,
+                MetadataService.Variant.THREE_SIGNING_KEYS)) {
+            var credentials = service.credentialsForPollingVariant(plan, variant);
+            assertTrue(seen.add(java.util.Base64.getEncoder().encodeToString(credentials.certificate().getPublicKey().getEncoded())), variant.id());
+        }
+    }
+
+    @Test
+    void defaultAcsFixturesChangeOnlyTheMetadataSelection() {
+        var clock = Clock.fixed(Instant.parse("2026-08-29T00:00:00Z"), ZoneOffset.UTC);
+        var store = new FilePlanKeyStore(directory, clock);
+        var plan = SamlTestFixtures.idpPlan();
+        var service = new MetadataService(URI.create("https://peer.example"), store, new XmlSigner(), clock);
+        for (var variant : java.util.List.of(MetadataService.Variant.DEFAULT_ACS_FIRST,
+                MetadataService.Variant.DEFAULT_ACS_SECOND, MetadataService.Variant.DEFAULT_ACS_IMPLICIT)) {
+            var document = SecureXml.parse(service.generate(plan, variant, "run_probe"));
+            var endpoints = document.getElementsByTagNameNS(MetadataService.MD, "AssertionConsumerService");
+            var defaults = new java.util.ArrayList<String>();
+            for (int i = 0; i < endpoints.getLength(); i++) {
+                var endpoint = (org.w3c.dom.Element) endpoints.item(i);
+                if (endpoint.getAttribute("isDefault").equals("true")) defaults.add(endpoint.getAttribute("index"));
+            }
+            assertEquals(variant == MetadataService.Variant.DEFAULT_ACS_IMPLICIT ? java.util.List.of()
+                    : java.util.List.of(variant == MetadataService.Variant.DEFAULT_ACS_FIRST ? "0" : "1"), defaults);
+            assertEquals("0", ((org.w3c.dom.Element) endpoints.item(0)).getAttribute("index"));
+        }
+    }
+
+    @Test
     void emitsSignedAllInOneMetadata() throws Exception {
         var clock = Clock.fixed(Instant.parse("2026-08-29T00:00:00Z"), ZoneOffset.UTC);
         var keyStore = new FilePlanKeyStore(directory, clock);

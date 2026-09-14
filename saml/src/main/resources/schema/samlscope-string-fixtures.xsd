@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"
+    targetNamespace="urn:samlscope:fixture:string" xmlns:f="urn:samlscope:fixture:string"
+    elementFormDefault="qualified">
+  <!-- Only the Suite's fixed input vocabulary; never a target-supplied schema. -->
+  <xs:simpleType name="MyStringType"><xs:restriction base="xs:string"/></xs:simpleType>
+  <xs:element name="AdviceString" type="xs:string"/>
+  <xs:element name="ExtensionString">
+    <xs:complexType><xs:attribute name="value" type="xs:string" use="required"/></xs:complexType>
+  </xs:element>
+</xs:schema>

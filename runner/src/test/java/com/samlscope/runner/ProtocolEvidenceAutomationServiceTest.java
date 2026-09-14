@@ -80,7 +80,7 @@ class ProtocolEvidenceAutomationServiceTest {
     }
 
     @Test
-    void oneCampaignConfirmationFinishesConfigCasesWithoutAskingForPerCaseVerdicts() {
+    void campaignConfirmationCannotTurnMissingRejectionEvidenceIntoSuccess() {
         var repository = new MemoryExecutions();
         var transitions = new CaseExecutionService(repository);
         var first = new MetadataConsumerObservationTestCase(
@@ -104,8 +104,8 @@ class ProtocolEvidenceAutomationServiceTest {
         var evaluation = service.evaluateAttempted(RUN);
 
         assertEquals(List.of(
-                new ProtocolEvidenceAutomationService.CompletedCase(first.id(), Outcome.SATISFIED),
-                new ProtocolEvidenceAutomationService.CompletedCase(second.id(), Outcome.SATISFIED)),
+                new ProtocolEvidenceAutomationService.CompletedCase(first.id(), Outcome.NOT_VERIFIED),
+                new ProtocolEvidenceAutomationService.CompletedCase(second.id(), Outcome.NOT_VERIFIED)),
                 evaluation.completed());
         assertEquals(CaseExecutionStatus.FINISHED,
                 repository.find(RUN, first.id()).orElseThrow().status());

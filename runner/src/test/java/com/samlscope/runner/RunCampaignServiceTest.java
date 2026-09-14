@@ -41,6 +41,27 @@ class RunCampaignServiceTest {
     private static final Instant NOW = Instant.parse("2026-08-31T00:00:00Z");
 
     @Test
+    void supplementalMetadataActionsShareWorkWithoutDuplicatingConformanceCases() {
+        var extension = definition("IIP-EXT01-c-idp-01", "IIP-EXT01.c", ExecutionMode.BROWSER, "none");
+        var metadata = definition("metadata-case", "IIP-MD05.a3", ExecutionMode.CONFIG, "none");
+        var implementation = new com.samlscope.runner.cases.IdpExecutableBrowserFixtureScenarioTestCase(
+                extension.id(), ignored -> null);
+        var report = service(List.of(extension, metadata), List.of(implementation,
+                new CampaignProtocolCase(metadata.id(), List.of("control"))),
+                List.of(execution(extension.id(), false), execution(metadata.id(), false))).report("run");
+        assertEquals(2, report.cases());
+        assertEquals(2, report.classifications().size());
+        assertTrue(report.classifications().stream().allMatch(value -> value.plan() == Plan.STANDARD),
+                "A required metadata operation must not disappear from a QUICK plan budget");
+        assertEquals(2, report.campaigns().size());
+        var campaign = report.campaigns().stream()
+                .filter(value -> value.actionKind() == RunCampaignQuery.ActionKind.METADATA_REFRESH).findFirst().orElseThrow();
+        assertEquals(14, campaign.deliberateUserActions(), "one shared control plus the schema-derived metadata matrix");
+        assertEquals(2, campaign.caseIds().size());
+        assertEquals(2, report.casesByEvidenceClass().values().stream().mapToInt(Integer::intValue).sum());
+    }
+
+    @Test
     void sharesOneMetadataRefreshActionAcrossMultipleCases() {
         var first = definition("IIP-MD04-a-idp-01", "IIP-MD04.a", ExecutionMode.CONFIG, "none");
         var second = definition("IIP-MD05-a-idp-01", "IIP-MD05.a", ExecutionMode.CONFIG, "none");
@@ -326,7 +347,13 @@ class RunCampaignServiceTest {
             @Override public com.samlscope.core.run.Reachability reachability() {
                 return com.samlscope.core.run.Reachability.CONFIRMED;
             }
-            @Override public com.samlscope.core.transcript.TranscriptRecorder transcript() { return null; }
+            @Override public com.samlscope.core.transcript.TranscriptRecorder transcript() {
+                return new com.samlscope.core.transcript.TranscriptRecorder() {
+                    public com.samlscope.core.transcript.TranscriptEntry record(com.samlscope.core.transcript.TranscriptInput input) { throw new UnsupportedOperationException(); }
+                    public com.samlscope.core.transcript.TranscriptEntry updateSamlAnalysis(String id, String correlation, Map<String,Object> summary) { throw new UnsupportedOperationException(); }
+                    public List<com.samlscope.core.transcript.TranscriptEntry> list(String runId) { return List.of(); }
+                };
+            }
             @Override public boolean transcriptComplete() { return true; }
         };
     }

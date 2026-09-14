@@ -1,5 +1,5 @@
 import { SourceNoticeLink } from './SourceNoticeLink'
-import { useEffect, useMemo, useState } from 'react'
+import { Fragment, useEffect, useMemo, useState } from 'react'
 import { AppShell } from './AppShell'
 import { api, type PublicResult } from './api'
 import { humanize } from './format'
@@ -89,6 +89,17 @@ export function ResultReport({ runId }: { runId: string }) {
             <summary><span>{requirement.id}</span><strong className={`badge badge-${requirement.verdict.toLowerCase()}`}>{humanize(requirement.verdict)}</strong></summary>
             <div className="requirement-body"><a href={requirement.specUrl}>Source requirement</a> · <SourceNoticeLink kind="requirement" id={requirement.id} />
               <ul>{requirement.obligations.map(item => <li key={item.key}><code>{item.key}</code><span>{item.level} / {humanize(item.verdict)}</span></li>)}</ul>
+              {requirement.cases.map(test => <details key={test.id} className="case-observations">
+                <summary><code>{test.id}</code> · {humanize(test.verdict)}</summary>
+                <p>{humanize(test.reason.replaceAll('.', ' '))}</p>
+                {test.diagnostics && Object.keys(test.diagnostics).length > 0 && <>
+                  <p>Partial observations are supporting detail. The case verdict above remains authoritative.</p>
+                  <dl className="key-values">{Object.entries(test.diagnostics).map(([name, values]) => <Fragment key={name}>
+                    <dt>{humanize(name.replace(/([a-z])([A-Z])/g, '$1_$2'))}</dt>
+                    <dd>{values.map(value => <div key={value}><code>{value}</code></div>)}</dd>
+                  </Fragment>)}</dl>
+                </>}
+              </details>)}
             </div>
           </details>)}</div>}
       </section>

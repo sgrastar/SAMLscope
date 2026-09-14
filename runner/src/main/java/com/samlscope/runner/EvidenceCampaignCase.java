@@ -7,6 +7,9 @@ import java.util.List;
  * Implementations do not decide outcomes here; they only identify a reusable evidence action.
  */
 public interface EvidenceCampaignCase extends ExternallyObservedCase {
+    /** Additional shared operations, without counting the owning case again in the denominator. */
+    default List<EvidenceCampaignCase> supplementalEvidenceCampaigns() { return List.of(); }
+
     String evidenceCampaignId();
 
     String evidenceCampaignTitle();

@@ -32,6 +32,7 @@ public final class TranscriptAutomationRecorder
     private final Executor executor;
     private final Runnable shutdown;
     private final Object schedulingLock = new Object();
+    private boolean closed;
     private final Map<String, PendingReconciliation> pending = new LinkedHashMap<>();
     private final ThreadLocal<AutomaticSnapshot> automaticSnapshot = new ThreadLocal<>();
     private final AtomicReference<Consumer<String>> listener = new AtomicReference<>();
@@ -43,7 +44,7 @@ public final class TranscriptAutomationRecorder
 
     private TranscriptAutomationRecorder(
             TranscriptRecorder recorder, TranscriptContentReader content, ExecutorService executor) {
-        this(recorder, content, executor, executor::shutdownNow);
+        this(recorder, content, executor, () -> stopExecutor(executor));
     }
 
     TranscriptAutomationRecorder(
@@ -107,15 +108,29 @@ public final class TranscriptAutomationRecorder
 
     @Override
     public void close() {
-        shutdown.run();
         synchronized (schedulingLock) {
+            closed = true;
             pending.clear();
+        }
+        shutdown.run();
+    }
+
+    private static void stopExecutor(ExecutorService executor) {
+        executor.shutdownNow();
+        try {
+            if (!executor.awaitTermination(10, TimeUnit.SECONDS)) {
+                throw new IllegalStateException("Transcript reconciliation did not stop before shutdown");
+            }
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("Interrupted while stopping Transcript reconciliation", interrupted);
         }
     }
 
     private void notifyRecorded(String runId) {
         if (listener.get() == null) return;
         synchronized (schedulingLock) {
+            if (closed) return;
             var state = pending.computeIfAbsent(runId, ignored -> new PendingReconciliation());
             if (state.automaticDisabled) return;
             state.dirty = true;

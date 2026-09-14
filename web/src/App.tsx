@@ -10,6 +10,7 @@ import { idpRoundTripReady, idpRoundTripUrl } from './peerUrls'
 import { PeerRegistration } from './PeerRegistration'
 import { RoundTripLink } from './RoundTripLink'
 import { profileCatalog, profileLabel, profileRole } from './profiles'
+import { Admin } from './Admin'
 import { Licenses } from './Licenses'
 
 const initialInput: PlanInput = {
@@ -27,6 +28,7 @@ const initialInput: PlanInput = {
 }
 
 export function App() {
+  if (window.location.pathname === '/admin') return <Admin />
   if (window.location.pathname === '/licenses') return <Licenses />
   const reportRunId = window.location.pathname.match(/^\/reports\/(run_[0-9A-HJKMNP-TV-Z]{26})$/)?.[1]
   if (reportRunId) return <ResultReport runId={reportRunId} />
@@ -61,6 +63,7 @@ function PlanWorkspace() {
   const [loading, setLoading] = useState(true)
   const [mode, setMode] = useState<'selfhosted' | 'hosted'>('selfhosted')
   const [auth, setAuth] = useState<AuthSession>()
+  const [adminOwners, setAdminOwners] = useState<Record<string, string | null>>({})
   const [managementUrl, setManagementUrl] = useState<string>()
   const [view, setView] = useState<'list' | 'new' | 'detail'>(initialLocation.view)
   const selected = useMemo(() => plans.find(plan => plan.plan.id === selectedId), [plans, selectedId])
@@ -91,6 +94,10 @@ function PlanWorkspace() {
       setMode(health.mode)
       const session = health.oidcEnabled ? await api.authSession() : undefined
       if (session) setAuth(session)
+      if (session?.role === 'ADMIN') {
+        const all = await api.adminPlans()
+        setAdminOwners(Object.fromEntries(all.map(row => [row.plan.plan.id, row.ownerId])))
+      }
       setInstalledProfiles(await api.profiles())
       if (health.mode === 'selfhosted' || session?.authenticated) setTargets(await api.targets())
       try { await refreshPlans() } catch (cause) {
@@ -164,6 +171,7 @@ function PlanWorkspace() {
         }
       }
       const created = await api.createPlan(planInput)
+      if (auth?.userId) setAdminOwners(current => ({ ...current, [created.plan.plan.id]: auth.userId! }))
       setPlans(current => [created.plan, ...current])
       setSelectedId(created.plan.plan.id)
       setRuns(created.initialRun ? [created.initialRun.run] : [])
@@ -175,7 +183,7 @@ function PlanWorkspace() {
       setInput(initialInput)
       setView('detail')
       window.history.pushState(null, '', `?plan=${encodeURIComponent(created.plan.plan.id)}`)
-      setMessage(created.initialRun?.managementUrl
+      setMessage(!auth?.enabled && created.initialRun?.managementUrl
         ? 'Test Plan and initial Run created. Save the protected management link below.'
         : 'Test Plan created. Register the Test Peer metadata in the target before starting a Run.')
     } catch (cause) { setError(planCreationError(cause, input.profile)) }
@@ -200,7 +208,7 @@ function PlanWorkspace() {
         }
       })
       setManagementUrl(created.managementUrl ?? undefined)
-      if (created.managementUrl) setMessage('Run created. Save the protected management link below.')
+      if (created.managementUrl) setMessage(auth?.enabled ? 'Run created.' : 'Run created. Save the protected management link below.')
       else {
         await api.preflight(created.run.id)
         setMessage('Run created and preflight completed.')
@@ -216,14 +224,16 @@ function PlanWorkspace() {
     <main className="shell page-main">
       {error && <div ref={errorRef} className="notice notice-error workspace-error" role="alert" tabIndex={-1}><strong>Unable to continue</strong>{error}</div>}
       {message && <div className="notice notice-success" role="status">{message}</div>}
-      {managementUrl && <ManagementLink url={managementUrl} />}
+      {managementUrl && (auth?.enabled
+        ? <a className="button" href={managementUrl}>Open Run workspace</a>
+        : <ManagementLink url={managementUrl} />)}
       {loading ? <PlanSkeleton /> : view === 'new' && mustSignIn ? <section className="panel">
         <h1>Sign in to create a Test Plan</h1>
         <p>Your Plans and Runs will be available when you return.</p>
         <a className="button" href="/auth/login">Continue to sign in</a>
       </section> : view === 'new' ? <NewPlan input={input} setInput={setInput} create={create} cancel={() => show('list')}
         targets={targets} installedProfiles={installedProfiles} creating={creating} />
-        : view === 'detail' && selected ? <PlanDetail plan={selected} runs={runs} createRun={createRun} canCreateRun={mode === 'selfhosted' || auth?.authenticated === true} back={() => show('list')} />
+        : view === 'detail' && selected ? <PlanDetail plan={selected} runs={runs} createRun={createRun} canCreateRun={(mode === 'selfhosted' || auth?.authenticated === true) && (auth?.role !== 'ADMIN' || adminOwners[selected.plan.id] === auth.userId)} back={() => show('list')} />
           : <PlanList plans={plans} runs={planRuns} open={id => show('detail', id)} create={() => show('new')}
             refresh={() => void refreshPlans().catch(cause => setError((cause as Error).message))} />}
       <footer className="legal">Operational quick checks remain separate from conformance results. Creating a Test Plan requires authorization to test the declared target.</footer>

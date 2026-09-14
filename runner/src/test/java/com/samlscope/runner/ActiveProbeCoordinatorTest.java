@@ -89,6 +89,107 @@ class ActiveProbeCoordinatorTest {
     }
 
     @Test
+    void queuesFiftyScenariosWithoutAgingRequestsOrStartingTheirTimeouts() {
+        var service = new CaseExecutionService(executions);
+        service.resume(RUN, new IdpErrorResponseTestCase(configuration(true)), contexts.contextFor(RUN),
+                new com.samlscope.core.caseexec.CaseEvent.Aborted("queue test"));
+        var clock = new QueueClock(NOW);
+        var plan = plans.find(PLAN).orElseThrow();
+        CaseContextProvider liveContexts = runId -> new DefaultCaseContext(runId, plan.profile().role(), clock,
+                plan.parameters(), plan.interaction(), Reachability.CONFIRMED, transcript, true);
+        var fixtures = java.util.stream.IntStream.range(0, 50)
+                .mapToObj(i -> (com.samlscope.core.caseexec.TestCase)new QueueFixture("queued-" + String.format("%02d",i), i % 2 != 0))
+                .toList();
+        var registry = new TestCaseRegistry(fixtures);
+        var signed = new java.util.concurrent.atomic.AtomicInteger();
+        var signer = new CaseExecutionService(executions, (runId, action) -> {signed.incrementAndGet(); return action;});
+        for (var fixture : fixtures) {
+            var queued = signer.enqueueFrontChannel(RUN, fixture, liveContexts.contextFor(RUN));
+            assertTrue(CaseExecutionService.isQueuedFrontChannel(queued));
+            assertEquals(queued, signer.enqueueFrontChannel(RUN, fixture, liveContexts.contextFor(RUN)));
+        }
+        assertEquals(0, signed.get());
+        var initialOutboxSize = executions.listOutbox(RUN).size();
+        clock.now = NOW.plus(Duration.ofHours(2));
+        assertTrue(new CaseTimeoutService(executions, registry, signer).expireReady(RUN, liveContexts.contextFor(RUN)).isEmpty());
+        var dispatcher = new OutboundDispatcher(executions,
+                (runId, action, credential) -> new OutboundSender.SendResult(false, Map.of(), "unused"),
+                (runId, actionId) -> Optional.empty(), new OutboundPolicy(true), clock);
+        var redirectKey = new com.samlscope.saml.crypto.FilePlanKeyStore(directory.resolve("redirect-keys"), clock).getOrCreate(PLAN);
+        var queuedCoordinator = new ActiveProbeCoordinator(URI.create("https://suite.example"),plans,runs,executions,
+                dispatcher,transcript,liveContexts,(ignored,runId)->configuration(true),registry,clock,signer,runId -> redirectKey);
+        for (int index=0; index<fixtures.size(); index++) {
+            var status = queuedCoordinator.status(RUN);
+            assertEquals(fixtures.get(index).id(),status.caseId());
+            assertEquals(index+1,signed.get());
+            assertEquals(initialOutboxSize+index+1,executions.listOutbox(RUN).size());
+            var action = executions.findOutbox(status.actionId()).orElseThrow().action();
+            var payload = action.payload().clone();
+            var xml = com.samlscope.saml.normal.SecureXml.parse(payload).getDocumentElement();
+            assertEquals(clock.instant().toString(),xml.getAttribute("IssueInstant"));
+            assertEquals(clock.instant().plus(Duration.ofDays(1)),executions.find(RUN,status.caseId()).orElseThrow().waitCondition().expiresAt());
+            assertEquals(status,queuedCoordinator.status(RUN));
+            var prepared = queuedCoordinator.prepare(RUN,status.actionId(),false);
+            var entry = transcript.list(RUN).stream().filter(e -> e.id().equals(prepared.transcriptEntryId())).findFirst().orElseThrow();
+            assertEquals(index % 2 == 0 ? "AuthnRequest" : "LogoutRequest", entry.samlSummary().get("type"));
+            assertEquals(index % 2 == 0 ? "POST" : "GET", entry.method());
+            if (index % 2 != 0) {
+                assertEquals(prepared.redirectDestination().getRawQuery(), entry.rawQuery());
+                assertEquals(prepared.redirectDestination().toString(), entry.url());
+                assertTrue(new com.samlscope.saml.binding.RedirectSignatureVerifier().isValid(entry.rawQuery(), redirectKey.certificate()));
+            } else org.junit.jupiter.api.Assertions.assertNull(prepared.redirectDestination());
+            assertThrows(IllegalStateException.class, () -> queuedCoordinator.prepare(RUN,status.actionId(),false));
+            clock.now = clock.now.plus(Duration.ofMinutes(10));
+            // Neither repeated status queries nor activation can refresh an already-dispatched payload.
+            signer.activateFrontChannel(RUN,fixtures.get(index),liveContexts.contextFor(RUN));
+            org.junit.jupiter.api.Assertions.assertArrayEquals(payload,executions.findOutbox(status.actionId()).orElseThrow().action().payload());
+            var response="<response/>".getBytes(StandardCharsets.UTF_8);
+            var evidence=new EvidenceRef("transcript","queue-"+index);
+            if (index % 2 == 0) {
+                assertThrows(IllegalArgumentException.class, () -> queuedCoordinator.acceptLogout(RUN,status.actionId(),response,evidence));
+                queuedCoordinator.accept(RUN,status.actionId(),response,evidence);
+            } else {
+                assertThrows(IllegalArgumentException.class, () -> queuedCoordinator.accept(RUN,status.actionId(),response,evidence));
+                queuedCoordinator.acceptLogout(RUN,status.actionId(),response,evidence);
+            }
+        }
+        assertEquals(ActiveProbeCoordinator.State.FINISHED,queuedCoordinator.status(RUN).state());
+        assertEquals(50,signed.get());
+    }
+
+    private static final class QueueClock extends Clock {
+        private Instant now;
+        private QueueClock(Instant now) {this.now=now;}
+        @Override public java.time.ZoneId getZone(){return ZoneOffset.UTC;}
+        @Override public Clock withZone(java.time.ZoneId zone){return this;}
+        @Override public Instant instant(){return now;}
+    }
+    private record QueueFixture(String id, boolean logout) implements com.samlscope.core.caseexec.TestCase, BrowserFrontChannelScenario {
+        public com.samlscope.core.plan.TargetRole role(){return com.samlscope.core.plan.TargetRole.IDP;}
+        public String instructionsEn(com.samlscope.core.caseexec.CaseState state){return "Run queued fixture";}
+        public Binding outboundBinding(com.samlscope.core.caseexec.CaseState state){return logout ? Binding.SIGNED_REDIRECT : Binding.HTTP_POST;}
+        public com.samlscope.core.caseexec.CaseStep start(com.samlscope.core.caseexec.CaseContext context){
+            var phase="await-queued-response";
+            var actionId=com.samlscope.core.caseexec.ActionIds.derive(context.runId(),id,phase,0);
+            var payload=logout ? new com.samlscope.saml.normal.SamlLogoutRequestFactory().build(
+                    "_"+actionId, URI.create("https://idp.example/slo"), "https://suite.example",
+                    com.samlscope.saml.normal.SecureXml.parse("<saml:NameID xmlns:saml='urn:oasis:names:tc:SAML:2.0:assertion'>user</saml:NameID>".getBytes(StandardCharsets.UTF_8)).getDocumentElement(),
+                    List.of("session"),context.clock().instant(),null,false)
+                    : new com.samlscope.saml.normal.SamlErrorProbeRequestFactory().build(
+                    com.samlscope.saml.normal.SamlErrorProbeRequestFactory.Probe.BASELINE_SUCCESS,"_"+actionId,
+                    URI.create("https://idp.example/sso"),"https://suite.example",URI.create("https://suite.example/acs"),context.clock().instant());
+            return new com.samlscope.core.caseexec.CaseStep.AwaitInbound(
+                    new com.samlscope.core.caseexec.CaseState(phase,Map.of()),
+                    List.of(new com.samlscope.core.caseexec.OutboundAction(actionId,logout ? com.samlscope.core.caseexec.OutboundKind.LOGOUT_REQUEST : com.samlscope.core.caseexec.OutboundKind.AUTHN_REQUEST,
+                            payload,URI.create(logout ? "https://idp.example/slo" : "https://idp.example/sso"),false)),
+                    new com.samlscope.core.caseexec.InboundMatcher("saml-response",Map.of("ScenarioActionId",actionId)),Duration.ofDays(1));
+        }
+        public com.samlscope.core.caseexec.CaseStep resume(com.samlscope.core.caseexec.CaseContext context,com.samlscope.core.caseexec.CaseState state,com.samlscope.core.caseexec.CaseEvent event){
+            return new com.samlscope.core.caseexec.CaseStep.Finish(com.samlscope.core.evaluation.CaseOutcome.notVerified("fixture-only","fixture-only"));
+        }
+    }
+
+    @Test
     void runsAllAbnormalRequestsSequentiallyAndCompletesFromCorrelatedResponses() {
         var passive = coordinator.status(RUN);
         assertEquals(ActiveProbeCoordinator.State.READY, passive.state());

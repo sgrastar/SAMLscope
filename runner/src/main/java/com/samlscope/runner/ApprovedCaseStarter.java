@@ -71,7 +71,9 @@ public final class ApprovedCaseStarter {
                             != ApplicabilityEvaluation.EffectiveResult.TRUE) {
                 continue;
             }
-            started.add(executions.start(run.id(), testCase, context));
+            started.add(testCase instanceof BrowserFrontChannelScenario
+                    ? executions.enqueueFrontChannel(run.id(), testCase, context)
+                    : executions.start(run.id(), testCase, context));
         }
         return List.copyOf(started);
     }

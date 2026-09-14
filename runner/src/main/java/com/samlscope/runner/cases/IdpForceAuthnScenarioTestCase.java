@@ -121,6 +121,14 @@ public final class IdpForceAuthnScenarioTestCase
         if (index == STAGES.size() - 1) {
             var requestInstant = Instant.parse(text(state, "request_issue_instant"));
             var baselineInstant = Instant.parse(text(state, "baseline_authn_instant"));
+            // A timestamp with omitted fractional digits cannot establish ordering within
+            // that reported unit. This is measurement ambiguity, not clock-skew tolerance.
+            var reportedUpperBound = observation.authnInstant().plusNanos(observation.precisionNanos());
+            if (!observation.authnInstant().isAfter(requestInstant)
+                    && reportedUpperBound.isAfter(requestInstant)) {
+                return new CaseStep.Finish(notVerified(
+                        state, "force_authn_timestamp_precision_insufficient", evidence));
+            }
             if (observation.authnInstant().isBefore(requestInstant)
                     || !observation.authnInstant().isAfter(baselineInstant)) {
                 return new CaseStep.Finish(new CaseOutcome(
@@ -177,12 +185,19 @@ public final class IdpForceAuthnScenarioTestCase
             var codes = root.getElementsByTagNameNS(PROTOCOL, "StatusCode");
             if (codes.getLength() == 0
                     || !SUCCESS.equals(((Element) codes.item(0)).getAttribute("Value"))) {
-                return new Observation(false, null);
+                return new Observation(false, null, 0);
             }
             var statements = root.getElementsByTagNameNS(ASSERTION, "AuthnStatement");
             if (statements.getLength() == 0) return null;
             var value = ((Element) statements.item(0)).getAttribute("AuthnInstant");
-            return new Observation(true, Instant.parse(value));
+            var dot = value.indexOf('.');
+            var digits = 0;
+            if (dot >= 0) {
+                for (var i = dot + 1; i < value.length() && Character.isDigit(value.charAt(i)); i++) digits++;
+            }
+            long precisionNanos = 1;
+            for (var i = Math.min(digits, 9); i < 9; i++) precisionNanos *= 10;
+            return new Observation(true, Instant.parse(value), precisionNanos);
         } catch (SamlException | DateTimeParseException invalid) {
             return null;
         }
@@ -230,5 +245,5 @@ public final class IdpForceAuthnScenarioTestCase
     }
 
     private record Stage(String id, Probe probe) {}
-    private record Observation(boolean success, Instant authnInstant) {}
+    private record Observation(boolean success, Instant authnInstant, long precisionNanos) {}
 }

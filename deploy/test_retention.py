@@ -60,6 +60,61 @@ class RetentionTest(unittest.TestCase):
         return {str(p.relative_to(self.root)): p.read_bytes()
                 for p in self.root.rglob("*") if p.is_file()}
 
+    def anonymous(self, days=31):
+        identifier = "oidc:" + "a" * 64
+        used = (NOW - dt.timedelta(days=days)).isoformat()
+        with self.connect() as db:
+            db.execute("INSERT INTO application_users(id, role, created_at, last_used_at, enrolled) "
+                       "VALUES (?, 'ANONYMOUS', ?, ?, 1)", (identifier, used, used))
+            for (plan,) in db.execute("SELECT id FROM plans").fetchall():
+                db.execute("INSERT OR REPLACE INTO hosted_plan_owners(plan_id, owner_id) VALUES (?, ?)", (plan, identifier))
+                self.write(f"keys/{plan}/private.pem")
+                self.write(f"target-metadata/{plan}.xml")
+            db.execute("INSERT INTO target_connections VALUES ('target', ?, '{}')", (identifier,))
+            db.execute("INSERT INTO target_metadata_revisions VALUES ('target', 'revision', '{}', '{}')")
+        return {"id": identifier, "version": 0, "lastUsedAt": used,
+                "isAnonymous": True, "verifiedAt": NOW.isoformat()}
+
+    def test_anonymous_expiry_without_provider_confirmation_is_preview_only(self):
+        self.anonymous()
+        report = maintain(self.root, NOW, apply=True, service_stopped=True)
+        self.assertEqual(1, len(report["anonymousExpiryCandidates"]))
+        self.assertEqual([], report["expiredAnonymousUsers"])
+        self.assertEqual([], report["privateRuns"])
+        self.assertTrue((self.root / "results" / self.old).exists())
+        self.assertTrue((self.root / "results" / self.published).exists())
+
+    def test_confirmed_expiry_removes_entire_account_including_public_reports(self):
+        confirmation = self.anonymous()
+        report = maintain(self.root, NOW, apply=True, service_stopped=True,
+                          anonymous_confirmations=[confirmation])
+        self.assertEqual([confirmation["id"]], report["expiredAnonymousUsers"])
+        with self.connect() as db:
+            for table in ("application_users", "plans", "runs", "published_runs", "transcript_entries",
+                          "target_connections", "target_metadata_revisions", "hosted_plan_owners"):
+                self.assertEqual(0, db.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0], table)
+            self.assertEqual([], db.execute("PRAGMA foreign_key_check").fetchall())
+        self.assertFalse((self.root / "results" / self.published).exists())
+        self.assertFalse(any((self.root / "keys").glob("*/private.pem")))
+
+    def test_expiry_rejects_stale_state_upgrade_activity_and_unverified_status(self):
+        confirmation = self.anonymous()
+        for bad in ({**confirmation, "verifiedAt": (NOW - dt.timedelta(minutes=6)).isoformat()},
+                    {**confirmation, "version": 1}, {**confirmation, "isAnonymous": False},
+                    {**confirmation, "lastUsedAt": NOW.isoformat()}):
+            before = self.snapshot()
+            with self.assertRaises(ValueError):
+                maintain(self.root, NOW, apply=True, service_stopped=True, anonymous_confirmations=[bad])
+            self.assertEqual(before, self.snapshot())
+        with self.connect() as db:
+            db.execute("UPDATE application_users SET role='USER', version=1")
+        with self.assertRaises(ValueError):
+            maintain(self.root, NOW, apply=True, service_stopped=True, anonymous_confirmations=[confirmation])
+        with self.connect() as db:
+            db.execute("UPDATE application_users SET role='ANONYMOUS', version=0, last_used_at=?", (NOW.isoformat(),))
+        with self.assertRaises(ValueError):
+            maintain(self.root, NOW, apply=True, service_stopped=True, anonymous_confirmations=[confirmation])
+
     def test_preview_does_not_modify_data(self):
         before = self.snapshot()
         report = maintain(self.root, NOW)

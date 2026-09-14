@@ -102,7 +102,7 @@ export interface PublicResult {
     verdict: string
     specUrl: string
     obligations: Array<{ key: string; level: string; role: string; verdict: string }>
-    cases: Array<{ id: string; obligation: string; outcome: string | null; verdict: string; mode: string; reason: string; evidenceClass: string }>
+    cases: Array<{ id: string; obligation: string; outcome: string | null; verdict: string; mode: string; reason: string; evidenceClass: string; diagnostics?: Record<string, string[]> }>
   }>
   unresolved: Array<{ obligation: string; level: string; verdict: string; reasons: string[]; howToResolve: string }>
   notObservable: Array<{ obligation: string; level: string; reason: string }>
@@ -276,7 +276,16 @@ export interface CampaignReport {
 }
 
 export interface Health { status: string; version: string; mode: 'selfhosted' | 'hosted'; oidcEnabled?: boolean }
+export type UserRole = 'ANONYMOUS' | 'USER' | 'ADMIN'
+export interface AdminUser {
+  user: { id: string; displayName: string; role: UserRole; status: 'ACTIVE' | 'DELETING'; createdAt: string; lastUsedAt: string | null; version: number }
+  expiresAt: string | null
+  expiryCandidate: boolean
+}
+export interface AdminPlan { plan: Plan; ownerId: string | null; createdAt: string }
 export interface AuthSession {
+  userId?: string | null
+  role?: UserRole | null
   enabled: boolean
   authenticated: boolean
   accessPolicy: 'optional' | 'new_plans' | 'required'
@@ -320,6 +329,13 @@ function camelize(value: unknown): unknown {
 }
 
 export const api = {
+  adminUsers: () => request<AdminUser[]>('/api/admin/users'),
+  adminPlans: () => request<AdminPlan[]>('/api/admin/plans'),
+  updateUser: (user: AdminUser['user']) => request<AdminUser['user']>(`/api/admin/users/${encodeURIComponent(user.id)}`, {
+    method: 'PUT', body: JSON.stringify({ displayName: user.displayName, role: user.role, version: user.version }),
+  }),
+  deleteUser: (id: string, version: number) => request<void>(`/api/admin/users/${encodeURIComponent(id)}`, { method: 'DELETE', body: JSON.stringify({ version }) }),
+  adminDeletePlan: (id: string) => request<void>(`/api/admin/plans/${encodeURIComponent(id)}`, { method: 'DELETE' }),
   resumeManagementSession: (runId: string) => request<{ runId: string; csrfToken: string }>(
     '/api/manage/session', { method: 'POST', body: JSON.stringify({ runId, resume: true }) }),
   authSession,
