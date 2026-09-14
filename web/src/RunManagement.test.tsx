@@ -981,6 +981,58 @@ test('shares one section conclusion while preserving case-specific overrides', a
   expect(posts[2].init?.body).toBe(JSON.stringify({ value: 'evidence_violates', note: 'Shared policy export' }))
 })
 
+test('shows and fixes the supplemental decryption key input for the IdP logout profile', async () => {
+  const calls: Array<{ url: string; init?: RequestInit }> = []
+  let submitted = false
+  vi.stubGlobal('fetch', vi.fn(async (url: string, init?: RequestInit) => {
+    calls.push({ url, init })
+    if (init?.method === 'POST' && url.endsWith('/supplemental-decryption-keys/submit')) {
+      submitted = true
+      return json({
+        runId: 'run_test', targetEntityId: 'https://target.example/entity', metadataSha256: 'a'.repeat(64),
+        sourceUri: 'https://idp.example/keys', publicKeysSpkiBase64: ['QUJD'], recordedAt: '2026-09-15T00:00:00Z',
+      })
+    }
+    if (url.endsWith('/supplemental-decryption-keys')) return json({
+      targetEntityId: 'https://target.example/entity', metadataSha256: 'a'.repeat(64),
+      testsStarted: submitted,
+      input: submitted ? {
+        runId: 'run_test', targetEntityId: 'https://target.example/entity', metadataSha256: 'a'.repeat(64),
+        sourceUri: 'https://idp.example/keys', publicKeysSpkiBase64: ['QUJD'], recordedAt: '2026-09-15T00:00:00Z',
+      } : null,
+    })
+    if (url.endsWith('/workspace-evidence')) return json({
+      interactions: [], bootstrapContracts: [], protocolEvidence: protocolEvidence(),
+      activeProbe: { state: 'NOT_STARTED' }, campaigns: [],
+    })
+    if (url.endsWith('/metadata-lab')) return json(metadataLab())
+    if (url === '/api/health') return json({ mode: 'selfhosted' })
+    if (url === '/api/plans') return json([{
+      plan: { id: 'plan', profile: 'single_logout_idp', name: 'Logout target',
+        target: { kind: 'IDP', entityId: 'https://target.example/entity' } },
+      entityId: 'https://suite.example/p/plan', metadataUrl: 'https://suite.example/p/plan/metadata',
+      mdqUrl: 'https://suite.example/mdq', secondaryIdpEntityId: 'https://suite.example/secondary',
+      secondaryIdpMetadataUrl: 'https://suite.example/secondary/metadata',
+    }])
+    if (url === '/api/runs/run_test') return json({ id: 'run_test', planId: 'plan', status: 'COMPLETED', context: {} })
+    throw new Error(`Unexpected request: ${url}`)
+  }))
+  render(<RunManagement runId="run_test" csrfToken="csrf" />)
+  expect(await screen.findByText('IdP decryption key input')).toBeTruthy()
+  expect(screen.getByText('a'.repeat(64))).toBeTruthy()
+  fireEvent.change(screen.getByLabelText(/Public-key source/), { target: { value: 'https://idp.example/keys' } })
+  fireEvent.change(screen.getByLabelText(/RSA public key/), { target: { value: 'QUJD' } })
+  fireEvent.click(screen.getByRole('button', { name: 'Fix decryption key input' }))
+  await waitFor(() => expect(submitted).toBe(true))
+  expect(await screen.findByText(/Fixed: 1 supplemental RSA key\(s\) from https:\/\/idp\.example\/keys/)).toBeTruthy()
+  const submit = calls.find(call => call.init?.method === 'POST')
+  expect(submit?.url).toBe('/api/runs/run_test/supplemental-decryption-keys/submit')
+  expect(submit?.init?.body).toBe(JSON.stringify({
+    targetEntityId: 'https://target.example/entity', metadataSha256: 'a'.repeat(64),
+    sourceUri: 'https://idp.example/keys', publicKeysSpkiBase64: ['QUJD'],
+  }))
+})
+
 function metadataLab() {
   return {
     runId: 'run_0123456789ABCDEFGHJKMNPQRS', planId: 'plan', selectedVariant: 'control',

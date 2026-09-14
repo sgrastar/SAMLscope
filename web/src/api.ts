@@ -37,6 +37,22 @@ export interface RunCreated {
   managementUrl: string | null
 }
 
+export interface SupplementalDecryptionKeyInput {
+  runId: string
+  targetEntityId: string
+  metadataSha256: string
+  sourceUri: string | null
+  publicKeysSpkiBase64: string[]
+  recordedAt: string
+}
+
+export interface SupplementalDecryptionKeyStatus {
+  targetEntityId: string
+  metadataSha256: string
+  testsStarted: boolean
+  input: SupplementalDecryptionKeyInput | null
+}
+
 export interface PlanCreated {
   plan: Plan
   initialRun: RunCreated | null
@@ -447,6 +463,15 @@ export const api = {
   startTests: (runId: string, csrfToken?: string) =>
     request<{ ecpProbesRequired: boolean }>(`/api/runs/${runId}/tests/start`, {
       method: 'POST', headers: csrfToken ? { 'X-CSRF-Token': csrfToken } : {},
+    }),
+  supplementalDecryptionKeys: (runId: string) =>
+    request<SupplementalDecryptionKeyStatus>(`/api/runs/${runId}/supplemental-decryption-keys`),
+  submitSupplementalDecryptionKeys: (runId: string, input: {
+    targetEntityId: string; metadataSha256: string; sourceUri: string; publicKeysSpkiBase64: string[];
+  }, csrfToken?: string) => request<SupplementalDecryptionKeyInput>(
+    `/api/runs/${runId}/supplemental-decryption-keys/submit`, {
+      method: 'POST', body: JSON.stringify(input),
+      headers: csrfToken ? { 'X-CSRF-Token': csrfToken } : {},
     }),
   startMilestone: (runId: string, milestone: 'M2' | 'M3', csrfToken?: string) =>
     request<unknown>(`/api/runs/${runId}/milestones/${milestone}/start`, {

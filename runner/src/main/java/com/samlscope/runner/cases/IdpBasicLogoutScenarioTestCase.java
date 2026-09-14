@@ -26,7 +26,13 @@ public final class IdpBasicLogoutScenarioTestCase implements TestCase, BrowserFr
     private static final String SUCCESS = "urn:oasis:names:tc:SAML:2.0:status:Success";
     private static final String VERSION = "slo-basic-v5";
     public record Configuration(IdpErrorProbeConfiguration login, URI logoutEndpoint, URI suiteLogoutEndpoint,
-            String targetIssuer, PlanCredentials suiteCredentials, List<X509Certificate> targetSigningCertificates, Binding logoutBinding, java.security.PublicKey targetEncryptionKey, List<java.security.PublicKey> targetEncryptionKeys) {
+            String targetIssuer, PlanCredentials suiteCredentials, List<X509Certificate> targetSigningCertificates, Binding logoutBinding, java.security.PublicKey targetEncryptionKey, List<java.security.PublicKey> targetEncryptionKeys, List<java.security.PublicKey> publishedEncryptionKeys) {
+        public Configuration(IdpErrorProbeConfiguration login, URI logoutEndpoint, URI suiteLogoutEndpoint,
+                String targetIssuer, PlanCredentials suiteCredentials, List<X509Certificate> targetSigningCertificates,
+                Binding logoutBinding, java.security.PublicKey targetEncryptionKey, List<java.security.PublicKey> targetEncryptionKeys) {
+            this(login,logoutEndpoint,suiteLogoutEndpoint,targetIssuer,suiteCredentials,targetSigningCertificates,
+                    logoutBinding,targetEncryptionKey,targetEncryptionKeys,targetEncryptionKeys);
+        }
         public Configuration(IdpErrorProbeConfiguration login, URI logoutEndpoint, URI suiteLogoutEndpoint,
                 String targetIssuer, PlanCredentials suiteCredentials, List<X509Certificate> targetSigningCertificates,
                 Binding logoutBinding, java.security.PublicKey targetEncryptionKey) {
@@ -41,7 +47,7 @@ public final class IdpBasicLogoutScenarioTestCase implements TestCase, BrowserFr
                 String targetIssuer, PlanCredentials suiteCredentials, List<X509Certificate> targetSigningCertificates) {
             this(login, logoutEndpoint, suiteLogoutEndpoint, targetIssuer, suiteCredentials, targetSigningCertificates, Binding.HTTP_POST);
         }
-        public Configuration { Objects.requireNonNull(login); Objects.requireNonNull(logoutBinding); targetSigningCertificates = List.copyOf(targetSigningCertificates); targetEncryptionKeys = List.copyOf(targetEncryptionKeys); }
+        public Configuration { Objects.requireNonNull(login); Objects.requireNonNull(logoutBinding); targetSigningCertificates = List.copyOf(targetSigningCertificates); targetEncryptionKeys = List.copyOf(targetEncryptionKeys); publishedEncryptionKeys = List.copyOf(publishedEncryptionKeys); }
     }
     private final Function<String, Configuration> configurations;
     private final SamlLogoutRequestFactory logout = new SamlLogoutRequestFactory();
@@ -83,18 +89,24 @@ public final class IdpBasicLogoutScenarioTestCase implements TestCase, BrowserFr
         if (!c.login().preconditionsSatisfied() || c.logoutEndpoint() == null || c.suiteLogoutEndpoint() == null
                 || c.suiteCredentials() == null || c.targetSigningCertificates().isEmpty() || c.targetIssuer() == null)
             return finish(Outcome.NOT_VERIFIED, "slo.basic.preconditions-unmet", List.of());
-        if (encryptedScenario() && (c.targetEncryptionKey() == null
-                || !"RSA".equals(c.targetEncryptionKey().getAlgorithm())
-                || java.util.Arrays.equals(c.targetEncryptionKey().getEncoded(),c.suiteCredentials().certificate().getPublicKey().getEncoded())))
-            return finish(Outcome.NOT_VERIFIED,encryptionReason("key-unavailable"),List.of());
-        if (MULTI_KEY_ID.equals(caseId)) {
-            var keys = c.targetEncryptionKeys();
-            if (keys.size() < 2 || keys.stream().anyMatch(k -> !"RSA".equals(k.getAlgorithm())
-                    || Arrays.equals(k.getEncoded(),c.suiteCredentials().certificate().getPublicKey().getEncoded()))
-                    || keys.stream().map(k -> Base64.getEncoder().encodeToString(k.getEncoded())).distinct().count() != keys.size())
-                return finish(Outcome.NOT_VERIFIED,encryptionReason("configuration-unavailable"),List.of());
+        if (encryptedScenario()) {
+            var usable = usableKeys(c);
+            if (MULTI_KEY_ID.equals(caseId)) {
+                if (usable.size() < 2
+                        || usable.stream().map(k -> Base64.getEncoder().encodeToString(k.getEncoded())).distinct().count() != usable.size())
+                    return finish(Outcome.NOT_VERIFIED,encryptionReason("configuration-unavailable"),List.of());
+            } else if (usable.isEmpty()) {
+                return finish(Outcome.NOT_VERIFIED,encryptionReason("key-unavailable"),List.of());
+            }
         }
         return beginLogin(context,c,encryptedScenario()?"login-control":"login",List.of());
+    }
+    /** Registered target keys only: the Suite key is the unregistered control and never a positive recipient. */
+    private static List<java.security.PublicKey> usableKeys(Configuration c) {
+        var suite = c.suiteCredentials().certificate().getPublicKey();
+        return c.targetEncryptionKeys().stream()
+                .filter(key -> "RSA".equals(key.getAlgorithm()))
+                .filter(key -> !Arrays.equals(key.getEncoded(), suite.getEncoded())).toList();
     }
     private CaseStep beginLogin(CaseContext context, Configuration c, String stage, List<EvidenceRef> evidence) {
         var action = ActionIds.derive(context.runId(), caseId, VERSION + "-"+stage, 0);
@@ -134,9 +146,12 @@ public final class IdpBasicLogoutScenarioTestCase implements TestCase, BrowserFr
                     if (SUCCESS.equals(status(root))) return finish(Outcome.NOT_VERIFIED,encryptionReason("negative-control-failed"),evidence);
                     return beginLogin(context,c,"login",evidence);
                 }
+                var source=state.data().get("decryption_key_source");
+                var details=(source instanceof String value && List.of("published-metadata","supplemental-input").contains(value))
+                        ? Map.<String,Object>of("decryption_key_source",List.of(value)) : Map.<String,Object>of();
                 return SUCCESS.equals(status(root))
-                        ? finish(Outcome.SATISFIED,encryptionReason("decryption-observed"),evidence)
-                        : finish(Outcome.VIOLATED,encryptionReason("rejected"),evidence);
+                        ? finish(Outcome.SATISFIED,encryptionReason("decryption-observed"),evidence,details)
+                        : finish(Outcome.VIOLATED,encryptionReason("rejected"),evidence,details);
             }
             if (REDIRECT_ID.equals(caseId)) {
                 return SUCCESS.equals(status(root))
@@ -177,9 +192,16 @@ public final class IdpBasicLogoutScenarioTestCase implements TestCase, BrowserFr
         var control="login-control".equals(state.data().get("stage"));
         var stage=control?"logout-control":"logout";
         var identifier=names.getFirst();
+        String keySource=null;
         if (encryptedScenario()) {
-            var key=control?c.suiteCredentials().certificate().getPublicKey()
-                    :MULTI_KEY_ID.equals(caseId)?c.targetEncryptionKeys().get(1):c.targetEncryptionKey();
+            var required=MULTI_KEY_ID.equals(caseId)?2:1;
+            var usable=usableKeys(c);
+            if (usable.size()<required)
+                return finish(Outcome.NOT_VERIFIED,encryptionReason(MULTI_KEY_ID.equals(caseId)?"configuration-unavailable":"key-unavailable"),evidence);
+            var key=control?c.suiteCredentials().certificate().getPublicKey():usable.get(MULTI_KEY_ID.equals(caseId)?1:0);
+            if(!control) keySource=c.publishedEncryptionKeys().stream()
+                    .anyMatch(published->Arrays.equals(published.getEncoded(),key.getEncoded()))
+                    ?"published-metadata":"supplemental-input";
             identifier=logout.encryptedIdentifier(identifier,key,new SamlEncryptionFixtureFactory.Algorithms(
                     SamlEncryptionFixtureFactory.Content.AES128_GCM,SamlEncryptionFixtureFactory.Transport.RSA_OAEP,
                     SamlEncryptionFixtureFactory.Digest.DEFAULT,SamlEncryptionFixtureFactory.Mgf.DEFAULT));
@@ -187,14 +209,21 @@ public final class IdpBasicLogoutScenarioTestCase implements TestCase, BrowserFr
         var action=ActionIds.derive(context.runId(),caseId,VERSION+"-"+stage,0);
         var payload=logout.sign(logout.build("_"+action,c.logoutEndpoint(),c.login().suiteIssuer(),identifier,indexes,
                 context.clock().instant(),null,false),c.suiteCredentials());
-        return await(context,c,stage,action,OutboundKind.LOGOUT_REQUEST,payload,c.logoutEndpoint(),evidence);
+        return await(context,c,stage,action,OutboundKind.LOGOUT_REQUEST,payload,c.logoutEndpoint(),evidence,keySource);
     }
     private CaseStep await(CaseContext context, Configuration c, String stage, String action, OutboundKind kind,
             byte[] payload, URI target, List<EvidenceRef> evidence) {
-        return new CaseStep.AwaitInbound(new CaseState(VERSION+"-"+stage,Map.of("definition",VERSION,"stage",stage,"case_id",caseId,
-                "request_id","_"+action,"fixture_id","slo-basic-"+stage,
-                "outbound_binding",(stage.startsWith("logout") ? c.logoutBinding() : Binding.HTTP_POST).name(),
-                "evidence",evidence.stream().map(EvidenceRef::reference).toList())),
+        return await(context,c,stage,action,kind,payload,target,evidence,null);
+    }
+    private CaseStep await(CaseContext context, Configuration c, String stage, String action, OutboundKind kind,
+            byte[] payload, URI target, List<EvidenceRef> evidence, String keySource) {
+        var data=new java.util.LinkedHashMap<String,Object>();
+        data.put("definition",VERSION);data.put("stage",stage);data.put("case_id",caseId);
+        data.put("request_id","_"+action);data.put("fixture_id","slo-basic-"+stage);
+        data.put("outbound_binding",(stage.startsWith("logout") ? c.logoutBinding() : Binding.HTTP_POST).name());
+        data.put("evidence",evidence.stream().map(EvidenceRef::reference).toList());
+        if(keySource!=null)data.put("decryption_key_source",keySource);
+        return new CaseStep.AwaitInbound(new CaseState(VERSION+"-"+stage,Map.copyOf(data)),
                 List.of(new OutboundAction(action,kind,payload,target,false)),
                 new InboundMatcher("saml-response",Map.of("ScenarioActionId",action)),c.login().responseTimeout());
     }
@@ -224,6 +253,9 @@ public final class IdpBasicLogoutScenarioTestCase implements TestCase, BrowserFr
         return result;
     }
     private CaseStep finish(Outcome outcome,String reason,List<EvidenceRef> evidence) {
-        return new CaseStep.Finish(new CaseOutcome(outcome,outcome==Outcome.NOT_VERIFIED ? reason : null,reason,reason,List.copyOf(evidence),Map.of()));
+        return finish(outcome,reason,evidence,Map.of());
+    }
+    private CaseStep finish(Outcome outcome,String reason,List<EvidenceRef> evidence,Map<String,Object> details) {
+        return new CaseStep.Finish(new CaseOutcome(outcome,outcome==Outcome.NOT_VERIFIED ? reason : null,reason,reason,List.copyOf(evidence),details));
     }
 }

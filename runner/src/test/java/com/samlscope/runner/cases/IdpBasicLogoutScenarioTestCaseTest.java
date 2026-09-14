@@ -283,6 +283,66 @@ class IdpBasicLogoutScenarioTestCaseTest {
         }
     }
 
+    @Test void effectiveEncryptionKeysChooseTheRegisteredRecipientAndReportTheirSource() throws Exception {
+        record Scenario(String caseId,List<java.security.PublicKey> published,List<java.security.PublicKey> effective,
+                PlanCredentials recipient,String source) {}
+        fixture();
+        var targetKey=target.certificate().getPublicKey();var wrongKey=wrong.certificate().getPublicKey();
+        var suiteKey=suite.certificate().getPublicKey();
+        var scenarios=List.of(
+                new Scenario(IdpBasicLogoutScenarioTestCase.ENCRYPTED_ID,List.of(targetKey),List.of(targetKey,wrongKey),target,"published-metadata"),
+                new Scenario(IdpBasicLogoutScenarioTestCase.ENCRYPTED_ID,List.of(),List.of(targetKey),target,"supplemental-input"),
+                new Scenario(IdpBasicLogoutScenarioTestCase.ENCRYPTED_ID,List.of(targetKey),List.of(suiteKey,targetKey),target,"published-metadata"),
+                new Scenario(IdpBasicLogoutScenarioTestCase.MULTI_KEY_ID,List.of(targetKey),List.of(targetKey,wrongKey),wrong,"supplemental-input"),
+                new Scenario(IdpBasicLogoutScenarioTestCase.MULTI_KEY_ID,List.of(targetKey,wrongKey),List.of(targetKey,wrongKey),wrong,"published-metadata"));
+        for(var scenario:scenarios) {
+            configuration=new IdpBasicLogoutScenarioTestCase.Configuration(configuration.login(),configuration.logoutEndpoint(),
+                    configuration.suiteLogoutEndpoint(),configuration.targetIssuer(),suite,List.of(target.certificate()),
+                    com.samlscope.runner.BrowserFrontChannelScenario.Binding.HTTP_POST,targetKey,
+                    scenario.effective(),scenario.published());
+            var test=new IdpBasicLogoutScenarioTestCase(scenario.caseId(),ignored->configuration);
+            var controlLogin=assertInstanceOf(CaseStep.AwaitInbound.class,test.start(context(true)));
+            var control=assertInstanceOf(CaseStep.AwaitInbound.class,test.resume(context(true),controlLogin.next(),
+                    inbound(login(controlLogin.next(),"persistent",false,false,false,1),"control-login")));
+            var bad=(Element)SecureXml.parse(control.actions().getFirst().payload()).getDocumentElement()
+                    .getElementsByTagNameNS(A,"EncryptedID").item(0);
+            assertEquals(" user-😀 ",new SamlXmlDecrypter().decrypt(bad,suite.privateKey()).getTextContent());
+            var fresh=assertInstanceOf(CaseStep.AwaitInbound.class,test.resume(context(true),control.next(),
+                    inbound(logoutResponse(control.next(),"Requester","none"),"key-rejection")));
+            var valid=assertInstanceOf(CaseStep.AwaitInbound.class,test.resume(context(true),fresh.next(),
+                    inbound(login(fresh.next(),"persistent",false,false,false,1),"valid-login")));
+            var encrypted=(Element)SecureXml.parse(valid.actions().getFirst().payload()).getDocumentElement()
+                    .getElementsByTagNameNS(A,"EncryptedID").item(0);
+            assertEquals(" user-😀 ",new SamlXmlDecrypter().decrypt(encrypted,scenario.recipient().privateKey()).getTextContent());
+            assertThrows(RuntimeException.class,()->new SamlXmlDecrypter().decrypt(encrypted,suite.privateKey()));
+            var result=assertInstanceOf(CaseStep.Finish.class,test.resume(context(true),valid.next(),
+                    inbound(logoutResponse(valid.next(),"Success","none"),"decrypted"))).outcome();
+            assertEquals(Outcome.SATISFIED,result.outcome());
+            assertEquals(4,result.evidence().size());
+            assertEquals(List.of(scenario.source()),result.details().get("decryption_key_source"));
+        }
+    }
+
+    @Test void rejectedEncryptedIdentifierStillReportsWhichFixedInputSuppliedTheKey() {
+        var test=encryptedFixture();
+        configuration=new IdpBasicLogoutScenarioTestCase.Configuration(configuration.login(),configuration.logoutEndpoint(),
+                configuration.suiteLogoutEndpoint(),configuration.targetIssuer(),suite,List.of(target.certificate()),
+                configuration.logoutBinding(),target.certificate().getPublicKey(),List.of(target.certificate().getPublicKey()),
+                List.of());
+        test=new IdpBasicLogoutScenarioTestCase(IdpBasicLogoutScenarioTestCase.ENCRYPTED_ID,ignored->configuration);
+        var first=assertInstanceOf(CaseStep.AwaitInbound.class,test.start(context(true)));
+        var second=assertInstanceOf(CaseStep.AwaitInbound.class,test.resume(context(true),first.next(),
+                inbound(login(first.next(),"persistent",false,false,false,1),"control-login")));
+        var third=assertInstanceOf(CaseStep.AwaitInbound.class,test.resume(context(true),second.next(),
+                inbound(logoutResponse(second.next(),"Requester","none"),"rejected-control")));
+        var fourth=assertInstanceOf(CaseStep.AwaitInbound.class,test.resume(context(true),third.next(),
+                inbound(login(third.next(),"persistent",false,false,false,1),"login")));
+        var result=assertInstanceOf(CaseStep.Finish.class,test.resume(context(true),fourth.next(),
+                inbound(logoutResponse(fourth.next(),"Requester","none"),"rejected"))).outcome();
+        assertEquals(Outcome.VIOLATED,result.outcome());
+        assertEquals(List.of("supplemental-input"),result.details().get("decryption_key_source"));
+    }
+
     @Test void redirectResponseTrustRequiresTheSameRecordedInboundMessage() {
         var test=fixture();
         for(var status:List.of("Success","Requester","Responder","VersionMismatch"))

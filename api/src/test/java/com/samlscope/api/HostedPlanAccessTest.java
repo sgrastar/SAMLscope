@@ -109,6 +109,16 @@ class HostedPlanAccessTest {
             }
             assertEquals(429, request(client, base, "GET", workspacePath, null, cookie, null, null).statusCode());
 
+            var supplementalPath = "/api/runs/" + runId + "/supplemental-decryption-keys";
+            assertDenied(client, base, "GET", supplementalPath, null, null, null);
+            assertDenied(client, base, "GET", supplementalPath, null, secondCookie, null);
+            assertDenied(client, base, "POST", supplementalPath + "/submit", "{}", null, null);
+            assertDenied(client, base, "POST", supplementalPath + "/submit", "{}", secondCookie, null);
+            assertDenied(client, base, "POST", supplementalPath + "/submit", "{}", cookie, null);
+            var supplemental = request(client, base, "GET", supplementalPath, null, cookie, null, null);
+            assertEquals(400, supplemental.statusCode(), supplemental.body());
+            assertFalse(supplemental.body().contains("internal.example"));
+
             var resumeBody = "{\"runId\":\"" + runId + "\",\"resume\":true}";
             var resumed = request(client, base, "POST", "/api/manage/session",
                     resumeBody, cookie, null, appOrigin);

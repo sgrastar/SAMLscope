@@ -369,12 +369,8 @@ final class M1Runtime {
                 });
         var m3Config = ApprovedConfigCaseRegistry.create(
                 definitions, com.samlscope.core.casedef.CaseDefinitionCatalog.Milestone.M3);
-        m3Config = ApprovedConfigCaseRegistry.withMultipleDecryptionKeys(m3Config, runId -> {
-            var run = runs.find(runId).orElseThrow(() -> new IllegalArgumentException("Unknown Run"));
-            var plan = plans.find(run.planId()).orElseThrow(() -> new IllegalStateException("Run has no Test Plan"));
-            return new com.samlscope.saml.metadata.TargetEncryptionKeys().rsaKeys(
-                    runMetadata.apply(runId), plan.target().entityId(), plan.profile().role());
-        }, caseExecutions::find);
+        m3Config = ApprovedConfigCaseRegistry.withMultipleDecryptionKeys(m3Config, supplementalKeys::keySet,
+                caseExecutions::find);
         var m3Browser = ApprovedBrowserCaseRegistry.create(
                 definitions, config.publicBaseUrl(),
                 com.samlscope.core.casedef.CaseDefinitionCatalog.Milestone.M3,
@@ -401,6 +397,7 @@ final class M1Runtime {
             var binding = com.samlscope.runner.BrowserFrontChannelScenario.Binding.HTTP_POST;
             java.security.PublicKey encryptionKey = null;
             java.util.List<java.security.PublicKey> encryptionKeys = java.util.List.of();
+            java.util.List<java.security.PublicKey> publishedEncryptionKeys = java.util.List.of();
             java.util.List<java.security.cert.X509Certificate> certificates = java.util.List.of();
             try {
                 var endpoints = metadataParser.parse(runMetadata.apply(runId), plan.target().entityId()).singleLogoutServices();
@@ -415,11 +412,13 @@ final class M1Runtime {
                 certificates = targetCertificates.certificatesFor(plan, runId);
                 if (com.samlscope.runner.cases.IdpBasicLogoutScenarioTestCase.ENCRYPTED_ID.equals(caseId)
                         || com.samlscope.runner.cases.IdpBasicLogoutScenarioTestCase.MULTI_KEY_ID.equals(caseId)) {
-                    encryptionKeys = new com.samlscope.saml.metadata.TargetEncryptionKeys().rsaKeys(
+                    publishedEncryptionKeys = new com.samlscope.saml.metadata.TargetEncryptionKeys().rsaKeys(
                             runMetadata.apply(runId),plan.target().entityId(),plan.profile().role());
+                    // Published metadata is merged with the Run's fixed supplemental input; metadata is never rewritten.
+                    encryptionKeys = supplementalKeys.effectiveKeys(runId);
                     var suitePublicKey = keys.getOrCreate(plan.id()).certificate().getPublicKey().getEncoded();
-                    if (!encryptionKeys.isEmpty() && encryptionKeys.stream().noneMatch(k -> java.util.Arrays.equals(k.getEncoded(),suitePublicKey)))
-                        encryptionKey = encryptionKeys.getFirst();
+                    encryptionKey = encryptionKeys.stream()
+                            .filter(k -> !java.util.Arrays.equals(k.getEncoded(),suitePublicKey)).findFirst().orElse(null);
                 }
             } catch (RuntimeException unavailable) {
                 // Missing transport or signing metadata is an unmet Suite test precondition.
@@ -427,7 +426,8 @@ final class M1Runtime {
             return new com.samlscope.runner.cases.IdpBasicLogoutScenarioTestCase.Configuration(
                     probeConfigurations.apply(plan, runId), endpoint,
                     config.peerBaseUrl().resolve("/p/" + plan.id() + "/sp/slo"), plan.target().entityId(),
-                    keys.getOrCreate(plan.id()), certificates, binding, encryptionKey, encryptionKeys);
+                    keys.getOrCreate(plan.id()), certificates, binding, encryptionKey, encryptionKeys,
+                    publishedEncryptionKeys);
         });
         var m3Automated = M3AutomatedCaseRegistry.create(
                 runId -> {

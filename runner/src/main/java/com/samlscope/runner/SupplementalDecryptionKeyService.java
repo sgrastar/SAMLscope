@@ -16,6 +16,32 @@ public final class SupplementalDecryptionKeyService {
     public record Submission(String targetEntityId,String metadataSha256,String sourceUri,List<String> publicKeysSpkiBase64) {
         public Submission { publicKeysSpkiBase64=List.copyOf(publicKeysSpkiBase64); }
     }
+    /** The fixed effective key material. Published keys keep their order; supplemental keys are appended. */
+    public record KeySet(List<PublicKey> published, List<PublicKey> supplemental) {
+        public KeySet { published=List.copyOf(published); supplemental=List.copyOf(supplemental); }
+        /** Published keys retain order; supplemental keys are appended without double-counting the same public key. */
+        public List<PublicKey> effective() {
+            var distinct=new LinkedHashMap<String,PublicKey>();
+            for(var key:published) add(distinct,key);
+            for(var key:supplemental) add(distinct,key);
+            return List.copyOf(distinct.values());
+        }
+        /** Published keys win when the same public key appears in both fixed inputs. */
+        public String sourceOf(PublicKey key) {
+            return contains(published,key) ? "published-metadata" : "supplemental-input";
+        }
+        /** Fixed source identifiers that contributed at least one effective key. */
+        public List<String> sources() {
+            var effective=effective();
+            var result=new ArrayList<String>();
+            if(effective.stream().anyMatch(key->contains(published,key))) result.add("published-metadata");
+            if(effective.stream().anyMatch(key->!contains(published,key))) result.add("supplemental-input");
+            return List.copyOf(result);
+        }
+        private static boolean contains(List<PublicKey> keys,PublicKey key) {
+            return keys.stream().anyMatch(candidate->encoded(candidate).equals(encoded(key)));
+        }
+    }
     private final SqliteSupplementalDecryptionKeys repository;
     private final Function<String,Scope> scopes;
     private final Clock clock;
@@ -39,7 +65,7 @@ public final class SupplementalDecryptionKeyService {
         if(existing.isPresent()) return sameInputOrConflict(existing.orElseThrow(),input);
         if(scope.testsStarted()) {
             repository.freezeAbsent(absence(runId,scope));
-            throw new IllegalStateException("Test inputs are fixed; use a new Run");
+            throw new TestInputFixed("Test inputs are fixed; use a new Run");
         }
         repository.insertIfAbsent(input);
         return sameInputOrConflict(repository.find(runId).orElseThrow(),input);
@@ -48,14 +74,15 @@ public final class SupplementalDecryptionKeyService {
     public SupplementalDecryptionKeys freeze(String runId) {
         return repository.freezeAbsent(absence(runId,scopes.apply(runId)));
     }
-    /** Published keys retain order; supplemental keys are appended without double-counting the same public key. */
-    public List<PublicKey> effectiveKeys(String runId) {
+    /** The fixed effective key material with published/supplemental provenance. Freezes absence when not yet fixed. */
+    public KeySet keySet(String runId) {
         var scope=scopes.apply(runId);
         var input=repository.freezeAbsent(absence(runId,scope));
-        var distinct=new LinkedHashMap<String,PublicKey>();
-        for(var key:scope.publishedEncryptionKeys()) add(distinct,key);
-        for(var key:input.publicKeys()) add(distinct,key);
-        return List.copyOf(distinct.values());
+        return new KeySet(scope.publishedEncryptionKeys(),input.publicKeys());
+    }
+    /** Published keys retain order; supplemental keys are appended without double-counting the same public key. */
+    public List<PublicKey> effectiveKeys(String runId) {
+        return keySet(runId).effective();
     }
     private SupplementalDecryptionKeys absence(String run,Scope scope) {
         return SupplementalDecryptionKeys.absent(run,scope.targetEntityId(),scope.metadataSha256(),clock.instant());
@@ -67,11 +94,12 @@ public final class SupplementalDecryptionKeyService {
     private static SupplementalDecryptionKeys sameInputOrConflict(SupplementalDecryptionKeys existing,SupplementalDecryptionKeys input) {
         if(!existing.targetEntityId().equals(input.targetEntityId()) || !existing.metadataSha256().equals(input.metadataSha256())
                 || !Objects.equals(existing.sourceUri(),input.sourceUri()) || !existing.publicKeysSpkiBase64().equals(input.publicKeysSpkiBase64()))
-            throw new IllegalStateException("Test inputs are fixed; use a new Run");
+            throw new TestInputFixed("Test inputs are fixed; use a new Run");
         return existing;
     }
     private static void add(Map<String,PublicKey> keys,PublicKey key) {
         if(!"RSA".equals(key.getAlgorithm())) throw new IllegalArgumentException("Expected an RSA encryption key");
-        keys.putIfAbsent(Base64.getEncoder().encodeToString(key.getEncoded()),key);
+        keys.putIfAbsent(encoded(key),key);
     }
+    private static String encoded(PublicKey key) { return Base64.getEncoder().encodeToString(key.getEncoded()); }
 }

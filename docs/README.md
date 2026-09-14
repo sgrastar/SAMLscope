@@ -124,3 +124,4 @@ not by differences in reference-implementation results ([00 §5](00-concept.md))
 - [Interaction execution and setup cost](25-interaction-execution-cost.md) — measured configuration changes, delegated operations, result deltas, and work-reduction priorities.
 
 - [Additional implementation and retests](27-additional-implementation.md) — implemented observations, automation fixes, verified results, and remaining release blockers.
+- [Supplemental decryption key acceptance](29-supplemental-key-acceptance.md) — explicit Run input for IdP decryption tests, local verification, and reference re-tests (2026-09-15).

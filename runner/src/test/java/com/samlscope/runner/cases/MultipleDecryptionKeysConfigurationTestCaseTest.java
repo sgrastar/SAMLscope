@@ -29,20 +29,41 @@ class MultipleDecryptionKeysConfigurationTestCaseTest {
             var reason=id.equals(IDS.getFirst())?"slo.encrypted-id.decryption-observed":"slo.encrypted-id.multiple-keys.decryption-observed";
             proofs.put(id,execution(RUN,id,CaseOutcome.of(Outcome.SATISFIED,reason,evidence)));
         }
-        var fallback=new ConfigurationGateTestCase(new AttestedOutcomeTestCase(MultipleDecryptionKeysConfigurationTestCase.ID,
+        var fallback=fallback();
+        return MultipleDecryptionKeysConfigurationTestCase.publishedOnly(fallback,ignored->keys,(run,id)->Optional.ofNullable(proofs.get(id)));
+    }
+    private TestCase fallback() {
+        return new ConfigurationGateTestCase(new AttestedOutcomeTestCase(MultipleDecryptionKeysConfigurationTestCase.ID,
                 TargetRole.IDP,"evidence","Review capability",Duration.ofDays(1),
                 List.of(AttestationOption.notVerified("unknown","configuration.evidence-unavailable","unknown"))),
                 "keys","Configure keys",Duration.ofDays(1),ConfigurationFailureSemantics.NORMATIVE_CAPABILITY);
-        return new MultipleDecryptionKeysConfigurationTestCase(fallback,ignored->keys,(run,id)->Optional.ofNullable(proofs.get(id)));
     }
     @Test void bothControlledDecryptionsProveCapabilityAndCanReplaceAnEarlierUnknown() throws Exception {
         var test=fixture();var previous=CaseOutcome.notVerified("unknown","configuration.evidence-unavailable");
         var result=assertInstanceOf(CaseStep.Finish.class,test.start(context())).outcome();
         assertEquals(Outcome.SATISFIED,result.outcome());assertEquals(8,result.evidence().size());
+        assertEquals(List.of("published-metadata"),result.details().get("decryption_key_source"));
         assertTrue(test.evidenceStatus(context()).ready());
         assertTrue(test.reevaluateRecordedEvidence(context(),previous).isPresent());
         assertFalse(test.reevaluateRecordedEvidence(context(),result).isPresent());
         assertTrue(test.resolvedFromExternalEvidence(execution(RUN,test.id(),result)));
+    }
+    @Test void supplementalSourceIsReportedWithoutChangingTheExactEvidenceSet() throws Exception {
+        var test=fixture();var published=keys.getFirst();
+        test=new MultipleDecryptionKeysConfigurationTestCase(fallback(),
+                ignored->new com.samlscope.runner.SupplementalDecryptionKeyService.KeySet(List.of(published),List.of(keys.get(1))),
+                (run,id)->Optional.ofNullable(proofs.get(id)));
+        var result=assertInstanceOf(CaseStep.Finish.class,test.start(context())).outcome();
+        assertEquals(Outcome.SATISFIED,result.outcome());
+        assertEquals(List.of("published-metadata","supplemental-input"),result.details().get("decryption_key_source"));
+        assertEquals(8,result.evidence().size());
+        assertEquals(8,result.evidence().stream().map(EvidenceRef::reference).distinct().count());
+        for(var id:IDS) {
+            var proof=proofs.get(id).outcome();
+            assertEquals(4,proof.evidence().size());
+            assertEquals(id.equals(IDS.getFirst())?"slo.encrypted-id.decryption-observed"
+                    :"slo.encrypted-id.multiple-keys.decryption-observed",proof.reasonCode());
+        }
     }
     @Test void allEightProofReferencesMustBelongToReadableUniqueInboundRecords() throws Exception {
         for(var id:IDS)for(int index=0;index<4;index++)for(var fault:List.of("run","outbound","ref","size","missing","duplicate")) {

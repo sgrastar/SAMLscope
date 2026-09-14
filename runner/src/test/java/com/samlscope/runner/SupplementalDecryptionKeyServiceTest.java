@@ -52,6 +52,70 @@ class SupplementalDecryptionKeyServiceTest {
             assertThrows(StoreException.class,()->mismatch.effectiveKeys("run"));
         }
     }
+    @Test void keySetReportsPublishedAndSupplementalProvenanceOfTheFixedInput() throws Exception {
+        var generator=KeyPairGenerator.getInstance("RSA");generator.initialize(2048);
+        var a=generator.generateKeyPair().getPublic();var b=generator.generateKeyPair().getPublic();
+        var database=database(directory.resolve("provenance"));var repository=new SqliteSupplementalDecryptionKeys(database,new JsonCodec());
+        var scope=new SupplementalDecryptionKeyService.Scope(ENTITY,HASH,false,List.of(a));
+        var service=new SupplementalDecryptionKeyService(repository,ignored->scope,Clock.systemUTC());
+        assertTrue(service.inspect("run").isEmpty());
+        assertTrue(repository.find("run").isEmpty());
+        var saved=service.submit("run",submission(ENTITY,HASH,"https://idp.example/keys",List.of(b)));
+        assertFalse(saved.publicKeys().isEmpty());
+        var fixed=service.keySet("run");
+        assertEquals(List.of(encoded(a),encoded(b)),fixed.effective().stream().map(SupplementalDecryptionKeyServiceTest::encoded).toList());
+        assertEquals(List.of("published-metadata","supplemental-input"),fixed.sources());
+        assertEquals("published-metadata",fixed.sourceOf(a));
+        assertEquals("supplemental-input",fixed.sourceOf(b));
+    }
+    @Test void keySetFreezesAbsenceAndKeepsPublishedOrderWithoutSupplementalSource() throws Exception {
+        var generator=KeyPairGenerator.getInstance("RSA");generator.initialize(2048);var key=generator.generateKeyPair().getPublic();
+        var database=database(directory.resolve("absent"));var repository=new SqliteSupplementalDecryptionKeys(database,new JsonCodec());
+        var service=new SupplementalDecryptionKeyService(repository,
+                ignored->new SupplementalDecryptionKeyService.Scope(ENTITY,HASH,false,List.of(key)),Clock.systemUTC());
+        assertTrue(service.inspect("run").isEmpty());
+        var fixed=service.keySet("run");
+        assertEquals(List.of(encoded(key)),fixed.effective().stream().map(SupplementalDecryptionKeyServiceTest::encoded).toList());
+        assertEquals(List.of("published-metadata"),fixed.sources());
+        assertTrue(service.inspect("run").orElseThrow().publicKeys().isEmpty());
+        assertThrows(TestInputFixed.class,()->service.submit("run",submission(ENTITY,HASH,"https://idp.example/keys",List.of(key))));
+    }
+    @Test void aSupplementalKeyThatRepeatsPublishedMaterialRetainsThePublishedSource() throws Exception {
+        var generator=KeyPairGenerator.getInstance("RSA");generator.initialize(2048);var key=generator.generateKeyPair().getPublic();
+        var database=database(directory.resolve("repeated"));var repository=new SqliteSupplementalDecryptionKeys(database,new JsonCodec());
+        var service=new SupplementalDecryptionKeyService(repository,
+                ignored->new SupplementalDecryptionKeyService.Scope(ENTITY,HASH,false,List.of(key)),Clock.systemUTC());
+        service.submit("run",submission(ENTITY,HASH,"https://idp.example/keys",List.of(key)));
+        var fixed=service.keySet("run");
+        assertEquals(List.of(encoded(key)),fixed.effective().stream().map(SupplementalDecryptionKeyServiceTest::encoded).toList());
+        assertEquals(List.of("published-metadata"),fixed.sources());
+    }
+    @Test void concurrentFirstInsertAndStartupFreezeLeaveOneConsistentSnapshot() throws Exception {
+        var generator=KeyPairGenerator.getInstance("RSA");generator.initialize(2048);var key=generator.generateKeyPair().getPublic();
+        for(int attempt=0;attempt<20;attempt++) {
+            var database=database(directory.resolve("race-"+attempt));var repository=new SqliteSupplementalDecryptionKeys(database,new JsonCodec());
+            var service=new SupplementalDecryptionKeyService(repository,
+                    ignored->new SupplementalDecryptionKeyService.Scope(ENTITY,HASH,false,List.of()),Clock.systemUTC());
+            var ready=new java.util.concurrent.CountDownLatch(1);
+            var submitter=java.util.concurrent.CompletableFuture.runAsync(()->{
+                try { ready.await(); service.submit("run",submission(ENTITY,HASH,"https://idp.example/keys",List.of(key))); }
+                catch(Exception fixed) { /* losing the first-insert race rejects the submission */ }
+            });
+            var freezer=java.util.concurrent.CompletableFuture.runAsync(()->{
+                try { ready.await(); service.freeze("run"); }
+                catch(Exception unavailable) { throw new AssertionError(unavailable); }
+            });
+            ready.countDown();submitter.join();freezer.join();
+            var snapshot=repository.find("run").orElseThrow();
+            assertTrue(snapshot.publicKeysSpkiBase64().isEmpty()
+                    || snapshot.publicKeysSpkiBase64().equals(List.of(encoded(key))),"attempt "+attempt);
+            assertEquals(ENTITY,snapshot.targetEntityId());
+            assertEquals(HASH,snapshot.metadataSha256());
+            var expectedEffective=snapshot.publicKeysSpkiBase64().isEmpty()?List.<String>of():List.of(encoded(key));
+            assertEquals(expectedEffective,
+                    service.effectiveKeys("run").stream().map(SupplementalDecryptionKeyServiceTest::encoded).toList());
+        }
+    }
     private static String encoded(PublicKey key) { return Base64.getEncoder().encodeToString(key.getEncoded()); }
     private static SupplementalDecryptionKeyService.Submission submission(String entity,String hash,String source,List<PublicKey> keys) {
         return new SupplementalDecryptionKeyService.Submission(entity,hash,source,keys.stream().map(SupplementalDecryptionKeyServiceTest::encoded).toList());

@@ -10,7 +10,7 @@ final class PublicCaseDiagnostics {
     private static final Set<String> KEYS = Set.of("confirmed_character_fixtures", "confirmed_type_conditions", "responded_extension_string_fixtures", "remaining_conditions", "missing_inputs",
             "remaining_protocol_elements", "fixtures", "fetched_variants", "used_variants", "missing_fetches",
             "missing_acceptance", "unresolved_rejection", "wrong_endpoint_variants", "successful_variants",
-            "error_variants", "violating_fixtures", "unverifiable_fixtures", "evidence_issues");
+            "error_variants", "violating_fixtures", "unverifiable_fixtures", "evidence_issues", "decryption_key_source");
     private static final Set<String> TOKENS = tokens();
     private PublicCaseDiagnostics() {}
     static Map<String,List<String>> from(CaseOutcome outcome) {
@@ -33,7 +33,8 @@ final class PublicCaseDiagnostics {
         var tokens = new HashSet<>(List.of("control", "target-encryption-key", "persistent-nameid", "transient-nameid",
                 "user-defined-advice-string", "user-defined-attribute-value-string",
                 "user-defined-extension-string-attribute", "literal-tab-and-lf-on-wire",
-                "SubjectConfirmationData", "Attribute", "history_unavailable", "history_incomplete", "run_mismatch",
+                "SubjectConfirmationData", "Attribute", "published-metadata", "supplemental-input",
+                "history_unavailable", "history_incomplete", "run_mismatch",
                 "ambiguous_entry_id", "decoded_content_missing", "decoded_content_size_mismatch",
                 "logout_message_scope_unresolved", "logout_type_mismatch", "decoded_content_unreadable", "redirect_message_mismatch", "response_type_mismatch", "decoded_content_invalid_xml"));
         Arrays.stream(MetadataService.Variant.values()).map(MetadataService.Variant::id).forEach(tokens::add);

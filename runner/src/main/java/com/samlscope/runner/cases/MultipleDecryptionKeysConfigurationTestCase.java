@@ -18,15 +18,23 @@ public final class MultipleDecryptionKeysConfigurationTestCase implements TestCa
             IdpBasicLogoutScenarioTestCase.MULTI_KEY_ID, "slo.encrypted-id.multiple-keys.decryption-observed");
     private static final String REASON = "configuration.multiple-decryption-keys.observed";
     private final TestCase fallback;
-    private final Function<String,List<PublicKey>> keys;
+    private final Function<String,SupplementalDecryptionKeyService.KeySet> keys;
     private final BiFunction<String,String,Optional<CaseExecution>> executions;
-    public MultipleDecryptionKeysConfigurationTestCase(TestCase fallback, Function<String,List<PublicKey>> keys,
+    public MultipleDecryptionKeysConfigurationTestCase(TestCase fallback,
+            Function<String,SupplementalDecryptionKeyService.KeySet> keys,
             BiFunction<String,String,Optional<CaseExecution>> executions) {
         this.fallback=Objects.requireNonNull(fallback); this.keys=Objects.requireNonNull(keys);
         this.executions=Objects.requireNonNull(executions);
         if (!ID.equals(fallback.id()) || fallback.role()!=TargetRole.IDP
                 || !(fallback instanceof ConfigurationPrompt) || !(fallback instanceof AttestationPrompt))
             throw new IllegalArgumentException("Expected approved multiple-decryption-key CONFIG fallback");
+    }
+    /** Metadata-published keys only; used where no supplemental input exists. */
+    public static MultipleDecryptionKeysConfigurationTestCase publishedOnly(TestCase fallback,
+            Function<String,List<PublicKey>> publishedKeys,
+            BiFunction<String,String,Optional<CaseExecution>> executions) {
+        return new MultipleDecryptionKeysConfigurationTestCase(fallback,
+                runId -> new SupplementalDecryptionKeyService.KeySet(publishedKeys.apply(runId),List.of()), executions);
     }
     @Override public String id() { return ID; }
     @Override public TargetRole role() { return TargetRole.IDP; }
@@ -61,10 +69,11 @@ public final class MultipleDecryptionKeysConfigurationTestCase implements TestCa
     private Optional<CaseOutcome> observed(CaseContext context) {
         if (!context.transcriptComplete()) return Optional.empty();
         try {
-            var published=keys.apply(context.runId());
+            var keySet=keys.apply(context.runId());
+            var effective=keySet.effective();
             // The provider is bound to the selected entity/role and immutable Run metadata.
-            if (published.size()<2 || published.stream().anyMatch(k->!"RSA".equals(k.getAlgorithm()))
-                    || published.stream().map(k->Base64.getEncoder().encodeToString(k.getEncoded())).distinct().count()!=published.size())
+            if (effective.size()<2 || effective.stream().anyMatch(k->!"RSA".equals(k.getAlgorithm()))
+                    || effective.stream().map(k->Base64.getEncoder().encodeToString(k.getEncoded())).distinct().count()!=effective.size())
                 return Optional.empty();
             var history=context.transcript().list(context.runId());
             var byId=new HashMap<String,com.samlscope.core.transcript.TranscriptEntry>();
@@ -87,7 +96,8 @@ public final class MultipleDecryptionKeysConfigurationTestCase implements TestCa
                     evidence.add(ref);
                 }
             }
-            return Optional.of(new CaseOutcome(Outcome.SATISFIED,null,REASON,REASON,List.copyOf(evidence),Map.of()));
+            return Optional.of(new CaseOutcome(Outcome.SATISFIED,null,REASON,REASON,List.copyOf(evidence),
+                    Map.of("decryption_key_source",keySet.sources())));
         } catch(RuntimeException unavailable) { return Optional.empty(); }
     }
 }

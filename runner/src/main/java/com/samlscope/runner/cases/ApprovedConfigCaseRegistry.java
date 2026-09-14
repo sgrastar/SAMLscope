@@ -23,7 +23,7 @@ public final class ApprovedConfigCaseRegistry {
     private ApprovedConfigCaseRegistry() {}
 
     public static TestCaseRegistry withMultipleDecryptionKeys(TestCaseRegistry registry,
-            Function<String,List<java.security.PublicKey>> keys,
+            Function<String,com.samlscope.runner.SupplementalDecryptionKeyService.KeySet> keys,
             java.util.function.BiFunction<String,String,java.util.Optional<com.samlscope.core.caseexec.CaseExecution>> executions) {
         return new TestCaseRegistry(registry.all().stream().map(testCase ->
                 MultipleDecryptionKeysConfigurationTestCase.ID.equals(testCase.id())

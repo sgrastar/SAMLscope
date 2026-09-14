@@ -336,6 +336,9 @@ public final class SamlScopeApplication {
             javalin.routes.exception(com.samlscope.core.plan.PlanConfigurationConflict.class, (error, ctx) ->
                     ctx.status(HttpStatus.CONFLICT).json(new ApiModels.ErrorView(
                             "plan_configuration_fixed", error.getMessage())));
+            javalin.routes.exception(com.samlscope.runner.TestInputFixed.class, (error, ctx) ->
+                    ctx.status(HttpStatus.CONFLICT).json(new ApiModels.ErrorView(
+                            "test_input_fixed", error.getMessage())));
             javalin.routes.exception(SecurityException.class, (error, ctx) ->
                     ctx.status(HttpStatus.FORBIDDEN)
                             .json(new ApiModels.ErrorView("access_denied", "Access denied")));

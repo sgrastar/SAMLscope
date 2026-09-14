@@ -693,3 +693,24 @@ Runごとの保存はSQLiteの一意制約を使った初回INSERT限定で、�
 <!--g1-literal--> この段階はRun単位のサービス処理の追加です。HTTP APIの認可付き登録、試験開始時の確定呼出し、暗号化シナリオと結果への出所反映、画面への接続はまだ必要です。稼働環境は変更せず、未検証567件を維持しています。製品設定変更・人間の手操作は0回です。
 
 <!--g1-literal--> Runner 444テストが成功しました。G1生成文書一致と構造46/46を確認しています。ソースSHA-256と検証ログはローカル `build/acceptance/reference-20260914/supplemental-key-service-batch/` に保存しました。
+
+
+### 補助公開鍵のAPI・画面・試験接続（2026-09-15）
+
+引き継ぎ文書 `28-deepseek-handoff.md` の「直前の作業途中：補助公開鍵入力」にあった未完成の接続を実装し、実環境で再試験しました。既定のコミットは `52e8feff9507b4bcae4e9f46152a6439ef94a4dd` です。
+
+- Runner: `SupplementalDecryptionKeyService.KeySet` を追加し、公開メタデータ鍵と補助鍵の出所（`published-metadata` / `supplemental-input`）を固定入力として扱えるようにしました。`TestInputFixed`（`IllegalStateException` の派生）を追加し、APIでは409 Conflictとして返します。`keySet` は入力が未確定なら「補助鍵なし」を保存してから実効鍵を返し、初回INSERTが勝つSQLiteの一意制約で開始処理と投稿の競合を一意に確定させます。
+- 暗号化シナリオ: `IdpBasicLogoutScenarioTestCase` は実効鍵一覧からSuiteの対照鍵を除いた登録鍵だけを使います。19aは先頭、19cは2番目の鍵を正の試験に使い、結果へ `decryption_key_source` を記録します。設定能力19bは同じ固定入力を用い、各暗号化試験が丁度4件、19bが8件の証拠を要求する検査を維持します。
+- API: `GET /api/runs/{id}/supplemental-decryption-keys` は状態と固定済み入力だけを返し、Runを固定しません。`POST .../submit` は認可・CSRFを他のRun操作と共通経路で要求します。読み取りは409ではなく、Run preflight前はメタデータ未取得のエラーになります。
+- 画面: Run workspace に「IdP decryption key input」パネルを追加し、対象entity・RunメタデータSHA-256・固定状態・出所・記録時刻を表示します。PEMまたはbase64の公開鍵を受け付け、固定済みなら編集不可です。
+- 結果: 公開診断の許可キーに `decryption_key_source` を追加し、値は固定トークンだけに限定しました。任意の出所URIや鍵素材は公開結果へ出しません。
+
+<!--g1-literal--> 認可・旧Run・開始競合・早すぎる固定を、API結合テストとRunnerの競合テストで確認しました。GETは保存を行わないこと、同一再送は記録時刻を維持すること、差し替えが409になること、試験開始が投稿済み入力を保持すること、未投稿のまま開始すると「補助鍵なし」が固定され後付けできないことを検証しています。20回の同時freeze/submitでも保存は「投稿鍵」か「補助鍵なし」のどちらかに一致しました。
+
+<!--g1-literal--> ローカル検証はCore 179、SAML 75、Store 39、Runner 451、Peer 13、API 86、Web 83の計926件が成功しました。G1生成文書一致と構造46/46は成功、G2は20/21でG2-30（保護実装ソースの署名差分）は未解消のままです。今回の変更を過去のG2承認と同一視していません。
+
+実環境はフルビルドした `samlscope:reference-supplemental-v19`（digest `sha256:59a7760e2becec15c7f2854ad71011fd0a3c9bcab87a63bfe6d94f8c600bd878`）へ反映しました。KeycloakのSLO Runでは管理APIからRSA-OAEPのENC公開鍵を読み、出所 `http://localhost:18180/admin/realms/samlscope/keys` として補助入力を1件投稿してから試験を開始しました。49ケースのうち変化は `IIP-IDP19-a` が `slo.encrypted-id.key-unavailable` から `slo.encrypted-id.negative-control-failed` へ、`IIP-IDP19-c` が `...key-unavailable` から `...configuration-unavailable` へ変わり、いずれもNOT_VERIFIEDのままです。Keycloakは未登録鍵の対照LogoutRequestも受理したため、正の試験は送信されていません。製品のFailed判定は追加していません。
+
+ShibbolethのSLO Runは同じ49ケースでVerdictの差分が0件でした。`IIP-IDP19-a`/`19-c`は4件、`19-b`は8件の証拠でSuccessのまま、結果に `decryption_key_source: ["published-metadata"]` が追加されています。SimpleSAMLphpは既に `slo.encrypted-id.negative-control-failed` のため再試験していません。
+
+<!--g1-literal--> 未検証567件と異なるケースID 180件は変更していません。新しく得られたのは補助入力の適用と出所記録の実証であり、Verdictの確定ではないためです。操作量は docker build 2回（初回のオーバーレイは起動失敗のため不採用、記録は残しています）、Suite/転送コンテナ再作成 各2回、製品コンテナ再起動0回、製品設定書き込み0回、管理API読み取り2回、補助入力投稿1回、新Run 2件、プロトコル往復46回、ブラウザ自動遷移4回、ユーザー本人の操作0回です。詳細は [補助公開鍵の受入記録](29-supplemental-key-acceptance.md) に保存しています。

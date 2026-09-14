@@ -3,13 +3,14 @@ import { FormEvent, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import {
   api, type ActiveProbeStatus, type BootstrapContract, type MetadataLab, type PendingInteraction, type Plan,
-  type ProtocolEvidenceStatus, type CampaignReport, type Run,
+  type ProtocolEvidenceStatus, type CampaignReport, type Run, type SupplementalDecryptionKeyStatus,
 } from './api'
 import { formatDate, humanize } from './format'
 import { idpRoundTripReady, idpRoundTripUrl } from './peerUrls'
 import { PeerRegistration } from './PeerRegistration'
 import { RoundTripLink } from './RoundTripLink'
 import { PreflightSummary } from './PreflightSummary'
+import { SupplementalDecryptionKeyPanel } from './SupplementalDecryptionKeyPanel'
 
 export function RunManagement({ runId, csrfToken, focusCaseId, navigateTo }: {
   runId: string
@@ -47,6 +48,8 @@ export function RunManagement({ runId, csrfToken, focusCaseId, navigateTo }: {
   })
   const [selectedCaseId, setSelectedCaseId] = useState<string>()
   const [caseDrawerOpen, setCaseDrawerOpen] = useState(false)
+  const [supplementalKeys, setSupplementalKeys] = useState<SupplementalDecryptionKeyStatus>()
+  const [supplementalKeysError, setSupplementalKeysError] = useState('')
   const caseDrawerRef = useRef<HTMLElement | null>(null)
   const caseDrawerCloseRef = useRef<HTMLButtonElement>(null)
   const lastCaseTriggerRef = useRef<HTMLButtonElement | null>(null)
@@ -121,6 +124,19 @@ export function RunManagement({ runId, csrfToken, focusCaseId, navigateTo }: {
     const selectedPlan = plans.find(value => value.plan.id === run.planId)
     setPlan(selectedPlan)
     setProfile(selectedPlan?.plan.profile ?? '')
+    if (selectedPlan?.plan.profile === 'single_logout_idp') {
+      try {
+        setSupplementalKeys(await api.supplementalDecryptionKeys(runId))
+        setSupplementalKeysError('')
+      } catch (cause) {
+        // Run preflight or metadata retrieval can still be pending; it must not block the workspace.
+        setSupplementalKeys(undefined)
+        setSupplementalKeysError((cause as Error).message)
+      }
+    } else {
+      setSupplementalKeys(undefined)
+      setSupplementalKeysError('')
+    }
     setMode(health.mode)
   }
 
@@ -322,6 +338,25 @@ export function RunManagement({ runId, csrfToken, focusCaseId, navigateTo }: {
       setNotice('')
       setError((cause as Error).message)
       await refresh().catch(() => undefined)
+    } finally {
+      setBusy('')
+    }
+  }
+
+  const submitSupplementalKeys = async (sourceUri: string, publicKeysSpkiBase64: string[]) => {
+    if (!supplementalKeys) return
+    setBusy('supplemental-keys')
+    setError('')
+    try {
+      await api.submitSupplementalDecryptionKeys(runId, {
+        targetEntityId: supplementalKeys.targetEntityId,
+        metadataSha256: supplementalKeys.metadataSha256,
+        sourceUri, publicKeysSpkiBase64,
+      }, csrfToken)
+      setNotice('Supplemental decryption key input is fixed for this Run. Start or resume the profile tests when ready.')
+      await refresh()
+    } catch (cause) {
+      setError((cause as Error).message)
     } finally {
       setBusy('')
     }
@@ -663,6 +698,12 @@ export function RunManagement({ runId, csrfToken, focusCaseId, navigateTo }: {
       </div>
     </div>
     {activeProbePanel}
+    {supplementalKeys
+      ? <SupplementalDecryptionKeyPanel status={supplementalKeys} busy={busy === 'supplemental-keys'}
+          error={supplementalKeysError} onSubmit={submitSupplementalKeys} />
+      : profile === 'single_logout_idp' && supplementalKeysError
+        ? <aside className="notice notice-error" role="alert">{supplementalKeysError}</aside>
+        : null}
     {error && <aside className="notice notice-error" role="alert">{error}</aside>}
     {notice && <aside className="notice notice-success" role="status">{notice}</aside>}
     {plan && <PeerRegistration plan={plan} />}
