@@ -155,7 +155,8 @@ public final class AutoBrowserEvidenceTestCase
                     || id().equals("IIP-SSO01-et-idp-01");
             messages.add(new NormalFlowBrowserObservation.Message(
                     "transcript:" + entry.id(), entry.method(), entry.url(), entry.timestamp(),
-                    key == null || preserveEnvelope ? xml : decryptAssertions(xml, key)));
+                    key == null || preserveEnvelope ? xml : decryptAssertions(xml, key),
+                    entry.direction() == Direction.INBOUND));
         }
         return NormalFlowBrowserObservation.evaluate(
                 id(), messages, targetEntityIds.apply(context.runId()).orElse(null),

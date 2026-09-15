@@ -213,6 +213,40 @@ def render(root,definitions,output):
                        result_sha256=hashlib.sha256(raw).hexdigest(),evidence_folder=str(path.parent.relative_to(root.parents[3])),interaction=interaction,
                        verdict=case['verdict'],evidence=case['evidence'],diagnostics=case.get('diagnostics',{}))
             transitions.append(dict(row))
+        peer_retests={
+            ('keycloak','browser_sso_idp'):'reference-20260915/algorithm-observation-batch/keycloak/browser_alg_combo',
+            ('shibboleth','browser_sso_idp'):'reference-20260915/algorithm-observation-batch/shibboleth/browser_sso_idp',
+        }
+        peer_expectations={
+            ('keycloak','browser_sso_idp'):{
+                'IIP-ALG04-a-idp-01':('PASS','browser.encryption.aes128-gcm.decrypted'),
+                'IIP-ALG06-a-idp-01':('PASS','browser.encryption.rsa-oaep-mgf1p.decrypted'),
+                'IIP-ALG06-c-idp-01':('PASS','browser.encryption.digest-combinations.decrypted'),
+                'IIP-ALG06-d-idp-01':('PASS','browser.encryption.mgf1-sha1-default.decrypted'),
+                'IIP-SSO01-g-idp-01':('PASS','browser.normal-flow.success-responses-have-assertions'),
+                'IIP-SSO01-z-idp-01':('WARNING','browser.normal-flow.unsolicited-sso-observed')},
+            ('shibboleth','browser_sso_idp'):{
+                'IIP-SSO01-g-idp-01':('PASS','browser.normal-flow.success-responses-have-assertions'),
+                'IIP-SSO01-k-idp-01':('PASS','browser.normal-flow.bearer-recipient-and-expiry-valid'),
+                'IIP-SSO01-z-idp-01':('WARNING','browser.normal-flow.unsolicited-sso-observed')},
+        }
+        peer_key=(row['product'],row['profile'])
+        if peer_key in peer_retests and row['case'] in peer_expectations[peer_key] and row.get('verdict','NOT_VERIFIED')=='NOT_VERIFIED':
+            path=root.parent.parent/peer_retests[peer_key]/'result.json'
+            raw=path.read_bytes(); result=json.loads(raw)
+            case=next(c for req in result['requirements'] for c in req['cases'] if c['id']==row['case'])
+            want=peer_expectations[peer_key][row['case']]
+            assert (case['verdict'],case['reason_code'])==want,(row['product'],row['case'],case['verdict'],case['reason_code'])
+            interactions_path=path.parent/'interactions'
+            interaction=None
+            if interactions_path.exists():
+                interaction=next((i for i in json.loads(interactions_path.read_text()) if i.get('caseId')==row['case']),None)
+            row['baseline']={k:row.get(k) for k in ('run','reason_code','result_sha256','evidence_folder','interaction')}
+            row.update(run=result['run']['id'],reason_code=case['reason_code'],
+                       result_sha256=hashlib.sha256(raw).hexdigest(),evidence_folder=str(path.parent.relative_to(root.parents[3])),
+                       interaction=interaction,verdict=case['verdict'],evidence=case['evidence'],
+                       diagnostics=case.get('diagnostics',{}))
+            transitions.append(dict(row))
         if row.get('verdict','NOT_VERIFIED')=='NOT_VERIFIED':refreshed.append(row)
     rows=refreshed
     (root/'retest-delta.json').write_text(json.dumps(transitions,ensure_ascii=False,indent=2)+'\n')

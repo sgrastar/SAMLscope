@@ -50,7 +50,12 @@ final class NormalFlowBrowserObservation {
             String expectedTargetEntityId,
             List<X509Certificate> targetSigningCertificates) {
         var parsed = parse(messages);
-        if (parsed.isEmpty() || parsed.size() != (messages == null ? 0 : messages.size())) {
+        // Malformed inbound messages still make an observation inconclusive: they could have
+        // contained evidence. Malformed outbound requests cannot, and adversarial probes such
+        // as DOCTYPE-bearing AuthnRequests must not disable unrelated normal-flow oracles.
+        var inbound = messages == null ? 0 : messages.stream().filter(Message::inbound).count();
+        var parsedInbound = parsed.stream().filter(value -> value.message().inbound()).count();
+        if (parsed.isEmpty() || parsedInbound != inbound) {
             return Optional.empty();
         }
         return switch (caseId) {
@@ -1103,7 +1108,10 @@ final class NormalFlowBrowserObservation {
         return new CaseOutcome(outcome, null, reasonCode, reasonCode, evidence, details);
     }
 
-    record Message(String evidenceRef, String method, String url, Instant timestamp, byte[] xml) {
+    record Message(String evidenceRef, String method, String url, Instant timestamp, byte[] xml, boolean inbound) {
+        public Message(String evidenceRef, String method, String url, Instant timestamp, byte[] xml) {
+            this(evidenceRef, method, url, timestamp, xml, true);
+        }
         Message {
             if (evidenceRef == null || evidenceRef.isBlank()) throw new IllegalArgumentException("evidenceRef is required");
             if (method == null || method.isBlank()) throw new IllegalArgumentException("method is required");

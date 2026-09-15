@@ -220,6 +220,80 @@ class SpPeerRoundTripTest {
     }
 
     @Test
+    void acceptsOnePreparedUnsolicitedResponseAndRejectsTheRest() {
+        var now = Instant.parse("2026-08-29T00:00:00Z");
+        var clock = Clock.fixed(now, ZoneOffset.UTC);
+        var database = new SqliteDatabase(directory);
+        var json = new JsonCodec();
+        var plans = new SqlitePlanRepository(database, json);
+        var runs = new SqliteRunRepository(database, json);
+        var cache = new MetadataCache(directory);
+        var plan = plan("plan_0123456789ABCDEFGHJKMNPQRS", FunctionalProfile.BROWSER_SSO_IDP, TargetKind.IDP,
+                "https://idp.example/entity", now);
+        plans.save(plan);
+        cache.put(plan.id(), idpMetadata());
+        var runService = new RunService(plans, runs, new RunEventBus(), clock);
+        var run = runService.create(plan.id());
+        cache.putIfAbsent(run.id(), idpMetadata());
+        var recorder = new FileTranscriptRecorder(database, json, directory);
+        var intents = new com.samlscope.runner.TargetInitiatedIntents();
+        var peer = new SpPeerService(plans, runs, runService, cache, new TargetMetadataParser(),
+                new SamlProtocolService(URI.create("https://peer.example"),
+                        new FilePlanKeyStore(directory, clock), new XmlSigner(), new OpenSamlReader(), clock),
+                recorder, clock, (runId, actionId, decodedSaml, evidence) -> { }, intents);
+        var acs = "https://peer.example/p/" + plan.id() + "/sp/acs/3";
+        var body = "SAMLResponse=" + URLEncoder.encode(Base64.getEncoder().encodeToString(
+                unsolicitedResponse(acs)), StandardCharsets.UTF_8)
+                + "&RelayState=" + URLEncoder.encode(run.id(), StandardCharsets.UTF_8);
+        assertThrows(SamlException.class, () -> peer.consume(
+                plan.id(), body.getBytes(StandardCharsets.UTF_8), Map.of(), acs));
+
+        intents.prepare(run.id(), plan.id(), com.samlscope.runner.TargetInitiatedIntents.Kind.UNSOLICITED_SSO,
+                java.time.Duration.ofMinutes(10), clock);
+        var mismatch = "SAMLResponse=" + URLEncoder.encode(Base64.getEncoder().encodeToString(
+                unsolicitedResponse("https://peer.example/p/" + plan.id() + "/sp/acs/9")), StandardCharsets.UTF_8)
+                + "&RelayState=" + URLEncoder.encode(run.id(), StandardCharsets.UTF_8);
+        assertThrows(SamlException.class, () -> peer.consume(
+                plan.id(), mismatch.getBytes(StandardCharsets.UTF_8), Map.of(), acs));
+        assertTrue(intents.find(run.id(), clock).isPresent());
+
+        peer.consume(plan.id(), body.getBytes(StandardCharsets.UTF_8), Map.of(), acs);
+        var inbound = recorder.list(run.id()).stream()
+                .filter(value -> value.direction() == com.samlscope.core.transcript.Direction.INBOUND)
+                .filter(value -> Boolean.TRUE.equals(value.samlSummary().get("unsolicited")))
+                .findFirst().orElseThrow();
+        assertEquals(true, inbound.samlSummary().get("normalFlowAccepted"));
+        assertTrue(intents.find(run.id(), clock).isEmpty());
+        assertThrows(SamlException.class, () -> peer.consume(
+                plan.id(), body.getBytes(StandardCharsets.UTF_8), Map.of(), acs));
+
+        // Targets that do not echo a RelayState are attributed through the single prepared
+        // Run of the Plan only while that intent is active.
+        var withoutRelay = "SAMLResponse=" + URLEncoder.encode(Base64.getEncoder().encodeToString(
+                unsolicitedResponse(acs)), StandardCharsets.UTF_8);
+        assertThrows(SamlException.class, () -> peer.consume(
+                plan.id(), withoutRelay.getBytes(StandardCharsets.UTF_8), Map.of(), acs));
+        intents.prepare(run.id(), plan.id(), com.samlscope.runner.TargetInitiatedIntents.Kind.UNSOLICITED_SSO,
+                java.time.Duration.ofMinutes(10), clock);
+        peer.consume(plan.id(), withoutRelay.getBytes(StandardCharsets.UTF_8), Map.of(), acs);
+        assertEquals(2, recorder.list(run.id()).stream()
+                .filter(value -> Boolean.TRUE.equals(value.samlSummary().get("unsolicited"))).count());
+    }
+
+    private static byte[] unsolicitedResponse(String destination) {
+        return ("<samlp:Response xmlns:samlp=\"urn:oasis:names:tc:SAML:2.0:protocol\" "
+                + "xmlns:saml=\"urn:oasis:names:tc:SAML:2.0:assertion\" ID=\"_unsolicited\" "
+                + "Version=\"2.0\" IssueInstant=\"2026-08-29T00:00:00Z\" Destination=\"" + destination + "\">"
+                + "<saml:Issuer>https://idp.example/entity</saml:Issuer>"
+                + "<samlp:Status><samlp:StatusCode Value=\"urn:oasis:names:tc:SAML:2.0:status:Success\"/></samlp:Status>"
+                + "<saml:Assertion ID=\"_a\" Version=\"2.0\" IssueInstant=\"2026-08-29T00:00:00Z\">"
+                + "<saml:Issuer>https://idp.example/entity</saml:Issuer>"
+                + "<saml:Subject><saml:NameID>user</saml:NameID></saml:Subject>"
+                + "<saml:AuthnStatement AuthnInstant=\"2026-08-29T00:00:00Z\"/></saml:Assertion></samlp:Response>")
+                .getBytes(StandardCharsets.UTF_8);
+    }
+
+    @Test
     void recordsTargetResponseBeforeDtdRejection() {
         var now = Instant.parse("2026-08-29T00:00:00Z");
         var clock = Clock.fixed(now, ZoneOffset.UTC);

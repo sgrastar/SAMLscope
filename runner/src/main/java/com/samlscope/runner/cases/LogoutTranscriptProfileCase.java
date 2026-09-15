@@ -48,6 +48,7 @@ public final class LogoutTranscriptProfileCase {
     private final Rule rule;
     private final List<X509Certificate> verificationKeys;
     private final String expectedTargetEntityId;
+    private final java.security.PrivateKey decryptionKey;
     private final XmlSignatureVerifier xmlSignatures = new XmlSignatureVerifier();
     private final RedirectSignatureVerifier redirectSignatures = new RedirectSignatureVerifier();
 
@@ -57,9 +58,15 @@ public final class LogoutTranscriptProfileCase {
 
     public LogoutTranscriptProfileCase(
             Rule rule, List<X509Certificate> verificationKeys, String expectedTargetEntityId) {
+        this(rule, verificationKeys, expectedTargetEntityId, null);
+    }
+
+    public LogoutTranscriptProfileCase(Rule rule, List<X509Certificate> verificationKeys,
+            String expectedTargetEntityId, java.security.PrivateKey decryptionKey) {
         this.rule = java.util.Objects.requireNonNull(rule, "rule");
         this.verificationKeys = List.copyOf(verificationKeys == null ? List.of() : verificationKeys);
         this.expectedTargetEntityId = expectedTargetEntityId;
+        this.decryptionKey = decryptionKey;
     }
 
     public CaseOutcome evaluate(
@@ -166,7 +173,7 @@ public final class LogoutTranscriptProfileCase {
 
     private CaseOutcome requestNotOnOrAfterBound(List<Message> targetLogout, List<Message> all) {
         var issued = issuedNameIds(all);
-        if (issued.isEmpty()) return CaseOutcome.notVerified(
+        if (issued.isEmpty()) return notVerifiedWithEvidence(targetLogout,
                 "issued_session_expiry_unavailable", "slo.not-on-or-after.assertion-unavailable");
         var inspected = new ArrayList<Message>();
         var violations = new ArrayList<String>();
@@ -184,7 +191,7 @@ public final class LogoutTranscriptProfileCase {
                 violations.add(request.reference());
             }
         }
-        if (inspected.isEmpty()) return CaseOutcome.notVerified(
+        if (inspected.isEmpty()) return notVerifiedWithEvidence(targetLogout,
                 "logout_session_expiry_correlation_unavailable", "slo.not-on-or-after.correlation-unavailable");
         return outcome(inspected, violations, "slo.logout-request.not-on-or-after-bound");
     }
@@ -564,6 +571,11 @@ public final class LogoutTranscriptProfileCase {
                 evidence(messages), Map.of("observed", messages.size(), "violations", List.copyOf(violations)));
     }
 
+    /** A rule-level "cannot prove" result must stay reviewable instead of waiting forever. */
+    private CaseOutcome notVerifiedWithEvidence(List<Message> messages, String detail, String code) {
+        return new CaseOutcome(Outcome.NOT_VERIFIED, detail, code, code, evidence(messages), Map.of());
+    }
+
     private List<EvidenceRef> evidence(List<Message> messages) {
         return messages.stream().map(value -> new EvidenceRef("transcript", value.reference())).distinct().toList();
     }
@@ -641,6 +653,7 @@ public final class LogoutTranscriptProfileCase {
                     issues.add("redirect_message_mismatch"); continue;
                 }
                 var document = SecureXml.parse(xml);
+                if (decryptionKey != null) decryptAssertions(document);
                 Element logout = null;
                 var root = document.getDocumentElement();
                 if (is(root, "LogoutRequest") || is(root, "LogoutResponse")) {
@@ -676,6 +689,24 @@ public final class LogoutTranscriptProfileCase {
             }
         }
         return new Snapshot(List.copyOf(result), List.copyOf(issues), List.copyOf(refs));
+    }
+
+    /** In-memory view only: identifiers inside an encrypted login Assertion must be readable. */
+    private void decryptAssertions(org.w3c.dom.Document document) {
+        var wrappers = document.getElementsByTagNameNS(ASSERTION, "EncryptedAssertion");
+        var pending = new ArrayList<Element>();
+        for (var index = 0; index < wrappers.getLength(); index++) {
+            pending.add((Element) wrappers.item(index));
+        }
+        for (var wrapper : pending) {
+            try {
+                var plaintext = new com.samlscope.saml.crypto.SamlXmlDecrypter()
+                        .decrypt(wrapper, decryptionKey);
+                wrapper.getParentNode().replaceChild(document.importNode(plaintext, true), wrapper);
+            } catch (RuntimeException undecryptable) {
+                // Leave the wrapper in place; the rule reports the identifiers as unavailable.
+            }
+        }
     }
 
     private Element direct(Element parent, String namespace, String localName) {

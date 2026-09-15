@@ -125,19 +125,20 @@ public final class SamlScopeApplication {
                 config.peerBaseUrl(), plans, runs, metadataCache, metadataParser, saml,
                 new EcpProbeEnvelopeFactory(),
                 new EcpProbeService(caseExecutions, ephemeralCredentials, outboundDispatcher, clock));
+        var targetInitiated = new com.samlscope.runner.TargetInitiatedIntents();
         var m1 = M1Runtime.create(
                 config, database, json, plans, runs, transcript, transcript, metadataCache,
                 metadataParser, keyStore, caseExecutions, metadataLab, outboundDispatcher,
                 hostedRateLimiter, hostedRunProvisioner, clock,
-                profileArtifacts, approvedProfileDigests);
+                profileArtifacts, approvedProfileDigests, targetInitiated);
         var authorization = new ManagementAuthorization(oidc,
                 new com.samlscope.store.SqlitePlanOwnerRepository(database), plans, runs, m1);
         transcript.onRecorded(m1::reconcileTranscriptEvidenceAutomatically);
         var spPeer = new SpPeerService(
                 plans, runs, runService, metadataCache, metadataParser, saml, transcript, clock,
-                m1::acceptActiveProbe);
+                m1::acceptActiveProbe, targetInitiated);
         var sloPeer = new SloPeerService(plans, runs, metadataCache, metadataParser, saml, transcript, clock,
-                m1::acceptActiveSloProbe);
+                m1::acceptActiveSloProbe, targetInitiated);
         var preloadedMetadataCache = new BoundedByteArrayCache(128);
 
         var managementWrites = new java.util.concurrent.Semaphore(1, true);
@@ -188,6 +189,7 @@ public final class SamlScopeApplication {
                 });
             }
             SupplementalDecryptionKeyRoutes.register(javalin, m1::supplementalKeys, m1::submitSupplementalKeys);
+            TargetInitiatedRoutes.register(javalin, m1::targetInitiated, m1::prepareTargetInitiated);
             QuickCheckRoutes.register(javalin, m1::quickCheck);
             ResultRoutes.register(javalin, m1::requireResult, m1::requireReport);
             PublicationRoutes.register(javalin, m1::publish);
@@ -254,6 +256,13 @@ public final class SamlScopeApplication {
                         authorization.authorizeRun(ctx, true));
                 javalin.routes.before("/api/runs/{id}/interactions", ctx ->
                         authorization.authorizeRun(ctx, false));
+                javalin.routes.before("/api/runs/{id}/target-initiated", ctx -> {
+                    if (ctx.method().name().equals("GET")) {
+                        authorization.authorizeRun(ctx, false);
+                    } else {
+                        authorization.authorizeRun(ctx, true);
+                    }
+                });
                 javalin.routes.before("/api/runs/{id}/supplemental-decryption-keys", ctx ->
                         authorization.authorizeRun(ctx, false));
                 javalin.routes.before("/api/runs/{id}/supplemental-decryption-keys/submit", ctx ->
@@ -1006,8 +1015,8 @@ public final class SamlScopeApplication {
             return;
         }
         ctx.header("Cache-Control", "no-store").contentType("text/html; charset=utf-8")
-                .result(PeerCompletionPage.render(m1.workspaceUrl(consumed.metadataProbe()
-                                ? consumed.metadataProbeRunId() : consumed.relayState()),
+                .result(PeerCompletionPage.render(
+                        m1.workspaceUrl(consumed.runId() == null ? consumed.relayState() : consumed.runId()),
                         "/p/" + ctx.pathParam("plan") + "/ui/completion.css", consumed.summary()));
     }
 

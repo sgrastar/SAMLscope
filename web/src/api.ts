@@ -46,6 +46,12 @@ export interface SupplementalDecryptionKeyInput {
   recordedAt: string
 }
 
+export interface TargetInitiatedIntent {
+  runId: string
+  kind: 'UNSOLICITED_SSO' | 'TARGET_LOGOUT'
+  expiresAt: string
+}
+
 export interface SupplementalDecryptionKeyStatus {
   targetEntityId: string
   metadataSha256: string
@@ -463,6 +469,13 @@ export const api = {
   startTests: (runId: string, csrfToken?: string) =>
     request<{ ecpProbesRequired: boolean }>(`/api/runs/${runId}/tests/start`, {
       method: 'POST', headers: csrfToken ? { 'X-CSRF-Token': csrfToken } : {},
+    }),
+  targetInitiated: (runId: string) =>
+    request<TargetInitiatedIntent | null>(`/api/runs/${runId}/target-initiated`),
+  prepareTargetInitiated: (runId: string, kind: TargetInitiatedIntent['kind'], csrfToken?: string) =>
+    request<TargetInitiatedIntent>(`/api/runs/${runId}/target-initiated`, {
+      method: 'POST', body: JSON.stringify({ kind }),
+      headers: csrfToken ? { 'X-CSRF-Token': csrfToken } : {},
     }),
   supplementalDecryptionKeys: (runId: string) =>
     request<SupplementalDecryptionKeyStatus>(`/api/runs/${runId}/supplemental-decryption-keys`),

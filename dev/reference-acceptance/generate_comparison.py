@@ -38,6 +38,7 @@ def render(root, output):
     sections = []
     manifest = []
     alg_adopted = set()
+    peer_adopted = set()
     unresolved = {product: Counter() for product in PRODUCTS}
     for profile, folders in SELECTION.items():
         columns = []
@@ -183,6 +184,51 @@ def render(root, output):
                                  'run': supplement['run']['id'], 'cases': sorted(ALG_CASES),
                                  'result_sha256': hashlib.sha256(supplement_raw).hexdigest(),
                                  'suite_image': supplement['suite']['image_digest']})
+            peer_expected = {
+                ('keycloak', 'browser_sso_idp'): {
+                    'folder': '../reference-20260915/algorithm-observation-batch/keycloak/browser_alg_combo',
+                    'cases': {
+                        'IIP-ALG04-a-idp-01': ('PASS', 'browser.encryption.aes128-gcm.decrypted'),
+                        'IIP-ALG06-a-idp-01': ('PASS', 'browser.encryption.rsa-oaep-mgf1p.decrypted'),
+                        'IIP-ALG06-c-idp-01': ('PASS', 'browser.encryption.digest-combinations.decrypted'),
+                        'IIP-ALG06-d-idp-01': ('PASS', 'browser.encryption.mgf1-sha1-default.decrypted'),
+                        'IIP-SSO01-g-idp-01': ('PASS', 'browser.normal-flow.success-responses-have-assertions'),
+                        'IIP-SSO01-z-idp-01': ('WARNING', 'browser.normal-flow.unsolicited-sso-observed')}},
+                ('shibboleth', 'browser_sso_idp'): {
+                    'folder': '../reference-20260915/algorithm-observation-batch/shibboleth/browser_sso_idp',
+                    'cases': {
+                        'IIP-SSO01-g-idp-01': ('PASS', 'browser.normal-flow.success-responses-have-assertions'),
+                        'IIP-SSO01-k-idp-01': ('PASS', 'browser.normal-flow.bearer-recipient-and-expiry-valid'),
+                        'IIP-SSO01-z-idp-01': ('WARNING', 'browser.normal-flow.unsolicited-sso-observed')}},
+                ('shibboleth', 'single_logout_idp'): {
+                    'folder': '../reference-20260915/peer-intent/shibboleth/slo_target_logout',
+                    'cases': {
+                        'IIP-IDP17-j-idp-01': ('PASS', 'slo.LogoutRequest.issuer-count.satisfied'),
+                        'IIP-IDP17-k-idp-01': ('PASS', 'slo.LogoutRequest.issuer-value.satisfied'),
+                        'IIP-IDP17-l-idp-01': ('PASS', 'slo.LogoutRequest.issuer-format.satisfied'),
+                        'IIP-IDP17-m-idp-01': ('PASS', 'slo.LogoutRequest.signature.satisfied'),
+                        'IIP-IDP17-t-idp-01': ('FAIL', 'slo.logout-request.not-on-or-after.violated'),
+                        'IIP-IDP17-n-idp-01': ('NOT_VERIFIED', 'slo.identifier.strong-match-unobservable'),
+                        'IIP-IDP17-u-idp-01': ('NOT_VERIFIED', 'slo.not-on-or-after.correlation-unavailable')}},
+            }
+            peer = peer_expected.get((product, profile))
+            if peer:
+                peer_raw = (root / peer['folder'] / 'result.json').read_bytes()
+                peer_result = json.loads(peer_raw)
+                peer_cases = {c['id']: c for req in peer_result['requirements'] for c in req['cases']}
+                for case_id, want in peer['cases'].items():
+                    if case_id not in cases:
+                        continue
+                    replacement = peer_cases[case_id]
+                    assert (replacement['verdict'], replacement['reason_code']) == want, (
+                        product, case_id, replacement['verdict'], replacement['reason_code'])
+                    cases[case_id] = replacement
+                    peer_adopted.add((product, profile, case_id))
+                manifest.append({'profile': profile, 'product': product,
+                                 'folder': peer['folder'].replace('../', 'build/acceptance/'),
+                                 'run': peer_result['run']['id'], 'cases': sorted(peer['cases']),
+                                 'result_sha256': hashlib.sha256(peer_raw).hexdigest(),
+                                 'suite_image': peer_result['suite']['image_digest']})
             columns.append(cases)
             unresolved[product].update(c["reason_code"] for c in cases.values() if c["verdict"] == "NOT_VERIFIED")
             manifest.append({"profile": profile, "product": product, "folder": folder,
@@ -212,7 +258,7 @@ def render(root, output):
                            "INCONSISTENT": "Inconsistent", "ERROR": "Error (Suite)"}.get(verdict, verdict)
                 if product == 'simplesamlphp' and profile == 'browser_sso_idp' and case_id == 'IIP-IDP06-b-idp-01':
                     display += " (prior run; latest precision not verified)"
-                cells.append(display + (" †" if (product == "shibboleth" and profile == "browser_sso_idp" and case_id in {'IIP-SSO01-fk-idp-01','IIP-SSO01-fu-idp-01','IIP-SSO01-gi-idp-01'}) or (product == "simplesamlphp" and profile == "browser_sso_idp" and case_id in {"IIP-IDP06-a-idp-01", "IIP-IDP06-b-idp-01"}) or (profile == "single_logout_idp" and (case_id in COMMON_RETESTS or case_id == "IIP-IDP17-a-idp-01" or case_id == "IIP-IDP18-a-idp-01" or case_id == "IIP-IDP19-a-idp-01" or case_id == "IIP-IDP19-c-idp-01" or (product == "shibboleth" and case_id == "IIP-IDP19-b-idp-01"))) or case_id in ADDITIONAL_RETESTS.get(profile, set()) or (product, profile, case_id) in alg_adopted or (product == "shibboleth" and ((profile == "metadata_idp" and case_id in POLLING_RETESTS) or (profile == "browser_sso_idp" and case_id == "IIP-IDP12-c-idp-01"))) else ""))
+                cells.append(display + (" †" if (product == "shibboleth" and profile == "browser_sso_idp" and case_id in {'IIP-SSO01-fk-idp-01','IIP-SSO01-fu-idp-01','IIP-SSO01-gi-idp-01'}) or (product == "simplesamlphp" and profile == "browser_sso_idp" and case_id in {"IIP-IDP06-a-idp-01", "IIP-IDP06-b-idp-01"}) or (profile == "single_logout_idp" and (case_id in COMMON_RETESTS or case_id == "IIP-IDP17-a-idp-01" or case_id == "IIP-IDP18-a-idp-01" or case_id == "IIP-IDP19-a-idp-01" or case_id == "IIP-IDP19-c-idp-01" or (product == "shibboleth" and case_id == "IIP-IDP19-b-idp-01"))) or case_id in ADDITIONAL_RETESTS.get(profile, set()) or (product, profile, case_id) in alg_adopted or (product, profile, case_id) in peer_adopted or (product == "shibboleth" and ((profile == "metadata_idp" and case_id in POLLING_RETESTS) or (profile == "browser_sso_idp" and case_id == "IIP-IDP12-c-idp-01"))) else ""))
             lines.append(f"| `{case_id}` | " + " | ".join(cells) + " |")
         sections.append("\n".join(lines))
     template = Path(__file__).with_name("comparison-notes.md").read_text()

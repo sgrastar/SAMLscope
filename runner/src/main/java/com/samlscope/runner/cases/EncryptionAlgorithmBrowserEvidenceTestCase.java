@@ -119,7 +119,12 @@ public final class EncryptionAlgorithmBrowserEvidenceTestCase
             } catch (RuntimeException unavailable) {
                 continue;
             }
-            var document = SecureXml.parse(xml);
+            org.w3c.dom.Document document;
+            try {
+                document = SecureXml.parse(xml);
+            } catch (RuntimeException unreadable) {
+                continue;
+            }
             var inResponseTo = document.getDocumentElement().getAttribute("InResponseTo");
             var request = requests.get(inResponseTo);
             // ECP probe responses correlate to the outbox action rather than an AuthnRequest ID.

@@ -15,6 +15,7 @@ import java.util.Map;
 import java.util.List;
 import java.util.ArrayList;
 import com.samlscope.runner.ActiveProbeCorrelation;
+import com.samlscope.runner.TargetInitiatedIntents;
 import com.samlscope.core.transcript.TranscriptRecorder;
 import com.samlscope.core.transcript.TranscriptInput;
 import com.samlscope.core.transcript.TranscriptEntry;
@@ -243,6 +244,7 @@ class SloPeerServiceTest {
             }
             public List<TranscriptEntry> list(String run) { return recorder.list(run); }
         };
+        var intents = new TargetInitiatedIntents();
         var service = new SloPeerService(
                 plans, runs, cache, new TargetMetadataParser(),
                 new SamlProtocolService(URI.create("https://suite.example"),
@@ -250,8 +252,8 @@ class SloPeerServiceTest {
                 observed, clock,(runId,action,xml,evidence)-> {
                     var recorded=recorder.list(runId).stream().filter(e->e.id().equals(evidence.reference())).findFirst().orElseThrow();
                     calls.add(new Call(runId,action,xml,evidence,recorded.samlSummary()));
-                });
-        return new Fixture(plan, run.id(), service, recorder,calls,inputs);
+                }, intents);
+        return new Fixture(plan, run.id(), service, recorder,calls,inputs,intents,clock);
     }
 
     private byte[] targetMetadata() {
@@ -279,8 +281,29 @@ class SloPeerServiceTest {
                 """.getBytes(StandardCharsets.UTF_8);
     }
 
+    @Test
+    void targetInitiatedLogoutRequiresAPreparedSingleUseIntent() {
+        var fixture = fixture();
+        var body = "SAMLRequest=" + URLEncoder.encode(
+                Base64.getEncoder().encodeToString(logoutRequest()), StandardCharsets.UTF_8);
+        var url = "https://suite.example/p/" + fixture.plan.id() + "/sp/slo";
+        assertThrows(RuntimeException.class, () -> fixture.service.consume(
+                fixture.plan.id(), SloPeerService.Transport.FRONT_CHANNEL, "POST", null,
+                body.getBytes(StandardCharsets.UTF_8), Map.of(), url));
+        fixture.intents.prepare(fixture.runId, fixture.plan.id(),
+                TargetInitiatedIntents.Kind.TARGET_LOGOUT, java.time.Duration.ofMinutes(10), fixture.clock);
+        var result = fixture.service.consume(
+                fixture.plan.id(), SloPeerService.Transport.FRONT_CHANNEL, "POST", null,
+                body.getBytes(StandardCharsets.UTF_8), Map.of(), url);
+        assertEquals("LogoutRequest", result.messageType());
+        assertEquals(fixture.runId, result.runId());
+        assertThrows(RuntimeException.class, () -> fixture.service.consume(
+                fixture.plan.id(), SloPeerService.Transport.FRONT_CHANNEL, "POST", null,
+                body.getBytes(StandardCharsets.UTF_8), Map.of(), url));
+    }
+
     private record Fixture(
             TestPlan plan, String runId, SloPeerService service, FileTranscriptRecorder recorder,
-            List<Call> calls,List<TranscriptInput> inputs) {}
+            List<Call> calls,List<TranscriptInput> inputs, TargetInitiatedIntents intents, Clock clock) {}
     private record Call(String runId,String actionId,byte[] xml,EvidenceRef evidence,Map<String,Object> recordedSummary) {}
 }

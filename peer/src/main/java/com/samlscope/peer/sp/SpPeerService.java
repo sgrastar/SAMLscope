@@ -5,6 +5,7 @@ import java.time.Clock;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import com.samlscope.core.plan.PlanRepository;
 import com.samlscope.core.plan.TargetRole;
 import com.samlscope.core.run.Reachability;
@@ -15,6 +16,7 @@ import com.samlscope.core.transcript.TranscriptInput;
 import com.samlscope.core.transcript.TranscriptRecorder;
 import com.samlscope.runner.RunService;
 import com.samlscope.runner.ActiveProbeCorrelation;
+import com.samlscope.runner.TargetInitiatedIntents;
 import com.samlscope.core.evaluation.EvidenceRef;
 import com.samlscope.saml.metadata.MetadataService;
 import com.samlscope.saml.metadata.TargetMetadataParser;
@@ -32,6 +34,7 @@ public final class SpPeerService {
     private final TranscriptRecorder transcript;
     private final Clock clock;
     private final ActiveProbeResponseHandler activeProbeResponses;
+    private final TargetInitiatedIntents targetInitiated;
 
     public SpPeerService(PlanRepository plans, RunRepository runs, RunService runService,
                          MetadataCache metadataCache, TargetMetadataParser metadataParser,
@@ -44,6 +47,15 @@ public final class SpPeerService {
                          MetadataCache metadataCache, TargetMetadataParser metadataParser,
                          SamlProtocolService saml, TranscriptRecorder transcript, Clock clock,
                          ActiveProbeResponseHandler activeProbeResponses) {
+        this(plans, runs, runService, metadataCache, metadataParser, saml, transcript, clock,
+                activeProbeResponses, new TargetInitiatedIntents());
+    }
+
+    public SpPeerService(PlanRepository plans, RunRepository runs, RunService runService,
+                         MetadataCache metadataCache, TargetMetadataParser metadataParser,
+                         SamlProtocolService saml, TranscriptRecorder transcript, Clock clock,
+                         ActiveProbeResponseHandler activeProbeResponses,
+                         TargetInitiatedIntents targetInitiated) {
         this.plans = plans;
         this.runs = runs;
         this.runService = runService;
@@ -54,6 +66,7 @@ public final class SpPeerService {
         this.clock = clock;
         this.activeProbeResponses = java.util.Objects.requireNonNull(
                 activeProbeResponses, "activeProbeResponses");
+        this.targetInitiated = java.util.Objects.requireNonNull(targetInitiated, "targetInitiated");
     }
 
     public URI start(String planId, String runId) {
@@ -115,6 +128,16 @@ public final class SpPeerService {
         var activeProbe = ActiveProbeCorrelation.parse(rawMessage.relayState());
         var runId = activeProbe.map(ActiveProbeCorrelation.Value::runId)
                 .orElse(metadataProbe ? correlatedRun : rawMessage.relayState());
+        var unsolicitedByPlan = false;
+        if (runId == null && !metadataProbe && activeProbe.isEmpty()) {
+            // Some targets do not return a RelayState for an IdP-initiated message. Accept it
+            // only when exactly one Run of this Plan has prepared the single-use intent.
+            var intent = targetInitiated.peekPlan(planId, TargetInitiatedIntents.Kind.UNSOLICITED_SSO, clock);
+            if (intent.isPresent()) {
+                runId = intent.orElseThrow().runId();
+                unsolicitedByPlan = true;
+            }
+        }
         if (runId == null) throw new SamlException("SAMLResponse has no RelayState correlation");
         var run = runs.find(runId).orElseThrow(() -> new SamlException("Unknown RelayState"));
         if (!run.planId().equals(planId)) throw new SamlException("RelayState belongs to another Test Plan");
@@ -138,11 +161,12 @@ public final class SpPeerService {
                     summary,
                     activeProbe.orElseThrow().runId(),
                     activeProbe.orElseThrow().actionId(),
-                    null, null, rawMessage.relayState());
+                    null, null, rawMessage.relayState(), run.id());
         }
         var expected = String.valueOf(run.context().getOrDefault("authnRequestId", ""));
         var actual = String.valueOf(message.parsed().summary().getOrDefault("inResponseTo", ""));
         var analyzedSummary = new LinkedHashMap<String, Object>(message.parsed().summary());
+        var unsolicitedAccepted = false;
         if (activeProbe.isPresent()) {
             // Active browser scenarios use a request ID derived from the action ID. This is
             // protocol correlation evidence only; the scenario case remains the owner of the
@@ -156,11 +180,22 @@ public final class SpPeerService {
             // does not claim that the target accepted metadata or satisfied any obligation.
             analyzedSummary.put("metadataProbeAccepted",
                     matchesMetadataProbeRequest(run.context(), variant, actual));
-        } else if (!metadataProbe) {
-            analyzedSummary.put("normalFlowAccepted", !expected.isBlank() && expected.equals(actual));
+        } else {
+            var correlated = !expected.isBlank() && expected.equals(actual);
+            var relayMatched = run.id().equals(message.relayState());
+            if (!correlated && actual.isBlank() && (relayMatched || unsolicitedByPlan)
+                    && unsolicitedResponseAllowed(run, planId, requestUrl, message, relayMatched)) {
+                // Explicitly prepared IdP-initiated check. The intent is single use and the
+                // message must still carry the run-specific RelayState, the target Issuer and
+                // the exact ACS Destination.
+                unsolicitedAccepted = true;
+                analyzedSummary.put("unsolicited", true);
+            }
+            analyzedSummary.put("normalFlowAccepted", correlated || unsolicitedAccepted);
         }
         transcript.updateSamlAnalysis(transcriptEntry.id(), actual, analyzedSummary);
-        if (!metadataProbe && activeProbe.isEmpty() && (expected.isBlank() || !expected.equals(actual))) {
+        if (!metadataProbe && activeProbe.isEmpty() && !unsolicitedAccepted
+                && (expected.isBlank() || !expected.equals(actual))) {
             throw new SamlException("SAMLResponse InResponseTo does not match the active AuthnRequest");
         }
         if (activeProbe.isPresent()) {
@@ -185,7 +220,35 @@ public final class SpPeerService {
                 activeProbe.map(ActiveProbeCorrelation.Value::actionId).orElse(null),
                 metadataProbe ? correlatedRun : null,
                 metadataProbe ? variant : null,
-                rawMessage.relayState());
+                rawMessage.relayState(), run.id());
+    }
+
+    private boolean unsolicitedResponseAllowed(
+            com.samlscope.core.run.TestRun run, String planId, String requestUrl,
+            SamlProtocolService.DecodedMessage message, boolean relayMatched) {
+        if (message.relayState() != null && !relayMatched) return false;
+        var plan = plans.find(planId).orElse(null);
+        if (plan == null || !plan.target().entityId().equals(
+                String.valueOf(message.parsed().summary().getOrDefault("issuer", "")))) return false;
+        if (!"urn:oasis:names:tc:SAML:2.0:status:Success".equals(
+                String.valueOf(message.parsed().summary().getOrDefault("statusCode", "")))) return false;
+        var destination = String.valueOf(message.parsed().summary().getOrDefault("destination", ""));
+        if (destination.isBlank() || !sameOriginAndPath(destination, requestUrl)) return false;
+        return targetInitiated.consumeForRun(run.id(), TargetInitiatedIntents.Kind.UNSOLICITED_SSO, clock);
+    }
+
+    private static boolean sameOriginAndPath(String left, String right) {
+        if (right.isBlank()) return false;
+        try {
+            var a = URI.create(left);
+            var b = URI.create(right);
+            return a.getScheme() != null && a.getScheme().equals(b.getScheme())
+                    && a.getHost() != null && a.getHost().equals(b.getHost())
+                    && Objects.equals(a.getPort(), b.getPort())
+                    && a.getRawPath().equals(b.getRawPath());
+        } catch (RuntimeException invalid) {
+            return false;
+        }
     }
 
     private boolean matchesMetadataProbeRequest(
@@ -227,7 +290,8 @@ public final class SpPeerService {
             String activeProbeActionId,
             String metadataProbeRunId,
             String metadataProbeVariant,
-            String relayState) {
+            String relayState,
+            String runId) {
         public ConsumeResult { summary = Map.copyOf(summary); }
         public boolean activeProbe() { return activeProbeRunId != null; }
         public boolean metadataProbe() { return metadataProbeRunId != null; }

@@ -288,7 +288,8 @@ public final class ApprovedBrowserCaseRegistry {
                 evidence, publicBase, browserPrompt(definition, transcriptDriven), BROWSER_TTL);
         if (transcriptContent != null && LogoutBrowserEvidenceTestCase.supports(definition.id())) {
             return new LogoutBrowserEvidenceTestCase(
-                    fallback, transcriptContent, targetEntityIds, targetSigningCertificates);
+                    fallback, transcriptContent, targetEntityIds, targetSigningCertificates,
+                    decryptionKeys == null ? ignored -> java.util.Optional.empty() : decryptionKeys);
         }
         if (transcriptContent != null && decryptionKeys != null
                 && EncryptionAlgorithmObservation.supports(definition.id())) {

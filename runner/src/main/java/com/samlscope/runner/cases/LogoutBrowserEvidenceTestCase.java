@@ -13,10 +13,11 @@ import com.samlscope.core.caseexec.CaseStep;
 import com.samlscope.core.caseexec.TestCase;
 import com.samlscope.core.plan.TargetRole;
 import com.samlscope.core.transcript.TranscriptContentReader;
+import com.samlscope.runner.RecordedEvidenceReevaluation;
 
 /** Completes approved SLO browser cases from target-emitted protocol evidence after a user logout action. */
-public final class LogoutBrowserEvidenceTestCase
-        implements TestCase, BrowserPrompt, ProtocolEvidenceCase, com.samlscope.runner.EvidenceCampaignCase {
+public final class LogoutBrowserEvidenceTestCase implements TestCase, BrowserPrompt, ProtocolEvidenceCase,
+        com.samlscope.runner.EvidenceCampaignCase, RecordedEvidenceReevaluation {
     private static final Map<String, LogoutTranscriptProfileCase.Rule> RULES = Map.ofEntries(
             Map.entry("IIP-IDP17-f-idp-01", LogoutTranscriptProfileCase.Rule.RESPONSE_ISSUER_COUNT),
             Map.entry("IIP-IDP17-g-idp-01", LogoutTranscriptProfileCase.Rule.RESPONSE_ISSUER_VALUE),
@@ -35,16 +36,27 @@ public final class LogoutBrowserEvidenceTestCase
     private final TranscriptContentReader content;
     private final Function<String, Optional<String>> targetEntityIds;
     private final Function<String, List<X509Certificate>> signingCertificates;
+    private final SamlDecryptionKeyProvider decryptionKeys;
 
     public LogoutBrowserEvidenceTestCase(
             BrowserEvidenceTestCase fallback,
             TranscriptContentReader content,
             Function<String, Optional<String>> targetEntityIds,
             Function<String, List<X509Certificate>> signingCertificates) {
+        this(fallback, content, targetEntityIds, signingCertificates, ignored -> Optional.empty());
+    }
+
+    public LogoutBrowserEvidenceTestCase(
+            BrowserEvidenceTestCase fallback,
+            TranscriptContentReader content,
+            Function<String, Optional<String>> targetEntityIds,
+            Function<String, List<X509Certificate>> signingCertificates,
+            SamlDecryptionKeyProvider decryptionKeys) {
         this.fallback = Objects.requireNonNull(fallback, "fallback");
         this.content = Objects.requireNonNull(content, "content");
         this.targetEntityIds = Objects.requireNonNull(targetEntityIds, "targetEntityIds");
         this.signingCertificates = Objects.requireNonNull(signingCertificates, "signingCertificates");
+        this.decryptionKeys = Objects.requireNonNull(decryptionKeys, "decryptionKeys");
         if (!supports(fallback.id())) throw new IllegalArgumentException("No SLO oracle for " + fallback.id());
     }
 
@@ -82,11 +94,24 @@ public final class LogoutBrowserEvidenceTestCase
                         .orElseGet(Map::of));
     }
 
+    @Override
+    public boolean supportsRecordedEvidenceReevaluation(
+            com.samlscope.core.evaluation.CaseOutcome previous) {
+        return previous != null && previous.outcome() == com.samlscope.core.evaluation.Outcome.NOT_VERIFIED;
+    }
+
+    @Override
+    public Optional<com.samlscope.core.evaluation.CaseOutcome> reevaluateRecordedEvidence(
+            CaseContext context, com.samlscope.core.evaluation.CaseOutcome previous) {
+        return observed(context).flatMap(next -> RecordedEvidenceReevaluation.conclusiveUpdate(previous, next));
+    }
+
     private Optional<com.samlscope.core.evaluation.CaseOutcome> observed(CaseContext context) {
         if (!context.transcriptComplete()) return Optional.of(LogoutTranscriptProfileCase.incompleteHistory());
         var outcome = new LogoutTranscriptProfileCase(
                 RULES.get(id()), signingCertificates.apply(context.runId()),
-                targetEntityIds.apply(context.runId()).orElse(null))
+                targetEntityIds.apply(context.runId()).orElse(null),
+                decryptionKeys.keyFor(context.runId()).orElse(null))
                 .evaluate(context.runId(), context.transcript(), content);
         return outcome.evidence().isEmpty() && !"slo.evidence.incomplete".equals(outcome.reasonCode())
                 ? Optional.empty() : Optional.of(outcome);

@@ -727,3 +727,12 @@ ShibbolethのSLO Runは同じ49ケースでVerdictの差分が0件でした。`I
 SSO/SLOのNormalFlow判定で証拠を生成できない9ケースを調査しました。`IIP-SSO01-g/z` はIdP起点成功、`IIP-SSO01-ep` はVersionMismatchのSAML Response、`IIP-SSO01-k` は受理される別ACS、`IIP-SSO03-b` は2種類目のSAMLエラー、`IIP-IDP17-n/u` はtarget-initiated LogoutRequestが不足しています。Suite側で補完できるのはECP相関のみで、残りは対象製品側の起点操作または設定に依存します。判定は前後で変わっていません。
 
 <!--g1-literal--> 未検証は567から559へ減少しました（異なるケースID 180は不変）。単体テスト条件の追加は未検証の解消として数えていません。G2-30は未解消のままで、今回の変更を独立承認として扱いません。変更・検証・操作の詳細は [生成側アルゴリズム判定の受入記録](30-algorithm-observation-operations.md) に保存しています。
+
+
+### 対象起点メッセージの受信経路と未検証9件の確定（2026-09-15）
+
+<!--g1-literal--> Suiteから直接起動できないIdP起点SSOとtarget-initiated logoutについて、単一使用の準備intent（`TargetInitiatedIntents`）を追加しました。ACSとSLOの受信経路は、準備済みintentがある場合だけRelayStateなしのunsolicited Responseまたはプラン内で唯一の待機RunへのLogoutRequestを受け付け、Issuer・Destination・Success・単一使用を検証します。未準備の受信は従来どおり拒否します。
+
+API `GET/POST /api/runs/{id}/target-initiated` とRun workspaceの準備パネルを追加し、RelayStateと待機状態を表示します。`LogoutBrowserEvidenceTestCase`は完了後のNOT_VERIFIEDを新Transcript証拠で再評価でき、SLO判定は暗号化Assertion内のNameID/SessionIndexをRun鍵で復号してから照合します。DOCTYPE付きの敵対的送信要求が正常系観測全体を停止させる問題も修正し、解析不能な受信応答は不確定のまま維持します。
+
+<!--g1-literal--> 実製品では、Keycloakで`IIP-SSO01-g`がSuccess、`IIP-SSO01-z`がWarning、Shibbolethで`IIP-SSO01-g`と`IIP-SSO01-k`がSuccess、`IIP-SSO01-z`がWarning、`IDP17-j/k/l/m`がSuccess、`IDP17-t`が既知のFailed、`IDP17-n/u`が具体的な理由付きNOT_VERIFIEDになりました。未検証は559から550へ減少しました（異なるケースID 180は不変）。KeycloakとSimpleSAMLphpのtarget-initiated logoutはSuiteへのLogoutRequestが到達せず未検証のままです。詳細は [対象起点メッセージの受入記録](31-peer-intent-acceptance.md) に保存しています。

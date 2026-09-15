@@ -12,6 +12,7 @@ import com.samlscope.core.transcript.TranscriptInput;
 import com.samlscope.core.transcript.TranscriptRecorder;
 import com.samlscope.core.evaluation.EvidenceRef;
 import com.samlscope.runner.ActiveProbeCorrelation;
+import com.samlscope.runner.TargetInitiatedIntents;
 import com.samlscope.saml.metadata.MetadataService;
 import com.samlscope.saml.metadata.TargetMetadataParser;
 import com.samlscope.saml.normal.SamlException;
@@ -50,6 +51,7 @@ public final class SloPeerService {
     private final TranscriptRecorder transcript;
     private final Clock clock;
     private final ActiveProbeResponseHandler activeProbeResponses;
+    private final TargetInitiatedIntents targetInitiated;
 
     public SloPeerService(
             PlanRepository plans,
@@ -66,6 +68,14 @@ public final class SloPeerService {
     public SloPeerService(PlanRepository plans, RunRepository runs, MetadataCache metadata,
             TargetMetadataParser parser, SamlProtocolService saml, TranscriptRecorder transcript,
             Clock clock, ActiveProbeResponseHandler activeProbeResponses) {
+        this(plans, runs, metadata, parser, saml, transcript, clock, activeProbeResponses,
+                new TargetInitiatedIntents());
+    }
+
+    public SloPeerService(PlanRepository plans, RunRepository runs, MetadataCache metadata,
+            TargetMetadataParser parser, SamlProtocolService saml, TranscriptRecorder transcript,
+            Clock clock, ActiveProbeResponseHandler activeProbeResponses,
+            TargetInitiatedIntents targetInitiated) {
         this.plans = java.util.Objects.requireNonNull(plans, "plans");
         this.runs = java.util.Objects.requireNonNull(runs, "runs");
         this.metadata = java.util.Objects.requireNonNull(metadata, "metadata");
@@ -74,6 +84,7 @@ public final class SloPeerService {
         this.transcript = java.util.Objects.requireNonNull(transcript, "transcript");
         this.clock = java.util.Objects.requireNonNull(clock, "clock");
         this.activeProbeResponses = java.util.Objects.requireNonNull(activeProbeResponses, "activeProbeResponses");
+        this.targetInitiated = java.util.Objects.requireNonNull(targetInitiated, "targetInitiated");
     }
 
     public Result consume(
@@ -106,7 +117,21 @@ public final class SloPeerService {
             runId = activeProbe.orElseThrow().runId();
         }
         if (runId == null) runId = decoded.message().relayState();
-        if (runId == null || runId.isBlank()) throw new SamlException("SLO message has no Run correlation");
+        var targetInitiatedLogout = false;
+        if (runId == null || runId.isBlank()) {
+            // A target-initiated LogoutRequest carries no Suite correlation. Accept it only
+            // when exactly one Run of this plan has explicitly prepared the check, and verify
+            // the issuer before consuming the single-use intent.
+            var intent = targetInitiated.resolvePlan(planId, TargetInitiatedIntents.Kind.TARGET_LOGOUT, clock);
+            if (intent.isEmpty()) throw new SamlException("SLO message has no Run correlation");
+            var issuer = decodedIssuer(decoded);
+            var targetPlan = plans.find(planId).orElseThrow(() -> new SamlException("Unknown Test Plan"));
+            if (!targetPlan.target().entityId().equals(issuer)) {
+                throw new SamlException("Target-initiated logout issuer does not match the Test Plan target");
+            }
+            runId = intent.orElseThrow().runId();
+            targetInitiatedLogout = true;
+        }
         var run = runs.find(runId).orElseThrow(() -> new SamlException("Unknown correlated Run"));
         if (!planId.equals(run.planId())) throw new SamlException("Correlated Run belongs to another Test Plan");
 
@@ -152,6 +177,7 @@ public final class SloPeerService {
                 transport == Transport.SOAP ? "text/xml" : contentType(method),
                 rawQuery, transcriptXml, Map.of("type", messageType, "transport", transport.name())));
         if ("LogoutResponse".equals(messageType)) return new Result(run.id(), messageType, null, null);
+        if (targetInitiatedLogout) { /* single-use intent already consumed by resolvePlan */ }
 
         var target = parser.parse(metadata.get(plan.id()), plan.target().entityId());
         var preferredBinding = transport == Transport.SOAP ? MetadataService.SOAP
@@ -185,6 +211,14 @@ public final class SloPeerService {
     private void requireResponse(Result result) {
         if (result == null || result.response() == null) {
             throw new IllegalArgumentException("SLO result has no response");
+        }
+    }
+
+    private String decodedIssuer(Decoded decoded) {
+        try {
+            return String.valueOf(saml.parse(decoded.message()).parsed().summary().getOrDefault("issuer", ""));
+        } catch (RuntimeException unavailable) {
+            return "";
         }
     }
 

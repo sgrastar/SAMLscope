@@ -61,6 +61,7 @@ import com.samlscope.store.SqliteHostedRunProvisioner;
 
 /** Phase 1 execution composition kept outside the HTTP root so its boundaries remain independently testable. */
 final class M1Runtime {
+    private final com.samlscope.runner.TargetInitiatedIntents targetInitiated;
     private final com.samlscope.runner.SupplementalDecryptionKeyService supplementalKeys;
     private final java.util.function.Function<String, com.samlscope.runner.SupplementalDecryptionKeyService.Scope> supplementalKeyScopes;
     private final AppConfig config;
@@ -121,7 +122,9 @@ final class M1Runtime {
             com.samlscope.core.evaluation.CoverageCatalog coverage,
             com.samlscope.runner.ApplicabilityProvider applicability,
             com.samlscope.runner.SupplementalDecryptionKeyService supplementalKeys,
-            java.util.function.Function<String, com.samlscope.runner.SupplementalDecryptionKeyService.Scope> supplementalKeyScopes) {
+            java.util.function.Function<String, com.samlscope.runner.SupplementalDecryptionKeyService.Scope> supplementalKeyScopes,
+            com.samlscope.runner.TargetInitiatedIntents targetInitiated) {
+        this.targetInitiated = targetInitiated;
         this.supplementalKeys = supplementalKeys;
         this.supplementalKeyScopes = supplementalKeyScopes;
         this.coverage = coverage;
@@ -173,7 +176,7 @@ final class M1Runtime {
         return create(config, database, json, plans, runs, transcript, transcriptContent,
                 metadataCache, metadataParser, keys, caseExecutions, metadataLab,
                 outboundDispatcher, reconciliationLimiter, hostedRunProvisioner, clock,
-                Map.of(), Map.of());
+                Map.of(), Map.of(), new com.samlscope.runner.TargetInitiatedIntents());
     }
 
     static M1Runtime create(
@@ -195,6 +198,32 @@ final class M1Runtime {
             Clock clock,
             Map<com.samlscope.core.profile.FunctionalProfile,byte[]> profileArtifacts,
             Map<com.samlscope.core.profile.FunctionalProfile,String> approvedProfileDigests) {
+        return create(config, database, json, plans, runs, transcript, transcriptContent,
+                metadataCache, metadataParser, keys, caseExecutions, metadataLab,
+                outboundDispatcher, reconciliationLimiter, hostedRunProvisioner, clock,
+                profileArtifacts, approvedProfileDigests, new com.samlscope.runner.TargetInitiatedIntents());
+    }
+
+    static M1Runtime create(
+            AppConfig config,
+            SqliteDatabase database,
+            JsonCodec json,
+            PlanRepository plans,
+            RunRepository runs,
+            TranscriptRecorder transcript,
+            TranscriptContentReader transcriptContent,
+            MetadataCache metadataCache,
+            TargetMetadataParser metadataParser,
+            FilePlanKeyStore keys,
+            SqliteCaseExecutionRepository caseExecutions,
+            com.samlscope.runner.MetadataLabService metadataLab,
+            OutboundDispatcher outboundDispatcher,
+            HostedRateLimiter reconciliationLimiter,
+            SqliteHostedRunProvisioner hostedRunProvisioner,
+            Clock clock,
+            Map<com.samlscope.core.profile.FunctionalProfile,byte[]> profileArtifacts,
+            Map<com.samlscope.core.profile.FunctionalProfile,String> approvedProfileDigests,
+            com.samlscope.runner.TargetInitiatedIntents targetInitiated) {
         var documents = CatalogDocuments.load();
         var coverage = CoverageCatalogMapper.fromDocument(documents.parsed("tests/coverage.yaml"));
         var predicates = PredicateCatalogMapper.fromDocument(documents.parsed("tests/predicates.yaml"));
@@ -519,7 +548,8 @@ final class M1Runtime {
                 starters, pendingInteractions, bootstrapContracts, protocolEvidence, attestations,
                 configurations, browserCompletions, caseExecutions, publications,
                 reconciliationLimiter, hostedRunProvisioner, activeProbes, timeouts,
-                campaigns, campaignActions, profileDefinitions, coverage, applicability, supplementalKeys, supplementalKeyScopes);
+                campaigns, campaignActions, profileDefinitions, coverage, applicability, supplementalKeys,
+                supplementalKeyScopes, targetInitiated);
     }
 
     java.util.Set<com.samlscope.core.profile.FunctionalProfile> installedProfiles() {
@@ -529,6 +559,36 @@ final class M1Runtime {
     com.samlscope.core.profile.FunctionalDefinitionIdentity definitionIdentity(
             com.samlscope.core.profile.FunctionalProfile profile) {
         return profileDefinitions.identity(profile);
+    }
+
+    record TargetInitiatedView(String runId, String kind, String expiresAt) {}
+
+    TargetInitiatedView targetInitiated(String runId) {
+        requireRun(runId);
+        return targetInitiated.find(runId, clock)
+                .map(value -> new TargetInitiatedView(runId, value.kind().name(), value.expiresAt().toString()))
+                .orElse(null);
+    }
+
+    TargetInitiatedView prepareTargetInitiated(String runId, String kindText) {
+        return withManualEvidenceWork(runId, () -> {
+            var run = requireRun(runId);
+            var plan = requirePlan(run);
+            com.samlscope.runner.TargetInitiatedIntents.Kind kind;
+            try {
+                kind = com.samlscope.runner.TargetInitiatedIntents.Kind.valueOf(
+                        kindText == null ? "" : kindText.trim().toUpperCase(Locale.ROOT));
+            } catch (RuntimeException invalid) {
+                throw new IllegalArgumentException("Unknown target-initiated check kind");
+            }
+            var supported = kind == com.samlscope.runner.TargetInitiatedIntents.Kind.UNSOLICITED_SSO
+                    ? plan.profile() == com.samlscope.core.profile.FunctionalProfile.BROWSER_SSO_IDP
+                    : plan.profile() == com.samlscope.core.profile.FunctionalProfile.SINGLE_LOGOUT_IDP;
+            if (!supported) throw new IllegalArgumentException(
+                    "The target-initiated check does not apply to this profile");
+            var intent = targetInitiated.prepare(run.id(), plan.id(), kind, java.time.Duration.ofMinutes(30), clock);
+            return new TargetInitiatedView(run.id(), intent.kind().name(), intent.expiresAt().toString());
+        });
     }
 
     record SupplementalKeyView(String targetEntityId, String metadataSha256, boolean testsStarted,

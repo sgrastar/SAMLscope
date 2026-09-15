@@ -126,3 +126,4 @@ not by differences in reference-implementation results ([00 §5](00-concept.md))
 - [Additional implementation and retests](27-additional-implementation.md) — implemented observations, automation fixes, verified results, and remaining release blockers.
 - [Supplemental decryption key acceptance](29-supplemental-key-acceptance.md) — explicit Run input for IdP decryption tests, local verification, and reference re-tests (2026-09-15).
 - [Algorithm observation operations](30-algorithm-observation-operations.md) — producer-side IIP-ALG04/06 evidence, SSO/SLO evidence-generation gaps, and operation counts (2026-09-15).
+- [Target-initiated acceptance](31-peer-intent-acceptance.md) — single-use intents for IdP-initiated SSO and target-initiated logout, reference results, and limits (2026-09-15).

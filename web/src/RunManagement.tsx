@@ -4,6 +4,7 @@ import { createPortal } from 'react-dom'
 import {
   api, type ActiveProbeStatus, type BootstrapContract, type MetadataLab, type PendingInteraction, type Plan,
   type ProtocolEvidenceStatus, type CampaignReport, type Run, type SupplementalDecryptionKeyStatus,
+  type TargetInitiatedIntent,
 } from './api'
 import { formatDate, humanize } from './format'
 import { idpRoundTripReady, idpRoundTripUrl } from './peerUrls'
@@ -50,6 +51,7 @@ export function RunManagement({ runId, csrfToken, focusCaseId, navigateTo }: {
   const [caseDrawerOpen, setCaseDrawerOpen] = useState(false)
   const [supplementalKeys, setSupplementalKeys] = useState<SupplementalDecryptionKeyStatus>()
   const [supplementalKeysError, setSupplementalKeysError] = useState('')
+  const [targetInitiated, setTargetInitiated] = useState<TargetInitiatedIntent | null>(null)
   const caseDrawerRef = useRef<HTMLElement | null>(null)
   const caseDrawerCloseRef = useRef<HTMLButtonElement>(null)
   const lastCaseTriggerRef = useRef<HTMLButtonElement | null>(null)
@@ -136,6 +138,11 @@ export function RunManagement({ runId, csrfToken, focusCaseId, navigateTo }: {
     } else {
       setSupplementalKeys(undefined)
       setSupplementalKeysError('')
+    }
+    if (selectedPlan?.plan.profile === 'browser_sso_idp' || selectedPlan?.plan.profile === 'single_logout_idp') {
+      setTargetInitiated(await api.targetInitiated(runId).catch(() => null))
+    } else {
+      setTargetInitiated(null)
     }
     setMode(health.mode)
   }
@@ -319,6 +326,21 @@ export function RunManagement({ runId, csrfToken, focusCaseId, navigateTo }: {
     } catch (cause) {
       setError((cause as Error).message)
       await refresh().catch(() => undefined)
+    } finally {
+      setBusy('')
+    }
+  }
+
+  const prepareTargetInitiated = async (kind: TargetInitiatedIntent['kind']) => {
+    setBusy('target-initiated')
+    setError('')
+    try {
+      setTargetInitiated(await api.prepareTargetInitiated(runId, kind, csrfToken))
+      setNotice(kind === 'UNSOLICITED_SSO'
+        ? 'Waiting for one IdP-initiated Response. Open the target start URL with the displayed RelayState.'
+        : 'Waiting for one target-initiated LogoutRequest. Sign out at the target using the displayed session.')
+    } catch (cause) {
+      setError((cause as Error).message)
     } finally {
       setBusy('')
     }
@@ -698,6 +720,25 @@ export function RunManagement({ runId, csrfToken, focusCaseId, navigateTo }: {
       </div>
     </div>
     {activeProbePanel}
+    {profile === 'browser_sso_idp' && <article className="interaction target-initiated">
+      <header><strong>IdP-initiated SSO check</strong><span>{targetInitiated ? 'WAITING' : 'PREPARE FIRST'}</span></header>
+      <p>Prepare one single-use intent, then open the target's IdP-initiated SSO endpoint with
+        RelayState set to this Run ID. SAMLscope accepts exactly one unsolicited, signed-in-target
+        Response and records it as transcript evidence; without a prepared intent it is rejected.</p>
+      {targetInitiated
+        ? <p className="notice">Waiting until {formatDate(targetInitiated.expiresAt, 'Unknown')}. RelayState: <code>{targetInitiated.runId}</code></p>
+        : <button disabled={busy !== ''} onClick={() => void prepareTargetInitiated('UNSOLICITED_SSO')}>
+            Prepare one IdP-initiated check</button>}
+    </article>}
+    {profile === 'single_logout_idp' && <article className="interaction target-initiated">
+      <header><strong>Target-initiated logout check</strong><span>{targetInitiated ? 'WAITING' : 'PREPARE FIRST'}</span></header>
+      <p>Prepare one single-use intent, then sign out at the target in the same session.
+        SAMLscope accepts one target-issued LogoutRequest for this Run and records it as transcript evidence.</p>
+      {targetInitiated
+        ? <p className="notice">Waiting until {formatDate(targetInitiated.expiresAt, 'Unknown')}.</p>
+        : <button disabled={busy !== ''} onClick={() => void prepareTargetInitiated('TARGET_LOGOUT')}>
+            Prepare one target-initiated logout check</button>}
+    </article>}
     {supplementalKeys
       ? <SupplementalDecryptionKeyPanel status={supplementalKeys} busy={busy === 'supplemental-keys'}
           error={supplementalKeysError} onSubmit={submitSupplementalKeys} />

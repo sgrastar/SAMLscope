@@ -520,6 +520,31 @@ class NormalFlowBrowserObservationTest {
                 message("POST", "https://suite.example/acs", "<broken"));
     }
 
+    @Test
+    void malformedOutboundProbesDoNotDisableUnrelatedNormalFlowObservations() {
+        var malformedOutbound = new NormalFlowBrowserObservation.Message(
+                "doctype-probe", "POST", "https://idp.example/sso",
+                Instant.parse("2026-08-30T00:00:01Z"),
+                "<!DOCTYPE AuthnRequest [<!ELEMENT AuthnRequest EMPTY>]><AuthnRequest/>"
+                        .getBytes(StandardCharsets.UTF_8), false);
+        assertOutcome("IIP-SSO01-a-idp-01", Outcome.SATISFIED,
+                request("https://idp.example/sso", "2.0", "_request"),
+                response("POST", "https://suite.example/acs", "2.0", "_request",
+                        assertion("issuer", null, null)),
+                malformedOutbound);
+
+        var malformedInbound = new NormalFlowBrowserObservation.Message(
+                "malformed-response", "POST", "https://suite.example/acs",
+                Instant.parse("2026-08-30T00:00:01Z"),
+                "<!DOCTYPE Response [<!ELEMENT Response EMPTY>]><Response/>"
+                        .getBytes(StandardCharsets.UTF_8), true);
+        assertEmpty("IIP-SSO01-a-idp-01",
+                request("https://idp.example/sso", "2.0", "_request"),
+                response("POST", "https://suite.example/acs", "2.0", "_request",
+                        assertion("issuer", null, null)),
+                malformedInbound);
+    }
+
     private void assertOutcome(String caseId, Outcome expected, NormalFlowBrowserObservation.Message... messages) {
         assertEquals(expected, evaluate(caseId, messages).orElseThrow().outcome());
     }
