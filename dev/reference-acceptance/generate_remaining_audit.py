@@ -63,6 +63,48 @@ IMPLEMENTATION_UPDATES = {
     },
 }
 
+# Classification only: these labels describe why an observation is still unresolved.
+# They never change a Verdict and are not product failures.
+DIAGNOSIS = {
+    'feature-absent': ('製品が機能として公開していない（公開メタデータ等から確認済み）',
+                       'この製品は機能として提供していないため、この試験は実行できません（skipped相当）'),
+    'role-inapplicable': ('ロール上、対象が消費しない成果物を要求するvariant',
+                          'IdPロールでは消費されないvariantのため実行対象外（対象外であることは判定済み）'),
+    'evidence-form-mismatch': ('承認済み判定条件が要求する証拠形式と製品応答が不一致',
+                               '証拠形式が承認済み条件と一致しないためNot verified（要件解釈の再確認が必要）'),
+    'operator-attestation-available': ('自己申告または運用者証言で確認可能',
+                                       '運用者証言（ケースごとに1回答）で確認可能。現在のPlanは自己申告無効'),
+    'suite-observation-gap': ('Suite側の観測・実行経路が未接続',
+                              'Suite側の実装で解消可能なNot verified'),
+}
+_FEATURE_ABSENT = {
+    'IIP-MD05-f7-idp-01', 'IIP-MD05-f8-idp-01', 'IIP-MD05-f9-idp-01', 'IIP-MD05-fa-idp-01',
+    'IIP-MD05-fb-idp-01', 'IIP-MD05-fh-idp-01', 'IIP-MD05-fj-idp-01',
+}
+_ROLE_INAPPLICABLE = {'IIP-EXT01-b-idp-01', 'IIP-EXT01-c-idp-01'}
+_EVIDENCE_FORM = {
+    'idp.signed-request.inconclusive', 'idp.error-assertion.inconclusive',
+    'idp.error-response.inconclusive', 'idp.version.inconclusive',
+    'idp.acs-probe.inconclusive', 'idp.authn-context.inconclusive',
+    'idp.nameid-policy.inconclusive', 'request.signing.unavailable',
+    'control_failed', 'metadata.rsa-sha1.unobserved', 'delivery_or_response_unknown',
+    'slo.encrypted-id.key-unavailable', 'slo.encrypted-id.multiple-keys.key-unavailable',
+    'slo.encrypted-id.negative-control-failed',
+}
+
+def diagnose(row):
+    case = row['case']
+    reason = row['reason_code']
+    if case in _FEATURE_ABSENT:
+        return 'feature-absent'
+    if case in _ROLE_INAPPLICABLE:
+        return 'role-inapplicable'
+    if reason == 'attestation.interaction-disallowed' or row.get('mode') == 'ATTESTED':
+        return 'operator-attestation-available'
+    if reason in _EVIDENCE_FORM:
+        return 'evidence-form-mismatch'
+    return 'suite-observation-gap'
+
 def implementation_audit():
     result = {}
     for case_id, update in IMPLEMENTATION_UPDATES.items():
@@ -255,9 +297,12 @@ def render(root,definitions,output):
     rows=refreshed
     (root/'retest-delta.json').write_text(json.dumps(transitions,ensure_ascii=False,indent=2)+'\n')
     counts=Counter(); indexed=defaultdict(list)
+    diagnoses=Counter()
     for row in rows:
         group=classify(row);row['category']=group;counts[group]+=1
         c=catalog[row['case']]
+        row['mode']=c.get('mode')
+        row['capability_diagnosis']=diagnose(row);diagnoses[row['capability_diagnosis']]+=1
         row['variant_references']=[v['reference'] for v in c['variant_plan']]
         row['variant_instructions']=[v['instruction_en'] for v in c['variant_plan']]
         row['controls']=[{'id':v['id'],'kind':v['kind'],'fixture':v.get('fixture')} for v in c['controls']]
@@ -311,6 +356,16 @@ def render(root,definitions,output):
         cells=['、'.join(sorted({r['profile'] for r in items if r['product']==p})) or '—' for p in ('keycloak','shibboleth','simplesamlphp')]
         why=' / '.join(GROUPS[g][0] for g in sorted({r['category'] for r in items}))
         lines.append(f'| `{case}` | '+' | '.join(cells)+f' | {why} |')
+    lines+=['', '## 判定不能の分類（診断）', '',
+             'Verdictは変更せず、未検証の理由だけを分類します。feature-absentは公開メタデータ等から機能の不在を確認済みのもの、role-inapplicableはロール上消費されないvariant、evidence-form-mismatchは承認済み証拠形式との不一致、operator-attestation-availableは運用者証言で確認可能、suite-observation-gapはSuite実装で解消可能です。', '',
+             '| 診断 | 件数 | 意味 | 表示案 |', '|---|---:|---|---|']
+    for key,count in diagnoses.most_common():
+        meaning,display=DIAGNOSIS[key]
+        lines.append(f'| `{key}` | {count} | {meaning} | {display} |')
+    for key in DIAGNOSIS:
+        ids=sorted({r['case'] for r in rows if r.get('capability_diagnosis')==key})
+        if ids:
+            lines+=['', f'### {key}', '', ', '.join('`'+i+'`' for i in ids), '']
     lines+=['', '## 証拠', '',
             'ローカルの `build/acceptance/reference-20260914/remaining-audit/inventory.json` に現在の全未検証観測のRun、ケースID、理由コード、試験条件、対照、次の作業、元result.jsonのSHA-256を保存しています。追加再試験の全結果は `retest-delta.json`、変更前の集合は `baseline.json` に保存しています。元の結果や承認済みケース定義は変更していません。', '',
             '実装確認: `BrowserEvidenceTestCase`、`IdpExecutableBrowserFixtureScenarioTestCase`、`ApprovedConfigCaseRegistry`、`AttestedOutcomeTestCase`。ケースごとの条件は `tests/cases.yaml` を参照しています。', '',
