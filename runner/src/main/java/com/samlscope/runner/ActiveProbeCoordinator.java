@@ -325,13 +325,26 @@ public final class ActiveProbeCoordinator {
         return status(runId);
     }
 
+    private static boolean parsesAsSamlMessage(byte[] xml) {
+        try {
+            var root = com.samlscope.saml.normal.SecureXml.parse(xml).getDocumentElement();
+            var namespace = String.valueOf(root.getNamespaceURI());
+            return namespace.equals("urn:oasis:names:tc:SAML:2.0:protocol")
+                    || namespace.equals("urn:oasis:names:tc:SAML:2.0:assertion");
+        } catch (RuntimeException unparsable) {
+            return false;
+        }
+    }
+
     /** Records an observed browser landing as evidence for transcript-driven SLO binding rules. */
     public com.samlscope.core.transcript.TranscriptEntry recordBrowserObservation(
             String runId, String correlationId, int httpStatus, String url, String body, String fallbackUrl) {
         requireRun(runId);
         var bodyBytes = (body == null ? "" : body).getBytes(StandardCharsets.UTF_8);
         var saml = com.samlscope.saml.normal.SamlEmbeddedMessage.find(body)
-                .map(bytes -> (byte[]) bytes).orElse(new byte[0]);
+                .map(bytes -> (byte[]) bytes)
+                .filter(bytes -> parsesAsSamlMessage(bytes))
+                .orElse(new byte[0]);
         var summary = new java.util.LinkedHashMap<String, Object>();
         summary.put("type", "BrowserResponseObservation");
         summary.put("http_status", httpStatus);

@@ -882,6 +882,12 @@ public final class SamlScopeApplication {
         javalin.routes.post("/p/{plan}/idp/sso", ctx -> serveIdp(ctx, idpPeer));
         javalin.routes.get("/p/{plan}/idp/secondary/sso", ctx -> serveIdp(ctx, secondaryIdpPeer));
         javalin.routes.post("/p/{plan}/idp/secondary/sso", ctx -> serveIdp(ctx, secondaryIdpPeer));
+        // Fixture-only endpoint: a participant that always fails is required to exercise
+        // continue-after-failure and PartialLogout. It carries no run correlation or verdict.
+        javalin.routes.get("/p/{plan}/sp/slo-fail", ctx ->
+                ctx.status(HttpStatus.INTERNAL_SERVER_ERROR).contentType("text/plain").result("slo failure fixture"));
+        javalin.routes.post("/p/{plan}/sp/slo-fail", ctx ->
+                ctx.status(HttpStatus.INTERNAL_SERVER_ERROR).contentType("text/plain").result("slo failure fixture"));
         for (var role : List.of("sp", "idp")) {
             javalin.routes.get("/p/{plan}/" + role + "/slo", ctx ->
                     serveSlo(ctx, sloPeer, SloPeerService.Transport.FRONT_CHANNEL, m1));

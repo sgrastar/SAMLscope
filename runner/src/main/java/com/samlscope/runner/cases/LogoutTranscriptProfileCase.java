@@ -41,6 +41,7 @@ public final class LogoutTranscriptProfileCase {
     private static final String DS = "http://www.w3.org/2000/09/xmldsig#";
     private static final String ASYNC = "urn:oasis:names:tc:SAML:2.0:protocol:ext:async-slo";
     private static final String STATUS_SUCCESS = "urn:oasis:names:tc:SAML:2.0:status:Success";
+    private static final String PARTIAL_LOGOUT_STATUS = "urn:oasis:names:tc:SAML:2.0:status:PartialLogout";
     private static final Set<String> TOP_STATUS = Set.of(
             STATUS_SUCCESS,
             "urn:oasis:names:tc:SAML:2.0:status:Requester",
@@ -109,7 +110,7 @@ public final class LogoutTranscriptProfileCase {
             case TARGET_REDIRECT_RESPONSE_CONSUMED -> targetRedirectResponseConsumed(
                     targetLogout, all, snapshot.entries());
             case INFORMATIONAL_PROPAGATION -> informationalPropagation(targetLogout);
-            case TARGET_PROPAGATION_CONTINUE -> targetPropagationContinue(targetLogout);
+            case TARGET_PROPAGATION_CONTINUE -> targetPropagationContinue(targetLogout, all);
             case TARGET_PARTIAL_LOGOUT -> targetPartialLogout(targetLogout, all);
         };
     }
@@ -573,11 +574,23 @@ public final class LogoutTranscriptProfileCase {
         };
     }
 
-    private CaseOutcome targetPropagationContinue(List<Message> targetLogout) {
+    private CaseOutcome targetPropagationContinue(List<Message> targetLogout, List<Message> all) {
         var requests = targetLogout.stream().filter(value -> is(value.logout(), "LogoutRequest")).toList();
         if (requests.isEmpty()) return optionalNotObserved("slo.propagation.not-implemented");
-        // Failure induction across multiple participants is not observable from a single
-        // Suite SP transcript, so a one-participant run cannot prove continue-after-failure.
+        // A failed participant is visible through the initiator's PartialLogout response while the
+        // Suite's participant endpoint records that the remaining participant was still attempted.
+        var responses = all.stream()
+                .filter(value -> value.entry().direction() == Direction.INBOUND)
+                .filter(value -> is(value.logout(), "LogoutResponse")).toList();
+        var failed = responses.stream().anyMatch(value -> PARTIAL_LOGOUT_STATUS
+                .equals(secondaryStatus(value.logout())));
+        var endpoints = requests.stream().map(value -> String.valueOf(value.entry().url()))
+                .distinct().toList();
+        if (failed && !requests.isEmpty()) {
+            return new CaseOutcome(Outcome.SATISFIED, null, "slo.propagation.continue-after-failure",
+                    "slo.propagation.continue-after-failure", evidence(requests),
+                    Map.of("participant_endpoints", endpoints.size(), "partial_logout", true));
+        }
         return notVerifiedWithEvidence(requests, "slo.propagation.failure-induction-unavailable",
                 "slo.propagation.failure-induction-unavailable");
     }
@@ -588,8 +601,8 @@ public final class LogoutTranscriptProfileCase {
         var responses = all.stream()
                 .filter(value -> value.entry().direction() == Direction.INBOUND)
                 .filter(value -> is(value.logout(), "LogoutResponse")).toList();
-        var partial = responses.stream().filter(value -> "urn:oasis:names:tc:SAML:2.0:status:PartialLogout"
-                .equals(secondaryStatus(value.logout()))).toList();
+        var partial = responses.stream()
+                .filter(value -> PARTIAL_LOGOUT_STATUS.equals(secondaryStatus(value.logout()))).toList();
         if (!partial.isEmpty()) {
             return new CaseOutcome(Outcome.SATISFIED, null, "slo.partial-logout.observed",
                     "slo.partial-logout.observed", evidence(partial),
@@ -741,6 +754,7 @@ public final class LogoutTranscriptProfileCase {
                 refs.add(new EvidenceRef("transcript", "transcript:" + entry.id()));
                 issues.add("logout_message_scope_unresolved"); continue;
             }
+            if ("BrowserResponseObservation".equals(entry.samlSummary().get("type"))) continue;
             var recordedType = entry.samlSummary().get("type");
             boolean recordedLogout = "LogoutRequest".equals(recordedType) || "LogoutResponse".equals(recordedType);
             if (entry.decodedSamlRef() == null && entry.decodedSamlBytes() == 0 && !recordedLogout) continue;

@@ -157,7 +157,12 @@ Suite SPがRedirect応答エンドポイントのみを広告する構成を、�
 | `IIP-IDP17.s` | Warning | 未確定 | Warning | 同上。Shibbolethは単一参加者のため失敗を誘導できず、PartialLogoutの観測経路がない |
 
 - 実証による未検証解消: 4観測（511→507）。Shibbolethのr/sは理由を`slo.propagation.failure-induction-unavailable` / `slo.partial-logout.unobserved`へ精密化し、未確定を維持。
-- Shibbolethの伝播継続・PartialLogoutを確定するには、**同一Run内に複数のSP参加者**が必要です。設計案: (1) Suiteが1つのPlanで第2・第3のSP entity（`/p/{plan}/sp2/*`, `/sp3/*`）とメタデータを公開、(2) 失敗誘導用のSLO SOAPエンドポイント（接続拒否/タイムアウト固定）を用意、(3) IdPメタデータへ3 entityを登録して同一ブラウザで順にログイン、(4) 1つ目を失敗させた上で残りに要求が届くこと（r）と開始SPへの応答にPartialLogoutが入ること（s）をトランスクリプト規則で判定。Suite側の複数SP対応が前提で、次の実装単位とします。
+- Shibbolethの伝播継続・PartialLogoutを確定するため、**追加SP参加者をIdPメタデータだけに登録する軽量ハーネス**を実装しました（Suiteの複数SP公開は不要）。
+  - 追加参加者: `sp-fail`（SLOは常時500の`/p/{plan}/sp/slo-fail`）と`sp-remain`（SLOは`/p/{plan}/sp/slo[/soap]?run={run}`で同一Runに相関）。
+  - 同一ブラウザで主SP＋2参加者にログイン（Unsolicited SSO）すると、IdPセッションに3参加者が入ります。
+  - 到達点: 2参加者のセッション確立、IdPの伝播UI（`PropagateLogout`）到達、失敗参加者への500誘導、残参加者への伝播要求が同一Runに記録されるところまで確認。
+  - 残ブロッカー: ShibbolethのSLO Webflowは伝播ページのJS/後続遷移で完了し、開始SPへのLogoutResponse（PartialLogout）を送出します。curl相当のドライバでは`_eventId=proceed`後はスナップショット失効となり完了できません。実ブラウザ相当のJS実行または正しい継続イベントの特定が必要です。
+  - 失敗誘導用エンドポイント`/p/{plan}/sp/slo-fail`（常時500・判定なし）は実装済みです。
 
 ## 10. 操作コストの記録方針
 
