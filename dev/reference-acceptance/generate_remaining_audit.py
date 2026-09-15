@@ -261,6 +261,9 @@ def render(root,definitions,output):
             ('keycloak','ecp_idp'):'reference-20260915/peer-intent/keycloak/ecp_alg',
             ('simplesamlphp','browser_sso_idp'):'reference-20260915/peer-intent/simplesamlphp/browser_alg_enc',
             ('simplesamlphp','ecp_idp'):'reference-20260915/peer-intent/simplesamlphp/ecp_alg_enc',
+            ('keycloak','single_logout_idp'):'reference-20260915/supplemental-key-integrated/keycloak/single_logout_idp',
+            ('shibboleth','single_logout_idp'):'reference-20260915/peer-intent/shibboleth/slo_target_logout',
+            ('simplesamlphp','single_logout_idp'):'reference-20260914/slo-receive-integrated/simplesamlphp/single_logout_idp',
         }
         peer_expectations={
             ('keycloak','browser_sso_idp'):{
@@ -281,6 +284,53 @@ def render(root,definitions,output):
                 'IIP-ALG06-a-idp-01':('PASS','browser.encryption.rsa-oaep-mgf1p.decrypted')},
             ('simplesamlphp','ecp_idp'):{
                 'IIP-ALG06-a-idp-01':('PASS','browser.encryption.rsa-oaep-mgf1p.decrypted')},
+            ('keycloak','single_logout_idp'):{
+                'IIP-IDP17-b-idp-01':('NOT_VERIFIED','browser.oracle-unavailable'),
+                'IIP-IDP17-b1-idp-01':('NOT_VERIFIED','browser.oracle-unavailable'),
+                'IIP-IDP17-b2-idp-01':('NOT_VERIFIED','browser.oracle-unavailable'),
+                'IIP-IDP17-c-idp-01':('NOT_VERIFIED','browser.oracle-unavailable'),
+                'IIP-IDP17-r-idp-01':('NOT_VERIFIED','browser.oracle-unavailable'),
+                'IIP-IDP17-s-idp-01':('NOT_VERIFIED','browser.oracle-unavailable'),
+                'IIP-IDP17-x-idp-01':('NOT_VERIFIED','browser.oracle-unavailable'),
+                'IIP-IDP17-y-idp-01':('NOT_VERIFIED','browser.oracle-unavailable'),
+                'IIP-IDP17-z-idp-01':('NOT_VERIFIED','browser.oracle-unavailable'),
+                'IIP-IDP17-aa-idp-01':('NOT_VERIFIED','browser.oracle-unavailable'),
+                'IIP-IDP17-al-idp-01':('NOT_VERIFIED','browser.oracle-unavailable'),
+                'IIP-IDP18-b-idp-01':('NOT_VERIFIED','browser.oracle-unavailable'),
+                'IIP-IDP18-c-idp-01':('NOT_VERIFIED','browser.oracle-unavailable'),
+                'IIP-IDP18-d-idp-01':('NOT_VERIFIED','browser.oracle-unavailable')},
+            ('shibboleth','single_logout_idp'):{
+                'IIP-IDP17-b-idp-01':('NOT_VERIFIED','browser.oracle-unavailable'),
+                'IIP-IDP17-b1-idp-01':('NOT_VERIFIED','browser.oracle-unavailable'),
+                'IIP-IDP17-b2-idp-01':('NOT_VERIFIED','browser.oracle-unavailable'),
+                'IIP-IDP17-c-idp-01':('NOT_VERIFIED','browser.oracle-unavailable'),
+                'IIP-IDP17-n-idp-01':('NOT_VERIFIED','slo.identifier.strong-match-unobservable'),
+                'IIP-IDP17-r-idp-01':('NOT_VERIFIED','browser.oracle-unavailable'),
+                'IIP-IDP17-s-idp-01':('NOT_VERIFIED','browser.oracle-unavailable'),
+                'IIP-IDP17-u-idp-01':('NOT_VERIFIED','slo.not-on-or-after.correlation-unavailable'),
+                'IIP-IDP17-x-idp-01':('NOT_VERIFIED','browser.oracle-unavailable'),
+                'IIP-IDP17-y-idp-01':('NOT_VERIFIED','browser.oracle-unavailable'),
+                'IIP-IDP17-z-idp-01':('NOT_VERIFIED','browser.oracle-unavailable'),
+                'IIP-IDP17-aa-idp-01':('NOT_VERIFIED','browser.oracle-unavailable'),
+                'IIP-IDP17-al-idp-01':('NOT_VERIFIED','browser.oracle-unavailable'),
+                'IIP-IDP18-b-idp-01':('NOT_VERIFIED','browser.oracle-unavailable'),
+                'IIP-IDP18-c-idp-01':('NOT_VERIFIED','browser.oracle-unavailable'),
+                'IIP-IDP18-d-idp-01':('NOT_VERIFIED','browser.oracle-unavailable')},
+            ('simplesamlphp','single_logout_idp'):{
+                'IIP-IDP17-b-idp-01':('NOT_VERIFIED','browser.oracle-unavailable'),
+                'IIP-IDP17-b1-idp-01':('NOT_VERIFIED','browser.oracle-unavailable'),
+                'IIP-IDP17-b2-idp-01':('NOT_VERIFIED','browser.oracle-unavailable'),
+                'IIP-IDP17-c-idp-01':('NOT_VERIFIED','browser.oracle-unavailable'),
+                'IIP-IDP17-r-idp-01':('NOT_VERIFIED','browser.oracle-unavailable'),
+                'IIP-IDP17-s-idp-01':('NOT_VERIFIED','browser.oracle-unavailable'),
+                'IIP-IDP17-x-idp-01':('NOT_VERIFIED','browser.oracle-unavailable'),
+                'IIP-IDP17-y-idp-01':('NOT_VERIFIED','browser.oracle-unavailable'),
+                'IIP-IDP17-z-idp-01':('NOT_VERIFIED','browser.oracle-unavailable'),
+                'IIP-IDP17-aa-idp-01':('NOT_VERIFIED','browser.oracle-unavailable'),
+                'IIP-IDP17-al-idp-01':('NOT_VERIFIED','browser.oracle-unavailable'),
+                'IIP-IDP18-b-idp-01':('NOT_VERIFIED','browser.oracle-unavailable'),
+                'IIP-IDP18-c-idp-01':('NOT_VERIFIED','browser.oracle-unavailable'),
+                'IIP-IDP18-d-idp-01':('NOT_VERIFIED','browser.oracle-unavailable')},
         }
         peer_key=(row['product'],row['profile'])
         if peer_key in peer_retests and row['case'] in peer_expectations[peer_key] and row.get('verdict','NOT_VERIFIED')=='NOT_VERIFIED':

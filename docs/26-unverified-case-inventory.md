@@ -15,9 +15,9 @@
 | 設定後の証拠確認・自己申告経路 | 187 | 設定・証拠 |
 | 自己申告が無効 | 75 | 設定・証拠 |
 | メタデータの追加試験・観測不足 | 71 | 試験経路確認 |
-| ブラウザ・SLOの追加観測不足 | 30 | 試験経路確認 |
+| ブラウザ・SLOの追加観測不足 | 28 | 試験経路確認 |
 | 古い待機結果・再開時には期限切れ | 0 | 新Runで再試験 |
-| 実行したが確定できない | 51 | 個別診断 |
+| 実行したが確定できない | 53 | 個別診断 |
 
 ### G02の確認済み条件と残条件
 
@@ -101,7 +101,23 @@ approved variant全体の入力生成と観測を実装する。追加ログイ�
 | `IIP-IDP06-b-idp-01` | Not verified（今回の再試験対象外） | Not verified（今回の再試験対象外） | Success |
 | `IIP-IDP12-c-idp-01` | Not verified（今回の再試験対象外） | Success | Not verified（今回の再試験対象外） |
 | `IIP-IDP17-a-idp-01` | Success | Success | Success |
+| `IIP-IDP17-aa-idp-01` | Not verified: browser.oracle-unavailable | Not verified: browser.oracle-unavailable | Not verified: browser.oracle-unavailable |
+| `IIP-IDP17-al-idp-01` | Not verified: browser.oracle-unavailable | Not verified: browser.oracle-unavailable | Not verified: browser.oracle-unavailable |
+| `IIP-IDP17-b-idp-01` | Not verified: browser.oracle-unavailable | Not verified: browser.oracle-unavailable | Not verified: browser.oracle-unavailable |
+| `IIP-IDP17-b1-idp-01` | Not verified: browser.oracle-unavailable | Not verified: browser.oracle-unavailable | Not verified: browser.oracle-unavailable |
+| `IIP-IDP17-b2-idp-01` | Not verified: browser.oracle-unavailable | Not verified: browser.oracle-unavailable | Not verified: browser.oracle-unavailable |
+| `IIP-IDP17-c-idp-01` | Not verified: browser.oracle-unavailable | Not verified: browser.oracle-unavailable | Not verified: browser.oracle-unavailable |
+| `IIP-IDP17-n-idp-01` | Not verified（今回の再試験対象外） | Not verified: slo.identifier.strong-match-unobservable | Not verified（今回の再試験対象外） |
+| `IIP-IDP17-r-idp-01` | Not verified: browser.oracle-unavailable | Not verified: browser.oracle-unavailable | Not verified: browser.oracle-unavailable |
+| `IIP-IDP17-s-idp-01` | Not verified: browser.oracle-unavailable | Not verified: browser.oracle-unavailable | Not verified: browser.oracle-unavailable |
+| `IIP-IDP17-u-idp-01` | Not verified（今回の再試験対象外） | Not verified: slo.not-on-or-after.correlation-unavailable | Not verified（今回の再試験対象外） |
+| `IIP-IDP17-x-idp-01` | Not verified: browser.oracle-unavailable | Not verified: browser.oracle-unavailable | Not verified: browser.oracle-unavailable |
+| `IIP-IDP17-y-idp-01` | Not verified: browser.oracle-unavailable | Not verified: browser.oracle-unavailable | Not verified: browser.oracle-unavailable |
+| `IIP-IDP17-z-idp-01` | Not verified: browser.oracle-unavailable | Not verified: browser.oracle-unavailable | Not verified: browser.oracle-unavailable |
 | `IIP-IDP18-a-idp-01` | Success | Success | Success |
+| `IIP-IDP18-b-idp-01` | Not verified: browser.oracle-unavailable | Not verified: browser.oracle-unavailable | Not verified: browser.oracle-unavailable |
+| `IIP-IDP18-c-idp-01` | Not verified: browser.oracle-unavailable | Not verified: browser.oracle-unavailable | Not verified: browser.oracle-unavailable |
+| `IIP-IDP18-d-idp-01` | Not verified: browser.oracle-unavailable | Not verified: browser.oracle-unavailable | Not verified: browser.oracle-unavailable |
 | `IIP-IDP19-a-idp-01` | Not verified: slo.encrypted-id.key-unavailable | Success | Not verified: slo.encrypted-id.negative-control-failed |
 | `IIP-IDP19-b-idp-01` | Not verified（今回の再試験対象外） | Success | Not verified（今回の再試験対象外） |
 | `IIP-IDP19-c-idp-01` | Not verified: slo.encrypted-id.multiple-keys.key-unavailable | Success | Not verified: slo.encrypted-id.multiple-keys.configuration-unavailable |
@@ -165,10 +181,10 @@ approved variant全体の入力生成と観測を実装する。追加ログイ�
 | `IIP-IDP17-b1-idp-01` | single_logout_idp | single_logout_idp | single_logout_idp | ブラウザ完了後の自動判定がない |
 | `IIP-IDP17-b2-idp-01` | single_logout_idp | single_logout_idp | single_logout_idp | ブラウザ完了後の自動判定がない |
 | `IIP-IDP17-c-idp-01` | single_logout_idp | single_logout_idp | single_logout_idp | ブラウザ完了後の自動判定がない |
-| `IIP-IDP17-n-idp-01` | single_logout_idp | single_logout_idp | — | ブラウザ・SLOの追加観測不足 |
+| `IIP-IDP17-n-idp-01` | single_logout_idp | single_logout_idp | — | ブラウザ・SLOの追加観測不足 / 実行したが確定できない |
 | `IIP-IDP17-r-idp-01` | single_logout_idp | single_logout_idp | single_logout_idp | ブラウザ完了後の自動判定がない |
 | `IIP-IDP17-s-idp-01` | single_logout_idp | single_logout_idp | single_logout_idp | ブラウザ完了後の自動判定がない |
-| `IIP-IDP17-u-idp-01` | single_logout_idp | single_logout_idp | — | ブラウザ・SLOの追加観測不足 |
+| `IIP-IDP17-u-idp-01` | single_logout_idp | single_logout_idp | — | ブラウザ・SLOの追加観測不足 / 実行したが確定できない |
 | `IIP-IDP17-x-idp-01` | single_logout_idp | single_logout_idp | single_logout_idp | ブラウザ完了後の自動判定がない |
 | `IIP-IDP17-y-idp-01` | single_logout_idp | single_logout_idp | single_logout_idp | ブラウザ完了後の自動判定がない |
 | `IIP-IDP17-z-idp-01` | single_logout_idp | single_logout_idp | single_logout_idp | ブラウザ完了後の自動判定がない |

@@ -53,6 +53,10 @@ Keycloakの暗号属性は個別削除が反映されないため、事前観測
 
 `IIP-SSO05-a` / `IIP-SSO05-a2` はpersistent形式の成功応答を必要としますが、Shibbolethの既定構成ではpersistent要求が`Requester`で拒否されます。`saml-nameid.properties`の`idp.persistentId.sourceAttribute=uid`と`useUnfilteredAttributes=true`を一時設定し、NameID生成サービスの再読込とTomcat再起動（プロパティ読込をログで確認）後にブラウザ経路を2回再試験しました。しかしpersistent要求3件はいずれも`SubjectCanonicalizationError`（subject canonicalization flow不在）で拒否され、成功応答は得られませんでした。設定は`before`へ復元し、再起動後にIdPのメタデータ200を確認済みです。SSO05-a/a2は未検証のまま理由を「c14n前提の整備後に再試験」へ更新し、製品FAILとは扱いません。試行の記録は`build/acceptance/reference-20260915/peer-intent/shib-config/diagnosis.json`に保存しています。
 
+## SLOブラウザoracleの未実装範囲
+
+SLO系には、Suite側の観測実装がまだないため`browser.oracle-unavailable`で終わるケースがあります。3製品のsingle_logout_idpで、`IIP-IDP17-b/b1/b2/c/r/s/x/y/z/aa/al`と`IIP-IDP18-b/c/d`の14ケース（製品別）です。非同期SLO要求、誤ったDestination、無効署名の受理、伝播タイムアウト、Redirect限定のSLOエンドポイントなど、Suiteが能動的に送る必要がある入力が対象で、IdP側の応答待ちや操作不足ではありません。製品FAILとは扱わず、Suite側の実装計画（suite-observation-gap）として台帳の理由を更新しました。Shibbolethの`IIP-IDP17-n/u`は対象メッセージまで観測できているため、識別子のstrong matchとNotOnOrAfterの対応付けという残条件を理由として記録しています。
+
 ## 証拠と限界
 
 Runのresult.json・report.html・transcript・ログ・設定バックアップは `build/acceptance/reference-20260915/peer-intent/` に保存しています（Git管理対象外）。G2-30は未解消のままで、この作業は独立承認ではありません。[全件台帳](26-unverified-case-inventory.md)と[比較表](23-reference-test-comparison.md)を生成器で更新しています。
