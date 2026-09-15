@@ -32,7 +32,7 @@ public final class LogoutTranscriptProfileCase {
         RESPONSE_ISSUER_COUNT, RESPONSE_ISSUER_VALUE, RESPONSE_ISSUER_FORMAT, RESPONSE_SIGNATURE,
         REQUEST_ISSUER_COUNT, REQUEST_ISSUER_VALUE, REQUEST_ISSUER_FORMAT, REQUEST_SIGNATURE,
         REQUEST_NOT_ON_OR_AFTER, REQUEST_IDENTIFIER_MATCH, REQUEST_NOT_ON_OR_AFTER_BOUND,
-        REDIRECT_LOGOUT_REQUEST_ACCEPTED
+        REDIRECT_LOGOUT_REQUEST_ACCEPTED, TARGET_REDIRECT_LOGOUT_REQUEST, TARGET_REDIRECT_RESPONSE_CONSUMED
     }
 
     private static final String PROTOCOL = "urn:oasis:names:tc:SAML:2.0:protocol";
@@ -104,6 +104,9 @@ public final class LogoutTranscriptProfileCase {
             case REQUEST_IDENTIFIER_MATCH -> requestIdentifierMatches(targetLogout, all);
             case REQUEST_NOT_ON_OR_AFTER_BOUND -> requestNotOnOrAfterBound(targetLogout, all);
             case REDIRECT_LOGOUT_REQUEST_ACCEPTED -> redirectLogoutRequestAccepted(targetLogout, all);
+            case TARGET_REDIRECT_LOGOUT_REQUEST -> targetRedirectLogoutRequest(targetLogout);
+            case TARGET_REDIRECT_RESPONSE_CONSUMED -> targetRedirectResponseConsumed(
+                    targetLogout, all, snapshot.entries());
         };
     }
 
@@ -554,8 +557,68 @@ public final class LogoutTranscriptProfileCase {
     private CaseOutcome absent() {
         return switch (rule) {
             case ASYNC_CHOICE -> informationalAsync(List.of());
+            case TARGET_REDIRECT_LOGOUT_REQUEST -> optionalNotObserved("slo.redirect-request.not-issued");
+            case TARGET_REDIRECT_RESPONSE_CONSUMED -> optionalNotObserved("slo.redirect-response.not-issued");
             default -> optionalNotObserved("slo.target-message.not-observed");
         };
+    }
+
+    private CaseOutcome targetRedirectLogoutRequest(List<Message> targetLogout) {
+        var requests = targetLogout.stream().filter(value -> is(value.logout(), "LogoutRequest")).toList();
+        if (requests.isEmpty()) return optionalNotObserved("slo.redirect-request.not-issued");
+        var methods = new java.util.LinkedHashSet<String>();
+        for (var message : requests) {
+            methods.add(String.valueOf(message.entry().method()).toUpperCase(java.util.Locale.ROOT));
+        }
+        var misleading = requests.stream()
+                .filter(value -> !"GET".equalsIgnoreCase(value.entry().method()))
+                .map(Message::reference).toList();
+        return new CaseOutcome(misleading.isEmpty() ? Outcome.SATISFIED : Outcome.VIOLATED, null,
+                misleading.isEmpty() ? "slo.redirect-request.observed" : "slo.redirect-request.binding-violated",
+                misleading.isEmpty() ? "slo.redirect-request.observed" : "slo.redirect-request.binding-violated",
+                evidence(requests), Map.of("methods", List.copyOf(methods), "violations", misleading));
+    }
+
+    private CaseOutcome targetRedirectResponseConsumed(List<Message> targetLogout, List<Message> all,
+            List<TranscriptEntry> entries) {
+        var requests = targetLogout.stream().filter(value -> is(value.logout(), "LogoutRequest")).toList();
+        if (requests.isEmpty()) return optionalNotObserved("slo.redirect-response.not-issued");
+        var ids = requests.stream().map(value -> value.logout().getAttribute("ID"))
+                .collect(java.util.stream.Collectors.toSet());
+        var responses = all.stream()
+                .filter(value -> value.entry().direction() == Direction.OUTBOUND)
+                .filter(value -> is(value.logout(), "LogoutResponse"))
+                .filter(value -> ids.contains(value.logout().getAttribute("InResponseTo")))
+                .toList();
+        if (responses.isEmpty()) {
+            return notVerifiedWithEvidence(requests, "slo.redirect-response.unavailable",
+                    "slo.redirect-response.unavailable");
+        }
+        var nonRedirect = responses.stream().filter(value -> !String.valueOf(
+                        value.entry().samlSummary().getOrDefault("binding", "")).endsWith(":HTTP-Redirect"))
+                .map(Message::reference).toList();
+        if (!nonRedirect.isEmpty()) {
+            return new CaseOutcome(Outcome.VIOLATED, null, "slo.redirect-response.binding-violated",
+                    "slo.redirect-response.binding-violated", evidence(responses),
+                    Map.of("violations", nonRedirect));
+        }
+        var lastResponseAt = responses.stream().map(value -> value.entry().timestamp())
+                .max(java.util.Comparator.naturalOrder()).orElse(null);
+        var observations = entries.stream()
+                .filter(entry -> "BROWSER".equalsIgnoreCase(entry.method()))
+                .filter(entry -> lastResponseAt == null || !entry.timestamp().isBefore(lastResponseAt))
+                .toList();
+        if (observations.isEmpty()) {
+            return notVerifiedWithEvidence(responses, "slo.redirect-response.consumption-unobserved",
+                    "slo.redirect-response.consumption-unobserved");
+        }
+        var failed = observations.stream().anyMatch(entry -> Boolean.TRUE.equals(
+                entry.samlSummary().getOrDefault("failure_indicated",
+                        entry.status() != null && entry.status() >= 400)));
+        return new CaseOutcome(failed ? Outcome.VIOLATED : Outcome.SATISFIED, null,
+                failed ? "slo.redirect-response.not-consumed" : "slo.redirect-response.consumed",
+                failed ? "slo.redirect-response.not-consumed" : "slo.redirect-response.consumed",
+                evidence(responses), Map.of("observations", observations.size()));
     }
 
     private CaseOutcome optionalNotObserved(String reasonCode) {
@@ -622,7 +685,7 @@ public final class LogoutTranscriptProfileCase {
         final List<TranscriptEntry> entries;
         try { entries = List.copyOf(transcript.list(runId)); }
         catch (RuntimeException unavailable) {
-            return new Snapshot(List.of(), List.of("history_unavailable"), List.of());
+            return new Snapshot(List.of(), List.of("history_unavailable"), List.of(), List.of());
         }
         var ids = new java.util.HashSet<String>();
         for (var entry : entries) {
@@ -688,7 +751,7 @@ public final class LogoutTranscriptProfileCase {
                 issues.add("decoded_content_unreadable");
             }
         }
-        return new Snapshot(List.copyOf(result), List.copyOf(issues), List.copyOf(refs));
+        return new Snapshot(List.copyOf(result), List.copyOf(issues), List.copyOf(refs), List.copyOf(entries));
     }
 
     /** In-memory view only: identifiers inside an encrypted login Assertion must be readable. */
@@ -736,6 +799,8 @@ public final class LogoutTranscriptProfileCase {
 
     private record Message(
             TranscriptEntry entry, org.w3c.dom.Document document, Element logout, String reference, String digest, byte[] xml) {}
-    private record Snapshot(List<Message> messages, List<String> issues, List<EvidenceRef> evidence) {}
+    private record Snapshot(
+            List<Message> messages, List<String> issues, List<EvidenceRef> evidence,
+            List<TranscriptEntry> entries) {}
     private record IssuedSessionIdentifier(String identifierKey, Set<String> sessionIndexes) {}
 }

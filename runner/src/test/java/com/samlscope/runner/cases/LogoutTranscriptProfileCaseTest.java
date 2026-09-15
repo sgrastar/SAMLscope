@@ -329,6 +329,55 @@ class LogoutTranscriptProfileCaseTest {
         }
     }
 
+    @Test
+    void targetRedirectRequestRequiresTheConfiguredRedirectBinding() {
+        var redirect = fixture(new Entry("request", Direction.INBOUND, "GET",
+                request("_request", "2.0", ""), null, Map.of("type", "LogoutRequest")));
+        assertEquals(Outcome.SATISFIED,
+                redirect.evaluate(LogoutTranscriptProfileCase.Rule.TARGET_REDIRECT_LOGOUT_REQUEST));
+        var post = fixture(new Entry("request", Direction.INBOUND, "POST",
+                request("_request", "2.0", ""), null, Map.of("type", "LogoutRequest")));
+        assertEquals(Outcome.VIOLATED,
+                post.evaluate(LogoutTranscriptProfileCase.Rule.TARGET_REDIRECT_LOGOUT_REQUEST));
+        assertEquals(Outcome.SATISFIED_WITH_NOTE,
+                fixture().evaluate(LogoutTranscriptProfileCase.Rule.TARGET_REDIRECT_LOGOUT_REQUEST));
+    }
+
+    @Test
+    void targetRedirectResponseConsumptionNeedsARedirectResponseAndAnObservedLanding() {
+        var redirectBinding = Map.<String, Object>of(
+                "type", "LogoutResponse", "binding", "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect");
+        var consumed = fixture(
+                new Entry("request", Direction.INBOUND, "GET",
+                        request("_request", "2.0", ""), null, Map.of("type", "LogoutRequest")),
+                new Entry("response", Direction.OUTBOUND, "POST",
+                        response("_response", "2.0", "_request", success()), null, redirectBinding),
+                new Entry("obs", Direction.INBOUND, "BROWSER", null, null, Map.of(
+                        "type", "BrowserResponseObservation", "http_status", 200, "failure_indicated", false)));
+        assertEquals(Outcome.SATISFIED,
+                consumed.evaluate(LogoutTranscriptProfileCase.Rule.TARGET_REDIRECT_RESPONSE_CONSUMED));
+        var failed = fixture(
+                new Entry("request", Direction.INBOUND, "GET",
+                        request("_request", "2.0", ""), null, Map.of("type", "LogoutRequest")),
+                new Entry("response", Direction.OUTBOUND, "POST",
+                        response("_response", "2.0", "_request", success()), null, redirectBinding),
+                new Entry("obs", Direction.INBOUND, "BROWSER", null, null, Map.of(
+                        "type", "BrowserResponseObservation", "http_status", 200, "failure_indicated", true)));
+        assertEquals(Outcome.VIOLATED,
+                failed.evaluate(LogoutTranscriptProfileCase.Rule.TARGET_REDIRECT_RESPONSE_CONSUMED));
+        var postBinding = fixture(
+                new Entry("request", Direction.INBOUND, "GET",
+                        request("_request", "2.0", ""), null, Map.of("type", "LogoutRequest")),
+                new Entry("response", Direction.OUTBOUND, "POST",
+                        response("_response", "2.0", "_request", success()), null,
+                        Map.of("type", "LogoutResponse",
+                                "binding", "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST")));
+        assertEquals(Outcome.VIOLATED,
+                postBinding.evaluate(LogoutTranscriptProfileCase.Rule.TARGET_REDIRECT_RESPONSE_CONSUMED));
+        assertEquals(Outcome.SATISFIED_WITH_NOTE,
+                fixture().evaluate(LogoutTranscriptProfileCase.Rule.TARGET_REDIRECT_RESPONSE_CONSUMED));
+    }
+
     private TranscriptEntry altered(TranscriptEntry e, String run, String decodedRef, int bytes, Map<String, Object> summary) {
         return new TranscriptEntry(e.id(), run, e.direction(), e.timestamp(), e.correlationId(), e.method(), e.url(),
                 e.status(), e.headers(), e.bodyRef(), e.bodyBytes(), decodedRef, bytes, e.contentType(), e.rawQuery(), summary);
@@ -381,8 +430,8 @@ class LogoutTranscriptProfileCaseTest {
         private Fixture(List<Entry> values) {
             var sequence = 0;
             for (var value : values) {
-                var reference = "decoded-" + value.id();
-                var bytes = value.xml().getBytes(StandardCharsets.UTF_8);
+                var reference = value.xml() == null ? null : "decoded-" + value.id();
+                var bytes = value.xml() == null ? new byte[0] : value.xml().getBytes(StandardCharsets.UTF_8);
                 entries.add(new TranscriptEntry(
                         value.id(), RUN, value.direction(), Instant.parse("2026-08-29T00:00:00Z").plusSeconds(sequence++),
                         "corr", value.method(), "https://suite.example/slo", 200, Map.of(), null, 0,

@@ -376,6 +376,41 @@ def render(root,definitions,output):
                        interaction=interaction,verdict=case['verdict'],evidence=case['evidence'],
                        diagnostics=case.get('diagnostics',{}))
             transitions.append(dict(row))
+        slo_18b={
+            'keycloak':'reference-20260915/slo-oracle/keycloak/slo_18b',
+            'shibboleth':'reference-20260915/slo-oracle/shibboleth/slo_18b',
+            'simplesamlphp':'reference-20260915/slo-oracle/simplesamlphp/slo_18b',
+        }
+        if row['profile']=='single_logout_idp' and row['case']=='IIP-IDP18-b-idp-01' \
+                and row['product'] in slo_18b and row.get('verdict','NOT_VERIFIED')=='NOT_VERIFIED':
+            path=root.parent.parent/slo_18b[row['product']]/'result.json'
+            raw=path.read_bytes(); result=json.loads(raw)
+            case=next(c for req in result['requirements'] for c in req['cases'] if c['id']==row['case'])
+            assert (case['verdict'],case['reason_code'])==('PASS','slo.redirect-response.observed'),(
+                row['product'],case['verdict'],case['reason_code'])
+            row['baseline']={k:row.get(k) for k in ('run','reason_code','result_sha256','evidence_folder','interaction')}
+            row.update(run=result['run']['id'],reason_code=case['reason_code'],
+                       result_sha256=hashlib.sha256(raw).hexdigest(),
+                       evidence_folder=str(path.parent.relative_to(root.parents[3])),
+                       interaction=None,verdict=case['verdict'],evidence=case['evidence'],
+                       diagnostics=case.get('diagnostics',{}))
+            transitions.append(dict(row))
+        if row['profile']=='single_logout_idp' and row['product']=='shibboleth' \
+                and row['case'] in {'IIP-IDP18-c-idp-01','IIP-IDP18-d-idp-01'} \
+                and row.get('verdict','NOT_VERIFIED')=='NOT_VERIFIED':
+            expected={'IIP-IDP18-c-idp-01':('PASS','slo.redirect-request.observed'),
+                      'IIP-IDP18-d-idp-01':('PASS','slo.redirect-response.consumed')}[row['case']]
+            path=root.parent.parent/'reference-20260915/peer-intent/shibboleth/slo_target_logout_18cd/result.json'
+            raw=path.read_bytes(); result=json.loads(raw)
+            case=next(c for req in result['requirements'] for c in req['cases'] if c['id']==row['case'])
+            assert (case['verdict'],case['reason_code'])==expected,(row['case'],case['verdict'],case['reason_code'])
+            row['baseline']={k:row.get(k) for k in ('run','reason_code','result_sha256','evidence_folder','interaction')}
+            row.update(run=result['run']['id'],reason_code=case['reason_code'],
+                       result_sha256=hashlib.sha256(raw).hexdigest(),
+                       evidence_folder=str(path.parent.relative_to(root.parents[3])),
+                       interaction=None,verdict=case['verdict'],evidence=case['evidence'],
+                       diagnostics=case.get('diagnostics',{}))
+            transitions.append(dict(row))
         if row.get('verdict','NOT_VERIFIED')=='NOT_VERIFIED':refreshed.append(row)
     rows=refreshed
     (root/'retest-delta.json').write_text(json.dumps(transitions,ensure_ascii=False,indent=2)+'\n')

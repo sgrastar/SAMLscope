@@ -308,17 +308,8 @@ public final class ActiveProbeCoordinator {
         if (outbox.status() == OutboxStatus.PENDING || outbox.status() == OutboxStatus.BLOCKED_ON_CREDENTIAL) {
             throw new IllegalStateException("Browser observation arrived before front-channel dispatch");
         }
-        var bodyBytes = (body == null ? "" : body).getBytes(StandardCharsets.UTF_8);
-        var saml = com.samlscope.saml.normal.SamlEmbeddedMessage.find(body)
-                .map(bytes -> (byte[]) bytes).orElse(new byte[0]);
-        var summary = new java.util.LinkedHashMap<String, Object>();
-        summary.put("type", "BrowserResponseObservation");
-        summary.put("http_status", httpStatus);
-        summary.put("url", url == null ? "" : url);
-        var entry = transcript.record(new TranscriptInput(
-                runId, Direction.INBOUND, clock.instant(), actionId, "BROWSER",
-                url == null || url.isBlank() ? outbox.action().target().toString() : url,
-                httpStatus, Map.of(), bodyBytes, "text/html", null, saml, Map.copyOf(summary)));
+        var entry = recordBrowserObservation(runId, actionId, httpStatus, url, body,
+                outbox.action().target().toString());
         if (outbox.status() == OutboxStatus.UNKNOWN_DELIVERY) {
             dispatcher.confirmInboundDelivery(actionId, entry.id());
         }
@@ -332,6 +323,27 @@ public final class ActiveProbeCoordinator {
         executionService.resume(runId, testCase, contexts.contextFor(runId),
                 new CaseEvent.BrowserObservation(httpStatus, url, body));
         return status(runId);
+    }
+
+    /** Records an observed browser landing as evidence for transcript-driven SLO binding rules. */
+    public com.samlscope.core.transcript.TranscriptEntry recordBrowserObservation(
+            String runId, String correlationId, int httpStatus, String url, String body, String fallbackUrl) {
+        requireRun(runId);
+        var bodyBytes = (body == null ? "" : body).getBytes(StandardCharsets.UTF_8);
+        var saml = com.samlscope.saml.normal.SamlEmbeddedMessage.find(body)
+                .map(bytes -> (byte[]) bytes).orElse(new byte[0]);
+        var summary = new java.util.LinkedHashMap<String, Object>();
+        summary.put("type", "BrowserResponseObservation");
+        summary.put("http_status", httpStatus);
+        summary.put("failure_indicated",
+                com.samlscope.runner.cases.SloProbeObservation.failureIndicated(httpStatus, body));
+        summary.put("url", url == null ? "" : url);
+        return transcript.record(new TranscriptInput(
+                runId, Direction.INBOUND, clock.instant(),
+                correlationId == null || correlationId.isBlank() ? "browser-observation" : correlationId,
+                "BROWSER",
+                url == null || url.isBlank() ? (fallbackUrl == null ? "" : fallbackUrl) : url,
+                httpStatus, Map.of(), bodyBytes, "text/html", null, saml, Map.copyOf(summary)));
     }
 
     /** Marks only the current fixture unavailable and continues the remaining scenario controls. */

@@ -18,6 +18,7 @@ import com.samlscope.saml.normal.*;
 public final class IdpBasicLogoutScenarioTestCase implements TestCase, BrowserFrontChannelScenario, BrowserPrompt {
     public static final String ID = "IIP-IDP17-a-idp-01";
     public static final String REDIRECT_ID = "IIP-IDP18-a-idp-01";
+    public static final String REDIRECT_RESPONSE_ID = "IIP-IDP18-b-idp-01";
     public static final String ENCRYPTED_ID = "IIP-IDP19-a-idp-01";
     public static final String MULTI_KEY_ID = "IIP-IDP19-c-idp-01";
     private final String caseId;
@@ -57,7 +58,8 @@ public final class IdpBasicLogoutScenarioTestCase implements TestCase, BrowserFr
         this(ID, configurations);
     }
     public IdpBasicLogoutScenarioTestCase(String caseId, Function<String, Configuration> configurations) {
-        if (!List.of(ID, REDIRECT_ID, ENCRYPTED_ID, MULTI_KEY_ID).contains(caseId)) throw new IllegalArgumentException("Unsupported logout scenario");
+        if (!List.of(ID, REDIRECT_ID, REDIRECT_RESPONSE_ID, ENCRYPTED_ID, MULTI_KEY_ID).contains(caseId))
+            throw new IllegalArgumentException("Unsupported logout scenario");
         this.caseId = caseId;
         this.configurations = Objects.requireNonNull(configurations);
     }
@@ -84,7 +86,7 @@ public final class IdpBasicLogoutScenarioTestCase implements TestCase, BrowserFr
     @Override public CaseStep start(CaseContext context) {
         if (!context.transcriptComplete()) return finish(Outcome.NOT_VERIFIED,"slo.basic.history-incomplete",List.of());
         var c = configurations.apply(context.runId());
-        if (REDIRECT_ID.equals(caseId) && c.logoutBinding() != Binding.SIGNED_REDIRECT)
+        if (List.of(REDIRECT_ID, REDIRECT_RESPONSE_ID).contains(caseId) && c.logoutBinding() != Binding.SIGNED_REDIRECT)
             return finish(Outcome.NOT_VERIFIED, "slo.redirect.configuration-unavailable", List.of());
         if (!c.login().preconditionsSatisfied() || c.logoutEndpoint() == null || c.suiteLogoutEndpoint() == null
                 || c.suiteCredentials() == null || c.targetSigningCertificates().isEmpty() || c.targetIssuer() == null)
@@ -158,6 +160,15 @@ public final class IdpBasicLogoutScenarioTestCase implements TestCase, BrowserFr
                         ? finish(Outcome.SATISFIED,"slo.redirect.logout-request-accepted.satisfied",evidence)
                         : finish(Outcome.VIOLATED,"slo.redirect.logout-request-rejected",evidence);
             }
+            if (REDIRECT_RESPONSE_ID.equals(caseId)) {
+                // The Suite SP advertises only a Redirect response endpoint, so a POST response
+                // is a binding violation while a Redirect response completes the obligation.
+                if (!"GET".equalsIgnoreCase(inboundMethod(context, inbound)))
+                    return finish(Outcome.VIOLATED,"slo.redirect-response.binding-violated",evidence);
+                return SUCCESS.equals(status(root))
+                        ? finish(Outcome.SATISFIED,"slo.redirect-response.observed",evidence)
+                        : finish(Outcome.VIOLATED,"slo.redirect-response.rejected",evidence);
+            }
             // G1 explicitly assigns session termination and status branching to IDP17.e/o/q.
             return finish(Outcome.SATISFIED,"slo.basic.synchronous-response-observed",evidence);
         } catch (RuntimeException invalid) {
@@ -227,6 +238,13 @@ public final class IdpBasicLogoutScenarioTestCase implements TestCase, BrowserFr
                 List.of(new OutboundAction(action,kind,payload,target,false)),
                 new InboundMatcher("saml-response",Map.of("ScenarioActionId",action)),c.login().responseTimeout());
     }
+    private String inboundMethod(CaseContext context, CaseEvent.InboundMessage inbound) {
+        return context.transcript().list(context.runId()).stream()
+                .filter(entry -> inbound.evidence().reference().equals(entry.id()))
+                .map(com.samlscope.core.transcript.TranscriptEntry::method)
+                .findFirst().orElse("");
+    }
+
     private boolean trustedRedirect(CaseContext context, Configuration c, CaseEvent.InboundMessage inbound) {
         var entries = context.transcript().list(context.runId()).stream()
                 .filter(entry -> inbound.evidence().reference().equals(entry.id())).toList();

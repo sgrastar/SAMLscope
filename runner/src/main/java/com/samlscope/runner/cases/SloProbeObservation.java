@@ -8,7 +8,7 @@ import com.samlscope.saml.normal.SecureXml;
 import org.w3c.dom.Element;
 
 /** What the authenticated browser or the SLO endpoint observed for one probe delivery. */
-record SloProbeObservation(
+public record SloProbeObservation(
         int httpStatus,
         String url,
         boolean samlPresent,
@@ -19,6 +19,11 @@ record SloProbeObservation(
     private static final String PROTOCOL = "urn:oasis:names:tc:SAML:2.0:protocol";
     private static final List<String> FAILURE_TOKENS = List.of(
             "fail", "error", "invalid", "denied", "unable", "unsuccessful", "not able", "rejected");
+
+    /** Shared classification for browser observations recorded outside a probe action. */
+    public static boolean failureIndicated(int status, String body) {
+        return status >= 400 || containsFailureToken(body == null ? "" : body);
+    }
 
     static SloProbeObservation ofBrowserResponse(int status, String url, String body) {
         var text = body == null ? "" : body;

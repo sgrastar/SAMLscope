@@ -430,7 +430,8 @@ final class M1Runtime {
             java.util.List<java.security.cert.X509Certificate> certificates = java.util.List.of();
             try {
                 var endpoints = metadataParser.parse(runMetadata.apply(runId), plan.target().entityId()).singleLogoutServices();
-                if (!com.samlscope.runner.cases.IdpBasicLogoutScenarioTestCase.REDIRECT_ID.equals(caseId))
+                if (!java.util.List.of(com.samlscope.runner.cases.IdpBasicLogoutScenarioTestCase.REDIRECT_ID,
+                        com.samlscope.runner.cases.IdpBasicLogoutScenarioTestCase.REDIRECT_RESPONSE_ID).contains(caseId))
                     endpoint = endpoints.stream().filter(value -> com.samlscope.saml.metadata.MetadataService.POST.equals(value.binding()))
                             .map(com.samlscope.saml.metadata.TargetMetadata.Endpoint::location).findFirst().orElse(null);
                 if (endpoint == null) {
@@ -724,6 +725,13 @@ final class M1Runtime {
         var status = activeProbes.abort(runId);
         if (results != null) results.generate(runId);
         return status;
+    }
+
+    com.samlscope.core.transcript.TranscriptEntry recordBrowserObservation(
+            String runId, com.samlscope.api.ApiModels.BrowserObservation observation) {
+        requireRun(runId);
+        return activeProbes.recordBrowserObservation(
+                runId, null, observation.status(), observation.url(), observation.body(), null);
     }
 
     ActiveProbeCoordinator.Status reportActiveProbeBrowserResponse(

@@ -129,11 +129,25 @@ Suite側の直接HTTP送出（`LOGOUT_PROBE`）と、正しいDestinationの対�
 
 次の実装対象は、HTTP-Redirect限定端点（18-b/c/d）と伝播（r/s・c）です。
 
-## 7. 操作コストの記録方針
+## 7. バッチ3の結果（IIP-IDP18.b / c / d）
+
+Suite SPがRedirect応答エンドポイントのみを広告する構成を、対象製品側の設定で作成しました（Shibboleth: `suite.xml`のSP SingleLogoutServiceをRedirectのみにしてMetadataResolverService再読込。Keycloak: クライアント属性`post`/`soap`を空文字で除去し`redirect`のみ残置。SimpleSAMLphp: 既にRedirectのみ）。Suiteは署名付きRedirect（GET）LogoutRequestを送出し、応答のbindingをトランスクリプトのHTTPメソッドから判定します。
+
+| ケース | Keycloak | Shibboleth | SimpleSAMLphp | 観測した事実 |
+|---|---|---|---|---|
+| `IIP-IDP18.b` | Success | Success | Success | Redirect要求に対しLogoutResponseがHTTP-Redirectで返る |
+| `IIP-IDP18.c` | 未確定 | Success | 未確定 | ShibbolethはIdP起点LogoutRequestをHTTP-Redirectで送出 |
+| `IIP-IDP18.d` | 未確定 | Success | 未確定 | SuiteがRedirectで返したLogoutResponseをIdPが消費（ブラウザ観測200・失敗表示なし） |
+
+- 実証による未検証解消: 5観測（523→518、異なるケースID 172→171）。
+- Keycloak/SimpleSAMLphpの`IIP-IDP18.c/d`は、対象がIdP起点LogoutRequestを発行しないため（`docs/31`参照）、キャンペーンのケースが未起動のままです。variantの「発行されない場合は`satisfied_with_note`」を適用するには、キャンペーンの完了（未発行の確定）を記録する経路が必要で、これは未実装の残課題として記録します。
+- 操作: ShibbolethのSPメタデータ書換え1回・再読込1回、Keycloakクライアント属性書換え1回（post/soap除去）、Suite再作成1回、Run作成4回（18-b用3、18-c/d用1）、ユーザー操作0回。
+
+## 8. 操作コストの記録方針
 
 製品設定の書き込み・復元、管理API操作、Suite再作成、Run回数をバッチごとに記録し、`docs/31`と各バッチの`operations.json`へ保存します。失敗試行も含めます。
 
-## 8. 進捗の区分
+## 9. 進捗の区分
 
 - コード実装: Suite/コアの変更とテスト。
 - 実環境への接続: Run作成、fixture送出、応答記録。

@@ -43,6 +43,7 @@ public final class ApprovedBrowserCaseRegistry {
                         testCase.id(), runId -> configurations.apply(testCase.id(), runId), transcriptContent);
             }
             if (java.util.Set.of(IdpBasicLogoutScenarioTestCase.ID, IdpBasicLogoutScenarioTestCase.REDIRECT_ID,
+                    IdpBasicLogoutScenarioTestCase.REDIRECT_RESPONSE_ID,
                     IdpBasicLogoutScenarioTestCase.ENCRYPTED_ID, IdpBasicLogoutScenarioTestCase.MULTI_KEY_ID)
                     .contains(testCase.id())) {
                 return (com.samlscope.core.caseexec.TestCase) new IdpBasicLogoutScenarioTestCase(testCase.id(),

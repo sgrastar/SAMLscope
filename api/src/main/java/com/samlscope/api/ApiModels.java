@@ -40,6 +40,15 @@ final class ApiModels {
     record RunCreated(com.samlscope.core.run.TestRun run, String managementUrl) {}
     record ErrorView(String error, String message) {}
 
+    /** Observed browser landing without an action correlation, used by transcript-driven rules. */
+    record BrowserObservation(int status, String url, String body) {
+        public BrowserObservation {
+            if (url == null) url = "";
+            if (body == null) body = "";
+            if (body.length() > 512 * 1024) body = body.substring(0, 512 * 1024);
+        }
+    }
+
     /** Observed browser landing after a front-channel probe; the Suite stores it as evidence. */
     record BrowserResponse(String actionId, int status, String url, String body) {
         public BrowserResponse {
