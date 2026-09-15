@@ -139,6 +139,16 @@
 
 対象: `IIP-MD05.c5/c6/c7`、`IIP-MD06.c`、`IIP-MD09.a/b`。
 
-## 3. 未確定を残す理由と次の作業
+## 3. 製品自身の取込経路の実装（コードで検証済み）
 
-(b)の取込観測は、メタデータ項目→クライアント属性の写像と、その後の挙動観測（署名検証・鍵選択・ACS選択）をoracleとして実装する必要があります。取込が成功しても意味処理のSuccessにはしません。次の実装単位は、`MetadataFixtureObservationTestCase`系の既存観測と管理API取込を組み合わせ、MD05.a4/av/aw・MD12系から着手します。分類はVerdictを変えず、`docs/26`の診断へ反映しています。
+管理コンソールのメタデータ取込をPlaywrightで自動化し、**元のfixtureファイル**を製品自身の取込経路へ渡す経路を実装しました（`dev/keycloak/console_import.mjs`、実行に`npm i playwright`が必要）。SuiteによるXML→属性変換は使いません。
+
+検証できたこと:
+- コンソールの「Import client」ダイアログがSuiteのSPメタデータ文書を受け付け、クライアントを作成しました（クライアント詳細画面へ遷移）。
+- 取込結果（製品の解釈）を管理APIで記録しました: `saml_assertion_consumer_url_post/redirect`、`saml_single_logout_service_url_post/soap/redirect`、`saml.signing.certificate`、`saml.assertion.signature`、`saml.encrypt`、`saml.server.signature`、NameID形式など（`console-import/imported-client.json`）。
+- 同じclientIdの既存クライアントは取込で再作成されました（クライアントDB IDが変化）。既存属性は保持され、後続Runで使うSLO Redirect端点を再適用して復元を確認しました（`console-import/restore.json`）。
+- 取込成功はSuccessの根拠にしません。以後は取込後にプロトコルフローを実行し、署名検証・鍵選択・証明書受理の実挙動で判定します。
+
+## 4. 未確定を残す理由と次の作業
+
+(b)の取込観測は、取込経路（実装済み）に加えて、取込後の挙動観測（署名検証・鍵選択・ACS選択）をoracleとして実装する必要があります。次の実装単位は、取込済みクライアントに対するSSO/署名フローの観測を`docs/05`のインターフェースに沿って追加し、MD05.a4/av/aw・MD12系から着手します。分類はVerdictを変えず、`docs/26`の診断へ反映しています。
