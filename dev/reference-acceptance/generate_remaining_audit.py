@@ -91,7 +91,7 @@ _KEYCLOAK_METADATA_FEATURE_ABSENT = {
     'IIP-MD05-a5-idp-01', 'IIP-MD05-a8-idp-01', 'IIP-MD05-ac-idp-01', 'IIP-MD05-ad-idp-01',
     'IIP-MD05-ae-idp-01', 'IIP-MD05-af-idp-01', 'IIP-MD05-ah-idp-01', 'IIP-MD05-am-idp-01',
     'IIP-MD05-an-idp-01', 'IIP-MD05-ao-idp-01', 'IIP-MD05-ap-idp-01', 'IIP-MD05-aq-idp-01',
-    'IIP-MD05-ar-idp-01', 'IIP-MD05-as-idp-01', 'IIP-MD05-aw-idp-01', 'IIP-MD05-b-idp-01',
+    'IIP-MD05-ar-idp-01', 'IIP-MD05-as-idp-01', 'IIP-MD05-b-idp-01',
     'IIP-MD05-c-idp-01', 'IIP-MD05-c2-idp-01', 'IIP-MD05-c3-idp-01', 'IIP-MD05-cd-idp-01',
     'IIP-MD05-d-idp-01', 'IIP-MD05-d1-idp-01', 'IIP-MD05-e-idp-01', 'IIP-MD05-e5-idp-01',
     'IIP-MD05-e7-idp-01', 'IIP-MD05-e8-idp-01', 'IIP-MD05-e9-idp-01', 'IIP-MD05-ea-idp-01',
@@ -431,23 +431,29 @@ def render(root,definitions,output):
                        diagnostics=case.get('diagnostics',{}))
             transitions.append(dict(row))
         target_initiated={
-            'shibboleth':'reference-20260915/peer-intent/shibboleth/slo_target_logout_18cd',
-            'keycloak':'reference-20260915/peer-intent/keycloak/slo_target_logout_18cd2',
-            'simplesamlphp':'reference-20260915/peer-intent/simplesamlphp/slo_target_logout_18cd2',
+            'shibboleth':'reference-20260915/peer-intent/shibboleth/slo_audit',
+            'keycloak':'reference-20260915/peer-intent/keycloak/slo_audit',
+            'simplesamlphp':'reference-20260915/peer-intent/simplesamlphp/slo_audit',
         }
         target_expectations={
             'shibboleth':{
                 'IIP-IDP17-c-idp-01':('WARNING','slo.propagation.choice-recorded'),
+                'IIP-IDP17-r-idp-01':('NOT_VERIFIED','slo.propagation.failure-induction-unavailable'),
+                'IIP-IDP17-s-idp-01':('NOT_VERIFIED','slo.partial-logout.unobserved'),
                 'IIP-IDP18-c-idp-01':('PASS','slo.redirect-request.observed'),
-                'IIP-IDP18-d-idp-01':('PASS','slo.redirect-response.consumed')},
+                'IIP-IDP18-d-idp-01':('NOT_VERIFIED','slo.redirect-response.unavailable')},
             'keycloak':{
-                'IIP-IDP17-c-idp-01':('WARNING','slo.propagation.choice-recorded'),
-                'IIP-IDP18-c-idp-01':('WARNING','slo.redirect-request.not-issued'),
-                'IIP-IDP18-d-idp-01':('WARNING','slo.redirect-response.not-issued')},
+                'IIP-IDP17-c-idp-01':('NOT_VERIFIED','slo.propagation.not-observed'),
+                'IIP-IDP17-r-idp-01':('NOT_VERIFIED','slo.propagation.not-observed'),
+                'IIP-IDP17-s-idp-01':('NOT_VERIFIED','slo.partial-logout.not-observed'),
+                'IIP-IDP18-c-idp-01':('NOT_VERIFIED','slo.redirect-request.not-observed'),
+                'IIP-IDP18-d-idp-01':('NOT_VERIFIED','slo.redirect-response.not-observed')},
             'simplesamlphp':{
-                'IIP-IDP17-c-idp-01':('WARNING','slo.propagation.choice-recorded'),
-                'IIP-IDP18-c-idp-01':('WARNING','slo.redirect-request.not-issued'),
-                'IIP-IDP18-d-idp-01':('WARNING','slo.redirect-response.not-issued')},
+                'IIP-IDP17-c-idp-01':('NOT_VERIFIED','slo.propagation.not-observed'),
+                'IIP-IDP17-r-idp-01':('NOT_VERIFIED','slo.propagation.not-observed'),
+                'IIP-IDP17-s-idp-01':('NOT_VERIFIED','slo.partial-logout.not-observed'),
+                'IIP-IDP18-c-idp-01':('NOT_VERIFIED','slo.redirect-request.not-observed'),
+                'IIP-IDP18-d-idp-01':('NOT_VERIFIED','slo.redirect-response.not-observed')},
         }
         if row['profile']=='single_logout_idp' and row['product'] in target_initiated \
                 and row['case'] in target_expectations[row['product']] \
@@ -456,37 +462,6 @@ def render(root,definitions,output):
             raw=path.read_bytes(); result=json.loads(raw)
             case=next(c for req in result['requirements'] for c in req['cases'] if c['id']==row['case'])
             want=target_expectations[row['product']][row['case']]
-            assert (case['verdict'],case['reason_code'])==want,(row['product'],row['case'],case['verdict'],case['reason_code'])
-            row['baseline']={k:row.get(k) for k in ('run','reason_code','result_sha256','evidence_folder','interaction')}
-            row.update(run=result['run']['id'],reason_code=case['reason_code'],
-                       result_sha256=hashlib.sha256(raw).hexdigest(),
-                       evidence_folder=str(path.parent.relative_to(root.parents[3])),
-                       interaction=None,verdict=case['verdict'],evidence=case['evidence'],
-                       diagnostics=case.get('diagnostics',{}))
-            transitions.append(dict(row))
-        propagation={
-            'keycloak':'reference-20260915/peer-intent/keycloak/slo_target_logout_rs',
-            'shibboleth':'reference-20260915/peer-intent/shibboleth/slo_target_logout_rs',
-            'simplesamlphp':'reference-20260915/peer-intent/simplesamlphp/slo_target_logout_rs',
-        }
-        propagation_expectations={
-            'keycloak':{
-                'IIP-IDP17-r-idp-01':('WARNING','slo.propagation.not-implemented'),
-                'IIP-IDP17-s-idp-01':('WARNING','slo.propagation.not-implemented')},
-            'simplesamlphp':{
-                'IIP-IDP17-r-idp-01':('WARNING','slo.propagation.not-implemented'),
-                'IIP-IDP17-s-idp-01':('WARNING','slo.propagation.not-implemented')},
-            'shibboleth':{
-                'IIP-IDP17-r-idp-01':('NOT_VERIFIED','slo.propagation.failure-induction-unavailable'),
-                'IIP-IDP17-s-idp-01':('NOT_VERIFIED','slo.partial-logout.unobserved')},
-        }
-        if row['profile']=='single_logout_idp' and row['product'] in propagation \
-                and row['case'] in propagation_expectations[row['product']] \
-                and row.get('verdict','NOT_VERIFIED')=='NOT_VERIFIED':
-            path=root.parent.parent/propagation[row['product']]/'result.json'
-            raw=path.read_bytes(); result=json.loads(raw)
-            case=next(c for req in result['requirements'] for c in req['cases'] if c['id']==row['case'])
-            want=propagation_expectations[row['product']][row['case']]
             assert (case['verdict'],case['reason_code'])==want,(row['product'],row['case'],case['verdict'],case['reason_code'])
             row['baseline']={k:row.get(k) for k in ('run','reason_code','result_sha256','evidence_folder','interaction')}
             row.update(run=result['run']['id'],reason_code=case['reason_code'],
@@ -509,6 +484,17 @@ def render(root,definitions,output):
         row['variant_instructions']=[v['instruction_en'] for v in c['variant_plan']]
         row['controls']=[{'id':v['id'],'kind':v['kind'],'fixture':v.get('fixture')} for v in c['controls']]
         row['next_action']=GROUPS[group][2]
+        if row.get('product')=='keycloak' and row.get('profile')=='metadata_idp':
+            if row.get('capability_diagnosis')=='feature-absent':
+                row['next_action']=('製品自身の取込経路（管理コンソールのメタデータ取込）へ元fixtureを渡す経路は'
+                    '未実装。調査した経路（管理APIの属性一覧、サーバー側取込APIの有無、単一証明書モデル）では'
+                    '該当能力を確認できない。不存在は未確認であり、製品取込経路での再確認が必要。')
+                row['absence_basis']='not-confirmed-investigated-path'
+            elif row.get('capability_diagnosis')=='suite-observation-gap':
+                row['next_action']=('製品自身の取込経路へ元fixtureを渡し、その後の挙動（署名検証・鍵選択・'
+                    '証明書受理）を観測する。SuiteのXML→属性変換はメタデータ解釈の証拠にしない。')
+            elif row.get('capability_diagnosis')=='operator-attestation-available':
+                row['next_action']='公開・運用の証拠（鍵ロールオーバー履歴、失効扱い、Trust設定の要否）を運用者証言で確認する。'
         if row['case']=='IIP-G02-a-idp-01' and row.get('diagnostics',{}).get('remaining_conditions'):
             row['next_action']='残条件の入力・正常系対照・応答観測を実装する: '+', '.join(row['diagnostics']['remaining_conditions'])
         if row['case'] in implementations:

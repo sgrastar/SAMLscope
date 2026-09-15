@@ -883,11 +883,16 @@ public final class SamlScopeApplication {
         javalin.routes.get("/p/{plan}/idp/secondary/sso", ctx -> serveIdp(ctx, secondaryIdpPeer));
         javalin.routes.post("/p/{plan}/idp/secondary/sso", ctx -> serveIdp(ctx, secondaryIdpPeer));
         // Fixture-only endpoint: a participant that always fails is required to exercise
-        // continue-after-failure and PartialLogout. It carries no run correlation or verdict.
-        javalin.routes.get("/p/{plan}/sp/slo-fail", ctx ->
-                ctx.status(HttpStatus.INTERNAL_SERVER_ERROR).contentType("text/plain").result("slo failure fixture"));
-        javalin.routes.post("/p/{plan}/sp/slo-fail", ctx ->
-                ctx.status(HttpStatus.INTERNAL_SERVER_ERROR).contentType("text/plain").result("slo failure fixture"));
+        // continue-after-failure and PartialLogout. It records the attempt so the rule can require
+        // an observed failing attempt, but it never contributes a verdict by itself.
+        javalin.routes.get("/p/{plan}/sp/slo-fail", ctx -> {
+            recordSloFailParticipant(ctx, transcript, clock);
+            ctx.status(HttpStatus.INTERNAL_SERVER_ERROR).contentType("text/plain").result("slo failure fixture");
+        });
+        javalin.routes.post("/p/{plan}/sp/slo-fail", ctx -> {
+            recordSloFailParticipant(ctx, transcript, clock);
+            ctx.status(HttpStatus.INTERNAL_SERVER_ERROR).contentType("text/plain").result("slo failure fixture");
+        });
         for (var role : List.of("sp", "idp")) {
             javalin.routes.get("/p/{plan}/" + role + "/slo", ctx ->
                     serveSlo(ctx, sloPeer, SloPeerService.Transport.FRONT_CHANNEL, m1));
@@ -909,6 +914,18 @@ public final class SamlScopeApplication {
                     ctx.bodyAsBytes(), Map.of("type", "EcpPaosResponse")));
             ctx.status(HttpStatus.NO_CONTENT);
         });
+    }
+
+    private static void recordSloFailParticipant(
+            Context ctx, com.samlscope.core.transcript.TranscriptRecorder transcript,
+            java.time.Clock clock) {
+        var runId = ctx.queryParam("run");
+        if (runId == null || runId.isBlank()) return;
+        transcript.record(new com.samlscope.core.transcript.TranscriptInput(
+                runId, com.samlscope.core.transcript.Direction.INBOUND, clock.instant(),
+                null, ctx.method().name(), absoluteRequestUrl(ctx), 500, java.util.Map.of(),
+                new byte[0], "text/plain", ctx.req().getQueryString(), new byte[0],
+                java.util.Map.of("type", "SloFailParticipant", "http_status", 500)));
     }
 
     private static void requireActiveProbeRoute(

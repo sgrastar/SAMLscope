@@ -164,11 +164,19 @@ Suite SPがRedirect応答エンドポイントのみを広告する構成を、�
   - 残ブロッカー: ShibbolethのSLO Webflowは伝播ページのJS/後続遷移で完了し、開始SPへのLogoutResponse（PartialLogout）を送出します。curl相当のドライバでは`_eventId=proceed`後はスナップショット失効となり完了できません。実ブラウザ相当のJS実行または正しい継続イベントの特定が必要です。
   - 失敗誘導用エンドポイント`/p/{plan}/sp/slo-fail`（常時500・判定なし）は実装済みです。
 
-## 10. 操作コストの記録方針
+## 10. 確定結果の監査（2026-09-15）
+
+- キャンペーン終了操作（`target-initiated/conclude`）だけで「未発行」「伝播不実装」のWarningにしないよう規則を修正しました。証拠がない場合は`not-observed`系の理由でNOT_VERIFIEDへ戻します。
+- 18-d（IdPによるRedirect応答の消費）は、200ページの観測だけでは消費の証明にならないためNOT_VERIFIEDへ戻し、`consumption-unobserved`/`unavailable`を理由とします。
+- r（伝播継続）のSuccess条件を厳格化しました。同一のログアウト処理で、**失敗参加者への試行記録**（`/sp/slo-fail`の試行エントリ）、**失敗**（PartialLogout）、**残参加者への試行**の3つが揃う場合のみSuccessとします。任意のLogoutRequestとの共存では確定しません。失敗参加者と残参加者の順序・セッション分離を確認する負の対照は、伝播ハーネス完成時に必須とします。
+- 監査で戻した観測: Keycloak/SimpleSAMLphpの17-c・18-c/d・r/s（10件）とShibboleth 18-d（1件）。Shibbolethの17-c（伝播を実測）と18-c（bindingを実測）は維持します。台帳は507→518観測。
+- メタデータ消費の原則: SuiteのXML→管理API属性変換は製品のメタデータ解釈の証拠にせず、製品自身の取込経路へ元fixtureを渡した後の挙動で判定します（[docs/33](33-keycloak-metadata-observation.md)）。
+
+## 11. 操作コストの記録方針
 
 製品設定の書き込み・復元、管理API操作、Suite再作成、Run回数をバッチごとに記録し、`docs/31`と各バッチの`operations.json`へ保存します。失敗試行も含めます。
 
-## 11. 進捗の区分
+## 12. 進捗の区分
 
 - コード実装: Suite/コアの変更とテスト。
 - 実環境への接続: Run作成、fixture送出、応答記録。

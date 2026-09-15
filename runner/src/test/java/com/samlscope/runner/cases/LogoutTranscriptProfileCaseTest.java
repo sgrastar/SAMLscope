@@ -337,23 +337,39 @@ class LogoutTranscriptProfileCaseTest {
                 single.evaluate(LogoutTranscriptProfileCase.Rule.TARGET_PROPAGATION_CONTINUE));
         assertEquals(Outcome.NOT_VERIFIED,
                 single.evaluate(LogoutTranscriptProfileCase.Rule.TARGET_PARTIAL_LOGOUT));
-        assertEquals(Outcome.SATISFIED_WITH_NOTE,
+        assertEquals(Outcome.NOT_VERIFIED,
                 fixture().evaluate(LogoutTranscriptProfileCase.Rule.TARGET_PROPAGATION_CONTINUE));
-        assertEquals(Outcome.SATISFIED_WITH_NOTE,
+        assertEquals(Outcome.NOT_VERIFIED,
                 fixture().evaluate(LogoutTranscriptProfileCase.Rule.TARGET_PARTIAL_LOGOUT));
+        var partialResponse = "<samlp:LogoutResponse xmlns:samlp=\"urn:oasis:names:tc:SAML:2.0:protocol\" "
+                + "ID=\"_response\" Version=\"2.0\" IssueInstant=\"2026-08-29T00:00:00Z\" "
+                + "InResponseTo=\"_request\"><samlp:Status><samlp:StatusCode "
+                + "Value=\"urn:oasis:names:tc:SAML:2.0:status:Success\"><samlp:StatusCode "
+                + "Value=\"urn:oasis:names:tc:SAML:2.0:status:PartialLogout\"/>"
+                + "</samlp:StatusCode></samlp:Status></samlp:LogoutResponse>";
         var partial = fixture(
                 new Entry("request", Direction.INBOUND, "GET",
                         request("_request", "2.0", ""), null, Map.of("type", "LogoutRequest")),
-                new Entry("response", Direction.INBOUND, "POST",
-                        "<samlp:LogoutResponse xmlns:samlp=\"urn:oasis:names:tc:SAML:2.0:protocol\" "
-                                + "ID=\"_response\" Version=\"2.0\" IssueInstant=\"2026-08-29T00:00:00Z\" "
-                                + "InResponseTo=\"_request\"><samlp:Status><samlp:StatusCode "
-                                + "Value=\"urn:oasis:names:tc:SAML:2.0:status:Success\"><samlp:StatusCode "
-                                + "Value=\"urn:oasis:names:tc:SAML:2.0:status:PartialLogout\"/>"
-                                + "</samlp:StatusCode></samlp:Status></samlp:LogoutResponse>", null,
+                new Entry("response", Direction.INBOUND, "POST", partialResponse, null,
                         Map.of("type", "LogoutResponse")));
         assertEquals(Outcome.SATISFIED,
                 partial.evaluate(LogoutTranscriptProfileCase.Rule.TARGET_PARTIAL_LOGOUT));
+        var continued = fixture(
+                new Entry("fail", Direction.INBOUND, "POST", null, null,
+                        Map.of("type", "SloFailParticipant", "http_status", 500)),
+                new Entry("request", Direction.INBOUND, "GET",
+                        request("_request", "2.0", ""), null, Map.of("type", "LogoutRequest")),
+                new Entry("response", Direction.INBOUND, "POST", partialResponse, null,
+                        Map.of("type", "LogoutResponse")));
+        assertEquals(Outcome.SATISFIED,
+                continued.evaluate(LogoutTranscriptProfileCase.Rule.TARGET_PROPAGATION_CONTINUE));
+        var noFailure = fixture(
+                new Entry("fail", Direction.INBOUND, "POST", null, null,
+                        Map.of("type", "SloFailParticipant", "http_status", 500)),
+                new Entry("request", Direction.INBOUND, "GET",
+                        request("_request", "2.0", ""), null, Map.of("type", "LogoutRequest")));
+        assertEquals(Outcome.NOT_VERIFIED,
+                noFailure.evaluate(LogoutTranscriptProfileCase.Rule.TARGET_PROPAGATION_CONTINUE));
     }
 
     @Test
@@ -364,8 +380,7 @@ class LogoutTranscriptProfileCaseTest {
         assertEquals(Outcome.SATISFIED_WITH_NOTE, observed.outcome());
         assertEquals(Boolean.TRUE, observed.details().get("propagated"));
         var notObserved = fixture().result(LogoutTranscriptProfileCase.Rule.INFORMATIONAL_PROPAGATION, null);
-        assertEquals(Outcome.SATISFIED_WITH_NOTE, notObserved.outcome());
-        assertEquals(Boolean.FALSE, notObserved.details().get("propagated"));
+        assertEquals(Outcome.NOT_VERIFIED, notObserved.outcome());
     }
 
     @Test
@@ -378,7 +393,7 @@ class LogoutTranscriptProfileCaseTest {
                 request("_request", "2.0", ""), null, Map.of("type", "LogoutRequest")));
         assertEquals(Outcome.VIOLATED,
                 post.evaluate(LogoutTranscriptProfileCase.Rule.TARGET_REDIRECT_LOGOUT_REQUEST));
-        assertEquals(Outcome.SATISFIED_WITH_NOTE,
+        assertEquals(Outcome.NOT_VERIFIED,
                 fixture().evaluate(LogoutTranscriptProfileCase.Rule.TARGET_REDIRECT_LOGOUT_REQUEST));
     }
 
@@ -393,7 +408,7 @@ class LogoutTranscriptProfileCaseTest {
                         response("_response", "2.0", "_request", success()), null, redirectBinding),
                 new Entry("obs", Direction.INBOUND, "BROWSER", null, null, Map.of(
                         "type", "BrowserResponseObservation", "http_status", 200, "failure_indicated", false)));
-        assertEquals(Outcome.SATISFIED,
+        assertEquals(Outcome.NOT_VERIFIED,
                 consumed.evaluate(LogoutTranscriptProfileCase.Rule.TARGET_REDIRECT_RESPONSE_CONSUMED));
         var failed = fixture(
                 new Entry("request", Direction.INBOUND, "GET",
@@ -413,7 +428,7 @@ class LogoutTranscriptProfileCaseTest {
                                 "binding", "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST")));
         assertEquals(Outcome.VIOLATED,
                 postBinding.evaluate(LogoutTranscriptProfileCase.Rule.TARGET_REDIRECT_RESPONSE_CONSUMED));
-        assertEquals(Outcome.SATISFIED_WITH_NOTE,
+        assertEquals(Outcome.NOT_VERIFIED,
                 fixture().evaluate(LogoutTranscriptProfileCase.Rule.TARGET_REDIRECT_RESPONSE_CONSUMED));
     }
 

@@ -110,7 +110,8 @@ public final class LogoutTranscriptProfileCase {
             case TARGET_REDIRECT_RESPONSE_CONSUMED -> targetRedirectResponseConsumed(
                     targetLogout, all, snapshot.entries());
             case INFORMATIONAL_PROPAGATION -> informationalPropagation(targetLogout);
-            case TARGET_PROPAGATION_CONTINUE -> targetPropagationContinue(targetLogout, all);
+            case TARGET_PROPAGATION_CONTINUE -> targetPropagationContinue(
+                    targetLogout, all, snapshot.entries());
             case TARGET_PARTIAL_LOGOUT -> targetPartialLogout(targetLogout, all);
         };
     }
@@ -562,34 +563,45 @@ public final class LogoutTranscriptProfileCase {
     private CaseOutcome absent() {
         return switch (rule) {
             case ASYNC_CHOICE -> informationalAsync(List.of());
-            case TARGET_REDIRECT_LOGOUT_REQUEST -> optionalNotObserved("slo.redirect-request.not-issued");
-            case TARGET_REDIRECT_RESPONSE_CONSUMED -> optionalNotObserved("slo.redirect-response.not-issued");
-            case INFORMATIONAL_PROPAGATION -> new CaseOutcome(
-                    Outcome.SATISFIED_WITH_NOTE, null, "slo.propagation.choice-recorded",
-                    "slo.propagation.choice-recorded", List.of(),
-                    Map.of("propagated", false, "observed_requests", 0));
-            case TARGET_PROPAGATION_CONTINUE, TARGET_PARTIAL_LOGOUT ->
-                    optionalNotObserved("slo.propagation.not-implemented");
+            case TARGET_REDIRECT_LOGOUT_REQUEST -> notVerifiedWithEvidence(List.of(),
+                    "slo.redirect-request.not-observed", "slo.redirect-request.not-observed");
+            case TARGET_REDIRECT_RESPONSE_CONSUMED -> notVerifiedWithEvidence(List.of(),
+                    "slo.redirect-response.not-observed", "slo.redirect-response.not-observed");
+            case INFORMATIONAL_PROPAGATION -> notVerifiedWithEvidence(List.of(),
+                    "slo.propagation.not-observed", "slo.propagation.not-observed");
+            case TARGET_PROPAGATION_CONTINUE -> notVerifiedWithEvidence(List.of(),
+                    "slo.propagation.not-observed", "slo.propagation.not-observed");
+            case TARGET_PARTIAL_LOGOUT -> notVerifiedWithEvidence(List.of(),
+                    "slo.partial-logout.not-observed", "slo.partial-logout.not-observed");
             default -> optionalNotObserved("slo.target-message.not-observed");
         };
     }
 
-    private CaseOutcome targetPropagationContinue(List<Message> targetLogout, List<Message> all) {
+    private CaseOutcome targetPropagationContinue(List<Message> targetLogout, List<Message> all,
+            List<TranscriptEntry> entries) {
         var requests = targetLogout.stream().filter(value -> is(value.logout(), "LogoutRequest")).toList();
-        if (requests.isEmpty()) return optionalNotObserved("slo.propagation.not-implemented");
-        // A failed participant is visible through the initiator's PartialLogout response while the
-        // Suite's participant endpoint records that the remaining participant was still attempted.
-        var responses = all.stream()
-                .filter(value -> value.entry().direction() == Direction.INBOUND)
-                .filter(value -> is(value.logout(), "LogoutResponse")).toList();
-        var failed = responses.stream().anyMatch(value -> PARTIAL_LOGOUT_STATUS
-                .equals(secondaryStatus(value.logout())));
-        var endpoints = requests.stream().map(value -> String.valueOf(value.entry().url()))
+        if (requests.isEmpty()) {
+            return notVerifiedWithEvidence(List.of(), "slo.propagation.not-observed",
+                    "slo.propagation.not-observed");
+        }
+        // Continue-after-failure requires, within the same logout processing, an attempt to the
+        // failing participant, its failure, and an attempt to a remaining participant.
+        var failingAttempts = entries.stream()
+                .filter(entry -> "SloFailParticipant".equals(entry.samlSummary().get("type"))).toList();
+        var remaining = requests.stream().map(value -> String.valueOf(value.entry().url()))
                 .distinct().toList();
-        if (failed && !requests.isEmpty()) {
+        var failure = all.stream()
+                .filter(value -> value.entry().direction() == Direction.INBOUND)
+                .filter(value -> is(value.logout(), "LogoutResponse"))
+                .anyMatch(value -> PARTIAL_LOGOUT_STATUS.equals(secondaryStatus(value.logout())));
+        if (!failingAttempts.isEmpty() && !remaining.isEmpty() && failure) {
+            var evidence = new java.util.ArrayList<EvidenceRef>();
+            for (var attempt : failingAttempts) evidence.add(new EvidenceRef("transcript", attempt.id()));
+            evidence.addAll(evidence(requests));
             return new CaseOutcome(Outcome.SATISFIED, null, "slo.propagation.continue-after-failure",
-                    "slo.propagation.continue-after-failure", evidence(requests),
-                    Map.of("participant_endpoints", endpoints.size(), "partial_logout", true));
+                    "slo.propagation.continue-after-failure", evidence,
+                    Map.of("failing_attempts", failingAttempts.size(),
+                            "remaining_endpoints", remaining.size(), "partial_logout", true));
         }
         return notVerifiedWithEvidence(requests, "slo.propagation.failure-induction-unavailable",
                 "slo.propagation.failure-induction-unavailable");
@@ -597,7 +609,10 @@ public final class LogoutTranscriptProfileCase {
 
     private CaseOutcome targetPartialLogout(List<Message> targetLogout, List<Message> all) {
         var requests = targetLogout.stream().filter(value -> is(value.logout(), "LogoutRequest")).toList();
-        if (requests.isEmpty()) return optionalNotObserved("slo.propagation.not-implemented");
+        if (requests.isEmpty()) {
+            return notVerifiedWithEvidence(List.of(), "slo.partial-logout.not-observed",
+                    "slo.partial-logout.not-observed");
+        }
         var responses = all.stream()
                 .filter(value -> value.entry().direction() == Direction.INBOUND)
                 .filter(value -> is(value.logout(), "LogoutResponse")).toList();
@@ -621,7 +636,10 @@ public final class LogoutTranscriptProfileCase {
 
     private CaseOutcome targetRedirectLogoutRequest(List<Message> targetLogout) {
         var requests = targetLogout.stream().filter(value -> is(value.logout(), "LogoutRequest")).toList();
-        if (requests.isEmpty()) return optionalNotObserved("slo.redirect-request.not-issued");
+        if (requests.isEmpty()) {
+            return notVerifiedWithEvidence(List.of(), "slo.redirect-request.not-observed",
+                    "slo.redirect-request.not-observed");
+        }
         var methods = new java.util.LinkedHashSet<String>();
         for (var message : requests) {
             methods.add(String.valueOf(message.entry().method()).toUpperCase(java.util.Locale.ROOT));
@@ -638,7 +656,10 @@ public final class LogoutTranscriptProfileCase {
     private CaseOutcome targetRedirectResponseConsumed(List<Message> targetLogout, List<Message> all,
             List<TranscriptEntry> entries) {
         var requests = targetLogout.stream().filter(value -> is(value.logout(), "LogoutRequest")).toList();
-        if (requests.isEmpty()) return optionalNotObserved("slo.redirect-response.not-issued");
+        if (requests.isEmpty()) {
+            return notVerifiedWithEvidence(List.of(), "slo.redirect-response.not-observed",
+                    "slo.redirect-response.not-observed");
+        }
         var ids = requests.stream().map(value -> value.logout().getAttribute("ID"))
                 .collect(java.util.stream.Collectors.toSet());
         var responses = all.stream()
@@ -671,10 +692,14 @@ public final class LogoutTranscriptProfileCase {
         var failed = observations.stream().anyMatch(entry -> Boolean.TRUE.equals(
                 entry.samlSummary().getOrDefault("failure_indicated",
                         entry.status() != null && entry.status() >= 400)));
-        return new CaseOutcome(failed ? Outcome.VIOLATED : Outcome.SATISFIED, null,
-                failed ? "slo.redirect-response.not-consumed" : "slo.redirect-response.consumed",
-                failed ? "slo.redirect-response.not-consumed" : "slo.redirect-response.consumed",
-                evidence(responses), Map.of("observations", observations.size()));
+        if (failed) {
+            return new CaseOutcome(Outcome.VIOLATED, null, "slo.redirect-response.not-consumed",
+                    "slo.redirect-response.not-consumed", evidence(responses),
+                    Map.of("observations", observations.size()));
+        }
+        // A successful page load does not prove that the IdP consumed the response.
+        return notVerifiedWithEvidence(responses, "slo.redirect-response.consumption-unobserved",
+                "slo.redirect-response.consumption-unobserved");
     }
 
     private CaseOutcome optionalNotObserved(String reasonCode) {
