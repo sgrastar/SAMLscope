@@ -25,7 +25,9 @@
 | `IIP-IDP17-n` | Shibboleth | Not verified | 復号しても識別子のstrong matchを証明できない |
 | `IIP-IDP17-u` | Shibboleth | Not verified | NotOnOrAfterとセッション失効の対応を証明できない |
 
-未検証は559から**550**へ減少しました（異なるケースID 180は不変）。内訳は、browser_sso_idpの6観測（Keycloak: ALG04.a/ALG06.a/ALG06.c/ALG06.d/SSO01-g/SSO01-z）と3観測（Shibboleth: SSO01-g/k/z）です。ShibbolethのIDP17-j/k/l/m/tは台帳の未検証集合に含まれていなかったため、解消数には算入していません。
+未検証は559から**548**へ減少しました（異なるケースID 180は不変）。内訳は、browser_sso_idpの6観測（Keycloak: ALG04.a/ALG06.a/ALG06.c/ALG06.d/SSO01-g/SSO01-z）と3観測（Shibboleth: SSO01-g/k/z）、ecp_idpの2観測（Keycloak: ALG04.a/ALG06.a、クライアント属性をAES128-GCM + rsa-oaep-mgf1pへ変更してPAOS宛先を登録し、観測後に既定値へ復元）です。ShibbolethのIDP17-j/k/l/m/tは台帳の未検証集合に含まれていなかったため、解消数には算入していません。
+
+ShibbolethのAES256-GCM + rsa-oaep(1.1)は、カスタムEncryptionConfigurationをglobal.xmlへ追加して再起動する試行を行いましたが、Tomcatの多重起動で新旧プロセスが競合し、観測は既定のAES128-GCMのままでした。プロセスを整理して設定を復元し、IdPがメタデータ200で稼働することを確認済みです。この経路の追加観測は計上していません。
 
 ## 製品の問題とSuiteの問題の区別
 

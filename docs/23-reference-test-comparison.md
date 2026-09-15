@@ -77,30 +77,30 @@ Shibbolethの`IIP-SSO01-fk/fu/gi`は、v8では事前生成された正常系要
 
 ## Not verifiedの内訳
 
-以下は表に採用したケース結果の延べ550件。†のケースは新Runの追加証拠を採用し、それ以外の既存証拠は保持しています。単一Runの集計や全試験の再完走を意味しません。比較表で設定不足として扱い直した旧FAILは、このNOT_VERIFIED集計には含めません。
+以下は表に採用したケース結果の延べ548件。†のケースは新Runの追加証拠を採用し、それ以外の既存証拠は保持しています。単一Runの集計や全試験の再完走を意味しません。比較表で設定不足として扱い直した旧FAILは、このNOT_VERIFIED集計には含めません。
 
 | 理由 | Keycloak | Shibboleth IdP | SimpleSAMLphp | 解消に必要なこと |
 |---|---:|---:|---:|---|
-| `case.pending-interaction` | 123 | 106 | 132 | 設定・受信待ちに加え、判定処理未実装の経路を含む。全件台帳を参照 |
+| `case.pending-interaction` | 121 | 106 | 132 | 設定・受信待ちに加え、判定処理未実装の経路を含む。全件台帳を参照 |
 | `attestation.interaction-disallowed` | 25 | 25 | 25 | 自己申告を無効にした構成。確認せずに申告を代行しない |
 | `browser_fixture_partial` | 20 | 21 | 20 | 一部の試験だけ実行。残るvariantの証拠が不足 |
 | `idp.signed-request.inconclusive` | 7 | 1 | 7 | 当該ケースの応答・対象設定・正常系対照を追加確認 |
 | `idp.acs-probe.inconclusive` | 3 | 3 | 1 | 当該ケースの応答・対象設定・正常系対照を追加確認 |
 | `request.signing.unavailable` | 3 | 0 | 3 | 署名必須構成でSuiteが当該要求を署名できない |
-| `idp.error-assertion.inconclusive` | 2 | 0 | 2 | 当該ケースの応答・対象設定・正常系対照を追加確認 |
 | `control_failed` | 2 | 2 | 0 | 正常系対照が成立せず異常系を判定できない |
+| `idp.error-assertion.inconclusive` | 2 | 0 | 2 | 当該ケースの応答・対象設定・正常系対照を追加確認 |
 | `idp.version.inconclusive` | 1 | 1 | 1 | 当該ケースの応答・対象設定・正常系対照を追加確認 |
 | `metadata.rsa-sha1.unobserved` | 1 | 1 | 1 | 当該ケースの応答・対象設定・正常系対照を追加確認 |
 | `idp.authn-context.inconclusive` | 1 | 1 | 0 | 当該ケースの応答・対象設定・正常系対照を追加確認 |
-| `saml.subject-principal.undetermined` | 0 | 0 | 1 | 当該ケースの応答・対象設定・正常系対照を追加確認 |
-| `slo.encrypted-id.key-unavailable` | 1 | 0 | 0 | 当該ケースの応答・対象設定・正常系対照を追加確認 |
 | `idp.error-response.inconclusive` | 1 | 0 | 0 | 当該ケースの応答・対象設定・正常系対照を追加確認 |
 | `idp.nameid-policy.inconclusive` | 1 | 0 | 0 | 当該ケースの応答・対象設定・正常系対照を追加確認 |
-| `slo.encrypted-id.multiple-keys.configuration-unavailable` | 0 | 0 | 1 | 当該ケースの応答・対象設定・正常系対照を追加確認 |
 | `slo.identifier.strong-match-unobservable` | 0 | 1 | 0 | 当該ケースの応答・対象設定・正常系対照を追加確認 |
-| `slo.not-on-or-after.correlation-unavailable` | 0 | 1 | 0 | 当該ケースの応答・対象設定・正常系対照を追加確認 |
+| `saml.subject-principal.undetermined` | 0 | 0 | 1 | 当該ケースの応答・対象設定・正常系対照を追加確認 |
+| `slo.encrypted-id.key-unavailable` | 1 | 0 | 0 | 当該ケースの応答・対象設定・正常系対照を追加確認 |
 | `slo.encrypted-id.multiple-keys.key-unavailable` | 1 | 0 | 0 | 当該ケースの応答・対象設定・正常系対照を追加確認 |
+| `slo.encrypted-id.multiple-keys.configuration-unavailable` | 0 | 0 | 1 | 当該ケースの応答・対象設定・正常系対照を追加確認 |
 | `slo.encrypted-id.negative-control-failed` | 0 | 0 | 1 | 当該ケースの応答・対象設定・正常系対照を追加確認 |
+| `slo.not-on-or-after.correlation-unavailable` | 0 | 1 | 0 | 当該ケースの応答・対象設定・正常系対照を追加確認 |
 
 Chromeと承認のブロックを解除するだけでは解消しません。自動判定やfixtureの未実装にはSuiteの実装が必要です。設定・自己申告の経路は証拠の裏付けが必要です。[全件台帳](26-unverified-case-inventory.md)にケースごとの原因と再試験を記録しています。
 
@@ -424,10 +424,10 @@ Chromeと承認のブロックを解除するだけでは解消しません。�
 | `IIP-ALG01-a-idp-01` | Not verified | Success | Not verified |
 | `IIP-ALG02-a-idp-01` | Not verified | Success | Not verified |
 | `IIP-ALG03-a-idp-01` | Not verified | Not verified | Not verified |
-| `IIP-ALG04-a-idp-01` | Not verified † | Success † | Not verified |
+| `IIP-ALG04-a-idp-01` | Success † | Success † | Not verified |
 | `IIP-ALG04-b-idp-01` | Success † | Not verified † | Not verified |
 | `IIP-ALG05-a-idp-01` | Warning | Warning | Warning |
-| `IIP-ALG06-a-idp-01` | Not verified † | Success † | Not verified |
+| `IIP-ALG06-a-idp-01` | Success † | Success † | Not verified |
 | `IIP-ALG06-b-idp-01` | Success † | Not verified † | Not verified |
 | `IIP-ALG06-c-idp-01` | Not verified † | Not verified † | Not verified |
 | `IIP-ALG06-d-idp-01` | Not verified † | Not verified † | Not verified |
@@ -533,6 +533,7 @@ Chromeと承認のブロックを解除するだけでは解消しません。�
 | metadata_idp († listed supplemental cases only) | simplesamlphp | `run_CPWMJEQVVQYFYRDSCYFQWEC755` | `additional-implementation/simplesamlphp/metadata_idp` |
 | metadata_idp | simplesamlphp | `run_YVZ8AB57K11T5XRZNEYVHMPQ1Z` | `interaction-followup/after/simplesamlphp/metadata_idp` |
 | ecp_idp († listed supplemental cases only) | keycloak | `run_B5BVZPZHA77V8B2SV0AKJZDJYC` | `build/acceptance/reference-20260915/algorithm-observation-batch/keycloak/ecp_idp` |
+| ecp_idp († listed supplemental cases only) | keycloak | `run_B05XBA5FYGXDV933K9PKA9X441` | `build/acceptance/reference-20260915/peer-intent/keycloak/ecp_alg` |
 | ecp_idp | keycloak | `run_H38KM96SRSD9ESW4B0JQ0RV5JC` | `keycloak/ecp_idp/run5` |
 | ecp_idp († listed supplemental cases only) | shibboleth | `run_YNSFE9WE4CNTHHB57W2RFVVR3K` | `build/acceptance/reference-20260915/algorithm-observation-batch/shibboleth/ecp_idp` |
 | ecp_idp | shibboleth | `run_4E2YMVJR6DPW196YFMWX4V9DN3` | `shibboleth/ecp_idp/run4` |

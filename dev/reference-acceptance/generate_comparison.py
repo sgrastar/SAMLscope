@@ -200,6 +200,11 @@ def render(root, output):
                         'IIP-SSO01-g-idp-01': ('PASS', 'browser.normal-flow.success-responses-have-assertions'),
                         'IIP-SSO01-k-idp-01': ('PASS', 'browser.normal-flow.bearer-recipient-and-expiry-valid'),
                         'IIP-SSO01-z-idp-01': ('WARNING', 'browser.normal-flow.unsolicited-sso-observed')}},
+                ('keycloak', 'ecp_idp'): {
+                    'folder': '../reference-20260915/peer-intent/keycloak/ecp_alg',
+                    'cases': {
+                        'IIP-ALG04-a-idp-01': ('PASS', 'browser.encryption.aes128-gcm.decrypted'),
+                        'IIP-ALG06-a-idp-01': ('PASS', 'browser.encryption.rsa-oaep-mgf1p.decrypted')}},
                 ('shibboleth', 'single_logout_idp'): {
                     'folder': '../reference-20260915/peer-intent/shibboleth/slo_target_logout',
                     'cases': {

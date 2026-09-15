@@ -216,6 +216,7 @@ def render(root,definitions,output):
         peer_retests={
             ('keycloak','browser_sso_idp'):'reference-20260915/algorithm-observation-batch/keycloak/browser_alg_combo',
             ('shibboleth','browser_sso_idp'):'reference-20260915/algorithm-observation-batch/shibboleth/browser_sso_idp',
+            ('keycloak','ecp_idp'):'reference-20260915/peer-intent/keycloak/ecp_alg',
         }
         peer_expectations={
             ('keycloak','browser_sso_idp'):{
@@ -229,6 +230,9 @@ def render(root,definitions,output):
                 'IIP-SSO01-g-idp-01':('PASS','browser.normal-flow.success-responses-have-assertions'),
                 'IIP-SSO01-k-idp-01':('PASS','browser.normal-flow.bearer-recipient-and-expiry-valid'),
                 'IIP-SSO01-z-idp-01':('WARNING','browser.normal-flow.unsolicited-sso-observed')},
+            ('keycloak','ecp_idp'):{
+                'IIP-ALG04-a-idp-01':('PASS','browser.encryption.aes128-gcm.decrypted'),
+                'IIP-ALG06-a-idp-01':('PASS','browser.encryption.rsa-oaep-mgf1p.decrypted')},
         }
         peer_key=(row['product'],row['profile'])
         if peer_key in peer_retests and row['case'] in peer_expectations[peer_key] and row.get('verdict','NOT_VERIFIED')=='NOT_VERIFIED':
