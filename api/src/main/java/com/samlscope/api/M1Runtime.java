@@ -457,7 +457,7 @@ final class M1Runtime {
                     config.peerBaseUrl().resolve("/p/" + plan.id() + "/sp/slo"), plan.target().entityId(),
                     keys.getOrCreate(plan.id()), certificates, binding, encryptionKey, encryptionKeys,
                     publishedEncryptionKeys);
-        });
+        }, transcriptContent);
         var m3Automated = M3AutomatedCaseRegistry.create(
                 runId -> {
                     try { return runMetadata.apply(runId); }

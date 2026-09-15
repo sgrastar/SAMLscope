@@ -106,6 +106,51 @@ class HttpOutboundSenderTest {
         }
     }
 
+    @Test
+    void deliversLogoutProbesAndReadsTheSamlMessageOutOfTheResponsePage() throws Exception {
+        var seenBody = new AtomicReference<String>();
+        var server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        server.createContext("/sloprobe", exchange -> {
+            seenBody.set(new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
+            var samlResponse = java.util.Base64.getEncoder().encodeToString(
+                    ("<samlp:LogoutResponse xmlns:samlp=\"urn:oasis:names:tc:SAML:2.0:protocol\" ID=\"_r\" "
+                            + "InResponseTo=\"_a\"><samlp:Status><samlp:StatusCode "
+                            + "Value=\"urn:oasis:names:tc:SAML:2.0:status:Requester\"/></samlp:Status>"
+                            + "</samlp:LogoutResponse>").getBytes(StandardCharsets.UTF_8));
+            var page = ("<html><body><form method=\"post\" action=\"https://suite.example/slo\">"
+                    + "<input type=\"hidden\" name=\"SAMLResponse\" value=\"" + samlResponse + "\"/>"
+                    + "</form></body></html>").getBytes(StandardCharsets.UTF_8);
+            exchange.getResponseHeaders().set("Content-Type", "text/html");
+            exchange.sendResponseHeaders(200, page.length);
+            exchange.getResponseBody().write(page);
+            exchange.close();
+        });
+        server.start();
+        try {
+            var recorder = recorder();
+            var sender = new HttpOutboundSender(
+                    HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NEVER).build(), recorder,
+                    Clock.fixed(NOW, ZoneOffset.UTC));
+            var request = ("<samlp:LogoutRequest xmlns:samlp=\"urn:oasis:names:tc:SAML:2.0:protocol\" ID=\"_l\"/>")
+                    .getBytes(StandardCharsets.UTF_8);
+            var action = new OutboundAction("action_0123456789abcdef0123456789abcdef", OutboundKind.LOGOUT_PROBE,
+                    request, URI.create("http://127.0.0.1:" + server.getAddress().getPort() + "/sloprobe"), false);
+
+            var result = sender.send(RUN_ID, action, new byte[0]);
+
+            assertTrue(seenBody.get().startsWith("SAMLRequest="));
+            assertEquals(200, result.details().get("http_status"));
+            assertEquals("LogoutResponse", result.details().get("saml_message"));
+            var inbound = recorder.list(RUN_ID).stream()
+                    .filter(value -> value.direction() == com.samlscope.core.transcript.Direction.INBOUND)
+                    .findFirst().orElseThrow();
+            assertEquals("saml-message", inbound.samlSummary().get("probe_response"));
+            assertEquals("urn:oasis:names:tc:SAML:2.0:status:Requester", inbound.samlSummary().get("status"));
+        } finally {
+            server.stop(0);
+        }
+    }
+
     private FileTranscriptRecorder recorder() {
         var json = new JsonCodec();
         var database = new SqliteDatabase(directory);

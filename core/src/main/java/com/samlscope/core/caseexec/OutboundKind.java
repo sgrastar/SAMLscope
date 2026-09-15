@@ -6,6 +6,7 @@ public enum OutboundKind {
     MDQ_FETCH(Retry.SAFE),
     AUTHN_REQUEST(Retry.UNSAFE),
     LOGOUT_REQUEST(Retry.UNSAFE),
+    LOGOUT_PROBE(Retry.UNSAFE),
     ECP_SOAP(Retry.UNSAFE),
     SOAP_SLO(Retry.UNSAFE);
 

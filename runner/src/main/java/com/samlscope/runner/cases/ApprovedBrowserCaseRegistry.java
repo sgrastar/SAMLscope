@@ -31,12 +31,21 @@ public final class ApprovedBrowserCaseRegistry {
     }
 
     public static TestCaseRegistry withLogoutScenarios(TestCaseRegistry registry,
-            java.util.function.BiFunction<String, String, IdpBasicLogoutScenarioTestCase.Configuration> configurations) {
-        return new TestCaseRegistry(registry.all().stream().map(testCase ->
-                java.util.Set.of(IdpBasicLogoutScenarioTestCase.ID, IdpBasicLogoutScenarioTestCase.REDIRECT_ID, IdpBasicLogoutScenarioTestCase.ENCRYPTED_ID, IdpBasicLogoutScenarioTestCase.MULTI_KEY_ID).contains(testCase.id())
-                        ? (com.samlscope.core.caseexec.TestCase)new IdpBasicLogoutScenarioTestCase(testCase.id(),
-                                runId -> configurations.apply(testCase.id(), runId))
-                        : testCase).toList());
+            java.util.function.BiFunction<String, String, IdpBasicLogoutScenarioTestCase.Configuration> configurations,
+            TranscriptContentReader transcriptContent) {
+        return new TestCaseRegistry(registry.all().stream().map(testCase -> {
+            if (LogoutRejectionScenarioTestCase.CASE_IDS.contains(testCase.id())) {
+                return (com.samlscope.core.caseexec.TestCase) new LogoutRejectionScenarioTestCase(
+                        testCase.id(), runId -> configurations.apply(testCase.id(), runId), transcriptContent);
+            }
+            if (java.util.Set.of(IdpBasicLogoutScenarioTestCase.ID, IdpBasicLogoutScenarioTestCase.REDIRECT_ID,
+                    IdpBasicLogoutScenarioTestCase.ENCRYPTED_ID, IdpBasicLogoutScenarioTestCase.MULTI_KEY_ID)
+                    .contains(testCase.id())) {
+                return (com.samlscope.core.caseexec.TestCase) new IdpBasicLogoutScenarioTestCase(testCase.id(),
+                        runId -> configurations.apply(testCase.id(), runId));
+            }
+            return testCase;
+        }).toList());
     }
 
     public static TestCaseRegistry withPublishedMetadata(TestCaseRegistry registry,

@@ -141,6 +141,26 @@ public final class ActiveProbeCoordinator {
                 .filter(value -> value.action().actionId().equals(
                         current.waitCondition().inboundMatcher().criteria().get("ScenarioActionId")))
                 .findFirst().orElseThrow(() -> new IllegalStateException("Active probe has no matching outbox action"));
+        if (action.action().kind() == com.samlscope.core.caseexec.OutboundKind.LOGOUT_PROBE) {
+            // Suite-side delivery: the response body is recorded as Transcript evidence and routed
+            // back to the waiting case. Unknown delivery never becomes a target failure.
+            var dispatched = dispatcher.dispatch(action.action().actionId());
+            if (dispatched.state() == com.samlscope.runner.outbox.OutboundDispatcher.State.SENT) {
+                var updated = repository.findOutbox(action.action().actionId()).orElseThrow();
+                var entryId = updated.transcriptEntryId();
+                if (entryId == null || entryId.isBlank()) {
+                    throw new IllegalStateException("Direct probe delivery has no transcript entry");
+                }
+                var router = new InboundCaseRouter(repository, scenarioCases, executionService);
+                router.route(runId, "saml-response", Map.of("ScenarioActionId", action.action().actionId()),
+                        entryId.getBytes(java.nio.charset.StandardCharsets.UTF_8),
+                        new EvidenceRef("transcript", entryId), contexts.contextFor(runId));
+            } else if (dispatched.state() == com.samlscope.runner.outbox.OutboundDispatcher.State.UNKNOWN_DELIVERY) {
+                executionService.resume(runId, testCase, contexts.contextFor(runId),
+                        new CaseEvent.InboundUnavailable("direct-probe-delivery-unknown"));
+            }
+            continue;
+        }
         var state = action.status() == OutboxStatus.PENDING ? State.READY : State.AWAITING_RESPONSE;
         var startUrl = state == State.READY
                 ? publicBase.resolve("/p/" + run.planId() + "/probe/" + action.action().actionId()
