@@ -734,6 +734,13 @@ final class M1Runtime {
                 runId, null, observation.status(), observation.url(), observation.body(), null);
     }
 
+    int concludeTargetInitiated(String runId) {
+        requireRun(runId);
+        var concluded = activeProbes.concludeTargetInitiatedCampaign(runId);
+        if (concluded > 0 && results != null) results.generate(runId);
+        return concluded;
+    }
+
     ActiveProbeCoordinator.Status reportActiveProbeBrowserResponse(
             String runId, com.samlscope.api.ApiModels.BrowserResponse response) {
         requireRun(runId);

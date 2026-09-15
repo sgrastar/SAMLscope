@@ -143,11 +143,17 @@ Suite SPがRedirect応答エンドポイントのみを広告する構成を、�
 - Keycloak/SimpleSAMLphpの`IIP-IDP18.c/d`は、対象がIdP起点LogoutRequestを発行しないため（`docs/31`参照）、キャンペーンのケースが未起動のままです。variantの「発行されない場合は`satisfied_with_note`」を適用するには、キャンペーンの完了（未発行の確定）を記録する経路が必要で、これは未実装の残課題として記録します。
 - 操作: ShibbolethのSPメタデータ書換え1回・再読込1回、Keycloakクライアント属性書換え1回（post/soap除去）、Suite再作成1回、Run作成4回（18-b用3、18-c/d用1）、ユーザー操作0回。
 
-## 8. 操作コストの記録方針
+## 8. バッチ4の結果（IIP-IDP17.c とキャンペーン完了）
+
+- `IIP-IDP17.c`（informational）: 伝播の有無を情報記録する規則を追加。ShibbolethはIdP起点LogoutRequestを送出（`propagated=true`）、Keycloak/SimpleSAMLphpは送出しない（`propagated=false`）。Verdictは情報記録のWarning。
+- ターゲット起点ログアウトのキャンペーンは、対象が要求を発行しない場合に永久待機していました。`POST /api/runs/{id}/target-initiated/conclude` を追加し、未発行を確定して規則の観測（`not-issued`）を記録します。Suiteが自ら「発行なし」を観測できない場合でも、未発行の確定を運用者/ドライバの操作として記録する経路です。
+- 実証による未検証解消: 7観測（518→511、異なるケースID 171→168）。
+
+## 9. 操作コストの記録方針
 
 製品設定の書き込み・復元、管理API操作、Suite再作成、Run回数をバッチごとに記録し、`docs/31`と各バッチの`operations.json`へ保存します。失敗試行も含めます。
 
-## 9. 進捗の区分
+## 10. 進捗の区分
 
 - コード実装: Suite/コアの変更とテスト。
 - 実環境への接続: Run作成、fixture送出、応答記録。

@@ -395,15 +395,33 @@ def render(root,definitions,output):
                        interaction=None,verdict=case['verdict'],evidence=case['evidence'],
                        diagnostics=case.get('diagnostics',{}))
             transitions.append(dict(row))
-        if row['profile']=='single_logout_idp' and row['product']=='shibboleth' \
-                and row['case'] in {'IIP-IDP18-c-idp-01','IIP-IDP18-d-idp-01'} \
+        target_initiated={
+            'shibboleth':'reference-20260915/peer-intent/shibboleth/slo_target_logout_18cd',
+            'keycloak':'reference-20260915/peer-intent/keycloak/slo_target_logout_18cd2',
+            'simplesamlphp':'reference-20260915/peer-intent/simplesamlphp/slo_target_logout_18cd2',
+        }
+        target_expectations={
+            'shibboleth':{
+                'IIP-IDP17-c-idp-01':('WARNING','slo.propagation.choice-recorded'),
+                'IIP-IDP18-c-idp-01':('PASS','slo.redirect-request.observed'),
+                'IIP-IDP18-d-idp-01':('PASS','slo.redirect-response.consumed')},
+            'keycloak':{
+                'IIP-IDP17-c-idp-01':('WARNING','slo.propagation.choice-recorded'),
+                'IIP-IDP18-c-idp-01':('WARNING','slo.redirect-request.not-issued'),
+                'IIP-IDP18-d-idp-01':('WARNING','slo.redirect-response.not-issued')},
+            'simplesamlphp':{
+                'IIP-IDP17-c-idp-01':('WARNING','slo.propagation.choice-recorded'),
+                'IIP-IDP18-c-idp-01':('WARNING','slo.redirect-request.not-issued'),
+                'IIP-IDP18-d-idp-01':('WARNING','slo.redirect-response.not-issued')},
+        }
+        if row['profile']=='single_logout_idp' and row['product'] in target_initiated \
+                and row['case'] in target_expectations[row['product']] \
                 and row.get('verdict','NOT_VERIFIED')=='NOT_VERIFIED':
-            expected={'IIP-IDP18-c-idp-01':('PASS','slo.redirect-request.observed'),
-                      'IIP-IDP18-d-idp-01':('PASS','slo.redirect-response.consumed')}[row['case']]
-            path=root.parent.parent/'reference-20260915/peer-intent/shibboleth/slo_target_logout_18cd/result.json'
+            path=root.parent.parent/target_initiated[row['product']]/'result.json'
             raw=path.read_bytes(); result=json.loads(raw)
             case=next(c for req in result['requirements'] for c in req['cases'] if c['id']==row['case'])
-            assert (case['verdict'],case['reason_code'])==expected,(row['case'],case['verdict'],case['reason_code'])
+            want=target_expectations[row['product']][row['case']]
+            assert (case['verdict'],case['reason_code'])==want,(row['product'],row['case'],case['verdict'],case['reason_code'])
             row['baseline']={k:row.get(k) for k in ('run','reason_code','result_sha256','evidence_folder','interaction')}
             row.update(run=result['run']['id'],reason_code=case['reason_code'],
                        result_sha256=hashlib.sha256(raw).hexdigest(),

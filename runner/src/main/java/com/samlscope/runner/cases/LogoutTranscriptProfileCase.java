@@ -32,7 +32,8 @@ public final class LogoutTranscriptProfileCase {
         RESPONSE_ISSUER_COUNT, RESPONSE_ISSUER_VALUE, RESPONSE_ISSUER_FORMAT, RESPONSE_SIGNATURE,
         REQUEST_ISSUER_COUNT, REQUEST_ISSUER_VALUE, REQUEST_ISSUER_FORMAT, REQUEST_SIGNATURE,
         REQUEST_NOT_ON_OR_AFTER, REQUEST_IDENTIFIER_MATCH, REQUEST_NOT_ON_OR_AFTER_BOUND,
-        REDIRECT_LOGOUT_REQUEST_ACCEPTED, TARGET_REDIRECT_LOGOUT_REQUEST, TARGET_REDIRECT_RESPONSE_CONSUMED
+        REDIRECT_LOGOUT_REQUEST_ACCEPTED, TARGET_REDIRECT_LOGOUT_REQUEST, TARGET_REDIRECT_RESPONSE_CONSUMED,
+        INFORMATIONAL_PROPAGATION
     }
 
     private static final String PROTOCOL = "urn:oasis:names:tc:SAML:2.0:protocol";
@@ -107,6 +108,7 @@ public final class LogoutTranscriptProfileCase {
             case TARGET_REDIRECT_LOGOUT_REQUEST -> targetRedirectLogoutRequest(targetLogout);
             case TARGET_REDIRECT_RESPONSE_CONSUMED -> targetRedirectResponseConsumed(
                     targetLogout, all, snapshot.entries());
+            case INFORMATIONAL_PROPAGATION -> informationalPropagation(targetLogout);
         };
     }
 
@@ -559,8 +561,19 @@ public final class LogoutTranscriptProfileCase {
             case ASYNC_CHOICE -> informationalAsync(List.of());
             case TARGET_REDIRECT_LOGOUT_REQUEST -> optionalNotObserved("slo.redirect-request.not-issued");
             case TARGET_REDIRECT_RESPONSE_CONSUMED -> optionalNotObserved("slo.redirect-response.not-issued");
+            case INFORMATIONAL_PROPAGATION -> new CaseOutcome(
+                    Outcome.SATISFIED_WITH_NOTE, null, "slo.propagation.choice-recorded",
+                    "slo.propagation.choice-recorded", List.of(),
+                    Map.of("propagated", false, "observed_requests", 0));
             default -> optionalNotObserved("slo.target-message.not-observed");
         };
+    }
+
+    private CaseOutcome informationalPropagation(List<Message> targetLogout) {
+        var requests = targetLogout.stream().filter(value -> is(value.logout(), "LogoutRequest")).toList();
+        return new CaseOutcome(Outcome.SATISFIED_WITH_NOTE, null, "slo.propagation.choice-recorded",
+                "slo.propagation.choice-recorded", evidence(requests),
+                Map.of("propagated", !requests.isEmpty(), "observed_requests", requests.size()));
     }
 
     private CaseOutcome targetRedirectLogoutRequest(List<Message> targetLogout) {

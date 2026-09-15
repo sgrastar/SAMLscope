@@ -32,7 +32,8 @@ public final class LogoutBrowserEvidenceTestCase implements TestCase, BrowserPro
             Map.entry("IIP-IDP17-u-idp-01", LogoutTranscriptProfileCase.Rule.REQUEST_NOT_ON_OR_AFTER_BOUND),
             Map.entry("IIP-IDP18-a-idp-01", LogoutTranscriptProfileCase.Rule.REDIRECT_LOGOUT_REQUEST_ACCEPTED),
             Map.entry("IIP-IDP18-c-idp-01", LogoutTranscriptProfileCase.Rule.TARGET_REDIRECT_LOGOUT_REQUEST),
-            Map.entry("IIP-IDP18-d-idp-01", LogoutTranscriptProfileCase.Rule.TARGET_REDIRECT_RESPONSE_CONSUMED));
+            Map.entry("IIP-IDP18-d-idp-01", LogoutTranscriptProfileCase.Rule.TARGET_REDIRECT_RESPONSE_CONSUMED),
+            Map.entry("IIP-IDP17-c-idp-01", LogoutTranscriptProfileCase.Rule.INFORMATIONAL_PROPAGATION));
 
     private final BrowserEvidenceTestCase fallback;
     private final TranscriptContentReader content;
@@ -78,6 +79,17 @@ public final class LogoutBrowserEvidenceTestCase implements TestCase, BrowserPro
     }
 
     @Override public CaseStep resume(CaseContext context, CaseState state, CaseEvent event) {
+        if (event instanceof CaseEvent.Aborted aborted
+                && "target-initiated-not-issued".equals(aborted.reason())) {
+            // The campaign ended without target-emitted evidence; record the rule's observation.
+            if (!context.transcriptComplete()) return new CaseStep.Finish(LogoutTranscriptProfileCase.incompleteHistory());
+            var outcome = new LogoutTranscriptProfileCase(
+                    RULES.get(id()), signingCertificates.apply(context.runId()),
+                    targetEntityIds.apply(context.runId()).orElse(null),
+                    decryptionKeys.keyFor(context.runId()).orElse(null))
+                    .evaluate(context.runId(), context.transcript(), content);
+            return new CaseStep.Finish(outcome);
+        }
         if (event instanceof CaseEvent.TranscriptReady) {
             return observed(context).<CaseStep>map(CaseStep.Finish::new)
                     .orElseThrow(() -> new IllegalStateException("SLO Transcript evidence is not ready"));

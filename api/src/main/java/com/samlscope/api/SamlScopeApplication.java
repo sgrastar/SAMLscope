@@ -218,6 +218,8 @@ public final class SamlScopeApplication {
                     ctx.json(m1.abortActiveProbe(ctx.pathParam("id"))));
             javalin.routes.post("/api/runs/{id}/active-probe/retry", ctx ->
                     ctx.json(m1.retryActiveProbe(ctx.pathParam("id"))));
+            javalin.routes.post("/api/runs/{id}/target-initiated/conclude", ctx ->
+                    ctx.json(java.util.Map.of("concluded", m1.concludeTargetInitiated(ctx.pathParam("id")))));
             javalin.routes.post("/api/runs/{id}/browser-observation", ctx -> {
                 var request = ctx.bodyAsClass(ApiModels.BrowserObservation.class);
                 ctx.json(m1.recordBrowserObservation(ctx.pathParam("id"), request));
@@ -265,6 +267,8 @@ public final class SamlScopeApplication {
                 javalin.routes.before("/api/runs/{id}/active-probe/browser-response", ctx ->
                         authorization.authorizeRun(ctx, true));
                 javalin.routes.before("/api/runs/{id}/browser-observation", ctx ->
+                        authorization.authorizeRun(ctx, true));
+                javalin.routes.before("/api/runs/{id}/target-initiated/conclude", ctx ->
                         authorization.authorizeRun(ctx, true));
                 javalin.routes.before("/api/runs/{id}/interactions", ctx ->
                         authorization.authorizeRun(ctx, false));

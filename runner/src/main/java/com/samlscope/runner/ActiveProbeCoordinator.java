@@ -346,6 +346,30 @@ public final class ActiveProbeCoordinator {
                 httpStatus, Map.of(), bodyBytes, "text/html", null, saml, Map.copyOf(summary)));
     }
 
+    /**
+     * Concludes the target-initiated logout campaign when the target issued no request.
+     * Campaign cases then record "not observed" instead of waiting forever.
+     */
+    public int concludeTargetInitiatedCampaign(String runId) {
+        requireRun(runId);
+        var concluded = 0;
+        for (var execution : repository.list(runId)) {
+            if (execution.status() == CaseExecutionStatus.FINISHED) continue;
+            var testCase = scenarioCases.find(execution.caseId()).orElse(null);
+            if (!(testCase instanceof com.samlscope.runner.RecordedEvidenceReevaluation)) continue;
+            if (!(testCase instanceof com.samlscope.runner.EvidenceCampaignCase campaign)
+                    || !"target-initiated-logout".equals(campaign.evidenceCampaignId())) continue;
+            try {
+                executionService.resume(runId, testCase, contexts.contextFor(runId),
+                        new CaseEvent.Aborted("target-initiated-not-issued"));
+                concluded++;
+            } catch (RuntimeException notResumable) {
+                // A case waiting on another evidence form keeps its own completion path.
+            }
+        }
+        return concluded;
+    }
+
     /** Marks only the current fixture unavailable and continues the remaining scenario controls. */
     public Status abort(String runId) {
         var currentStatus = status(runId);

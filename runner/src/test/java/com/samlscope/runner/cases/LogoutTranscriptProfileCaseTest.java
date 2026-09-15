@@ -330,6 +330,18 @@ class LogoutTranscriptProfileCaseTest {
     }
 
     @Test
+    void propagationChoiceRecordsWhetherTheTargetIssuedARequest() {
+        var propagated = fixture(new Entry("request", Direction.INBOUND, "GET",
+                request("_request", "2.0", ""), null, Map.of("type", "LogoutRequest")));
+        var observed = propagated.result(LogoutTranscriptProfileCase.Rule.INFORMATIONAL_PROPAGATION, null);
+        assertEquals(Outcome.SATISFIED_WITH_NOTE, observed.outcome());
+        assertEquals(Boolean.TRUE, observed.details().get("propagated"));
+        var notObserved = fixture().result(LogoutTranscriptProfileCase.Rule.INFORMATIONAL_PROPAGATION, null);
+        assertEquals(Outcome.SATISFIED_WITH_NOTE, notObserved.outcome());
+        assertEquals(Boolean.FALSE, notObserved.details().get("propagated"));
+    }
+
+    @Test
     void targetRedirectRequestRequiresTheConfiguredRedirectBinding() {
         var redirect = fixture(new Entry("request", Direction.INBOUND, "GET",
                 request("_request", "2.0", ""), null, Map.of("type", "LogoutRequest")));
