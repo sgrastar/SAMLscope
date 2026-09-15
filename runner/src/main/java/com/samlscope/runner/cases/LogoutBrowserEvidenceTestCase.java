@@ -33,7 +33,9 @@ public final class LogoutBrowserEvidenceTestCase implements TestCase, BrowserPro
             Map.entry("IIP-IDP18-a-idp-01", LogoutTranscriptProfileCase.Rule.REDIRECT_LOGOUT_REQUEST_ACCEPTED),
             Map.entry("IIP-IDP18-c-idp-01", LogoutTranscriptProfileCase.Rule.TARGET_REDIRECT_LOGOUT_REQUEST),
             Map.entry("IIP-IDP18-d-idp-01", LogoutTranscriptProfileCase.Rule.TARGET_REDIRECT_RESPONSE_CONSUMED),
-            Map.entry("IIP-IDP17-c-idp-01", LogoutTranscriptProfileCase.Rule.INFORMATIONAL_PROPAGATION));
+            Map.entry("IIP-IDP17-c-idp-01", LogoutTranscriptProfileCase.Rule.INFORMATIONAL_PROPAGATION),
+            Map.entry("IIP-IDP17-r-idp-01", LogoutTranscriptProfileCase.Rule.TARGET_PROPAGATION_CONTINUE),
+            Map.entry("IIP-IDP17-s-idp-01", LogoutTranscriptProfileCase.Rule.TARGET_PARTIAL_LOGOUT));
 
     private final BrowserEvidenceTestCase fallback;
     private final TranscriptContentReader content;

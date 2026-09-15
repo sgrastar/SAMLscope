@@ -330,6 +330,33 @@ class LogoutTranscriptProfileCaseTest {
     }
 
     @Test
+    void propagationRequiresMultiParticipantFailureEvidence() {
+        var single = fixture(new Entry("request", Direction.INBOUND, "GET",
+                request("_request", "2.0", ""), null, Map.of("type", "LogoutRequest")));
+        assertEquals(Outcome.NOT_VERIFIED,
+                single.evaluate(LogoutTranscriptProfileCase.Rule.TARGET_PROPAGATION_CONTINUE));
+        assertEquals(Outcome.NOT_VERIFIED,
+                single.evaluate(LogoutTranscriptProfileCase.Rule.TARGET_PARTIAL_LOGOUT));
+        assertEquals(Outcome.SATISFIED_WITH_NOTE,
+                fixture().evaluate(LogoutTranscriptProfileCase.Rule.TARGET_PROPAGATION_CONTINUE));
+        assertEquals(Outcome.SATISFIED_WITH_NOTE,
+                fixture().evaluate(LogoutTranscriptProfileCase.Rule.TARGET_PARTIAL_LOGOUT));
+        var partial = fixture(
+                new Entry("request", Direction.INBOUND, "GET",
+                        request("_request", "2.0", ""), null, Map.of("type", "LogoutRequest")),
+                new Entry("response", Direction.INBOUND, "POST",
+                        "<samlp:LogoutResponse xmlns:samlp=\"urn:oasis:names:tc:SAML:2.0:protocol\" "
+                                + "ID=\"_response\" Version=\"2.0\" IssueInstant=\"2026-08-29T00:00:00Z\" "
+                                + "InResponseTo=\"_request\"><samlp:Status><samlp:StatusCode "
+                                + "Value=\"urn:oasis:names:tc:SAML:2.0:status:Success\"><samlp:StatusCode "
+                                + "Value=\"urn:oasis:names:tc:SAML:2.0:status:PartialLogout\"/>"
+                                + "</samlp:StatusCode></samlp:Status></samlp:LogoutResponse>", null,
+                        Map.of("type", "LogoutResponse")));
+        assertEquals(Outcome.SATISFIED,
+                partial.evaluate(LogoutTranscriptProfileCase.Rule.TARGET_PARTIAL_LOGOUT));
+    }
+
+    @Test
     void propagationChoiceRecordsWhetherTheTargetIssuedARequest() {
         var propagated = fixture(new Entry("request", Direction.INBOUND, "GET",
                 request("_request", "2.0", ""), null, Map.of("type", "LogoutRequest")));

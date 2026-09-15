@@ -429,6 +429,37 @@ def render(root,definitions,output):
                        interaction=None,verdict=case['verdict'],evidence=case['evidence'],
                        diagnostics=case.get('diagnostics',{}))
             transitions.append(dict(row))
+        propagation={
+            'keycloak':'reference-20260915/peer-intent/keycloak/slo_target_logout_rs',
+            'shibboleth':'reference-20260915/peer-intent/shibboleth/slo_target_logout_rs',
+            'simplesamlphp':'reference-20260915/peer-intent/simplesamlphp/slo_target_logout_rs',
+        }
+        propagation_expectations={
+            'keycloak':{
+                'IIP-IDP17-r-idp-01':('WARNING','slo.propagation.not-implemented'),
+                'IIP-IDP17-s-idp-01':('WARNING','slo.propagation.not-implemented')},
+            'simplesamlphp':{
+                'IIP-IDP17-r-idp-01':('WARNING','slo.propagation.not-implemented'),
+                'IIP-IDP17-s-idp-01':('WARNING','slo.propagation.not-implemented')},
+            'shibboleth':{
+                'IIP-IDP17-r-idp-01':('NOT_VERIFIED','slo.propagation.failure-induction-unavailable'),
+                'IIP-IDP17-s-idp-01':('NOT_VERIFIED','slo.partial-logout.unobserved')},
+        }
+        if row['profile']=='single_logout_idp' and row['product'] in propagation \
+                and row['case'] in propagation_expectations[row['product']] \
+                and row.get('verdict','NOT_VERIFIED')=='NOT_VERIFIED':
+            path=root.parent.parent/propagation[row['product']]/'result.json'
+            raw=path.read_bytes(); result=json.loads(raw)
+            case=next(c for req in result['requirements'] for c in req['cases'] if c['id']==row['case'])
+            want=propagation_expectations[row['product']][row['case']]
+            assert (case['verdict'],case['reason_code'])==want,(row['product'],row['case'],case['verdict'],case['reason_code'])
+            row['baseline']={k:row.get(k) for k in ('run','reason_code','result_sha256','evidence_folder','interaction')}
+            row.update(run=result['run']['id'],reason_code=case['reason_code'],
+                       result_sha256=hashlib.sha256(raw).hexdigest(),
+                       evidence_folder=str(path.parent.relative_to(root.parents[3])),
+                       interaction=None,verdict=case['verdict'],evidence=case['evidence'],
+                       diagnostics=case.get('diagnostics',{}))
+            transitions.append(dict(row))
         if row.get('verdict','NOT_VERIFIED')=='NOT_VERIFIED':refreshed.append(row)
     rows=refreshed
     (root/'retest-delta.json').write_text(json.dumps(transitions,ensure_ascii=False,indent=2)+'\n')

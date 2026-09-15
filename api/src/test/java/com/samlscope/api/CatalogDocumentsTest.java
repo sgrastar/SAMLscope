@@ -150,7 +150,7 @@ class CatalogDocumentsTest {
                 ignored -> java.util.Optional.of("https://idp.example"), ignored -> java.util.List.of());
         var automatedM3Idp = m3.forRole(TargetRole.IDP).stream()
                 .filter(ProtocolEvidenceCase.class::isInstance).count();
-        assertEquals(15, automatedM3Idp,
+        assertEquals(17, automatedM3Idp,
                 "Update this explicit no-questionnaire inventory when adding or removing an SLO oracle");
         assertTrue(m3.forRole(TargetRole.IDP).stream().noneMatch(AttestationPrompt.class::isInstance),
                 "An SLO browser action must never be followed by an operator-supplied verdict");
@@ -234,7 +234,7 @@ class CatalogDocumentsTest {
         var questionnaireFree = automated + browserActions + conclusiveAttested + conclusiveConfig;
 
         assertEquals(413, totalIdpFull);
-        assertEquals(239, conclusive,
+        assertEquals(241, conclusive,
                 "Update this explicit IDP Full automatic-oracle inventory when an oracle changes: automated="
                         + automated + ", browser=" + conclusiveBrowser + ", attested="
                         + conclusiveAttested + ", config=" + conclusiveConfig);

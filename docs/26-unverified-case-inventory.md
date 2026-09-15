@@ -4,20 +4,20 @@
 
 | 再試験前 | 確定（Success / Failed / Warning） | 現在の未検証 | 未検証の異なるケースID |
 |---:|---:|---:|---:|
-| 594 | 83 | 511 | 168 |
+| 594 | 87 | 507 | 168 |
 
 ## 内訳
 
 | 原因・現在の経路 | 件数 | 次に扱う範囲 |
 |---|---:|---|
-| ブラウザ完了後の自動判定がない | 35 | Suite実装 |
+| ブラウザ完了後の自動判定がない | 29 | Suite実装 |
 | 一部の試験条件しか実装されていない | 61 | Suite実装 |
 | 設定後の証拠確認・自己申告経路 | 187 | 設定・証拠 |
 | 自己申告が無効 | 75 | 設定・証拠 |
 | メタデータの追加試験・観測不足 | 71 | 試験経路確認 |
 | ブラウザ・SLOの追加観測不足 | 28 | 試験経路確認 |
 | 古い待機結果・再開時には期限切れ | 0 | 新Runで再試験 |
-| 実行したが確定できない | 54 | 個別診断 |
+| 実行したが確定できない | 56 | 個別診断 |
 
 ### G02の確認済み条件と残条件
 
@@ -177,8 +177,8 @@ approved variant全体の入力生成と観測を実装する。追加ログイ�
 | `IIP-IDP17-ab-idp-01` | single_logout_idp | single_logout_idp | single_logout_idp | 自己申告が無効 |
 | `IIP-IDP17-b2-idp-01` | — | — | single_logout_idp | 実行したが確定できない |
 | `IIP-IDP17-n-idp-01` | single_logout_idp | single_logout_idp | — | ブラウザ・SLOの追加観測不足 / 実行したが確定できない |
-| `IIP-IDP17-r-idp-01` | single_logout_idp | single_logout_idp | single_logout_idp | ブラウザ完了後の自動判定がない |
-| `IIP-IDP17-s-idp-01` | single_logout_idp | single_logout_idp | single_logout_idp | ブラウザ完了後の自動判定がない |
+| `IIP-IDP17-r-idp-01` | — | single_logout_idp | — | 実行したが確定できない |
+| `IIP-IDP17-s-idp-01` | — | single_logout_idp | — | 実行したが確定できない |
 | `IIP-IDP17-u-idp-01` | single_logout_idp | single_logout_idp | — | ブラウザ・SLOの追加観測不足 / 実行したが確定できない |
 | `IIP-IDP19-a-idp-01` | single_logout_idp | — | single_logout_idp | 実行したが確定できない |
 | `IIP-IDP19-b-idp-01` | single_logout_idp | — | single_logout_idp | 設定後の証拠確認・自己申告経路 |
@@ -313,7 +313,7 @@ Verdictは変更せず、未検証の理由だけを分類します。feature-ab
 
 | 診断 | 件数 | 意味 | 表示案 |
 |---|---:|---|---|
-| `suite-observation-gap` | 342 | Suite側の観測・実行経路が未接続 | Suite側の実装で解消可能なNot verified |
+| `suite-observation-gap` | 338 | Suite側の観測・実行経路が未接続 | Suite側の実装で解消可能なNot verified |
 | `operator-attestation-available` | 77 | 自己申告または運用者証言で確認可能 | 運用者証言（ケースごとに1回答）で確認可能。現在のPlanは自己申告無効 |
 | `evidence-form-mismatch` | 47 | 承認済み判定条件が要求する証拠形式と製品応答が不一致 | 証拠形式が承認済み条件と一致しないためNot verified（要件解釈の再確認が必要） |
 | `role-inapplicable` | 24 | ロール上、対象が消費しない成果物を要求するvariant | IdPロールでは消費されないvariantのため実行対象外（対象外であることは判定済み） |

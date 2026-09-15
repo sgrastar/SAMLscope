@@ -149,11 +149,21 @@ Suite SPがRedirect応答エンドポイントのみを広告する構成を、�
 - ターゲット起点ログアウトのキャンペーンは、対象が要求を発行しない場合に永久待機していました。`POST /api/runs/{id}/target-initiated/conclude` を追加し、未発行を確定して規則の観測（`not-issued`）を記録します。Suiteが自ら「発行なし」を観測できない場合でも、未発行の確定を運用者/ドライバの操作として記録する経路です。
 - 実証による未検証解消: 7観測（518→511、異なるケースID 171→168）。
 
-## 9. 操作コストの記録方針
+## 9. バッチ5の結果（IIP-IDP17.r / s）
+
+| ケース | Keycloak | Shibboleth | SimpleSAMLphp | 観測した事実 |
+|---|---|---|---|---|
+| `IIP-IDP17.r` | Warning | 未確定 | Warning | Keycloak/SimpleSAMLphpは伝播自体を実装しないため、variant規定どおり`satisfied_with_note`（伝播不実装）。Shibbolethは伝播するが、単一参加者では「失敗後の継続」を証明できない |
+| `IIP-IDP17.s` | Warning | 未確定 | Warning | 同上。Shibbolethは単一参加者のため失敗を誘導できず、PartialLogoutの観測経路がない |
+
+- 実証による未検証解消: 4観測（511→507）。Shibbolethのr/sは理由を`slo.propagation.failure-induction-unavailable` / `slo.partial-logout.unobserved`へ精密化し、未確定を維持。
+- Shibbolethの伝播継続・PartialLogoutを確定するには、**同一Run内に複数のSP参加者**が必要です。設計案: (1) Suiteが1つのPlanで第2・第3のSP entity（`/p/{plan}/sp2/*`, `/sp3/*`）とメタデータを公開、(2) 失敗誘導用のSLO SOAPエンドポイント（接続拒否/タイムアウト固定）を用意、(3) IdPメタデータへ3 entityを登録して同一ブラウザで順にログイン、(4) 1つ目を失敗させた上で残りに要求が届くこと（r）と開始SPへの応答にPartialLogoutが入ること（s）をトランスクリプト規則で判定。Suite側の複数SP対応が前提で、次の実装単位とします。
+
+## 10. 操作コストの記録方針
 
 製品設定の書き込み・復元、管理API操作、Suite再作成、Run回数をバッチごとに記録し、`docs/31`と各バッチの`operations.json`へ保存します。失敗試行も含めます。
 
-## 10. 進捗の区分
+## 11. 進捗の区分
 
 - コード実装: Suite/コアの変更とテスト。
 - 実環境への接続: Run作成、fixture送出、応答記録。

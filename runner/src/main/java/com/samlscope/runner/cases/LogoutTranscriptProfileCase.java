@@ -33,7 +33,7 @@ public final class LogoutTranscriptProfileCase {
         REQUEST_ISSUER_COUNT, REQUEST_ISSUER_VALUE, REQUEST_ISSUER_FORMAT, REQUEST_SIGNATURE,
         REQUEST_NOT_ON_OR_AFTER, REQUEST_IDENTIFIER_MATCH, REQUEST_NOT_ON_OR_AFTER_BOUND,
         REDIRECT_LOGOUT_REQUEST_ACCEPTED, TARGET_REDIRECT_LOGOUT_REQUEST, TARGET_REDIRECT_RESPONSE_CONSUMED,
-        INFORMATIONAL_PROPAGATION
+        INFORMATIONAL_PROPAGATION, TARGET_PROPAGATION_CONTINUE, TARGET_PARTIAL_LOGOUT
     }
 
     private static final String PROTOCOL = "urn:oasis:names:tc:SAML:2.0:protocol";
@@ -109,6 +109,8 @@ public final class LogoutTranscriptProfileCase {
             case TARGET_REDIRECT_RESPONSE_CONSUMED -> targetRedirectResponseConsumed(
                     targetLogout, all, snapshot.entries());
             case INFORMATIONAL_PROPAGATION -> informationalPropagation(targetLogout);
+            case TARGET_PROPAGATION_CONTINUE -> targetPropagationContinue(targetLogout);
+            case TARGET_PARTIAL_LOGOUT -> targetPartialLogout(targetLogout, all);
         };
     }
 
@@ -565,8 +567,36 @@ public final class LogoutTranscriptProfileCase {
                     Outcome.SATISFIED_WITH_NOTE, null, "slo.propagation.choice-recorded",
                     "slo.propagation.choice-recorded", List.of(),
                     Map.of("propagated", false, "observed_requests", 0));
+            case TARGET_PROPAGATION_CONTINUE, TARGET_PARTIAL_LOGOUT ->
+                    optionalNotObserved("slo.propagation.not-implemented");
             default -> optionalNotObserved("slo.target-message.not-observed");
         };
+    }
+
+    private CaseOutcome targetPropagationContinue(List<Message> targetLogout) {
+        var requests = targetLogout.stream().filter(value -> is(value.logout(), "LogoutRequest")).toList();
+        if (requests.isEmpty()) return optionalNotObserved("slo.propagation.not-implemented");
+        // Failure induction across multiple participants is not observable from a single
+        // Suite SP transcript, so a one-participant run cannot prove continue-after-failure.
+        return notVerifiedWithEvidence(requests, "slo.propagation.failure-induction-unavailable",
+                "slo.propagation.failure-induction-unavailable");
+    }
+
+    private CaseOutcome targetPartialLogout(List<Message> targetLogout, List<Message> all) {
+        var requests = targetLogout.stream().filter(value -> is(value.logout(), "LogoutRequest")).toList();
+        if (requests.isEmpty()) return optionalNotObserved("slo.propagation.not-implemented");
+        var responses = all.stream()
+                .filter(value -> value.entry().direction() == Direction.INBOUND)
+                .filter(value -> is(value.logout(), "LogoutResponse")).toList();
+        var partial = responses.stream().filter(value -> "urn:oasis:names:tc:SAML:2.0:status:PartialLogout"
+                .equals(secondaryStatus(value.logout()))).toList();
+        if (!partial.isEmpty()) {
+            return new CaseOutcome(Outcome.SATISFIED, null, "slo.partial-logout.observed",
+                    "slo.partial-logout.observed", evidence(partial),
+                    Map.of("partial_logout_responses", partial.size()));
+        }
+        return notVerifiedWithEvidence(responses.isEmpty() ? requests : responses,
+                "slo.partial-logout.unobserved", "slo.partial-logout.unobserved");
     }
 
     private CaseOutcome informationalPropagation(List<Message> targetLogout) {
