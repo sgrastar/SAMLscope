@@ -736,3 +736,10 @@ SSO/SLOのNormalFlow判定で証拠を生成できない9ケースを調査し�
 API `GET/POST /api/runs/{id}/target-initiated` とRun workspaceの準備パネルを追加し、RelayStateと待機状態を表示します。`LogoutBrowserEvidenceTestCase`は完了後のNOT_VERIFIEDを新Transcript証拠で再評価でき、SLO判定は暗号化Assertion内のNameID/SessionIndexをRun鍵で復号してから照合します。DOCTYPE付きの敵対的送信要求が正常系観測全体を停止させる問題も修正し、解析不能な受信応答は不確定のまま維持します。
 
 <!--g1-literal--> 実製品では、Keycloakで`IIP-SSO01-g`がSuccess、`IIP-SSO01-z`がWarning、Shibbolethで`IIP-SSO01-g`と`IIP-SSO01-k`がSuccess、`IIP-SSO01-z`がWarning、`IDP17-j/k/l/m`がSuccess、`IDP17-t`が既知のFailed、`IDP17-n/u`が具体的な理由付きNOT_VERIFIEDになりました。未検証は559から550へ減少しました（異なるケースID 180は不変）。KeycloakとSimpleSAMLphpのtarget-initiated logoutはSuiteへのLogoutRequestが到達せず未検証のままです。詳細は [対象起点メッセージの受入記録](31-peer-intent-acceptance.md) に保存しています。
+
+
+### 未検証の診断分類とSimpleSAMLphp暗号化観測（2026-09-15）
+
+<!--g1-literal--> 未検証548件の解消理由を、Verdictを変えずに`capability_diagnosis`として分類しました。内訳はsuite-observation-gap 379、operator-attestation-available 77、evidence-form-mismatch 47、role-inapplicable 24、feature-absent 21です。公開診断の許可キーに同キーと固定トークンを追加し、将来の表示（OIDF Conformanceのskipped相当を含む）に備えました。分類は台帳生成器が作成し、[全件台帳](26-unverified-case-inventory.md)に記録しています。
+
+<!--g1-literal--> SimpleSAMLphpのSuite SPメタデータへ`assertion.encryption=true`を設定し、browser_sso_idpとecp_idpのRunでAssertion暗号化を観測しました。鍵輸送はRSA-OAEP-MGF1Pで`IIP-ALG06-a`がSuccess、内容暗号はCBCのため`IIP-ALG04.a`は未検証を維持しました。設定はin-placeで復元し、コンテナ再起動後にPHP構文と値（NULL）を確認しています。未検証は548から546へ減少しました。

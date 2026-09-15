@@ -259,6 +259,8 @@ def render(root,definitions,output):
             ('keycloak','browser_sso_idp'):'reference-20260915/algorithm-observation-batch/keycloak/browser_alg_combo',
             ('shibboleth','browser_sso_idp'):'reference-20260915/algorithm-observation-batch/shibboleth/browser_sso_idp',
             ('keycloak','ecp_idp'):'reference-20260915/peer-intent/keycloak/ecp_alg',
+            ('simplesamlphp','browser_sso_idp'):'reference-20260915/peer-intent/simplesamlphp/browser_alg_enc',
+            ('simplesamlphp','ecp_idp'):'reference-20260915/peer-intent/simplesamlphp/ecp_alg_enc',
         }
         peer_expectations={
             ('keycloak','browser_sso_idp'):{
@@ -274,6 +276,10 @@ def render(root,definitions,output):
                 'IIP-SSO01-z-idp-01':('WARNING','browser.normal-flow.unsolicited-sso-observed')},
             ('keycloak','ecp_idp'):{
                 'IIP-ALG04-a-idp-01':('PASS','browser.encryption.aes128-gcm.decrypted'),
+                'IIP-ALG06-a-idp-01':('PASS','browser.encryption.rsa-oaep-mgf1p.decrypted')},
+            ('simplesamlphp','browser_sso_idp'):{
+                'IIP-ALG06-a-idp-01':('PASS','browser.encryption.rsa-oaep-mgf1p.decrypted')},
+            ('simplesamlphp','ecp_idp'):{
                 'IIP-ALG06-a-idp-01':('PASS','browser.encryption.rsa-oaep-mgf1p.decrypted')},
         }
         peer_key=(row['product'],row['profile'])

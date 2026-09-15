@@ -205,6 +205,14 @@ def render(root, output):
                     'cases': {
                         'IIP-ALG04-a-idp-01': ('PASS', 'browser.encryption.aes128-gcm.decrypted'),
                         'IIP-ALG06-a-idp-01': ('PASS', 'browser.encryption.rsa-oaep-mgf1p.decrypted')}},
+                ('simplesamlphp', 'browser_sso_idp'): {
+                    'folder': '../reference-20260915/peer-intent/simplesamlphp/browser_alg_enc',
+                    'cases': {
+                        'IIP-ALG06-a-idp-01': ('PASS', 'browser.encryption.rsa-oaep-mgf1p.decrypted')}},
+                ('simplesamlphp', 'ecp_idp'): {
+                    'folder': '../reference-20260915/peer-intent/simplesamlphp/ecp_alg_enc',
+                    'cases': {
+                        'IIP-ALG06-a-idp-01': ('PASS', 'browser.encryption.rsa-oaep-mgf1p.decrypted')}},
                 ('shibboleth', 'single_logout_idp'): {
                     'folder': '../reference-20260915/peer-intent/shibboleth/slo_target_logout',
                     'cases': {
