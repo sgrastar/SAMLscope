@@ -10,7 +10,7 @@ NAMES = dict(zip(PRODUCTS, ('Keycloak', 'Shibboleth', 'SimpleSAMLphp')))
 def cases(path):
     return {c['id']: c for r in json.loads(path.read_text())['requirements'] for c in r['cases']}
 
-def render(root, output):
+def render(root, output, date='2026-09-14', focus=(), notes=None):
     operations = [json.loads(line) for line in (root / 'operations.jsonl').read_text().splitlines() if line]
     totals = {p: Counter() for p in PRODUCTS}
     transitions = []
@@ -20,19 +20,24 @@ def render(root, output):
         old, new = cases(before), cases(after if after.exists() else before)
         if old.keys() != new.keys():
             raise ValueError('Case set changed: compare equivalent definitions first')
-        totals[product]['before'] += sum(c['verdict'] == 'NOT_VERIFIED' for c in old.values())
-        totals[product]['after'] += sum(c['verdict'] == 'NOT_VERIFIED' for c in new.values())
         for key, case in new.items():
+            if focus and key not in focus:
+                continue
+            totals[product]['before'] += old[key]['verdict'] == 'NOT_VERIFIED'
+            totals[product]['after'] += case['verdict'] == 'NOT_VERIFIED'
             if old[key]['verdict'] != case['verdict']:
                 transitions.append((product, profile, key, old[key]['verdict'], case['verdict'], case['reason_code']))
     lines = ['# 追加試験と設定・操作コストの記録', '',
-             'この記録は2026-09-14の追加試験だけを計測対象にしています。それ以前の環境構築・試行の回数や時間は未計測であり、ゼロとは扱いません。既存Runに追加の証拠を集め、同じケース定義で判定の差分を比較しています。', '',
+             f'この記録は{date}の追加試験だけを計測対象にしています。それ以前の環境構築・試行の回数や時間は未計測であり、ゼロとは扱いません。既存Runに追加の証拠を集め、同じケース定義で判定の差分を比較しています。' + ('対象ケースを限定した前後比較です。' if focus else ''), '',
              'ユーザー本人の操作、エージェントが代行したブラウザ操作、API・ファイルによる設定変更を別々に数えます。設定書き込みは復元も含めて1回ずつ数え、サービス再読み込みは別計上します。ブラウザ操作はページを開く・項目入力・クリック・手動継続をそれぞれ1回と数え、自動リダイレクトは含めません。スクリプトによる代行は、設定作業自体の消滅を意味しません。', '',
              '## 判定の変化', '', '| 製品 | Not verified：前 | 後 | 減少 |', '|---|---:|---:|---:|']
     for p in PRODUCTS:
         t=totals[p]; lines.append(f"| {NAMES[p]} | {t['before']} | {t['after']} | {t['before']-t['after']} |")
-    lines += ['', '上の差分は最初の追加試験の記録です。その後の全件監査では共通ケースを別Runで再試験し、追加で5件のSuccessを確認しました。さらに追加実装後の再試験で、現在の未検証件数は全件台帳で集計しています（[実装記録](27-additional-implementation.md)）。詳細と製品別の再試験結果は [全件台帳](26-unverified-case-inventory.md) を参照してください。以下の作業量・明細には、この再試験と不成功だった署名必須設定の試行も含めます。', '', 'この件数は製品・プロファイル・ケース単位の延べ観測数です。操作や設定の回数とは異なります。', '',
-              '## 作業量', '', '| 製品 | 設定書き込み（復元含む） | サービス再読込 | 代行ブラウザ操作 | ユーザー本人の操作 |', '|---|---:|---:|---:|---:|']
+    if focus:
+        lines += ['', '上の差分は対象ケースに限定した前後比較です。対象外ケースの判定は変更していません。全件の未検証件数と製品別の再試験結果は [全件台帳](26-unverified-case-inventory.md) を参照してください。', '', 'この件数は製品・プロファイル・ケース単位の延べ観測数です。操作や設定の回数とは異なります。', '',]
+    else:
+        lines += ['', '上の差分は最初の追加試験の記録です。その後の全件監査では共通ケースを別Runで再試験し、追加で5件のSuccessを確認しました。さらに追加実装後の再試験で、現在の未検証件数は全件台帳で集計しています（[実装記録](27-additional-implementation.md)）。詳細と製品別の再試験結果は [全件台帳](26-unverified-case-inventory.md) を参照してください。以下の作業量・明細には、この再試験と不成功だった署名必須設定の試行も含めます。', '', 'この件数は製品・プロファイル・ケース単位の延べ観測数です。操作や設定の回数とは異なります。', '',]
+    lines += ['## 作業量', '', '| 製品 | 設定書き込み（復元含む） | サービス再読込 | 代行ブラウザ操作 | ユーザー本人の操作 |', '|---|---:|---:|---:|---:|']
     for p in PRODUCTS:
         rows=[r for r in operations if r['product']==p]
         counts=[sum(r.get(k,0) for r in rows) for k in ('configuration_writes','service_reloads','browser_actions','human_actions')]
@@ -48,6 +53,10 @@ def render(root, output):
     lines += ['', '## 判定が変わったケース', '', '| 製品 | Profile | Test | 前 | 後 | 根拠コード |', '|---|---|---|---|---|---|']
     for product,profile,key,old,new,reason in transitions:
         lines.append(f'| {NAMES[product]} | {profile} | `{key}` | {old} | {new} | `{reason}` |')
+    if notes is not None:
+        output.write_text('\n'.join(lines) + '\n' + notes.read_text())
+        (root/'result-delta.json').write_text(json.dumps({'totals':totals,'transitions':transitions},ensure_ascii=False,indent=2)+'\n')
+        return
     lines += ['', '## 作業削減に直結する課題', '',
               '| 優先度 | 課題 | 今回確認できたこと | 改善案 |', '|---|---|---|---|',
               '| 高 | 操作しても判定できない項目が操作待ちに見える | BrowserEvidenceTestCaseは完了操作後もoracle-unavailableを返す。CONFIGの一部は自己申告へ進む | 開始前に自動判定・証拠確認・未実装を表示し、判定できない設定作業を要求しない |',
@@ -73,4 +82,7 @@ if __name__=='__main__':
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--evidence-root',type=Path,required=True)
     parser.add_argument('--output',type=Path,default=Path('docs/25-interaction-execution-cost.md'))
-    args=parser.parse_args();render(args.evidence_root,args.output)
+    parser.add_argument('--date',default='2026-09-14')
+    parser.add_argument('--focus-cases',default='',help='comma-separated case IDs to include in deltas and transitions')
+    parser.add_argument('--notes-file',type=Path,default=None,help='markdown sections appended after the operation detail table')
+    args=parser.parse_args();render(args.evidence_root,args.output,args.date,tuple(x for x in args.focus_cases.split(',') if x),args.notes_file)

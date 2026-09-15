@@ -14,6 +14,8 @@ ADDITIONAL_RETESTS = {
     "metadata_idp": {"IIP-MD05-fi-idp-01"},
 }
 POLLING_RETESTS = {'IIP-MD07-a-idp-01', 'IIP-MD06-a9-idp-01', 'IIP-MD06-a7-idp-01', 'IIP-MD06-a5-idp-01', 'IIP-MD05-ad-idp-01'}
+ALG_CASES = {'IIP-ALG04-a-idp-01', 'IIP-ALG04-b-idp-01', 'IIP-ALG06-a-idp-01',
+             'IIP-ALG06-b-idp-01', 'IIP-ALG06-c-idp-01', 'IIP-ALG06-d-idp-01'}
 SELECTION = {
     "browser_sso_idp": ("interaction-followup/after/keycloak/browser_sso_idp", "interaction-followup/after/shibboleth/browser_sso_idp", "interaction-followup/after/simplesamlphp/browser_sso_idp"),
     "metadata_idp": ("keycloak/metadata_idp/run2", "interaction-followup/after/shibboleth/metadata_idp", "interaction-followup/after/simplesamlphp/metadata_idp"),
@@ -35,6 +37,7 @@ CONFIRMED_FAILURES = {
 def render(root, output):
     sections = []
     manifest = []
+    alg_adopted = set()
     unresolved = {product: Counter() for product in PRODUCTS}
     for profile, folders in SELECTION.items():
         columns = []
@@ -157,6 +160,29 @@ def render(root, output):
                                  'run': supplement['run']['id'], 'cases': sorted(polling_cases),
                                  'result_sha256': hashlib.sha256(supplement_raw).hexdigest(),
                                  'suite_image': supplement['suite']['image_digest']})
+            alg_products = {'keycloak', 'shibboleth'} | ({'simplesamlphp'} if profile == 'browser_sso_idp' else set())
+            if profile in {'browser_sso_idp', 'ecp_idp'} and product in alg_products:
+                supplement_folder = f'../reference-20260915/algorithm-observation-batch/{product}/{profile}'
+                supplement_raw = (root / supplement_folder / 'result.json').read_bytes()
+                supplement = json.loads(supplement_raw)
+                extra = {c['id']: c for req in supplement['requirements'] for c in req['cases']}
+                expected = {'keycloak': {'IIP-ALG04-b-idp-01': ('PASS', 'browser.encryption.aes256-gcm.decrypted'),
+                                         'IIP-ALG06-b-idp-01': ('PASS', 'browser.encryption.rsa-oaep.decrypted')},
+                            'shibboleth': {'IIP-ALG04-a-idp-01': ('PASS', 'browser.encryption.aes128-gcm.decrypted'),
+                                           'IIP-ALG06-a-idp-01': ('PASS', 'browser.encryption.rsa-oaep-mgf1p.decrypted')},
+                            'simplesamlphp': {}}[product]
+                for case_id in ALG_CASES:
+                    assert cases[case_id]['verdict'] == 'NOT_VERIFIED'
+                    replacement = extra[case_id]
+                    assert (replacement['verdict'], replacement['reason_code']) == expected.get(
+                        case_id, ('NOT_VERIFIED', 'case.pending-interaction'))
+                    cases[case_id] = replacement
+                    alg_adopted.add((product, profile, case_id))
+                manifest.append({'profile': profile, 'product': product,
+                                 'folder': f'build/acceptance/reference-20260915/algorithm-observation-batch/{product}/{profile}',
+                                 'run': supplement['run']['id'], 'cases': sorted(ALG_CASES),
+                                 'result_sha256': hashlib.sha256(supplement_raw).hexdigest(),
+                                 'suite_image': supplement['suite']['image_digest']})
             columns.append(cases)
             unresolved[product].update(c["reason_code"] for c in cases.values() if c["verdict"] == "NOT_VERIFIED")
             manifest.append({"profile": profile, "product": product, "folder": folder,
@@ -186,7 +212,7 @@ def render(root, output):
                            "INCONSISTENT": "Inconsistent", "ERROR": "Error (Suite)"}.get(verdict, verdict)
                 if product == 'simplesamlphp' and profile == 'browser_sso_idp' and case_id == 'IIP-IDP06-b-idp-01':
                     display += " (prior run; latest precision not verified)"
-                cells.append(display + (" †" if (product == "shibboleth" and profile == "browser_sso_idp" and case_id in {'IIP-SSO01-fk-idp-01','IIP-SSO01-fu-idp-01','IIP-SSO01-gi-idp-01'}) or (product == "simplesamlphp" and profile == "browser_sso_idp" and case_id in {"IIP-IDP06-a-idp-01", "IIP-IDP06-b-idp-01"}) or (profile == "single_logout_idp" and (case_id in COMMON_RETESTS or case_id == "IIP-IDP17-a-idp-01" or case_id == "IIP-IDP18-a-idp-01" or case_id == "IIP-IDP19-a-idp-01" or case_id == "IIP-IDP19-c-idp-01" or (product == "shibboleth" and case_id == "IIP-IDP19-b-idp-01"))) or case_id in ADDITIONAL_RETESTS.get(profile, set()) or (product == "shibboleth" and ((profile == "metadata_idp" and case_id in POLLING_RETESTS) or (profile == "browser_sso_idp" and case_id == "IIP-IDP12-c-idp-01"))) else ""))
+                cells.append(display + (" †" if (product == "shibboleth" and profile == "browser_sso_idp" and case_id in {'IIP-SSO01-fk-idp-01','IIP-SSO01-fu-idp-01','IIP-SSO01-gi-idp-01'}) or (product == "simplesamlphp" and profile == "browser_sso_idp" and case_id in {"IIP-IDP06-a-idp-01", "IIP-IDP06-b-idp-01"}) or (profile == "single_logout_idp" and (case_id in COMMON_RETESTS or case_id == "IIP-IDP17-a-idp-01" or case_id == "IIP-IDP18-a-idp-01" or case_id == "IIP-IDP19-a-idp-01" or case_id == "IIP-IDP19-c-idp-01" or (product == "shibboleth" and case_id == "IIP-IDP19-b-idp-01"))) or case_id in ADDITIONAL_RETESTS.get(profile, set()) or (product, profile, case_id) in alg_adopted or (product == "shibboleth" and ((profile == "metadata_idp" and case_id in POLLING_RETESTS) or (profile == "browser_sso_idp" and case_id == "IIP-IDP12-c-idp-01"))) else ""))
             lines.append(f"| `{case_id}` | " + " | ".join(cells) + " |")
         sections.append("\n".join(lines))
     template = Path(__file__).with_name("comparison-notes.md").read_text()

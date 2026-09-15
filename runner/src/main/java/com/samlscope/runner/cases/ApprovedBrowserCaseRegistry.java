@@ -290,6 +290,11 @@ public final class ApprovedBrowserCaseRegistry {
             return new LogoutBrowserEvidenceTestCase(
                     fallback, transcriptContent, targetEntityIds, targetSigningCertificates);
         }
+        if (transcriptContent != null && decryptionKeys != null
+                && EncryptionAlgorithmObservation.supports(definition.id())) {
+            return new EncryptionAlgorithmBrowserEvidenceTestCase(
+                    fallback, transcriptContent, decryptionKeys);
+        }
         if (transcriptDriven) {
             return new AutoBrowserEvidenceTestCase(
                     fallback, transcriptContent, decryptionKeys, targetEntityIds, targetSigningCertificates);

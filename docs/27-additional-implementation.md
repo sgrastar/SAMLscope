@@ -714,3 +714,16 @@ Runごとの保存はSQLiteの一意制約を使った初回INSERT限定で、�
 ShibbolethのSLO Runは同じ49ケースでVerdictの差分が0件でした。`IIP-IDP19-a`/`19-c`は4件、`19-b`は8件の証拠でSuccessのまま、結果に `decryption_key_source: ["published-metadata"]` が追加されています。SimpleSAMLphpは既に `slo.encrypted-id.negative-control-failed` のため再試験していません。
 
 <!--g1-literal--> 未検証567件と異なるケースID 180件は変更していません。新しく得られたのは補助入力の適用と出所記録の実証であり、Verdictの確定ではないためです。操作量は docker build 2回（初回のオーバーレイは起動失敗のため不採用、記録は残しています）、Suite/転送コンテナ再作成 各2回、製品コンテナ再起動0回、製品設定書き込み0回、管理API読み取り2回、補助入力投稿1回、新Run 2件、プロトコル往復46回、ブラウザ自動遷移4回、ユーザー本人の操作0回です。詳細は [補助公開鍵の受入記録](29-supplemental-key-acceptance.md) に保存しています。
+
+
+### 生成側アルゴリズム判定と未検証8件の確定（2026-09-15）
+
+<!--g1-literal--> 未検証567件のうち、IIP-ALG04/06の6ケースは3製品×2プロファイルの36観測として残っていました。`ApprovedBrowserCaseRegistry` が `browser.oracle-unavailable` を返し、生成された EncryptedAssertion のアルゴリズムを読む判定がなかったためです。
+
+`EncryptionAlgorithmObservation` と `EncryptionAlgorithmBrowserEvidenceTestCase` を追加し、正常に相関した Response 内の EncryptedAssertion を Run 鍵で復号してから、EncryptionMethod（ブロック暗号）、EncryptedKey の EncryptionMethod（鍵輸送）、DigestMethod、MGF を検査する共通判定を実装しました。公開メタデータのアルゴリズム名だけではSuccessにせず、暗号化Assertionがない場合・復号できない場合・要求と異なるアルゴリズムだけの場合・4組合せの一部だけの場合はNOT_VERIFIEDを維持します。ECPはoutbox actionで相関し、SOAP内のAuthnRequest IDを使う経路も補完しました。
+
+<!--g1-literal--> 実環境は `samlscope:reference-alg-v20` へ反映して再試験しました。Keycloakは `IIP-ALG04-b`（AES256-GCM）と `IIP-ALG06-b`（rsa-oaep）を、Shibbolethは `IIP-ALG04-a`（AES128-GCM）と `IIP-ALG06-a`（rsa-oaep-mgf1p）を、それぞれbrowser_sso_idpとecp_idpで確定し、Success 8観測を追加しました。SimpleSAMLphpはbrowser_sso_idpの161ケースで暗号化Assertionが0件のため確定なしです。未確定の理由は製品が生成しないアルゴリズム（AES128/256-GCM、rsa-oaep系の相方、既定MGF1-SHA1）で、製品FAILにはしていません。
+
+SSO/SLOのNormalFlow判定で証拠を生成できない9ケースを調査しました。`IIP-SSO01-g/z` はIdP起点成功、`IIP-SSO01-ep` はVersionMismatchのSAML Response、`IIP-SSO01-k` は受理される別ACS、`IIP-SSO03-b` は2種類目のSAMLエラー、`IIP-IDP17-n/u` はtarget-initiated LogoutRequestが不足しています。Suite側で補完できるのはECP相関のみで、残りは対象製品側の起点操作または設定に依存します。判定は前後で変わっていません。
+
+<!--g1-literal--> 未検証は567から559へ減少しました（異なるケースID 180は不変）。単体テスト条件の追加は未検証の解消として数えていません。G2-30は未解消のままで、今回の変更を独立承認として扱いません。変更・検証・操作の詳細は [生成側アルゴリズム判定の受入記録](30-algorithm-observation-operations.md) に保存しています。

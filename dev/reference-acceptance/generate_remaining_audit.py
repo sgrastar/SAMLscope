@@ -190,6 +190,29 @@ def render(root,definitions,output):
                        result_sha256=hashlib.sha256(raw).hexdigest(),evidence_folder=str(path.parent),interaction=None,
                        verdict=case['verdict'],evidence=case['evidence'])
             transitions.append(dict(row))
+        alg_products={'keycloak','shibboleth'}|({'simplesamlphp'} if row['profile']=='browser_sso_idp' else set())
+        if row['case'] in {'IIP-ALG04-a-idp-01','IIP-ALG04-b-idp-01','IIP-ALG06-a-idp-01',
+                           'IIP-ALG06-b-idp-01','IIP-ALG06-c-idp-01','IIP-ALG06-d-idp-01'} \
+                and row['profile'] in {'browser_sso_idp','ecp_idp'} and row['product'] in alg_products:
+            expected={'keycloak':{'IIP-ALG04-b-idp-01':('PASS','browser.encryption.aes256-gcm.decrypted'),
+                                  'IIP-ALG06-b-idp-01':('PASS','browser.encryption.rsa-oaep.decrypted')},
+                      'shibboleth':{'IIP-ALG04-a-idp-01':('PASS','browser.encryption.aes128-gcm.decrypted'),
+                                    'IIP-ALG06-a-idp-01':('PASS','browser.encryption.rsa-oaep-mgf1p.decrypted')},
+                      'simplesamlphp':{}}[row['product']]
+            path=root.parent.parent/'reference-20260915/algorithm-observation-batch'/row['product']/row['profile']/'result.json'
+            raw=path.read_bytes(); result=json.loads(raw)
+            case=next(c for req in result['requirements'] for c in req['cases'] if c['id']==row['case'])
+            want=expected.get(row['case'],('NOT_VERIFIED','case.pending-interaction'))
+            assert (case['verdict'],case['reason_code'])==want, (row['product'],row['profile'],row['case'],case['verdict'],case['reason_code'])
+            interactions_path=path.parent/'interactions'
+            interaction=None
+            if interactions_path.exists():
+                interaction=next((i for i in json.loads(interactions_path.read_text()) if i.get('caseId')==row['case']),None)
+            row['baseline']={k:row.get(k) for k in ('run','reason_code','result_sha256','evidence_folder','interaction')}
+            row.update(run=result['run']['id'],reason_code=case['reason_code'],
+                       result_sha256=hashlib.sha256(raw).hexdigest(),evidence_folder=str(path.parent.relative_to(root.parents[3])),interaction=interaction,
+                       verdict=case['verdict'],evidence=case['evidence'],diagnostics=case.get('diagnostics',{}))
+            transitions.append(dict(row))
         if row.get('verdict','NOT_VERIFIED')=='NOT_VERIFIED':refreshed.append(row)
     rows=refreshed
     (root/'retest-delta.json').write_text(json.dumps(transitions,ensure_ascii=False,indent=2)+'\n')
