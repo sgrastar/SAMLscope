@@ -350,7 +350,7 @@ public final class SamlScopeApplication {
             routes(javalin, config, plans, runs, transcript, storedTranscript,
                     eventBus, runService, preflight,
                     metadata, metadataLab, metadataCache, metadataParser, spPeer,
-                    idpPeer, secondaryIdpPeer, sloPeer, m1,
+                    idpPeer, secondaryIdpPeer, sloPeer, saml, m1,
                     hostedRateLimiter, hostedRunProvisioner, preloadedMetadataCache, authorization, clock,
                     targetConnections);
             javalin.routes.exception(MisdirectedRequest.class, (error, ctx) ->
@@ -405,6 +405,7 @@ public final class SamlScopeApplication {
                                SpPeerService spPeer, IdpPeerService idpPeer,
                                IdpPeerService secondaryIdpPeer,
                                SloPeerService sloPeer,
+                               com.samlscope.saml.normal.SamlProtocolService saml,
                                M1Runtime m1, HostedRateLimiter hostedRateLimiter,
                                com.samlscope.store.SqliteHostedRunProvisioner hostedRunProvisioner,
                                BoundedByteArrayCache preloadedMetadataCache,
@@ -886,11 +887,11 @@ public final class SamlScopeApplication {
         // continue-after-failure and PartialLogout. It records the attempt so the rule can require
         // an observed failing attempt, but it never contributes a verdict by itself.
         javalin.routes.get("/p/{plan}/sp/slo-fail", ctx -> {
-            recordSloFailParticipant(ctx, transcript, clock);
+            recordSloFailParticipant(ctx, transcript, clock, saml);
             ctx.status(HttpStatus.INTERNAL_SERVER_ERROR).contentType("text/plain").result("slo failure fixture");
         });
         javalin.routes.post("/p/{plan}/sp/slo-fail", ctx -> {
-            recordSloFailParticipant(ctx, transcript, clock);
+            recordSloFailParticipant(ctx, transcript, clock, saml);
             ctx.status(HttpStatus.INTERNAL_SERVER_ERROR).contentType("text/plain").result("slo failure fixture");
         });
         for (var role : List.of("sp", "idp")) {
@@ -918,13 +919,23 @@ public final class SamlScopeApplication {
 
     private static void recordSloFailParticipant(
             Context ctx, com.samlscope.core.transcript.TranscriptRecorder transcript,
-            java.time.Clock clock) {
+            java.time.Clock clock, com.samlscope.saml.normal.SamlProtocolService saml) {
         var runId = ctx.queryParam("run");
         if (runId == null || runId.isBlank()) return;
+        byte[] decoded = new byte[0];
+        try {
+            var message = "GET".equalsIgnoreCase(ctx.method().name())
+                    ? saml.decodeRedirectRaw(ctx.req().getQueryString(), "SAMLRequest")
+                    : saml.decodePostRaw(ctx.bodyAsBytes(), "SAMLRequest");
+            decoded = message.xml();
+        } catch (RuntimeException undecodable) {
+            decoded = new byte[0];
+        }
+        if (decoded == null || decoded.length == 0) decoded = new byte[0];
         transcript.record(new com.samlscope.core.transcript.TranscriptInput(
                 runId, com.samlscope.core.transcript.Direction.INBOUND, clock.instant(),
                 null, ctx.method().name(), absoluteRequestUrl(ctx), 500, java.util.Map.of(),
-                new byte[0], "text/plain", ctx.req().getQueryString(), new byte[0],
+                new byte[0], "text/plain", ctx.req().getQueryString(), decoded,
                 java.util.Map.of("type", "SloFailParticipant", "http_status", 500)));
     }
 

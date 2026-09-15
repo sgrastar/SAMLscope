@@ -110,8 +110,7 @@ public final class LogoutTranscriptProfileCase {
             case TARGET_REDIRECT_RESPONSE_CONSUMED -> targetRedirectResponseConsumed(
                     targetLogout, all, snapshot.entries());
             case INFORMATIONAL_PROPAGATION -> informationalPropagation(targetLogout);
-            case TARGET_PROPAGATION_CONTINUE -> targetPropagationContinue(
-                    targetLogout, all, snapshot.entries());
+            case TARGET_PROPAGATION_CONTINUE -> targetPropagationContinue(targetLogout, all);
             case TARGET_PARTIAL_LOGOUT -> targetPartialLogout(targetLogout, all);
         };
     }
@@ -577,34 +576,84 @@ public final class LogoutTranscriptProfileCase {
         };
     }
 
-    private CaseOutcome targetPropagationContinue(List<Message> targetLogout, List<Message> all,
-            List<TranscriptEntry> entries) {
-        var requests = targetLogout.stream().filter(value -> is(value.logout(), "LogoutRequest")).toList();
-        if (requests.isEmpty()) {
+    private CaseOutcome targetPropagationContinue(List<Message> targetLogout, List<Message> all) {
+        var initiators = all.stream()
+                .filter(value -> value.entry().direction() == Direction.OUTBOUND)
+                .filter(value -> is(value.logout(), "LogoutRequest"))
+                .filter(value -> !sessionIndexes(value.logout()).isEmpty())
+                .toList();
+        if (initiators.isEmpty()) {
             return notVerifiedWithEvidence(List.of(), "slo.propagation.not-observed",
                     "slo.propagation.not-observed");
         }
-        // Continue-after-failure requires, within the same logout processing, an attempt to the
-        // failing participant, its failure, and an attempt to a remaining participant.
-        var failingAttempts = entries.stream()
-                .filter(entry -> "SloFailParticipant".equals(entry.samlSummary().get("type"))).toList();
-        var remaining = requests.stream().map(value -> String.valueOf(value.entry().url()))
-                .distinct().toList();
-        var failure = all.stream()
-                .filter(value -> value.entry().direction() == Direction.INBOUND)
-                .filter(value -> is(value.logout(), "LogoutResponse"))
-                .anyMatch(value -> PARTIAL_LOGOUT_STATUS.equals(secondaryStatus(value.logout())));
-        if (!failingAttempts.isEmpty() && !remaining.isEmpty() && failure) {
-            var evidence = new java.util.ArrayList<EvidenceRef>();
-            for (var attempt : failingAttempts) evidence.add(new EvidenceRef("transcript", attempt.id()));
-            evidence.addAll(evidence(requests));
+        // Each initiating request defines one logout processing. Evidence from other processings,
+        // sessions, orderings or unrelated PartialLogout responses must not combine into a Success.
+        var bestReason = "slo.propagation.not-observed";
+        var bestEvidence = new java.util.ArrayList<EvidenceRef>();
+        for (var initiator : initiators) {
+            var sessions = sessionIndexes(initiator.logout());
+            var responses = all.stream()
+                    .filter(value -> value.entry().direction() == Direction.INBOUND)
+                    .filter(value -> is(value.logout(), "LogoutResponse"))
+                    .filter(value -> initiator.logout().getAttribute("ID")
+                            .equals(value.logout().getAttribute("InResponseTo")))
+                    .toList();
+            if (responses.isEmpty()) {
+                bestReason = "slo.propagation.initiator-response-unavailable";
+                bestEvidence = new java.util.ArrayList<>(evidence(List.of(initiator)));
+                continue;
+            }
+            var sameProcessing = targetLogout.stream()
+                    .filter(value -> is(value.logout(), "LogoutRequest"))
+                    .filter(value -> !java.util.Collections.disjoint(
+                            new java.util.ArrayList<>(sessionIndexes(value.logout())), sessions))
+                    .toList();
+            var failing = sameProcessing.stream()
+                    .filter(value -> "SloFailParticipant".equals(value.entry().samlSummary().get("type")))
+                    .toList();
+            if (failing.isEmpty()) {
+                bestReason = "slo.propagation.failure-induction-unavailable";
+                bestEvidence = new java.util.ArrayList<>(evidence(sameProcessing));
+                continue;
+            }
+            var failureAt = failing.stream().map(value -> value.entry().timestamp())
+                    .max(java.util.Comparator.naturalOrder()).orElseThrow();
+            var failingEndpoints = failing.stream().map(value -> String.valueOf(value.entry().url()))
+                    .collect(java.util.stream.Collectors.toSet());
+            var continuation = sameProcessing.stream()
+                    .filter(value -> !"SloFailParticipant".equals(value.entry().samlSummary().get("type")))
+                    .filter(value -> !failingEndpoints.contains(String.valueOf(value.entry().url())))
+                    .filter(value -> value.entry().timestamp().isAfter(failureAt))
+                    .toList();
+            if (continuation.isEmpty()) {
+                bestReason = "slo.propagation.continuation-unobserved";
+                bestEvidence = new java.util.ArrayList<>(evidence(sameProcessing));
+                continue;
+            }
+            var satisfiedEvidence = new java.util.ArrayList<EvidenceRef>();
+            satisfiedEvidence.addAll(evidence(List.of(initiator)));
+            satisfiedEvidence.addAll(evidence(responses));
+            satisfiedEvidence.addAll(evidence(failing));
+            satisfiedEvidence.addAll(evidence(continuation));
             return new CaseOutcome(Outcome.SATISFIED, null, "slo.propagation.continue-after-failure",
-                    "slo.propagation.continue-after-failure", evidence,
-                    Map.of("failing_attempts", failingAttempts.size(),
-                            "remaining_endpoints", remaining.size(), "partial_logout", true));
+                    "slo.propagation.continue-after-failure", satisfiedEvidence,
+                    Map.of("session_indexes", List.copyOf(sessions), "failing_attempts", failing.size(),
+                            "remaining_endpoints", continuation.stream()
+                                    .map(value -> String.valueOf(value.entry().url())).distinct().count(),
+                            "partial_logout_final", responses.stream().anyMatch(value ->
+                                    PARTIAL_LOGOUT_STATUS.equals(secondaryStatus(value.logout())))));
         }
-        return notVerifiedWithEvidence(requests, "slo.propagation.failure-induction-unavailable",
-                "slo.propagation.failure-induction-unavailable");
+        return new CaseOutcome(Outcome.NOT_VERIFIED, bestReason, bestReason, bestReason,
+                bestEvidence, Map.of());
+    }
+
+    private java.util.Set<String> sessionIndexes(Element request) {
+        var values = new java.util.LinkedHashSet<String>();
+        for (var index : elements(request, PROTOCOL, "SessionIndex")) {
+            var text = index.getTextContent();
+            if (text != null && !text.isBlank()) values.add(text.trim());
+        }
+        return values;
     }
 
     private CaseOutcome targetPartialLogout(List<Message> targetLogout, List<Message> all) {

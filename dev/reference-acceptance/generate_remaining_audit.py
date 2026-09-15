@@ -120,15 +120,31 @@ _EVIDENCE_FORM = {
     'slo.encrypted-id.negative-control-failed',
 }
 
+def verify_keycloak_metadata_sets():
+    sets = {
+        'feature-absent': _KEYCLOAK_METADATA_FEATURE_ABSENT,
+        'import-gap': _KEYCLOAK_METADATA_IMPORT_GAP,
+        'attestation': _KEYCLOAK_METADATA_ATTESTATION,
+    }
+    names = list(sets)
+    for i in range(len(names)):
+        for j in range(i + 1, len(names)):
+            overlap = sets[names[i]] & sets[names[j]]
+            if overlap:
+                raise ValueError(f'Keycloak metadata sets overlap: {names[i]}/{names[j]} {sorted(overlap)}')
+
+
+verify_keycloak_metadata_sets()
+
 def diagnose(row):
     case = row['case']
     reason = row['reason_code']
     if row.get('product') == 'keycloak' and row.get('profile') == 'metadata_idp':
-        if case in _KEYCLOAK_METADATA_FEATURE_ABSENT:
-            return 'feature-absent'
         if case in _KEYCLOAK_METADATA_ATTESTATION:
             return 'operator-attestation-available'
-        if case in _KEYCLOAK_METADATA_IMPORT_GAP:
+        if case in _KEYCLOAK_METADATA_IMPORT_GAP or case in _KEYCLOAK_METADATA_FEATURE_ABSENT:
+            # Absence could not be confirmed on the investigated path, so the classification
+            # matches the fact: the Suite still needs the product's own import path.
             return 'suite-observation-gap'
     if case in _FEATURE_ABSENT:
         return 'feature-absent'
@@ -485,10 +501,10 @@ def render(root,definitions,output):
         row['controls']=[{'id':v['id'],'kind':v['kind'],'fixture':v.get('fixture')} for v in c['controls']]
         row['next_action']=GROUPS[group][2]
         if row.get('product')=='keycloak' and row.get('profile')=='metadata_idp':
-            if row.get('capability_diagnosis')=='feature-absent':
-                row['next_action']=('製品自身の取込経路（管理コンソールのメタデータ取込）へ元fixtureを渡す経路は'
-                    '未実装。調査した経路（管理APIの属性一覧、サーバー側取込APIの有無、単一証明書モデル）では'
-                    '該当能力を確認できない。不存在は未確認であり、製品取込経路での再確認が必要。')
+            if row['case'] in _KEYCLOAK_METADATA_FEATURE_ABSENT:
+                row['next_action']=('調査した経路（管理APIの属性一覧、サーバー側取込APIの有無、単一証明書モデル）では'
+                    '該当能力を確認できない。不存在は未確認。製品自身の取込経路（管理コンソール）へ元fixtureを'
+                    '渡し、その後の挙動で確認する。')
                 row['absence_basis']='not-confirmed-investigated-path'
             elif row.get('capability_diagnosis')=='suite-observation-gap':
                 row['next_action']=('製品自身の取込経路へ元fixtureを渡し、その後の挙動（署名検証・鍵選択・'

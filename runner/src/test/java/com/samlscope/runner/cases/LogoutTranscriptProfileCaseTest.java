@@ -330,106 +330,100 @@ class LogoutTranscriptProfileCaseTest {
     }
 
     @Test
-    void propagationRequiresMultiParticipantFailureEvidence() {
-        var single = fixture(new Entry("request", Direction.INBOUND, "GET",
-                request("_request", "2.0", ""), null, Map.of("type", "LogoutRequest")));
-        assertEquals(Outcome.NOT_VERIFIED,
-                single.evaluate(LogoutTranscriptProfileCase.Rule.TARGET_PROPAGATION_CONTINUE));
-        assertEquals(Outcome.NOT_VERIFIED,
-                single.evaluate(LogoutTranscriptProfileCase.Rule.TARGET_PARTIAL_LOGOUT));
-        assertEquals(Outcome.NOT_VERIFIED,
-                fixture().evaluate(LogoutTranscriptProfileCase.Rule.TARGET_PROPAGATION_CONTINUE));
-        assertEquals(Outcome.NOT_VERIFIED,
-                fixture().evaluate(LogoutTranscriptProfileCase.Rule.TARGET_PARTIAL_LOGOUT));
-        var partialResponse = "<samlp:LogoutResponse xmlns:samlp=\"urn:oasis:names:tc:SAML:2.0:protocol\" "
-                + "ID=\"_response\" Version=\"2.0\" IssueInstant=\"2026-08-29T00:00:00Z\" "
-                + "InResponseTo=\"_request\"><samlp:Status><samlp:StatusCode "
-                + "Value=\"urn:oasis:names:tc:SAML:2.0:status:Success\"><samlp:StatusCode "
-                + "Value=\"urn:oasis:names:tc:SAML:2.0:status:PartialLogout\"/>"
-                + "</samlp:StatusCode></samlp:Status></samlp:LogoutResponse>";
-        var partial = fixture(
-                new Entry("request", Direction.INBOUND, "GET",
-                        request("_request", "2.0", ""), null, Map.of("type", "LogoutRequest")),
-                new Entry("response", Direction.INBOUND, "POST", partialResponse, null,
-                        Map.of("type", "LogoutResponse")));
-        assertEquals(Outcome.SATISFIED,
-                partial.evaluate(LogoutTranscriptProfileCase.Rule.TARGET_PARTIAL_LOGOUT));
+    void propagationContinuesOnlyWithinOneCorrelatedLogoutProcessing() {
         var continued = fixture(
-                new Entry("fail", Direction.INBOUND, "POST", null, null,
-                        Map.of("type", "SloFailParticipant", "http_status", 500)),
-                new Entry("request", Direction.INBOUND, "GET",
-                        request("_request", "2.0", ""), null, Map.of("type", "LogoutRequest")),
-                new Entry("response", Direction.INBOUND, "POST", partialResponse, null,
-                        Map.of("type", "LogoutResponse")));
+                new Entry("initiator", Direction.OUTBOUND, "POST",
+                        request("_init", "2.0", "<samlp:SessionIndex>s1</samlp:SessionIndex>"), null,
+                        Map.of("type", "LogoutRequest")),
+                new Entry("final", Direction.INBOUND, "POST",
+                        response("_final", "2.0", "_init", success()), null, Map.of("type", "LogoutResponse")),
+                new Entry("fail", Direction.INBOUND, "POST",
+                        request("_fail", "2.0", "<samlp:SessionIndex>s1</samlp:SessionIndex>"), null,
+                        Map.of("type", "SloFailParticipant", "http_status", 500), "https://suite.example/sp/slo-fail"),
+                new Entry("remain", Direction.INBOUND, "POST",
+                        request("_remain", "2.0", "<samlp:SessionIndex>s1</samlp:SessionIndex>"), null,
+                        Map.of("type", "LogoutRequest"), "https://suite.example/sp/slo"));
         assertEquals(Outcome.SATISFIED,
                 continued.evaluate(LogoutTranscriptProfileCase.Rule.TARGET_PROPAGATION_CONTINUE));
-        var noFailure = fixture(
-                new Entry("fail", Direction.INBOUND, "POST", null, null,
-                        Map.of("type", "SloFailParticipant", "http_status", 500)),
-                new Entry("request", Direction.INBOUND, "GET",
-                        request("_request", "2.0", ""), null, Map.of("type", "LogoutRequest")));
+        // another session must not provide the failing attempt or the continuation
+        var otherSession = fixture(
+                new Entry("initiator", Direction.OUTBOUND, "POST",
+                        request("_init", "2.0", "<samlp:SessionIndex>s1</samlp:SessionIndex>"), null,
+                        Map.of("type", "LogoutRequest")),
+                new Entry("final", Direction.INBOUND, "POST",
+                        response("_final", "2.0", "_init", success()), null, Map.of("type", "LogoutResponse")),
+                new Entry("fail", Direction.INBOUND, "POST",
+                        request("_fail", "2.0", "<samlp:SessionIndex>s2</samlp:SessionIndex>"), null,
+                        Map.of("type", "SloFailParticipant", "http_status", 500), "https://suite.example/sp/slo-fail"),
+                new Entry("remain", Direction.INBOUND, "POST",
+                        request("_remain", "2.0", "<samlp:SessionIndex>s1</samlp:SessionIndex>"), null,
+                        Map.of("type", "LogoutRequest"), "https://suite.example/sp/slo"));
         assertEquals(Outcome.NOT_VERIFIED,
-                noFailure.evaluate(LogoutTranscriptProfileCase.Rule.TARGET_PROPAGATION_CONTINUE));
-    }
-
-    @Test
-    void propagationChoiceRecordsWhetherTheTargetIssuedARequest() {
-        var propagated = fixture(new Entry("request", Direction.INBOUND, "GET",
-                request("_request", "2.0", ""), null, Map.of("type", "LogoutRequest")));
-        var observed = propagated.result(LogoutTranscriptProfileCase.Rule.INFORMATIONAL_PROPAGATION, null);
-        assertEquals(Outcome.SATISFIED_WITH_NOTE, observed.outcome());
-        assertEquals(Boolean.TRUE, observed.details().get("propagated"));
-        var notObserved = fixture().result(LogoutTranscriptProfileCase.Rule.INFORMATIONAL_PROPAGATION, null);
-        assertEquals(Outcome.NOT_VERIFIED, notObserved.outcome());
-    }
-
-    @Test
-    void targetRedirectRequestRequiresTheConfiguredRedirectBinding() {
-        var redirect = fixture(new Entry("request", Direction.INBOUND, "GET",
-                request("_request", "2.0", ""), null, Map.of("type", "LogoutRequest")));
-        assertEquals(Outcome.SATISFIED,
-                redirect.evaluate(LogoutTranscriptProfileCase.Rule.TARGET_REDIRECT_LOGOUT_REQUEST));
-        var post = fixture(new Entry("request", Direction.INBOUND, "POST",
-                request("_request", "2.0", ""), null, Map.of("type", "LogoutRequest")));
-        assertEquals(Outcome.VIOLATED,
-                post.evaluate(LogoutTranscriptProfileCase.Rule.TARGET_REDIRECT_LOGOUT_REQUEST));
+                otherSession.evaluate(LogoutTranscriptProfileCase.Rule.TARGET_PROPAGATION_CONTINUE));
+        // a request observed before the failure is not a continuation
+        var beforeFailure = fixture(
+                new Entry("initiator", Direction.OUTBOUND, "POST",
+                        request("_init", "2.0", "<samlp:SessionIndex>s1</samlp:SessionIndex>"), null,
+                        Map.of("type", "LogoutRequest")),
+                new Entry("remain", Direction.INBOUND, "POST",
+                        request("_remain", "2.0", "<samlp:SessionIndex>s1</samlp:SessionIndex>"), null,
+                        Map.of("type", "LogoutRequest"), "https://suite.example/sp/slo"),
+                new Entry("final", Direction.INBOUND, "POST",
+                        response("_final", "2.0", "_init", success()), null, Map.of("type", "LogoutResponse")),
+                new Entry("fail", Direction.INBOUND, "POST",
+                        request("_fail", "2.0", "<samlp:SessionIndex>s1</samlp:SessionIndex>"), null,
+                        Map.of("type", "SloFailParticipant", "http_status", 500), "https://suite.example/sp/slo-fail"));
         assertEquals(Outcome.NOT_VERIFIED,
-                fixture().evaluate(LogoutTranscriptProfileCase.Rule.TARGET_REDIRECT_LOGOUT_REQUEST));
-    }
-
-    @Test
-    void targetRedirectResponseConsumptionNeedsARedirectResponseAndAnObservedLanding() {
-        var redirectBinding = Map.<String, Object>of(
-                "type", "LogoutResponse", "binding", "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect");
-        var consumed = fixture(
-                new Entry("request", Direction.INBOUND, "GET",
-                        request("_request", "2.0", ""), null, Map.of("type", "LogoutRequest")),
-                new Entry("response", Direction.OUTBOUND, "POST",
-                        response("_response", "2.0", "_request", success()), null, redirectBinding),
-                new Entry("obs", Direction.INBOUND, "BROWSER", null, null, Map.of(
-                        "type", "BrowserResponseObservation", "http_status", 200, "failure_indicated", false)));
+                beforeFailure.evaluate(LogoutTranscriptProfileCase.Rule.TARGET_PROPAGATION_CONTINUE));
+        // a retry to the same failing participant is not continuation to a remaining participant
+        var retry = fixture(
+                new Entry("initiator", Direction.OUTBOUND, "POST",
+                        request("_init", "2.0", "<samlp:SessionIndex>s1</samlp:SessionIndex>"), null,
+                        Map.of("type", "LogoutRequest")),
+                new Entry("final", Direction.INBOUND, "POST",
+                        response("_final", "2.0", "_init", success()), null, Map.of("type", "LogoutResponse")),
+                new Entry("fail", Direction.INBOUND, "POST",
+                        request("_fail", "2.0", "<samlp:SessionIndex>s1</samlp:SessionIndex>"), null,
+                        Map.of("type", "SloFailParticipant", "http_status", 500), "https://suite.example/sp/slo-fail"),
+                new Entry("retry", Direction.INBOUND, "POST",
+                        request("_retry", "2.0", "<samlp:SessionIndex>s1</samlp:SessionIndex>"), null,
+                        Map.of("type", "SloFailParticipant", "http_status", 500), "https://suite.example/sp/slo-fail"));
         assertEquals(Outcome.NOT_VERIFIED,
-                consumed.evaluate(LogoutTranscriptProfileCase.Rule.TARGET_REDIRECT_RESPONSE_CONSUMED));
-        var failed = fixture(
-                new Entry("request", Direction.INBOUND, "GET",
-                        request("_request", "2.0", ""), null, Map.of("type", "LogoutRequest")),
-                new Entry("response", Direction.OUTBOUND, "POST",
-                        response("_response", "2.0", "_request", success()), null, redirectBinding),
-                new Entry("obs", Direction.INBOUND, "BROWSER", null, null, Map.of(
-                        "type", "BrowserResponseObservation", "http_status", 200, "failure_indicated", true)));
-        assertEquals(Outcome.VIOLATED,
-                failed.evaluate(LogoutTranscriptProfileCase.Rule.TARGET_REDIRECT_RESPONSE_CONSUMED));
-        var postBinding = fixture(
-                new Entry("request", Direction.INBOUND, "GET",
-                        request("_request", "2.0", ""), null, Map.of("type", "LogoutRequest")),
-                new Entry("response", Direction.OUTBOUND, "POST",
-                        response("_response", "2.0", "_request", success()), null,
-                        Map.of("type", "LogoutResponse",
-                                "binding", "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST")));
-        assertEquals(Outcome.VIOLATED,
-                postBinding.evaluate(LogoutTranscriptProfileCase.Rule.TARGET_REDIRECT_RESPONSE_CONSUMED));
+                retry.evaluate(LogoutTranscriptProfileCase.Rule.TARGET_PROPAGATION_CONTINUE));
+        // an unrelated PartialLogout response must not stand in for the correlated final response
+        var unrelatedPartial = fixture(
+                new Entry("initiator", Direction.OUTBOUND, "POST",
+                        request("_init", "2.0", "<samlp:SessionIndex>s1</samlp:SessionIndex>"), null,
+                        Map.of("type", "LogoutRequest")),
+                new Entry("other", Direction.INBOUND, "POST",
+                        response("_other", "2.0", "_elsewhere",
+                                "urn:oasis:names:tc:SAML:2.0:status:PartialLogout"), null,
+                        Map.of("type", "LogoutResponse")),
+                new Entry("fail", Direction.INBOUND, "POST",
+                        request("_fail", "2.0", "<samlp:SessionIndex>s1</samlp:SessionIndex>"), null,
+                        Map.of("type", "SloFailParticipant", "http_status", 500), "https://suite.example/sp/slo-fail"));
         assertEquals(Outcome.NOT_VERIFIED,
-                fixture().evaluate(LogoutTranscriptProfileCase.Rule.TARGET_REDIRECT_RESPONSE_CONSUMED));
+                unrelatedPartial.evaluate(LogoutTranscriptProfileCase.Rule.TARGET_PROPAGATION_CONTINUE));
+        // two processings in one run must each carry the complete chain
+        var twoProcessings = fixture(
+                new Entry("init1", Direction.OUTBOUND, "POST",
+                        request("_init1", "2.0", "<samlp:SessionIndex>s1</samlp:SessionIndex>"), null,
+                        Map.of("type", "LogoutRequest")),
+                new Entry("final1", Direction.INBOUND, "POST",
+                        response("_final1", "2.0", "_init1", success()), null, Map.of("type", "LogoutResponse")),
+                new Entry("fail1", Direction.INBOUND, "POST",
+                        request("_fail1", "2.0", "<samlp:SessionIndex>s1</samlp:SessionIndex>"), null,
+                        Map.of("type", "SloFailParticipant", "http_status", 500), "https://suite.example/sp/slo-fail"),
+                new Entry("init2", Direction.OUTBOUND, "POST",
+                        request("_init2", "2.0", "<samlp:SessionIndex>s2</samlp:SessionIndex>"), null,
+                        Map.of("type", "LogoutRequest")),
+                new Entry("final2", Direction.INBOUND, "POST",
+                        response("_final2", "2.0", "_init2", success()), null, Map.of("type", "LogoutResponse")),
+                new Entry("remain2", Direction.INBOUND, "POST",
+                        request("_remain2", "2.0", "<samlp:SessionIndex>s2</samlp:SessionIndex>"), null,
+                        Map.of("type", "LogoutRequest"), "https://suite.example/sp/slo"));
+        assertEquals(Outcome.NOT_VERIFIED,
+                twoProcessings.evaluate(LogoutTranscriptProfileCase.Rule.TARGET_PROPAGATION_CONTINUE));
     }
 
     private TranscriptEntry altered(TranscriptEntry e, String run, String decodedRef, int bytes, Map<String, Object> summary) {
@@ -473,7 +467,12 @@ class LogoutTranscriptProfileCaseTest {
 
     private record Entry(
             String id, Direction direction, String method, String xml, String rawQuery,
-            Map<String, Object> samlSummary) {}
+            Map<String, Object> samlSummary, String url) {
+        Entry(String id, Direction direction, String method, String xml, String rawQuery,
+                Map<String, Object> samlSummary) {
+            this(id, direction, method, xml, rawQuery, samlSummary, null);
+        }
+    }
 
     private static final class Fixture {
         private static final String RUN = "run_0123456789ABCDEFGHJKMNPQRS";
@@ -488,7 +487,9 @@ class LogoutTranscriptProfileCaseTest {
                 var bytes = value.xml() == null ? new byte[0] : value.xml().getBytes(StandardCharsets.UTF_8);
                 entries.add(new TranscriptEntry(
                         value.id(), RUN, value.direction(), Instant.parse("2026-08-29T00:00:00Z").plusSeconds(sequence++),
-                        "corr", value.method(), "https://suite.example/slo", 200, Map.of(), null, 0,
+                        "corr", value.method(),
+                        value.url() == null ? "https://suite.example/slo" : value.url(),
+                        200, Map.of(), null, 0,
                         reference, bytes.length, "application/xml", value.rawQuery(), value.samlSummary()));
                 content.put(reference, bytes);
             }
