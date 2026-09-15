@@ -44,10 +44,14 @@ ShibbolethのAES256-GCM + rsa-oaep(1.1)は、カスタムEncryptionConfiguration
 | 製品 | 設定書き込み | 復元 | 再読込 | 内容 |
 |---|---:|---:|---:|---|
 | Keycloak | 11 | 2 | 0 | 暗号アルゴリズム属性のフェーズ設定・既定値復元・IdP起点URL名・SOAP SLO URL |
-| Shibboleth | 0 | 0 | 0 | Tomcat再起動のみ（Docker再起動後） |
+| Shibboleth | 4 | 2 | 1 | persistent NameID生成の一時有効化と復元（saml-nameid.properties）、NameIdentifierGenerationService再読込とTomcat再起動 |
 | SimpleSAMLphp | 0 | 0 | 0 | なし |
 
 Keycloakの暗号属性は個別削除が反映されないため、事前観測と同じ既定値（AES256-GCM / rsa-oaep / sha256 / mgf1sha256）を明示して復元しました。`saml_idp_initiated_sso_url_name`とSOAP SLO URLは残置し、目的と現在値を`build/acceptance/reference-20260915/peer-intent/keycloak/`のクライアント記録に保存しています。ユーザー本人の操作は0回です。
+
+## Shibboleth persistent NameIDの試行
+
+`IIP-SSO05-a` / `IIP-SSO05-a2` はpersistent形式の成功応答を必要としますが、Shibbolethの既定構成ではpersistent要求が`Requester`で拒否されます。`saml-nameid.properties`の`idp.persistentId.sourceAttribute=uid`と`useUnfilteredAttributes=true`を一時設定し、NameID生成サービスの再読込とTomcat再起動（プロパティ読込をログで確認）後にブラウザ経路を2回再試験しました。しかしpersistent要求3件はいずれも`SubjectCanonicalizationError`（subject canonicalization flow不在）で拒否され、成功応答は得られませんでした。設定は`before`へ復元し、再起動後にIdPのメタデータ200を確認済みです。SSO05-a/a2は未検証のまま理由を「c14n前提の整備後に再試験」へ更新し、製品FAILとは扱いません。試行の記録は`build/acceptance/reference-20260915/peer-intent/shib-config/diagnosis.json`に保存しています。
 
 ## 証拠と限界
 

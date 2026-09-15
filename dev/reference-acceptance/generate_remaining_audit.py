@@ -321,6 +321,8 @@ def render(root,definitions,output):
         if row['product']=='keycloak' and row['case'] in {'IIP-IDP19-a-idp-01','IIP-IDP19-b-idp-01','IIP-IDP19-c-idp-01'}:
             row['next_action']='暗号化プロバイダーは既存。SAMLメタデータ生成が署名鍵だけを選ぶことを稼働バイトコードで確認。鍵を増やすだけではSuiteの鍵取得は解消しない。公開メタデータを改変せず、出所を固定した試験用公開鍵の補助入力経路を追加して対照を実行する。'
             row['individual_diagnosis']='keycloak-decryption-keys/diagnosis.json'
+        if row['product']=='shibboleth' and row['profile']=='browser_sso_idp' and row['case'] in {'IIP-SSO05-a-idp-01','IIP-SSO05-a2-idp-01'}:
+            row['next_action']='persistent NameIDの成功応答が必要。IdPのpersistentId生成（saml-nameid.properties）を一時有効化して2回再試験したが、要求内のSubjectをcanonicalizeするflowがなくSubjectCanonicalizationErrorで拒否された。c14n設定を含む前提の整備後に再試験する。試行と復元はshib-config/diagnosis.jsonに記録。'
         indexed[row['case']].append(row)
     assert sum(counts.values())==len(rows)
     (root/'implementation-audit.json').write_text(json.dumps(implementations,ensure_ascii=False,indent=2)+'\n')
