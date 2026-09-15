@@ -313,15 +313,15 @@ Verdictは変更せず、未検証の理由だけを分類します。feature-ab
 
 | 診断 | 件数 | 意味 | 表示案 |
 |---|---:|---|---|
-| `suite-observation-gap` | 338 | Suite側の観測・実行経路が未接続 | Suite側の実装で解消可能なNot verified |
+| `suite-observation-gap` | 284 | Suite側の観測・実行経路が未接続 | Suite側の実装で解消可能なNot verified |
 | `operator-attestation-available` | 77 | 自己申告または運用者証言で確認可能 | 運用者証言（ケースごとに1回答）で確認可能。現在のPlanは自己申告無効 |
-| `evidence-form-mismatch` | 47 | 承認済み判定条件が要求する証拠形式と製品応答が不一致 | 証拠形式が承認済み条件と一致しないためNot verified（要件解釈の再確認が必要） |
+| `feature-absent` | 76 | 製品が機能として公開していない（公開メタデータ等から確認済み） | この製品は機能として提供していないため、この試験は実行できません（skipped相当） |
+| `evidence-form-mismatch` | 46 | 承認済み判定条件が要求する証拠形式と製品応答が不一致 | 証拠形式が承認済み条件と一致しないためNot verified（要件解釈の再確認が必要） |
 | `role-inapplicable` | 24 | ロール上、対象が消費しない成果物を要求するvariant | IdPロールでは消費されないvariantのため実行対象外（対象外であることは判定済み） |
-| `feature-absent` | 21 | 製品が機能として公開していない（公開メタデータ等から確認済み） | この製品は機能として提供していないため、この試験は実行できません（skipped相当） |
 
 ### feature-absent
 
-`IIP-MD05-f7-idp-01`, `IIP-MD05-f8-idp-01`, `IIP-MD05-f9-idp-01`, `IIP-MD05-fa-idp-01`, `IIP-MD05-fb-idp-01`, `IIP-MD05-fh-idp-01`, `IIP-MD05-fj-idp-01`
+`IIP-MD01-a-idp-01`, `IIP-MD02-a-idp-01`, `IIP-MD02-b-idp-01`, `IIP-MD02-c-idp-01`, `IIP-MD02-d-idp-01`, `IIP-MD03-a-idp-01`, `IIP-MD03-b-idp-01`, `IIP-MD03-c-idp-01`, `IIP-MD03-d-idp-01`, `IIP-MD04-a-idp-01`, `IIP-MD04-b-idp-01`, `IIP-MD04-c-idp-01`, `IIP-MD05-a-idp-01`, `IIP-MD05-a1-idp-01`, `IIP-MD05-a2-idp-01`, `IIP-MD05-a3-idp-01`, `IIP-MD05-a5-idp-01`, `IIP-MD05-a8-idp-01`, `IIP-MD05-ac-idp-01`, `IIP-MD05-ad-idp-01`, `IIP-MD05-ae-idp-01`, `IIP-MD05-af-idp-01`, `IIP-MD05-ah-idp-01`, `IIP-MD05-am-idp-01`, `IIP-MD05-an-idp-01`, `IIP-MD05-ao-idp-01`, `IIP-MD05-ap-idp-01`, `IIP-MD05-aq-idp-01`, `IIP-MD05-ar-idp-01`, `IIP-MD05-as-idp-01`, `IIP-MD05-aw-idp-01`, `IIP-MD05-b-idp-01`, `IIP-MD05-c-idp-01`, `IIP-MD05-c2-idp-01`, `IIP-MD05-c3-idp-01`, `IIP-MD05-cd-idp-01`, `IIP-MD05-d-idp-01`, `IIP-MD05-d1-idp-01`, `IIP-MD05-e-idp-01`, `IIP-MD05-e5-idp-01`, `IIP-MD05-e7-idp-01`, `IIP-MD05-e8-idp-01`, `IIP-MD05-e9-idp-01`, `IIP-MD05-ea-idp-01`, `IIP-MD05-eb-idp-01`, `IIP-MD05-f7-idp-01`, `IIP-MD05-f8-idp-01`, `IIP-MD05-f9-idp-01`, `IIP-MD05-fa-idp-01`, `IIP-MD05-fb-idp-01`, `IIP-MD05-fh-idp-01`, `IIP-MD05-fj-idp-01`, `IIP-MD05-g-idp-01`, `IIP-MD06-a1-idp-01`, `IIP-MD06-a2-idp-01`, `IIP-MD06-a3-idp-01`, `IIP-MD06-a6-idp-01`, `IIP-MD06-a7-idp-01`, `IIP-MD06-a9-idp-01`, `IIP-MD06-ab-idp-01`, `IIP-MD06-b-idp-01`, `IIP-MD07-a-idp-01`
 
 
 ### role-inapplicable

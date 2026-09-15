@@ -82,6 +82,34 @@ _FEATURE_ABSENT = {
     'IIP-MD05-fb-idp-01', 'IIP-MD05-fh-idp-01', 'IIP-MD05-fj-idp-01',
 }
 _ROLE_INAPPLICABLE = {'IIP-EXT01-b-idp-01', 'IIP-EXT01-c-idp-01'}
+# Keycloak metadata consumption has no runtime fetch/aggregation path in its client model.
+_KEYCLOAK_METADATA_FEATURE_ABSENT = {
+    'IIP-MD01-a-idp-01', 'IIP-MD02-a-idp-01', 'IIP-MD02-b-idp-01', 'IIP-MD02-c-idp-01',
+    'IIP-MD02-d-idp-01', 'IIP-MD03-a-idp-01', 'IIP-MD03-b-idp-01', 'IIP-MD03-c-idp-01',
+    'IIP-MD03-d-idp-01', 'IIP-MD04-a-idp-01', 'IIP-MD04-b-idp-01', 'IIP-MD04-c-idp-01',
+    'IIP-MD05-a-idp-01', 'IIP-MD05-a1-idp-01', 'IIP-MD05-a2-idp-01', 'IIP-MD05-a3-idp-01',
+    'IIP-MD05-a5-idp-01', 'IIP-MD05-a8-idp-01', 'IIP-MD05-ac-idp-01', 'IIP-MD05-ad-idp-01',
+    'IIP-MD05-ae-idp-01', 'IIP-MD05-af-idp-01', 'IIP-MD05-ah-idp-01', 'IIP-MD05-am-idp-01',
+    'IIP-MD05-an-idp-01', 'IIP-MD05-ao-idp-01', 'IIP-MD05-ap-idp-01', 'IIP-MD05-aq-idp-01',
+    'IIP-MD05-ar-idp-01', 'IIP-MD05-as-idp-01', 'IIP-MD05-aw-idp-01', 'IIP-MD05-b-idp-01',
+    'IIP-MD05-c-idp-01', 'IIP-MD05-c2-idp-01', 'IIP-MD05-c3-idp-01', 'IIP-MD05-cd-idp-01',
+    'IIP-MD05-d-idp-01', 'IIP-MD05-d1-idp-01', 'IIP-MD05-e-idp-01', 'IIP-MD05-e5-idp-01',
+    'IIP-MD05-e7-idp-01', 'IIP-MD05-e8-idp-01', 'IIP-MD05-e9-idp-01', 'IIP-MD05-ea-idp-01',
+    'IIP-MD05-eb-idp-01', 'IIP-MD05-g-idp-01', 'IIP-MD06-a1-idp-01', 'IIP-MD06-a2-idp-01',
+    'IIP-MD06-a3-idp-01', 'IIP-MD06-a6-idp-01', 'IIP-MD06-a7-idp-01', 'IIP-MD06-a9-idp-01',
+    'IIP-MD06-ab-idp-01', 'IIP-MD06-b-idp-01', 'IIP-MD07-a-idp-01',
+}
+# The Suite can drive an admin import and then judge the product behavior, once the oracle exists.
+_KEYCLOAK_METADATA_IMPORT_GAP = {
+    'IIP-MD05-a4-idp-01', 'IIP-MD05-av-idp-01', 'IIP-MD05-aw-idp-01', 'IIP-MD05-c1-idp-01',
+    'IIP-MD06-a-idp-01', 'IIP-MD06-a5-idp-01', 'IIP-MD06-a8-idp-01', 'IIP-MD07-b-idp-01',
+    'IIP-MD11-a-idp-01', 'IIP-MD12-a-idp-01', 'IIP-MD12-b-idp-01', 'IIP-MD12-c-idp-01',
+    'IIP-MD12-d-idp-01',
+}
+_KEYCLOAK_METADATA_ATTESTATION = {
+    'IIP-MD05-c5-idp-01', 'IIP-MD05-c6-idp-01', 'IIP-MD05-c7-idp-01',
+    'IIP-MD06-c-idp-01', 'IIP-MD09-a-idp-01', 'IIP-MD09-b-idp-01',
+}
 _EVIDENCE_FORM = {
     'idp.signed-request.inconclusive', 'idp.error-assertion.inconclusive',
     'idp.error-response.inconclusive', 'idp.version.inconclusive',
@@ -95,6 +123,13 @@ _EVIDENCE_FORM = {
 def diagnose(row):
     case = row['case']
     reason = row['reason_code']
+    if row.get('product') == 'keycloak' and row.get('profile') == 'metadata_idp':
+        if case in _KEYCLOAK_METADATA_FEATURE_ABSENT:
+            return 'feature-absent'
+        if case in _KEYCLOAK_METADATA_ATTESTATION:
+            return 'operator-attestation-available'
+        if case in _KEYCLOAK_METADATA_IMPORT_GAP:
+            return 'suite-observation-gap'
     if case in _FEATURE_ABSENT:
         return 'feature-absent'
     if case in _ROLE_INAPPLICABLE:
