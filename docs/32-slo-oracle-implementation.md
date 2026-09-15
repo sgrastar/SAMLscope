@@ -88,11 +88,30 @@ x/y/z/alの「セッションへ適用しない」は、次の対照で観測し
 4. b2（HTTP応答本文の成功／失敗対照）、c（informational）、r/s（多参加者登録）。
 5. Keycloakメタデータ観測経路（別節で分類・実装）。
 
-## 5. 操作コストの記録方針
+## 5. バッチ1の結果（IIP-IDP17.x / y / z / aa / al）
+
+Suite側の直接HTTP送出（`LOGOUT_PROBE`）と、正しいDestinationの対照LogoutRequestによるセッション生存確認を3製品で実行しました。対照がSuccessを返せば、craftされた要求はセッションへ適用されていません。
+
+| ケース | Keycloak | Shibboleth | SimpleSAMLphp | 観測した事実 |
+|---|---|---|---|---|
+| `IIP-IDP17-x` | Success | Success | Success | Destination不一致の要求は適用されず、対照の有効要求がSuccess |
+| `IIP-IDP17-y` | Warning | Warning | Warning | 改変署名は適用されない。IdPが応答を消費する方向は未観測のため`satisfied_with_note` |
+| `IIP-IDP17-z` | Warning | Warning | Warning | 無効署名の内容に依拠しない（セッション維持を対照で確認）。上と同じ注記 |
+| `IIP-IDP17-aa` | Warning | Warning | Warning | 無効署名に対してSAMLエラー応答を返さない（SHOULD違反相当・無応答はvariant規定どおりWARNING） |
+| `IIP-IDP17-al` | Success | Success | Success | SessionIndexを署名対象から除外した署名は受理されない |
+
+- 実証による未検証解消: 15観測（546→531、異なるケースID 179→174）。
+- 製品設定変更: 0回。環境のSPメタデータを確認し、KeycloakのSLO URLとSimpleSAMLphpのSingleLogoutServiceが相関なしの`/sp/slo`を指すことを確認しています。
+- Suite再作成: 3回（実装修正と再デプロイの単位）。Run作成: 3回（製品別）。ユーザー本人のブラウザ操作: 0回（プロトコルクライアントが自動実行）。
+- 判明した環境要因: ShibbolethのSP起点SLOは、ログアウト完了ページの隠しiframe（`_eventId=proceed`）を追従しないとLogoutResponseが送出されません。参照ドライバをiframe追従に修正しました（実ブラウザは自動取得します）。判定ロジック側ではありません。
+
+次の実装対象は、非同期SLO（b/b1/b2）、HTTP-Redirect限定端点（18-b/c/d）、伝播（r/s・c）です。
+
+## 6. 操作コストの記録方針
 
 製品設定の書き込み・復元、管理API操作、Suite再作成、Run回数をバッチごとに記録し、`docs/31`と各バッチの`operations.json`へ保存します。失敗試行も含めます。
 
-## 6. 進捗の区分
+## 7. 進捗の区分
 
 - コード実装: Suite/コアの変更とテスト。
 - 実環境への接続: Run作成、fixture送出、応答記録。

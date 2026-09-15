@@ -291,11 +291,6 @@ def render(root,definitions,output):
                 'IIP-IDP17-c-idp-01':('NOT_VERIFIED','browser.oracle-unavailable'),
                 'IIP-IDP17-r-idp-01':('NOT_VERIFIED','browser.oracle-unavailable'),
                 'IIP-IDP17-s-idp-01':('NOT_VERIFIED','browser.oracle-unavailable'),
-                'IIP-IDP17-x-idp-01':('NOT_VERIFIED','browser.oracle-unavailable'),
-                'IIP-IDP17-y-idp-01':('NOT_VERIFIED','browser.oracle-unavailable'),
-                'IIP-IDP17-z-idp-01':('NOT_VERIFIED','browser.oracle-unavailable'),
-                'IIP-IDP17-aa-idp-01':('NOT_VERIFIED','browser.oracle-unavailable'),
-                'IIP-IDP17-al-idp-01':('NOT_VERIFIED','browser.oracle-unavailable'),
                 'IIP-IDP18-b-idp-01':('NOT_VERIFIED','browser.oracle-unavailable'),
                 'IIP-IDP18-c-idp-01':('NOT_VERIFIED','browser.oracle-unavailable'),
                 'IIP-IDP18-d-idp-01':('NOT_VERIFIED','browser.oracle-unavailable')},
@@ -308,11 +303,6 @@ def render(root,definitions,output):
                 'IIP-IDP17-r-idp-01':('NOT_VERIFIED','browser.oracle-unavailable'),
                 'IIP-IDP17-s-idp-01':('NOT_VERIFIED','browser.oracle-unavailable'),
                 'IIP-IDP17-u-idp-01':('NOT_VERIFIED','slo.not-on-or-after.correlation-unavailable'),
-                'IIP-IDP17-x-idp-01':('NOT_VERIFIED','browser.oracle-unavailable'),
-                'IIP-IDP17-y-idp-01':('NOT_VERIFIED','browser.oracle-unavailable'),
-                'IIP-IDP17-z-idp-01':('NOT_VERIFIED','browser.oracle-unavailable'),
-                'IIP-IDP17-aa-idp-01':('NOT_VERIFIED','browser.oracle-unavailable'),
-                'IIP-IDP17-al-idp-01':('NOT_VERIFIED','browser.oracle-unavailable'),
                 'IIP-IDP18-b-idp-01':('NOT_VERIFIED','browser.oracle-unavailable'),
                 'IIP-IDP18-c-idp-01':('NOT_VERIFIED','browser.oracle-unavailable'),
                 'IIP-IDP18-d-idp-01':('NOT_VERIFIED','browser.oracle-unavailable')},
@@ -323,11 +313,6 @@ def render(root,definitions,output):
                 'IIP-IDP17-c-idp-01':('NOT_VERIFIED','browser.oracle-unavailable'),
                 'IIP-IDP17-r-idp-01':('NOT_VERIFIED','browser.oracle-unavailable'),
                 'IIP-IDP17-s-idp-01':('NOT_VERIFIED','browser.oracle-unavailable'),
-                'IIP-IDP17-x-idp-01':('NOT_VERIFIED','browser.oracle-unavailable'),
-                'IIP-IDP17-y-idp-01':('NOT_VERIFIED','browser.oracle-unavailable'),
-                'IIP-IDP17-z-idp-01':('NOT_VERIFIED','browser.oracle-unavailable'),
-                'IIP-IDP17-aa-idp-01':('NOT_VERIFIED','browser.oracle-unavailable'),
-                'IIP-IDP17-al-idp-01':('NOT_VERIFIED','browser.oracle-unavailable'),
                 'IIP-IDP18-b-idp-01':('NOT_VERIFIED','browser.oracle-unavailable'),
                 'IIP-IDP18-c-idp-01':('NOT_VERIFIED','browser.oracle-unavailable'),
                 'IIP-IDP18-d-idp-01':('NOT_VERIFIED','browser.oracle-unavailable')},
@@ -338,6 +323,35 @@ def render(root,definitions,output):
             raw=path.read_bytes(); result=json.loads(raw)
             case=next(c for req in result['requirements'] for c in req['cases'] if c['id']==row['case'])
             want=peer_expectations[peer_key][row['case']]
+            assert (case['verdict'],case['reason_code'])==want,(row['product'],row['case'],case['verdict'],case['reason_code'])
+            interactions_path=path.parent/'interactions'
+            interaction=None
+            if interactions_path.exists():
+                interaction=next((i for i in json.loads(interactions_path.read_text()) if i.get('caseId')==row['case']),None)
+            row['baseline']={k:row.get(k) for k in ('run','reason_code','result_sha256','evidence_folder','interaction')}
+            row.update(run=result['run']['id'],reason_code=case['reason_code'],
+                       result_sha256=hashlib.sha256(raw).hexdigest(),evidence_folder=str(path.parent.relative_to(root.parents[3])),
+                       interaction=interaction,verdict=case['verdict'],evidence=case['evidence'],
+                       diagnostics=case.get('diagnostics',{}))
+            transitions.append(dict(row))
+        slo_rejection={
+            'keycloak':'reference-20260915/slo-oracle/keycloak/slo_rejection',
+            'shibboleth':'reference-20260915/slo-oracle/shibboleth/slo_rejection2',
+            'simplesamlphp':'reference-20260915/slo-oracle/simplesamlphp/slo_rejection2',
+        }
+        rejection_expectations={
+            'IIP-IDP17-x-idp-01':('PASS','slo.destination-mismatch.not-applied'),
+            'IIP-IDP17-y-idp-01':('WARNING','slo.tampered-signature.not-applied'),
+            'IIP-IDP17-z-idp-01':('WARNING','slo.invalid-signature.not-relied-upon'),
+            'IIP-IDP17-aa-idp-01':('WARNING','slo.invalid-signature.no-error-response'),
+            'IIP-IDP17-al-idp-01':('PASS','slo.excluded-content.rejected'),
+        }
+        if row['profile']=='single_logout_idp' and row['product'] in slo_rejection \
+                and row['case'] in rejection_expectations and row.get('verdict','NOT_VERIFIED')=='NOT_VERIFIED':
+            path=root.parent.parent/slo_rejection[row['product']]/'result.json'
+            raw=path.read_bytes(); result=json.loads(raw)
+            case=next(c for req in result['requirements'] for c in req['cases'] if c['id']==row['case'])
+            want=rejection_expectations[row['case']]
             assert (case['verdict'],case['reason_code'])==want,(row['product'],row['case'],case['verdict'],case['reason_code'])
             interactions_path=path.parent/'interactions'
             interaction=None
