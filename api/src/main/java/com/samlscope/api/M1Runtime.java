@@ -726,6 +726,14 @@ final class M1Runtime {
         return status;
     }
 
+    ActiveProbeCoordinator.Status reportActiveProbeBrowserResponse(
+            String runId, com.samlscope.api.ApiModels.BrowserResponse response) {
+        requireRun(runId);
+        var status = activeProbes.reportBrowserResponse(
+                runId, response.actionId(), response.status(), response.url(), response.body());
+        return publishActiveProbeResponse(runId, response.actionId(), status);
+    }
+
     ActiveProbeCoordinator.Status retryActiveProbe(String runId) {
         requireRun(runId);
         return activeProbes.retry(runId);

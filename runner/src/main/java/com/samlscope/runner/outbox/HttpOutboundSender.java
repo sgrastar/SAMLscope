@@ -123,7 +123,8 @@ public final class HttpOutboundSender implements OutboundSender {
         var responseHeaders = new LinkedHashMap<String, List<String>>();
         response.headers().map().forEach((name, values) -> responseHeaders.put(name, List.copyOf(values)));
         var responseContentType = response.headers().firstValue("content-type").orElse(null);
-        var summary = probeSummary(responseBody, responseContentType);
+        var location = responseHeaders.getOrDefault("location", List.of()).stream().findFirst().orElse(null);
+        var summary = probeSummary(responseBody, responseContentType, location);
         var inbound = transcript.record(new TranscriptInput(
                 runId, Direction.INBOUND, clock.instant(), action.actionId(), "POST",
                 action.target().toString(), response.statusCode(), responseHeaders, responseBody,
@@ -136,12 +137,18 @@ public final class HttpOutboundSender implements OutboundSender {
         return new SendResult(false, Map.copyOf(details), inbound.id());
     }
 
-    private static Map<String, Object> probeSummary(byte[] body, String contentType) {
+    private static Map<String, Object> probeSummary(byte[] body, String contentType, String location) {
         var text = new String(body, StandardCharsets.UTF_8);
-        var saml = firstSamlMessage(text);
+        var saml = com.samlscope.saml.normal.SamlEmbeddedMessage.find(text)
+                .map(bytes -> (byte[]) bytes).orElse(null);
+        if (saml == null && location != null && !location.isBlank()) {
+            saml = com.samlscope.saml.normal.SamlEmbeddedMessage.find(location)
+                    .map(bytes -> (byte[]) bytes).orElse(null);
+        }
         if (saml == null) {
             return Map.of("type", "SloProbeHttpResponse",
                     "probe_response", "http-only",
+                    "redirect_location", location == null ? "" : location,
                     "content_type", contentType == null ? "" : contentType);
         }
         try {
@@ -156,6 +163,7 @@ public final class HttpOutboundSender implements OutboundSender {
             values.put("in_response_to", root.getAttribute("InResponseTo"));
             values.put("destination", root.getAttribute("Destination"));
             values.put("content_type", contentType == null ? "" : contentType);
+            values.put("redirect_location", location == null ? "" : location);
             var statuses = root.getElementsByTagNameNS(
                     "urn:oasis:names:tc:SAML:2.0:protocol", "StatusCode");
             if (statuses.getLength() > 0) {
@@ -168,49 +176,4 @@ public final class HttpOutboundSender implements OutboundSender {
         }
     }
 
-    /** Finds a SAML message in a form body or an auto-submit page without trusting the document. */
-    private static byte[] firstSamlMessage(String text) {
-        for (var parameter : List.of("SAMLResponse", "SAMLRequest")) {
-            var marker = parameter + "=";
-            var index = text.indexOf(marker);
-            while (index >= 0) {
-                var start = index + marker.length();
-                var end = start;
-                while (end < text.length() && "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=%".indexOf(text.charAt(end)) >= 0)
-                    end++;
-                var decoded = decodeSaml(text.substring(start, end));
-                if (decoded != null) return decoded;
-                index = text.indexOf(marker, index + marker.length());
-            }
-            var input = java.util.regex.Pattern.compile(
-                    "(?is)<input[^>]*name\\s*=\\s*[\"']?" + parameter + "[\"']?[^>]*>").matcher(text);
-            while (input.find()) {
-                var value = java.util.regex.Pattern.compile("(?is)value\\s*=\\s*[\"']([^\"']+)[\"']")
-                        .matcher(input.group());
-                if (!value.find()) continue;
-                var decoded = decodeSaml(value.group(1));
-                if (decoded != null) return decoded;
-            }
-        }
-        var trimmed = text.strip();
-        if (trimmed.startsWith("<")) {
-            var bytes = trimmed.getBytes(StandardCharsets.UTF_8);
-            var candidate = new String(bytes, StandardCharsets.UTF_8);
-            if (candidate.contains("LogoutResponse") || candidate.contains("LogoutRequest")) return bytes;
-        }
-        return null;
-    }
-
-    private static byte[] decodeSaml(String encoded) {
-        // HTML attributes carry raw Base64 ("+" stays "+"); form bodies URL-encode it.
-        for (var candidate : List.of(encoded, java.net.URLDecoder.decode(encoded, StandardCharsets.UTF_8))) {
-            try {
-                var decoded = Base64.getMimeDecoder().decode(candidate);
-                if (decoded.length > 0 && decoded[0] == '<') return decoded;
-            } catch (IllegalArgumentException ignored) {
-                // Try the other interpretation.
-            }
-        }
-        return null;
-    }
 }

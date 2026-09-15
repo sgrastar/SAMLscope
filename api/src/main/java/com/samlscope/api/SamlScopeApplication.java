@@ -218,6 +218,10 @@ public final class SamlScopeApplication {
                     ctx.json(m1.abortActiveProbe(ctx.pathParam("id"))));
             javalin.routes.post("/api/runs/{id}/active-probe/retry", ctx ->
                     ctx.json(m1.retryActiveProbe(ctx.pathParam("id"))));
+            javalin.routes.post("/api/runs/{id}/active-probe/browser-response", ctx -> {
+                var request = ctx.bodyAsClass(ApiModels.BrowserResponse.class);
+                ctx.json(m1.reportActiveProbeBrowserResponse(ctx.pathParam("id"), request));
+            });
             if (config.managementProtected()) {
                 ManagementSessionRoutes.register(javalin, config.publicBaseUrl(), m1::exchange,
                         m1::resumeManagementSession);
@@ -253,6 +257,8 @@ public final class SamlScopeApplication {
                 javalin.routes.before("/api/runs/{id}/active-probe/abort", ctx ->
                         authorization.authorizeRun(ctx, true));
                 javalin.routes.before("/api/runs/{id}/active-probe/retry", ctx ->
+                        authorization.authorizeRun(ctx, true));
+                javalin.routes.before("/api/runs/{id}/active-probe/browser-response", ctx ->
                         authorization.authorizeRun(ctx, true));
                 javalin.routes.before("/api/runs/{id}/interactions", ctx ->
                         authorization.authorizeRun(ctx, false));

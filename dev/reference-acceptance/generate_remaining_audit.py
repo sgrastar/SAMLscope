@@ -285,9 +285,6 @@ def render(root,definitions,output):
             ('simplesamlphp','ecp_idp'):{
                 'IIP-ALG06-a-idp-01':('PASS','browser.encryption.rsa-oaep-mgf1p.decrypted')},
             ('keycloak','single_logout_idp'):{
-                'IIP-IDP17-b-idp-01':('NOT_VERIFIED','browser.oracle-unavailable'),
-                'IIP-IDP17-b1-idp-01':('NOT_VERIFIED','browser.oracle-unavailable'),
-                'IIP-IDP17-b2-idp-01':('NOT_VERIFIED','browser.oracle-unavailable'),
                 'IIP-IDP17-c-idp-01':('NOT_VERIFIED','browser.oracle-unavailable'),
                 'IIP-IDP17-r-idp-01':('NOT_VERIFIED','browser.oracle-unavailable'),
                 'IIP-IDP17-s-idp-01':('NOT_VERIFIED','browser.oracle-unavailable'),
@@ -295,9 +292,6 @@ def render(root,definitions,output):
                 'IIP-IDP18-c-idp-01':('NOT_VERIFIED','browser.oracle-unavailable'),
                 'IIP-IDP18-d-idp-01':('NOT_VERIFIED','browser.oracle-unavailable')},
             ('shibboleth','single_logout_idp'):{
-                'IIP-IDP17-b-idp-01':('NOT_VERIFIED','browser.oracle-unavailable'),
-                'IIP-IDP17-b1-idp-01':('NOT_VERIFIED','browser.oracle-unavailable'),
-                'IIP-IDP17-b2-idp-01':('NOT_VERIFIED','browser.oracle-unavailable'),
                 'IIP-IDP17-c-idp-01':('NOT_VERIFIED','browser.oracle-unavailable'),
                 'IIP-IDP17-n-idp-01':('NOT_VERIFIED','slo.identifier.strong-match-unobservable'),
                 'IIP-IDP17-r-idp-01':('NOT_VERIFIED','browser.oracle-unavailable'),
@@ -307,9 +301,6 @@ def render(root,definitions,output):
                 'IIP-IDP18-c-idp-01':('NOT_VERIFIED','browser.oracle-unavailable'),
                 'IIP-IDP18-d-idp-01':('NOT_VERIFIED','browser.oracle-unavailable')},
             ('simplesamlphp','single_logout_idp'):{
-                'IIP-IDP17-b-idp-01':('NOT_VERIFIED','browser.oracle-unavailable'),
-                'IIP-IDP17-b1-idp-01':('NOT_VERIFIED','browser.oracle-unavailable'),
-                'IIP-IDP17-b2-idp-01':('NOT_VERIFIED','browser.oracle-unavailable'),
                 'IIP-IDP17-c-idp-01':('NOT_VERIFIED','browser.oracle-unavailable'),
                 'IIP-IDP17-r-idp-01':('NOT_VERIFIED','browser.oracle-unavailable'),
                 'IIP-IDP17-s-idp-01':('NOT_VERIFIED','browser.oracle-unavailable'),
@@ -334,24 +325,46 @@ def render(root,definitions,output):
                        interaction=interaction,verdict=case['verdict'],evidence=case['evidence'],
                        diagnostics=case.get('diagnostics',{}))
             transitions.append(dict(row))
-        slo_rejection={
-            'keycloak':'reference-20260915/slo-oracle/keycloak/slo_rejection',
-            'shibboleth':'reference-20260915/slo-oracle/shibboleth/slo_rejection2',
-            'simplesamlphp':'reference-20260915/slo-oracle/simplesamlphp/slo_rejection2',
+        slo_probe={
+            'keycloak':'reference-20260915/slo-oracle/keycloak/slo_probe_browser',
+            'shibboleth':'reference-20260915/slo-oracle/shibboleth/slo_probe_browser',
+            'simplesamlphp':'reference-20260915/slo-oracle/simplesamlphp/slo_probe_browser',
         }
-        rejection_expectations={
-            'IIP-IDP17-x-idp-01':('PASS','slo.destination-mismatch.not-applied'),
-            'IIP-IDP17-y-idp-01':('WARNING','slo.tampered-signature.not-applied'),
-            'IIP-IDP17-z-idp-01':('WARNING','slo.invalid-signature.not-relied-upon'),
-            'IIP-IDP17-aa-idp-01':('WARNING','slo.invalid-signature.no-error-response'),
-            'IIP-IDP17-al-idp-01':('PASS','slo.excluded-content.rejected'),
+        probe_expectations={
+            'keycloak':{
+                'IIP-IDP17-b-idp-01':('PASS','slo.async.mismatch-not-applied'),
+                'IIP-IDP17-b1-idp-01':('FAIL','slo.async.response-returned'),
+                'IIP-IDP17-b2-idp-01':('PASS','slo.async.feedback.distinguishes-success-and-failure'),
+                'IIP-IDP17-x-idp-01':('PASS','slo.destination-mismatch.not-applied'),
+                'IIP-IDP17-y-idp-01':('FAIL','slo.rejection.applied-to-session'),
+                'IIP-IDP17-z-idp-01':('FAIL','slo.rejection.applied-to-session'),
+                'IIP-IDP17-aa-idp-01':('WARNING','slo.invalid-signature.accepted-as-success'),
+                'IIP-IDP17-al-idp-01':('FAIL','slo.rejection.applied-to-session')},
+            'shibboleth':{
+                'IIP-IDP17-b-idp-01':('PASS','slo.async.mismatch-not-applied'),
+                'IIP-IDP17-b1-idp-01':('PASS','slo.async.no-response'),
+                'IIP-IDP17-b2-idp-01':('PASS','slo.async.feedback.distinguishes-success-and-failure'),
+                'IIP-IDP17-x-idp-01':('PASS','slo.destination-mismatch.not-applied'),
+                'IIP-IDP17-y-idp-01':('WARNING','slo.tampered-signature.not-applied'),
+                'IIP-IDP17-z-idp-01':('WARNING','slo.invalid-signature.not-relied-upon'),
+                'IIP-IDP17-aa-idp-01':('WARNING','slo.invalid-signature.no-error-response'),
+                'IIP-IDP17-al-idp-01':('PASS','slo.excluded-content.rejected')},
+            'simplesamlphp':{
+                'IIP-IDP17-b-idp-01':('FAIL','slo.async.mismatch-response-returned'),
+                'IIP-IDP17-b1-idp-01':('FAIL','slo.async.response-returned'),
+                'IIP-IDP17-b2-idp-01':('NOT_VERIFIED','slo.async.feedback.unrecognized'),
+                'IIP-IDP17-x-idp-01':('FAIL','slo.rejection.applied-to-session'),
+                'IIP-IDP17-y-idp-01':('WARNING','slo.tampered-signature.not-applied'),
+                'IIP-IDP17-z-idp-01':('WARNING','slo.invalid-signature.not-relied-upon'),
+                'IIP-IDP17-aa-idp-01':('WARNING','slo.invalid-signature.no-error-response'),
+                'IIP-IDP17-al-idp-01':('PASS','slo.excluded-content.rejected')},
         }
-        if row['profile']=='single_logout_idp' and row['product'] in slo_rejection \
-                and row['case'] in rejection_expectations and row.get('verdict','NOT_VERIFIED')=='NOT_VERIFIED':
-            path=root.parent.parent/slo_rejection[row['product']]/'result.json'
+        if row['profile']=='single_logout_idp' and row['product'] in slo_probe \
+                and row['case'] in probe_expectations[row['product']] and row.get('verdict','NOT_VERIFIED')=='NOT_VERIFIED':
+            path=root.parent.parent/slo_probe[row['product']]/'result.json'
             raw=path.read_bytes(); result=json.loads(raw)
             case=next(c for req in result['requirements'] for c in req['cases'] if c['id']==row['case'])
-            want=rejection_expectations[row['case']]
+            want=probe_expectations[row['product']][row['case']]
             assert (case['verdict'],case['reason_code'])==want,(row['product'],row['case'],case['verdict'],case['reason_code'])
             interactions_path=path.parent/'interactions'
             interaction=None

@@ -38,6 +38,10 @@ public final class ApprovedBrowserCaseRegistry {
                 return (com.samlscope.core.caseexec.TestCase) new LogoutRejectionScenarioTestCase(
                         testCase.id(), runId -> configurations.apply(testCase.id(), runId), transcriptContent);
             }
+            if (LogoutAsyncScenarioTestCase.CASE_IDS.contains(testCase.id())) {
+                return (com.samlscope.core.caseexec.TestCase) new LogoutAsyncScenarioTestCase(
+                        testCase.id(), runId -> configurations.apply(testCase.id(), runId), transcriptContent);
+            }
             if (java.util.Set.of(IdpBasicLogoutScenarioTestCase.ID, IdpBasicLogoutScenarioTestCase.REDIRECT_ID,
                     IdpBasicLogoutScenarioTestCase.ENCRYPTED_ID, IdpBasicLogoutScenarioTestCase.MULTI_KEY_ID)
                     .contains(testCase.id())) {

@@ -107,11 +107,33 @@ Suite側の直接HTTP送出（`LOGOUT_PROBE`）と、正しいDestinationの対�
 
 次の実装対象は、非同期SLO（b/b1/b2）、HTTP-Redirect限定端点（18-b/c/d）、伝播（r/s・c）です。
 
-## 6. 操作コストの記録方針
+## 6. バッチ2の結果（IIP-IDP17.b / b1 / b2 / x / y / z / aa / al）
+
+バッチ1の直接HTTP探索は**ブラウザのセッションCookieを持たない**ため、セッション依存の検証を迂回していました（SimpleSAMLphpは未認証要求をログインへ転送し、xの「Destination不一致は適用されない」という結論は実際には未検証でした）。そこで配送を認証済みブラウザ経由に変更し、ブラウザが観測したHTTP応答を新しい`browser-response` APIで構造化証拠として記録する方式に置き換えました。Keycloakの署名無効fixtureは、IdPが返したLogoutResponseの`InResponseTo`と要求のDestinationを転記で照合し、Suiteの検証器で署名が無効であることも確認しています。
+
+| ケース | Keycloak | Shibboleth | SimpleSAMLphp | 観測した事実 |
+|---|---|---|---|---|
+| `IIP-IDP17-b` | Success | Success | **Failed (Product)** | SSPはDestination不一致の非同期要求にもLogoutResponse(Success)を返す |
+| `IIP-IDP17-b1` | **Failed (Product)** | Success | **Failed (Product)** | Keycloak/SSPは信頼できる非同期要求へLogoutResponse(Success)を返す |
+| `IIP-IDP17-b2` | Success | Success | Not verified | SSPは成功/失敗ページを区別できる証拠を返さず（理由を更新） |
+| `IIP-IDP17-x` | Success | Success | **Failed (Product)** | SSPはDestination不一致の同期要求を適用しSuccessを返す |
+| `IIP-IDP17-y` | **Failed (Product)** | Warning | Warning | Keycloakは`SAML Client Signature`無効構成で提示された無効署名を検証せず適用 |
+| `IIP-IDP17-z` | **Failed (Product)** | Warning | Warning | 同上（内容に依拠） |
+| `IIP-IDP17-aa` | Warning | Warning | Warning | 3製品ともSAMLエラー応答を返さない（SHOULD相当） |
+| `IIP-IDP17-al` | **Failed (Product)** | Success | Success | Keycloakは署名対象からSessionIndexを除外した署名を受理 |
+
+- 実証による未検証解消: 23観測（531→523、異なるケースID 174→172）。残る`IIP-IDP17.b2`のSSP観測は、フィードバックページの意味が読み取れないためNot verifiedを維持。
+- Keycloakのy/z/alは、対象クライアントの`saml.client.signature=false`（既定）という構成での観測です。構成を変更すれば挙動が変わり得るため、台帳の理由と併せて構成を記録します。仕様は「消費したメッセージに署名が存在すれば検証する」ことを要求しており、この構成はその義務に適合しません。
+- 操作: 製品設定変更0回、Suite再作成4回（証拠APIと配送方式の修正）、Run作成3回、ユーザー本人のブラウザ操作0回。
+- 検証: Keycloak y要求の署名はSuiteの検証器で`valid=false`、応答は`InResponseTo`一致のSuccess。SSP x要求のDestinationは`https://samlscope.invalid/sp/slo`、応答はSuccess。
+
+次の実装対象は、HTTP-Redirect限定端点（18-b/c/d）と伝播（r/s・c）です。
+
+## 7. 操作コストの記録方針
 
 製品設定の書き込み・復元、管理API操作、Suite再作成、Run回数をバッチごとに記録し、`docs/31`と各バッチの`operations.json`へ保存します。失敗試行も含めます。
 
-## 7. 進捗の区分
+## 8. 進捗の区分
 
 - コード実装: Suite/コアの変更とテスト。
 - 実環境への接続: Run作成、fixture送出、応答記録。

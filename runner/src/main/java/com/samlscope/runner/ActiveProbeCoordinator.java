@@ -120,7 +120,7 @@ public final class ActiveProbeCoordinator {
             var executions = repository.list(runId).stream()
                     .filter(value -> scenario(value.caseId(), run).isPresent()).toList();
             if (executions.isEmpty()) {
-                return new Status(run.planId(), State.NOT_STARTED, null, null, false, null, null, null);
+                return new Status(run.planId(), State.NOT_STARTED, null, null, false, null, null, null, false);
             }
             var unfinished = executions.stream().anyMatch(value -> value.status() != CaseExecutionStatus.FINISHED);
             var lastOutcome = executions.stream()
@@ -128,7 +128,7 @@ public final class ActiveProbeCoordinator {
                     .map(CaseExecution::outcome).filter(Objects::nonNull)
                     .map(value -> value.outcome().name()).findFirst().orElse(null);
             return new Status(run.planId(), unfinished ? State.UNAVAILABLE : State.FINISHED,
-                    null, null, false, lastOutcome, null, null);
+                    null, null, false, lastOutcome, null, null, false);
         }
         var current = candidates.get(0);
         var testCase = scenario(current.caseId(), run).orElseThrow();
@@ -167,9 +167,11 @@ public final class ActiveProbeCoordinator {
                         + "?run=" + url(runId))
                 : null;
         var browserScenario = (BrowserFrontChannelScenario) testCase;
+        var observationExpected = Boolean.TRUE.equals(
+                current.state().data().get("browser_observation"));
         return new Status(run.planId(), state, action.action().actionId(), startUrl,
                 browserScenario.requiresFreshSession(current.state()), null,
-                current.caseId(), browserScenario.instructionsEn(current.state()));
+                current.caseId(), browserScenario.instructionsEn(current.state()), observationExpected);
         }
     }
 
@@ -295,6 +297,43 @@ public final class ActiveProbeCoordinator {
         return status(runId);
     }
 
+    /**
+     * Records what the authenticated browser saw after delivering a probe, so session-dependent
+     * HTTP feedback is observed without forging a log message. Unknown actions are ignored.
+     */
+    public Status reportBrowserResponse(String runId, String actionId, int httpStatus, String url, String body) {
+        requireRun(runId);
+        var outbox = repository.findOutbox(actionId)
+                .orElseThrow(() -> new IllegalArgumentException("Unknown active-probe action"));
+        if (outbox.status() == OutboxStatus.PENDING || outbox.status() == OutboxStatus.BLOCKED_ON_CREDENTIAL) {
+            throw new IllegalStateException("Browser observation arrived before front-channel dispatch");
+        }
+        var bodyBytes = (body == null ? "" : body).getBytes(StandardCharsets.UTF_8);
+        var saml = com.samlscope.saml.normal.SamlEmbeddedMessage.find(body)
+                .map(bytes -> (byte[]) bytes).orElse(new byte[0]);
+        var summary = new java.util.LinkedHashMap<String, Object>();
+        summary.put("type", "BrowserResponseObservation");
+        summary.put("http_status", httpStatus);
+        summary.put("url", url == null ? "" : url);
+        var entry = transcript.record(new TranscriptInput(
+                runId, Direction.INBOUND, clock.instant(), actionId, "BROWSER",
+                url == null || url.isBlank() ? outbox.action().target().toString() : url,
+                httpStatus, Map.of(), bodyBytes, "text/html", null, saml, Map.copyOf(summary)));
+        if (outbox.status() == OutboxStatus.UNKNOWN_DELIVERY) {
+            dispatcher.confirmInboundDelivery(actionId, entry.id());
+        }
+        var current = repository.find(runId, outbox.caseId())
+                .orElseThrow(() -> new IllegalStateException("Active-probe execution is missing"));
+        if (current.status() == CaseExecutionStatus.FINISHED) return status(runId);
+        var waitingAction = current.waitCondition() == null
+                ? null : current.waitCondition().inboundMatcher().criteria().get("ScenarioActionId");
+        if (!actionId.equals(waitingAction)) return status(runId);
+        var testCase = scenario(outbox.caseId(), requireRun(runId)).orElseThrow();
+        executionService.resume(runId, testCase, contexts.contextFor(runId),
+                new CaseEvent.BrowserObservation(httpStatus, url, body));
+        return status(runId);
+    }
+
     /** Marks only the current fixture unavailable and continues the remaining scenario controls. */
     public Status abort(String runId) {
         var currentStatus = status(runId);
@@ -354,7 +393,8 @@ public final class ActiveProbeCoordinator {
             boolean requiresFreshSession,
             String outcome,
             String caseId,
-            String instructionsEn) {
+            String instructionsEn,
+            boolean browserObservationExpected) {
         public Status {
             if (planId == null || planId.isBlank()) throw new IllegalArgumentException("planId is required");
         }

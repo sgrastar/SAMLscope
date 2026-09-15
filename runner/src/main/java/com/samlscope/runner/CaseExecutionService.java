@@ -251,6 +251,7 @@ public final class CaseExecutionService {
                     || event instanceof CaseEvent.ConfigUnavailable;
             case WAITING_ATTESTATION -> event instanceof CaseEvent.Attested;
             case WAITING_INBOUND -> event instanceof CaseEvent.InboundMessage
+                    || event instanceof CaseEvent.BrowserObservation
                     || event instanceof CaseEvent.InboundUnavailable
                     || event instanceof CaseEvent.RetryInbound;
             case FINISHED -> false;

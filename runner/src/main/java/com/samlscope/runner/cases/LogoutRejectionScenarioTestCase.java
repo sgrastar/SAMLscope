@@ -12,10 +12,10 @@ import java.util.function.Function;
 import org.w3c.dom.Element;
 import com.samlscope.core.caseexec.ActionIds;
 import com.samlscope.core.caseexec.CaseContext;
-import com.samlscope.core.caseexec.InboundMatcher;
 import com.samlscope.core.caseexec.CaseEvent;
 import com.samlscope.core.caseexec.CaseState;
 import com.samlscope.core.caseexec.CaseStep;
+import com.samlscope.core.caseexec.InboundMatcher;
 import com.samlscope.core.caseexec.OutboundAction;
 import com.samlscope.core.caseexec.OutboundKind;
 import com.samlscope.core.caseexec.TestCase;
@@ -24,7 +24,6 @@ import com.samlscope.core.evaluation.EvidenceRef;
 import com.samlscope.core.evaluation.Outcome;
 import com.samlscope.core.plan.TargetRole;
 import com.samlscope.core.transcript.TranscriptContentReader;
-import com.samlscope.core.transcript.TranscriptEntry;
 import com.samlscope.runner.BrowserFrontChannelScenario;
 import com.samlscope.saml.crypto.SamlXmlDecrypter;
 import com.samlscope.saml.crypto.XmlSignatureVerifier;
@@ -34,8 +33,9 @@ import com.samlscope.saml.normal.SamlLogoutRequestFactory;
 import com.samlscope.saml.normal.SecureXml;
 
 /**
- * Sends an approved crafted LogoutRequest and proves by a follow-up valid logout whether the
- * target applied it to the session. Rejection fixtures never conclude from silence alone.
+ * Delivers one crafted LogoutRequest with the authenticated browser and proves by a follow-up
+ * valid logout whether the target applied it. Rejection fixtures never conclude from silence
+ * alone, and the observed HTTP feedback is submitted by the browser driver as evidence.
  */
 public final class LogoutRejectionScenarioTestCase implements TestCase, BrowserFrontChannelScenario, BrowserPrompt {
     public static final String DESTINATION_ID = "IIP-IDP17-x-idp-01";
@@ -45,12 +45,12 @@ public final class LogoutRejectionScenarioTestCase implements TestCase, BrowserF
     public static final String EXCLUDED_CONTENT_ID = "IIP-IDP17-al-idp-01";
     public static final Set<String> CASE_IDS = Set.of(
             DESTINATION_ID, SIGNATURE_ID, INVALID_SIGNATURE_ID, ERROR_RESPONSE_ID, EXCLUDED_CONTENT_ID);
-    private static final String VERSION = "slo-rejection-v1";
+    private static final String VERSION = "slo-rejection-v2";
     private static final String P = SamlLogoutRequestFactory.PROTOCOL;
     private static final String A = SamlLogoutRequestFactory.ASSERTION;
     private static final String DS = "http://www.w3.org/2000/09/xmldsig#";
     private static final String SUCCESS = "urn:oasis:names:tc:SAML:2.0:status:Success";
-    private static final Duration PROBE_WAIT = Duration.ofSeconds(60);
+    private static final Duration PROBE_WAIT = Duration.ofMinutes(5);
     private static final URI WRONG_DESTINATION = URI.create("https://samlscope.invalid/sp/slo");
     private static final String ENVELOPED_SIGNATURE = "http://www.w3.org/2000/09/xmldsig#enveloped-signature";
     private static final String EXCLUSIVE_C14N = "http://www.w3.org/2001/10/xml-exc-c14n#";
@@ -63,8 +63,7 @@ public final class LogoutRejectionScenarioTestCase implements TestCase, BrowserF
     private final SamlXmlDecrypter decrypter = new SamlXmlDecrypter();
     private final XmlSignatureVerifier signatures = new XmlSignatureVerifier();
 
-    public LogoutRejectionScenarioTestCase(
-            String caseId,
+    public LogoutRejectionScenarioTestCase(String caseId,
             Function<String, IdpBasicLogoutScenarioTestCase.Configuration> configurations,
             TranscriptContentReader content) {
         if (!CASE_IDS.contains(caseId)) throw new IllegalArgumentException("Unsupported SLO rejection case " + caseId);
@@ -103,9 +102,12 @@ public final class LogoutRejectionScenarioTestCase implements TestCase, BrowserF
                 context.clock().instant());
         var document = SecureXml.parse(xml);
         signer.sign(document.getDocumentElement(), c.suiteCredentials(), null);
-        return await(c, "login", action, evidence, c.login().responseTimeout(),
-                new OutboundAction(action, OutboundKind.AUTHN_REQUEST, SecureXml.serialize(document),
-                        c.login().ssoEndpoint(), false));
+        var data = stateData("login", action, "slo-rejection-login", evidence);
+        return new CaseStep.AwaitInbound(new CaseState(VERSION + "-login", Map.copyOf(data)),
+                List.of(new OutboundAction(action, OutboundKind.AUTHN_REQUEST, SecureXml.serialize(document),
+                        c.login().ssoEndpoint(), false)),
+                new InboundMatcher("saml-response", Map.of("ScenarioActionId", action)),
+                c.login().responseTimeout());
     }
 
     @Override public CaseStep resume(CaseContext context, CaseState state, CaseEvent event) {
@@ -115,10 +117,14 @@ public final class LogoutRejectionScenarioTestCase implements TestCase, BrowserF
         var evidence = evidence(state);
         var stage = String.valueOf(state.data().get("stage"));
         if (event instanceof CaseEvent.TimedOut || event instanceof CaseEvent.Aborted
-                || event instanceof CaseEvent.InboundUnavailable || event instanceof CaseEvent.RetryInbound) {
+                || event instanceof CaseEvent.InboundUnavailable || event instanceof CaseEvent.RetryInbound)
             return finish(Outcome.NOT_VERIFIED,
                     "login".equals(stage) ? "slo.rejection.control-unavailable" : "slo.rejection.probe-no-response",
                     evidence);
+        if (event instanceof CaseEvent.BrowserObservation browser) {
+            if (!"probe".equals(stage)) return finish(Outcome.NOT_VERIFIED, "slo.rejection.control-unverifiable", evidence);
+            return afterProbe(context, configurations.apply(context.runId()), state,
+                    browserObservation(browser), evidence);
         }
         if (!(event instanceof CaseEvent.InboundMessage inbound))
             throw new IllegalArgumentException("SLO rejection scenario requires recorded inbound XML");
@@ -127,7 +133,7 @@ public final class LogoutRejectionScenarioTestCase implements TestCase, BrowserF
         var c = configurations.apply(context.runId());
         return switch (stage) {
             case "login" -> afterLogin(context, c, state, inbound, evidence);
-            case "probe" -> afterProbe(context, c, state, inbound, evidence);
+            case "probe" -> afterProbe(context, c, state, samlObservation(inbound), evidence);
             case "control" -> afterControl(context, c, state, inbound, evidence);
             default -> throw new IllegalStateException("Unsupported stage " + stage);
         };
@@ -135,8 +141,7 @@ public final class LogoutRejectionScenarioTestCase implements TestCase, BrowserF
 
     private CaseStep afterLogin(CaseContext context, IdpBasicLogoutScenarioTestCase.Configuration c,
             CaseState state, CaseEvent.InboundMessage inbound, List<EvidenceRef> evidence) {
-        var document = SecureXml.parse(inbound.decodedSaml());
-        var root = document.getDocumentElement();
+        var root = SecureXml.parse(inbound.decodedSaml()).getDocumentElement();
         if (!is(root, P, "Response") || !"2.0".equals(root.getAttribute("Version"))
                 || !Objects.equals(state.data().get("request_id"), root.getAttribute("InResponseTo"))
                 || !c.login().registeredAcs().toString().equals(root.getAttribute("Destination"))
@@ -164,38 +169,30 @@ public final class LogoutRejectionScenarioTestCase implements TestCase, BrowserF
         } catch (RuntimeException fixtureFailure) {
             return finish(Outcome.NOT_VERIFIED, "slo.rejection.fixture-unavailable", evidence);
         }
-        var data = new LinkedHashMap<String, Object>();
-        data.put("definition", VERSION); data.put("stage", "probe"); data.put("case_id", caseId);
-        data.put("request_id", "_" + action); data.put("fixture_id", fixtureId());
+        var data = stateData("probe", action, fixtureId(), evidence);
         data.put("identifier_xml", serializeIdentifier(names.getFirst()));
         data.put("session_indexes", List.copyOf(indexes));
-        data.put("evidence", references(evidence));
+        // The probe is delivered by the authenticated browser; its HTTP feedback is reported back.
+        data.put("browser_observation", true);
         return new CaseStep.AwaitInbound(new CaseState(VERSION + "-probe", Map.copyOf(data)),
-                List.of(new OutboundAction(action, OutboundKind.LOGOUT_PROBE, payload,
+                List.of(new OutboundAction(action, OutboundKind.LOGOUT_REQUEST, payload,
                         c.logoutEndpoint(), false)),
                 new InboundMatcher("saml-response", Map.of("ScenarioActionId", action)), PROBE_WAIT);
     }
 
     private CaseStep afterProbe(CaseContext context, IdpBasicLogoutScenarioTestCase.Configuration c,
-            CaseState state, CaseEvent.InboundMessage inbound, List<EvidenceRef> evidence) {
-        var analysis = probeAnalysis(context, inbound);
-        if (analysis == null) return finish(Outcome.NOT_VERIFIED, "slo.rejection.probe-unrecorded", evidence);
-        var details = new LinkedHashMap<String, Object>();
-        details.put("probe_response", analysis.kind());
-        details.put("probe_http_status", analysis.httpStatus());
-        details.put("probe_status", analysis.status());
-        if (analysis.outcome() == ProbeOutcome.NO_HTTP_RESPONSE)
-            return finish(Outcome.NOT_VERIFIED, "slo.rejection.probe-no-response", evidence, details);
+            CaseState state, SloProbeObservation observation, List<EvidenceRef> evidence) {
+        if (observation == null) return finish(Outcome.NOT_VERIFIED, "slo.rejection.probe-unrecorded", evidence);
+        var details = new LinkedHashMap<String, Object>(observation.diagnostics());
         if (ERROR_RESPONSE_ID.equals(caseId)) {
-            // The obligation is the error outcome itself; silence is a WARNING, not a rejection proof.
-            if (analysis.outcome() == ProbeOutcome.ERROR_RESPONSE)
+            if (observation.samlPresent() && !observation.samlSuccess())
                 return finish(optionalDirectionObserved() ? Outcome.SATISFIED : Outcome.SATISFIED_WITH_NOTE,
                         "slo.invalid-signature.error-response-observed", evidence, details);
-            if (analysis.outcome() == ProbeOutcome.SUCCESS_RESPONSE)
+            if (observation.samlSuccess())
                 return finish(Outcome.VIOLATED, "slo.invalid-signature.accepted-as-success", evidence, details);
             return finish(Outcome.VIOLATED, "slo.invalid-signature.no-error-response", evidence, details);
         }
-        if (analysis.outcome() == ProbeOutcome.SUCCESS_RESPONSE)
+        if (observation.samlSuccess())
             return finish(Outcome.VIOLATED, "slo.rejection.applied-to-session", evidence, details);
         var action = ActionIds.derive(context.runId(), caseId, VERSION + "-control", 0);
         Element identifier;
@@ -209,22 +206,20 @@ public final class LogoutRejectionScenarioTestCase implements TestCase, BrowserF
         var indexes = (List<String>) state.data().get("session_indexes");
         var payload = logout.sign(logout.build("_" + action, c.logoutEndpoint(), c.login().suiteIssuer(),
                 identifier, indexes, context.clock().instant(), null, false), c.suiteCredentials());
-        var data = new LinkedHashMap<String, Object>(details);
-        data.put("definition", VERSION); data.put("stage", "control"); data.put("case_id", caseId);
-        data.put("request_id", "_" + action); data.put("fixture_id", fixtureId() + "-control");
-        data.put("evidence", references(evidence));
+        var data = stateData("control", action, fixtureId() + "-control", evidence);
+        data.putAll(details);
         return new CaseStep.AwaitInbound(new CaseState(VERSION + "-control", Map.copyOf(data)),
                 List.of(new OutboundAction(action, OutboundKind.LOGOUT_REQUEST, payload,
                         c.logoutEndpoint(), false)),
-                new InboundMatcher("saml-response", Map.of("ScenarioActionId", action)), c.login().responseTimeout());
+                new InboundMatcher("saml-response", Map.of("ScenarioActionId", action)),
+                c.login().responseTimeout());
     }
 
     private CaseStep afterControl(CaseContext context, IdpBasicLogoutScenarioTestCase.Configuration c,
             CaseState state, CaseEvent.InboundMessage inbound, List<EvidenceRef> evidence) {
         var details = new LinkedHashMap<String, Object>();
-        details.put("probe_response", state.data().getOrDefault("probe_response", ""));
         details.put("probe_http_status", state.data().getOrDefault("probe_http_status", ""));
-        details.put("probe_status", state.data().getOrDefault("probe_status", ""));
+        details.put("probe_saml", state.data().getOrDefault("probe_saml", ""));
         try {
             var root = SecureXml.parse(inbound.decodedSaml()).getDocumentElement();
             if (!is(root, P, "LogoutResponse") || !trustedInbound(context, inbound, root, c)
@@ -266,15 +261,7 @@ public final class LogoutRejectionScenarioTestCase implements TestCase, BrowserF
         return tampered(signed);
     }
 
-    private static String serializeIdentifier(Element identifier) {
-        var document = SecureXml.newDocument();
-        document.appendChild(document.importNode(identifier, true));
-        return new String(SecureXml.serialize(document), java.nio.charset.StandardCharsets.UTF_8);
-    }
-
     private static byte[] tampered(byte[] signed) {
-        // Flip the first character of the SignatureValue: the XML stays well formed while the
-        // cryptographic value no longer matches the signed content.
         var document = SecureXml.parse(signed);
         var values = document.getElementsByTagNameNS(DS, "SignatureValue");
         if (values.getLength() != 1) throw new IllegalStateException("Fixture has no single SignatureValue");
@@ -285,24 +272,27 @@ public final class LogoutRejectionScenarioTestCase implements TestCase, BrowserF
         return SecureXml.serialize(document);
     }
 
-    private ProbeAnalysis probeAnalysis(CaseContext context, CaseEvent.InboundMessage inbound) {
-        var entry = entry(context, inbound.evidence());
-        if (entry == null || entry.status() == null) return null;
-        var summary = entry.samlSummary() == null ? Map.<String, Object>of() : entry.samlSummary();
-        var kind = String.valueOf(summary.getOrDefault("probe_response", "http-only"));
-        var message = String.valueOf(summary.getOrDefault("saml_message", ""));
-        var status = String.valueOf(summary.getOrDefault("status", ""));
-        var httpStatus = String.valueOf(entry.status());
-        var outcome = switch (kind) {
-            case "saml-message" -> "LogoutResponse".equals(message) && SUCCESS.equals(status)
-                    ? ProbeOutcome.SUCCESS_RESPONSE
-                    : ProbeOutcome.ERROR_RESPONSE;
-            default -> ProbeOutcome.HTTP_ONLY;
-        };
-        return new ProbeAnalysis(outcome, kind, status, httpStatus);
+    private static SloProbeObservation samlObservation(CaseEvent.InboundMessage inbound) {
+        return SloProbeObservation.ofSamlResponse(inbound.decodedSaml(), 200, "");
     }
 
-    private TranscriptEntry entry(CaseContext context, EvidenceRef evidence) {
+    private static SloProbeObservation browserObservation(CaseEvent.BrowserObservation observation) {
+        return SloProbeObservation.ofBrowserResponse(
+                observation.httpStatus(), observation.url(), observation.body());
+    }
+
+    private boolean trustedInbound(CaseContext context, CaseEvent.InboundMessage inbound, Element root,
+            IdpBasicLogoutScenarioTestCase.Configuration c) {
+        if (trusted(root, c)) return true;
+        var entry = contentEntry(context, inbound.evidence());
+        if (entry == null || !"GET".equalsIgnoreCase(entry.method()) || entry.rawQuery() == null) return false;
+        var verifier = new com.samlscope.saml.binding.RedirectSignatureVerifier();
+        var xml = inbound.decodedSaml();
+        return c.targetSigningCertificates().stream()
+                .anyMatch(cert -> verifier.isValidForMessage(entry.rawQuery(), cert, xml));
+    }
+
+    private com.samlscope.core.transcript.TranscriptEntry contentEntry(CaseContext context, EvidenceRef evidence) {
         if (!"transcript".equals(evidence.kind())) return null;
         return context.transcript().list(context.runId()).stream()
                 .filter(value -> evidence.reference().equals(value.id())).findFirst().orElse(null);
@@ -313,19 +303,6 @@ public final class LogoutRejectionScenarioTestCase implements TestCase, BrowserF
                 .anyMatch(cert -> signatures.hasValidEnvelopedSignature(root, cert));
     }
 
-    /** Enveloped XML signatures and HTTP-Redirect query signatures are both approved forms. */
-    private boolean trustedInbound(CaseContext context, CaseEvent.InboundMessage inbound, Element root,
-            IdpBasicLogoutScenarioTestCase.Configuration c) {
-        if (trusted(root, c)) return true;
-        var entry = entry(context, inbound.evidence());
-        if (entry == null || !"GET".equalsIgnoreCase(entry.method()) || entry.rawQuery() == null) return false;
-        var verifier = new com.samlscope.saml.binding.RedirectSignatureVerifier();
-        var xml = inbound.decodedSaml();
-        return c.targetSigningCertificates().stream()
-                .anyMatch(cert -> verifier.isValidForMessage(entry.rawQuery(), cert, xml));
-    }
-
-    /** The IdP-receives-LogoutResponse direction is not exercised by this fixture. */
     private boolean optionalDirectionObserved() {
         return DESTINATION_ID.equals(caseId) || EXCLUDED_CONTENT_ID.equals(caseId);
     }
@@ -345,14 +322,12 @@ public final class LogoutRejectionScenarioTestCase implements TestCase, BrowserF
         return "slo.excluded-content.rejected";
     }
 
-    private CaseStep await(IdpBasicLogoutScenarioTestCase.Configuration c, String stage, String action,
-            List<EvidenceRef> evidence, Duration timeout, OutboundAction outbound) {
+    private Map<String, Object> stateData(String stage, String action, String fixture, List<EvidenceRef> evidence) {
         var data = new LinkedHashMap<String, Object>();
         data.put("definition", VERSION); data.put("stage", stage); data.put("case_id", caseId);
-        data.put("request_id", "_" + action); data.put("fixture_id", "slo-rejection-login");
+        data.put("request_id", "_" + action); data.put("fixture_id", fixture);
         data.put("evidence", references(evidence));
-        return new CaseStep.AwaitInbound(new CaseState(VERSION + "-" + stage, Map.copyOf(data)),
-                List.of(outbound), new InboundMatcher("saml-response", Map.of("ScenarioActionId", action)), timeout);
+        return data;
     }
 
     private List<EvidenceRef> evidence(CaseState state) {
@@ -393,9 +368,9 @@ public final class LogoutRejectionScenarioTestCase implements TestCase, BrowserF
         return result;
     }
 
-    private enum ProbeOutcome { SUCCESS_RESPONSE, ERROR_RESPONSE, HTTP_ONLY, NO_HTTP_RESPONSE }
-
-    private record ProbeAnalysis(ProbeOutcome outcome, String kind, String status, String httpStatus) {
-        boolean responseApplied() { return outcome == ProbeOutcome.SUCCESS_RESPONSE; }
+    private static String serializeIdentifier(Element identifier) {
+        var document = SecureXml.newDocument();
+        document.appendChild(document.importNode(identifier, true));
+        return new String(SecureXml.serialize(document), java.nio.charset.StandardCharsets.UTF_8);
     }
 }
