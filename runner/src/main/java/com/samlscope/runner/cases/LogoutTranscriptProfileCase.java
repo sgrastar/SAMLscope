@@ -582,7 +582,48 @@ public final class LogoutTranscriptProfileCase {
                 .filter(value -> is(value.logout(), "LogoutRequest"))
                 .toList();
         if (initiators.isEmpty()) {
-            return notVerified("slo.propagation.not-observed", "slo.propagation.not-observed");
+            // Local logout propagation: the target initiates, so the run itself is the processing
+            // unit. Exactly one issued failure response keeps the attribution unambiguous.
+            var failing = targetLogout.stream()
+                    .filter(value -> "SloFailParticipant".equals(value.entry().samlSummary().get("type")))
+                    .filter(value -> Integer.valueOf(500)
+                            .equals(value.entry().samlSummary().get("http_status")))
+                    .toList();
+            if (failing.isEmpty()) {
+                return notVerified("slo.propagation.failure-induction-unavailable",
+                        "slo.propagation.failure-induction-unavailable");
+            }
+            if (failing.size() > 1) {
+                return notVerified("slo.propagation.processing-ambiguous",
+                        "slo.propagation.processing-ambiguous");
+            }
+            var failureAt = failing.getFirst().entry().timestamp();
+            var remaining = targetLogout.stream()
+                    .filter(value -> is(value.logout(), "LogoutRequest"))
+                    .filter(value -> !"SloFailParticipant".equals(value.entry().samlSummary().get("type")))
+                    .filter(value -> value.entry().timestamp().isAfter(failureAt))
+                    .toList();
+            if (remaining.isEmpty()) {
+                return notVerified("slo.propagation.continuation-unobserved",
+                        "slo.propagation.continuation-unobserved");
+            }
+            var answered = remaining.stream().anyMatch(value -> all.stream()
+                    .filter(candidate -> candidate.entry().direction() == Direction.OUTBOUND)
+                    .filter(candidate -> is(candidate.logout(), "LogoutResponse"))
+                    .anyMatch(candidate -> !candidate.entry().timestamp().isBefore(value.entry().timestamp())));
+            if (!answered) {
+                return notVerified("slo.propagation.continuation-response-unavailable",
+                        "slo.propagation.continuation-response-unavailable");
+            }
+            var localEvidence = new java.util.ArrayList<EvidenceRef>();
+            localEvidence.addAll(evidence(failing));
+            localEvidence.addAll(evidence(remaining));
+            return new CaseOutcome(Outcome.SATISFIED, null, "slo.propagation.continue-after-failure",
+                    "slo.propagation.continue-after-failure", localEvidence,
+                    Map.of("processing_unit", "local-logout",
+                            "failing_attempts", failing.size(),
+                            "remaining_endpoints", remaining.stream()
+                                    .map(value -> String.valueOf(value.entry().url())).distinct().count()));
         }
         // Each initiating request defines one logout processing bounded by its correlated final
         // response. Evidence outside the window, or windows that cannot be attributed separately,
