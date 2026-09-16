@@ -604,13 +604,12 @@ public final class LogoutTranscriptProfileCase {
             return notVerified("slo.propagation.initiator-response-unavailable",
                     "slo.propagation.initiator-response-unavailable");
         }
-        for (var i = 0; i < windows.size(); i++) {
-            for (var j = i + 1; j < windows.size(); j++) {
-                if (windows.get(i).overlaps(windows.get(j))) {
-                    return notVerified("slo.propagation.processing-ambiguous",
-                            "slo.propagation.processing-ambiguous");
-                }
-            }
+        // A straggler from another processing in the same run can arrive inside this window at
+        // the same participant endpoint, so a run with several processings cannot attribute
+        // continuation until participant endpoints are allocated per processing.
+        if (windows.size() > 1) {
+            return notVerified("slo.propagation.processing-ambiguous",
+                    "slo.propagation.processing-ambiguous");
         }
         var bestReason = "slo.propagation.not-observed";
         var bestEvidence = new java.util.ArrayList<EvidenceRef>();

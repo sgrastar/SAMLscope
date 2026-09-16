@@ -466,6 +466,32 @@ class LogoutTranscriptProfileCaseTest {
                 unanswered.evaluate(LogoutTranscriptProfileCase.Rule.TARGET_PROPAGATION_CONTINUE));
     }
 
+    @Test
+    void propagationIgnoresADelayedRequestFromAPreviousProcessing() {
+        var straggler = fixture(
+                new Entry("init1", Direction.OUTBOUND, "POST",
+                        request("_init1", "2.0", ""), null, Map.of("type", "LogoutRequest")),
+                new Entry("final1", Direction.INBOUND, "POST",
+                        response("_final1", "2.0", "_init1", success()), null, Map.of("type", "LogoutResponse")),
+                new Entry("straggler", Direction.INBOUND, "POST",
+                        request("_old", "2.0", ""), null,
+                        Map.of("type", "LogoutRequest"), "https://suite.example/sp/slo"),
+                new Entry("init2", Direction.OUTBOUND, "POST",
+                        request("_init2", "2.0", ""), null, Map.of("type", "LogoutRequest")),
+                new Entry("fail2", Direction.INBOUND, "POST",
+                        request("_fail2", "2.0", ""), null,
+                        Map.of("type", "SloFailParticipant", "http_status", 500), "https://suite.example/sp/slo-fail"),
+                new Entry("remain2", Direction.INBOUND, "POST",
+                        request("_remain2", "2.0", ""), null,
+                        Map.of("type", "LogoutRequest"), "https://suite.example/sp/slo"),
+                new Entry("answered2", Direction.OUTBOUND, "POST",
+                        response("_answer2", "2.0", "_remain2", success()), null, Map.of("type", "LogoutResponse")),
+                new Entry("final2", Direction.INBOUND, "POST",
+                        response("_final2", "2.0", "_init2", success()), null, Map.of("type", "LogoutResponse")));
+        assertEquals(Outcome.NOT_VERIFIED,
+                straggler.evaluate(LogoutTranscriptProfileCase.Rule.TARGET_PROPAGATION_CONTINUE));
+    }
+
     private TranscriptEntry altered(TranscriptEntry e, String run, String decodedRef, int bytes, Map<String, Object> summary) {
         return new TranscriptEntry(e.id(), run, e.direction(), e.timestamp(), e.correlationId(), e.method(), e.url(),
                 e.status(), e.headers(), e.bodyRef(), e.bodyBytes(), decodedRef, bytes, e.contentType(), e.rawQuery(), summary);
