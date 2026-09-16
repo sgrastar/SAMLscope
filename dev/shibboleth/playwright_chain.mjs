@@ -57,7 +57,11 @@ try {
 
   browser = await chromium.launch({ channel: 'chrome', headless: true });
   const context = await browser.newContext();
-  const page = await context.newPage();
+  let page = await context.newPage();
+  const ensurePage = async () => {
+    if (page.isClosed()) page = await context.newPage();
+    return page;
+  };
 
   await page.goto(`${base}/p/${plan}/start/m0-roundtrip?run=${run}`, { waitUntil: 'networkidle' });
   await fillLogin(page);
@@ -73,6 +77,7 @@ try {
   await api(`/api/runs/${run}/target-initiated`, true, { kind: 'TARGET_LOGOUT' });
 
   for (let index = 0; index < 400; index++) {
+    const pageRef = await ensurePage();
     const status = await json(`/api/runs/${run}/active-probe`);
     if (status.state === 'AWAITING_RESPONSE') {
       record.probes.push({ caseId: status.caseId, action: 'abort' });
@@ -80,24 +85,24 @@ try {
       continue;
     }
     if (status.state !== 'READY') { record.steps.push(`chain-${status.state}`); break; }
-    await page.goto(status.startUrl, { waitUntil: 'networkidle', timeout: 120000 }).catch((error) => {
+    await pageRef.goto(status.startUrl, { waitUntil: 'networkidle', timeout: 120000 }).catch((error) => {
       record.probes.push({ caseId: status.caseId, navigation: String(error).slice(0, 120) });
     });
-    const checkbox = page.locator('input[name="freshSessionConfirmed"]');
+    const checkbox = pageRef.locator('input[name="freshSessionConfirmed"]');
     if (await checkbox.count()) await checkbox.check().catch(() => {});
-    const confirm = page.getByRole('button', { name: /Continue with this request/i });
+    const confirm = pageRef.getByRole('button', { name: /Continue with this request/i });
     if (await confirm.count()) {
       await confirm.click().catch(() => {});
-      await page.waitForLoadState('networkidle').catch(() => {});
+      await pageRef.waitForLoadState('networkidle').catch(() => {});
     }
-    await fillLogin(page).catch(() => false);
-    await page.waitForLoadState('networkidle').catch(() => {});
-    await page.waitForTimeout(1500);
+    await fillLogin(pageRef).catch(() => false);
+    await pageRef.waitForLoadState('networkidle').catch(() => {});
+    if (!pageRef.isClosed()) await pageRef.waitForTimeout(1500);
     // The IdP Webflow can take several seconds to progress through its propagation scripts.
     let current = await json(`/api/runs/${run}/active-probe`);
     for (let wait = 0; wait < 20; wait++) {
       if (current.actionId !== status.actionId || current.state !== 'AWAITING_RESPONSE') break;
-      await page.waitForTimeout(1000);
+      if (!pageRef.isClosed()) await pageRef.waitForTimeout(1000);
       current = await json(`/api/runs/${run}/active-probe`);
     }
     record.probes.push({ caseId: status.caseId, advanced: current.actionId !== status.actionId || current.state !== 'AWAITING_RESPONSE' });
@@ -105,7 +110,8 @@ try {
       await api(`/api/runs/${run}/active-probe/abort`, true);
     }
   }
-  const text = await page.locator('body').innerText().catch(() => '');
+  const finalPage = await ensurePage();
+  const text = await finalPage.locator('body').innerText().catch(() => '');
   fs.writeFileSync(`${outDir}/final-page.txt`, text);
   if (text.includes('Response recorded')) record.steps.push('browser-response-delivered');
   try { await api(`/api/runs/${run}/target-initiated/conclude`, true); } catch {}
