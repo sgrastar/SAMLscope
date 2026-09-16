@@ -93,7 +93,13 @@ try {
     await fillLogin(page).catch(() => false);
     await page.waitForLoadState('networkidle').catch(() => {});
     await page.waitForTimeout(1500);
-    const current = await json(`/api/runs/${run}/active-probe`);
+    // The IdP Webflow can take several seconds to progress through its propagation scripts.
+    let current = await json(`/api/runs/${run}/active-probe`);
+    for (let wait = 0; wait < 20; wait++) {
+      if (current.actionId !== status.actionId || current.state !== 'AWAITING_RESPONSE') break;
+      await page.waitForTimeout(1000);
+      current = await json(`/api/runs/${run}/active-probe`);
+    }
     record.probes.push({ caseId: status.caseId, advanced: current.actionId !== status.actionId || current.state !== 'AWAITING_RESPONSE' });
     if (current.state === 'AWAITING_RESPONSE' && current.actionId === status.actionId) {
       await api(`/api/runs/${run}/active-probe/abort`, true);
