@@ -83,6 +83,13 @@ try {
     await page.goto(status.startUrl, { waitUntil: 'networkidle', timeout: 120000 }).catch((error) => {
       record.probes.push({ caseId: status.caseId, navigation: String(error).slice(0, 120) });
     });
+    const checkbox = page.locator('input[name="freshSessionConfirmed"]');
+    if (await checkbox.count()) await checkbox.check().catch(() => {});
+    const confirm = page.getByRole('button', { name: /Continue with this request/i });
+    if (await confirm.count()) {
+      await confirm.click().catch(() => {});
+      await page.waitForLoadState('networkidle').catch(() => {});
+    }
     await fillLogin(page).catch(() => false);
     await page.waitForLoadState('networkidle').catch(() => {});
     await page.waitForTimeout(1500);
