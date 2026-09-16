@@ -98,10 +98,20 @@ try {
     await fillLogin(pageRef).catch(() => false);
     await pageRef.waitForLoadState('networkidle').catch(() => {});
     if (!pageRef.isClosed()) await pageRef.waitForTimeout(1500);
-    // The IdP Webflow can take several seconds to progress through its propagation scripts.
+    // The IdP Webflow progresses through its propagation scripts; the target logout stage
+    // must not be aborted before the propagation reaches the remaining participants.
+    const targetLogout = status.caseId === 'IIP-IDP17-a-idp-01' && !status.requiresFreshSession;
+    const maxWait = targetLogout ? 90 : 20;
     let current = await json(`/api/runs/${run}/active-probe`);
-    for (let wait = 0; wait < 20; wait++) {
+    for (let wait = 0; wait < maxWait; wait++) {
       if (current.actionId !== status.actionId || current.state !== 'AWAITING_RESPONSE') break;
+      if (targetLogout && !pageRef.isClosed()) {
+        // Advance the propagation view exactly as a user would, without faking completion.
+        const propagate = pageRef.getByRole('button', { name: /propagate|continue|proceed|logout/i });
+        if (await propagate.count()) await propagate.first().click({ timeout: 2000 }).catch(() => {});
+        const link = pageRef.getByRole('link', { name: /continue|proceed|logout/i });
+        if (await link.count()) await link.first().click({ timeout: 2000 }).catch(() => {});
+      }
       if (!pageRef.isClosed()) await pageRef.waitForTimeout(1000);
       current = await json(`/api/runs/${run}/active-probe`);
     }
