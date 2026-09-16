@@ -144,8 +144,9 @@
 管理コンソールのメタデータ取込をPlaywrightで自動化し、**元のfixtureファイル**を製品自身の取込経路へ渡す経路を実装しました（`dev/keycloak/console_import.mjs`、実行に`npm i playwright`が必要）。SuiteによるXML→属性変換は使いません。
 
 検証できたこと:
-- コンソールの「Import client」ダイアログがSuiteのSPメタデータ文書を受け付け、クライアントを作成しました（クライアント詳細画面へ遷移）。
-- 取込結果（製品の解釈）を管理APIで記録しました: `saml_assertion_consumer_url_post/redirect`、`saml_single_logout_service_url_post/soap/redirect`、`saml.signing.certificate`、`saml.assertion.signature`、`saml.encrypt`、`saml.server.signature`、NameID形式など（`console-import/imported-client.json`）。
+- コンソールの「Import client」がSuiteのSPメタデータ文書を受け付け、クライアントを作成しました。**クリックと保存成功を分離**し、成功シグナル（クライアント設定ページへの遷移）と**管理APIの読み戻し**（属性・証明書の存在）を照合しています。固定待機だけに依存しません。
+- **1つの試験記録**として関連付けています: fixture識別（パス・SHA-256・entityID）、作成クライアント（DB ID・clientId）、取込結果（UI表示・API読み戻し）、任意の後続フロー（`--verify-command`）、削除/復元の読み戻し検証（`--delete`）。
+- スクリプトの終了状態を整備しました。検証済みのときだけ`IMPORT VERIFIED`で終了コード0、失敗時は`IMPORT FAILED`と`status=failure`を記録して終了コード1です（成功に見える出力を出しません）。成功例と2種類の失敗例（entityIDなし、メタデータ拒否）で確認済みです。
 - 同じclientIdの既存クライアントは取込で再作成されました（クライアントDB IDが変化）。既存属性は保持され、後続Runで使うSLO Redirect端点を再適用して復元を確認しました（`console-import/restore.json`）。
 - 取込成功はSuccessの根拠にしません。以後は取込後にプロトコルフローを実行し、署名検証・鍵選択・証明書受理の実挙動で判定します。
 

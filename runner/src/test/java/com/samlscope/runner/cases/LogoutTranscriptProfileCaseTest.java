@@ -333,97 +333,137 @@ class LogoutTranscriptProfileCaseTest {
     void propagationContinuesOnlyWithinOneCorrelatedLogoutProcessing() {
         var continued = fixture(
                 new Entry("initiator", Direction.OUTBOUND, "POST",
-                        request("_init", "2.0", "<samlp:SessionIndex>s1</samlp:SessionIndex>"), null,
-                        Map.of("type", "LogoutRequest")),
-                new Entry("final", Direction.INBOUND, "POST",
-                        response("_final", "2.0", "_init", success()), null, Map.of("type", "LogoutResponse")),
+                        request("_init", "2.0", ""), null, Map.of("type", "LogoutRequest")),
                 new Entry("fail", Direction.INBOUND, "POST",
-                        request("_fail", "2.0", "<samlp:SessionIndex>s1</samlp:SessionIndex>"), null,
+                        request("_fail", "2.0", ""), null,
                         Map.of("type", "SloFailParticipant", "http_status", 500), "https://suite.example/sp/slo-fail"),
                 new Entry("remain", Direction.INBOUND, "POST",
-                        request("_remain", "2.0", "<samlp:SessionIndex>s1</samlp:SessionIndex>"), null,
-                        Map.of("type", "LogoutRequest"), "https://suite.example/sp/slo"));
+                        request("_remain", "2.0", "<samlp:SessionIndex>other-sp-index</samlp:SessionIndex>"), null,
+                        Map.of("type", "LogoutRequest"), "https://suite.example/sp/slo"),
+                new Entry("answered", Direction.OUTBOUND, "POST",
+                        response("_answer", "2.0", "_remain", success()), null, Map.of("type", "LogoutResponse")),
+                new Entry("final", Direction.INBOUND, "POST",
+                        response("_final", "2.0", "_init", success()), null, Map.of("type", "LogoutResponse")));
         assertEquals(Outcome.SATISFIED,
                 continued.evaluate(LogoutTranscriptProfileCase.Rule.TARGET_PROPAGATION_CONTINUE));
-        // another session must not provide the failing attempt or the continuation
-        var otherSession = fixture(
+        // evidence after the correlated final response is outside the processing window
+        var afterFinal = fixture(
                 new Entry("initiator", Direction.OUTBOUND, "POST",
-                        request("_init", "2.0", "<samlp:SessionIndex>s1</samlp:SessionIndex>"), null,
-                        Map.of("type", "LogoutRequest")),
+                        request("_init", "2.0", ""), null, Map.of("type", "LogoutRequest")),
+                new Entry("fail", Direction.INBOUND, "POST",
+                        request("_fail", "2.0", ""), null,
+                        Map.of("type", "SloFailParticipant", "http_status", 500), "https://suite.example/sp/slo-fail"),
                 new Entry("final", Direction.INBOUND, "POST",
                         response("_final", "2.0", "_init", success()), null, Map.of("type", "LogoutResponse")),
-                new Entry("fail", Direction.INBOUND, "POST",
-                        request("_fail", "2.0", "<samlp:SessionIndex>s2</samlp:SessionIndex>"), null,
-                        Map.of("type", "SloFailParticipant", "http_status", 500), "https://suite.example/sp/slo-fail"),
                 new Entry("remain", Direction.INBOUND, "POST",
-                        request("_remain", "2.0", "<samlp:SessionIndex>s1</samlp:SessionIndex>"), null,
+                        request("_remain", "2.0", ""), null,
                         Map.of("type", "LogoutRequest"), "https://suite.example/sp/slo"));
         assertEquals(Outcome.NOT_VERIFIED,
-                otherSession.evaluate(LogoutTranscriptProfileCase.Rule.TARGET_PROPAGATION_CONTINUE));
-        // a request observed before the failure is not a continuation
-        var beforeFailure = fixture(
+                afterFinal.evaluate(LogoutTranscriptProfileCase.Rule.TARGET_PROPAGATION_CONTINUE));
+        // a delayed request from a previous attempt is before the initiating request
+        var delayed = fixture(
+                new Entry("old", Direction.INBOUND, "POST",
+                        request("_old", "2.0", ""), null,
+                        Map.of("type", "LogoutRequest"), "https://suite.example/sp/slo"),
                 new Entry("initiator", Direction.OUTBOUND, "POST",
-                        request("_init", "2.0", "<samlp:SessionIndex>s1</samlp:SessionIndex>"), null,
-                        Map.of("type", "LogoutRequest")),
+                        request("_init", "2.0", ""), null, Map.of("type", "LogoutRequest")),
+                new Entry("fail", Direction.INBOUND, "POST",
+                        request("_fail", "2.0", ""), null,
+                        Map.of("type", "SloFailParticipant", "http_status", 500), "https://suite.example/sp/slo-fail"),
+                new Entry("final", Direction.INBOUND, "POST",
+                        response("_final", "2.0", "_init", success()), null, Map.of("type", "LogoutResponse")));
+        assertEquals(Outcome.NOT_VERIFIED,
+                delayed.evaluate(LogoutTranscriptProfileCase.Rule.TARGET_PROPAGATION_CONTINUE));
+        // an arrival without the issued failure response is not a failure
+        var arrivalOnly = fixture(
+                new Entry("initiator", Direction.OUTBOUND, "POST",
+                        request("_init", "2.0", ""), null, Map.of("type", "LogoutRequest")),
+                new Entry("fail", Direction.INBOUND, "POST",
+                        request("_fail", "2.0", ""), null,
+                        Map.of("type", "SloFailParticipant"), "https://suite.example/sp/slo-fail"),
                 new Entry("remain", Direction.INBOUND, "POST",
-                        request("_remain", "2.0", "<samlp:SessionIndex>s1</samlp:SessionIndex>"), null,
+                        request("_remain", "2.0", ""), null,
                         Map.of("type", "LogoutRequest"), "https://suite.example/sp/slo"),
                 new Entry("final", Direction.INBOUND, "POST",
-                        response("_final", "2.0", "_init", success()), null, Map.of("type", "LogoutResponse")),
+                        response("_final", "2.0", "_init", success()), null, Map.of("type", "LogoutResponse")));
+        assertEquals(Outcome.NOT_VERIFIED,
+                arrivalOnly.evaluate(LogoutTranscriptProfileCase.Rule.TARGET_PROPAGATION_CONTINUE));
+        // a continuation that precedes the failure response is not continuation
+        var beforeFailure = fixture(
+                new Entry("initiator", Direction.OUTBOUND, "POST",
+                        request("_init", "2.0", ""), null, Map.of("type", "LogoutRequest")),
+                new Entry("remain", Direction.INBOUND, "POST",
+                        request("_remain", "2.0", ""), null,
+                        Map.of("type", "LogoutRequest"), "https://suite.example/sp/slo"),
                 new Entry("fail", Direction.INBOUND, "POST",
-                        request("_fail", "2.0", "<samlp:SessionIndex>s1</samlp:SessionIndex>"), null,
-                        Map.of("type", "SloFailParticipant", "http_status", 500), "https://suite.example/sp/slo-fail"));
+                        request("_fail", "2.0", ""), null,
+                        Map.of("type", "SloFailParticipant", "http_status", 500), "https://suite.example/sp/slo-fail"),
+                new Entry("final", Direction.INBOUND, "POST",
+                        response("_final", "2.0", "_init", success()), null, Map.of("type", "LogoutResponse")));
         assertEquals(Outcome.NOT_VERIFIED,
                 beforeFailure.evaluate(LogoutTranscriptProfileCase.Rule.TARGET_PROPAGATION_CONTINUE));
-        // a retry to the same failing participant is not continuation to a remaining participant
+        // overlapping processings cannot attribute the participants
+        var overlapping = fixture(
+                new Entry("init1", Direction.OUTBOUND, "POST",
+                        request("_init1", "2.0", ""), null, Map.of("type", "LogoutRequest")),
+                new Entry("init2", Direction.OUTBOUND, "POST",
+                        request("_init2", "2.0", ""), null, Map.of("type", "LogoutRequest")),
+                new Entry("fail", Direction.INBOUND, "POST",
+                        request("_fail", "2.0", ""), null,
+                        Map.of("type", "SloFailParticipant", "http_status", 500), "https://suite.example/sp/slo-fail"),
+                new Entry("remain", Direction.INBOUND, "POST",
+                        request("_remain", "2.0", ""), null,
+                        Map.of("type", "LogoutRequest"), "https://suite.example/sp/slo"),
+                new Entry("final1", Direction.INBOUND, "POST",
+                        response("_final1", "2.0", "_init1", success()), null, Map.of("type", "LogoutResponse")),
+                new Entry("final2", Direction.INBOUND, "POST",
+                        response("_final2", "2.0", "_init2", success()), null, Map.of("type", "LogoutResponse")));
+        assertEquals(Outcome.NOT_VERIFIED,
+                overlapping.evaluate(LogoutTranscriptProfileCase.Rule.TARGET_PROPAGATION_CONTINUE));
+        // a retry to the same failing endpoint is not a remaining participant
         var retry = fixture(
                 new Entry("initiator", Direction.OUTBOUND, "POST",
-                        request("_init", "2.0", "<samlp:SessionIndex>s1</samlp:SessionIndex>"), null,
-                        Map.of("type", "LogoutRequest")),
-                new Entry("final", Direction.INBOUND, "POST",
-                        response("_final", "2.0", "_init", success()), null, Map.of("type", "LogoutResponse")),
+                        request("_init", "2.0", ""), null, Map.of("type", "LogoutRequest")),
                 new Entry("fail", Direction.INBOUND, "POST",
-                        request("_fail", "2.0", "<samlp:SessionIndex>s1</samlp:SessionIndex>"), null,
+                        request("_fail", "2.0", ""), null,
                         Map.of("type", "SloFailParticipant", "http_status", 500), "https://suite.example/sp/slo-fail"),
                 new Entry("retry", Direction.INBOUND, "POST",
-                        request("_retry", "2.0", "<samlp:SessionIndex>s1</samlp:SessionIndex>"), null,
-                        Map.of("type", "SloFailParticipant", "http_status", 500), "https://suite.example/sp/slo-fail"));
+                        request("_retry", "2.0", ""), null,
+                        Map.of("type", "SloFailParticipant", "http_status", 500), "https://suite.example/sp/slo-fail"),
+                new Entry("final", Direction.INBOUND, "POST",
+                        response("_final", "2.0", "_init", success()), null, Map.of("type", "LogoutResponse")));
         assertEquals(Outcome.NOT_VERIFIED,
                 retry.evaluate(LogoutTranscriptProfileCase.Rule.TARGET_PROPAGATION_CONTINUE));
-        // an unrelated PartialLogout response must not stand in for the correlated final response
+        // an unrelated PartialLogout is not the correlated final response
         var unrelatedPartial = fixture(
                 new Entry("initiator", Direction.OUTBOUND, "POST",
-                        request("_init", "2.0", "<samlp:SessionIndex>s1</samlp:SessionIndex>"), null,
-                        Map.of("type", "LogoutRequest")),
+                        request("_init", "2.0", ""), null, Map.of("type", "LogoutRequest")),
                 new Entry("other", Direction.INBOUND, "POST",
                         response("_other", "2.0", "_elsewhere",
                                 "urn:oasis:names:tc:SAML:2.0:status:PartialLogout"), null,
                         Map.of("type", "LogoutResponse")),
                 new Entry("fail", Direction.INBOUND, "POST",
-                        request("_fail", "2.0", "<samlp:SessionIndex>s1</samlp:SessionIndex>"), null,
-                        Map.of("type", "SloFailParticipant", "http_status", 500), "https://suite.example/sp/slo-fail"));
-        assertEquals(Outcome.NOT_VERIFIED,
-                unrelatedPartial.evaluate(LogoutTranscriptProfileCase.Rule.TARGET_PROPAGATION_CONTINUE));
-        // two processings in one run must each carry the complete chain
-        var twoProcessings = fixture(
-                new Entry("init1", Direction.OUTBOUND, "POST",
-                        request("_init1", "2.0", "<samlp:SessionIndex>s1</samlp:SessionIndex>"), null,
-                        Map.of("type", "LogoutRequest")),
-                new Entry("final1", Direction.INBOUND, "POST",
-                        response("_final1", "2.0", "_init1", success()), null, Map.of("type", "LogoutResponse")),
-                new Entry("fail1", Direction.INBOUND, "POST",
-                        request("_fail1", "2.0", "<samlp:SessionIndex>s1</samlp:SessionIndex>"), null,
+                        request("_fail", "2.0", ""), null,
                         Map.of("type", "SloFailParticipant", "http_status", 500), "https://suite.example/sp/slo-fail"),
-                new Entry("init2", Direction.OUTBOUND, "POST",
-                        request("_init2", "2.0", "<samlp:SessionIndex>s2</samlp:SessionIndex>"), null,
-                        Map.of("type", "LogoutRequest")),
-                new Entry("final2", Direction.INBOUND, "POST",
-                        response("_final2", "2.0", "_init2", success()), null, Map.of("type", "LogoutResponse")),
-                new Entry("remain2", Direction.INBOUND, "POST",
-                        request("_remain2", "2.0", "<samlp:SessionIndex>s2</samlp:SessionIndex>"), null,
+                new Entry("remain", Direction.INBOUND, "POST",
+                        request("_remain", "2.0", ""), null,
                         Map.of("type", "LogoutRequest"), "https://suite.example/sp/slo"));
         assertEquals(Outcome.NOT_VERIFIED,
-                twoProcessings.evaluate(LogoutTranscriptProfileCase.Rule.TARGET_PROPAGATION_CONTINUE));
+                unrelatedPartial.evaluate(LogoutTranscriptProfileCase.Rule.TARGET_PROPAGATION_CONTINUE));
+        // the Suite must have answered the remaining participant inside the processing
+        var unanswered = fixture(
+                new Entry("initiator", Direction.OUTBOUND, "POST",
+                        request("_init", "2.0", ""), null, Map.of("type", "LogoutRequest")),
+                new Entry("fail", Direction.INBOUND, "POST",
+                        request("_fail", "2.0", ""), null,
+                        Map.of("type", "SloFailParticipant", "http_status", 500), "https://suite.example/sp/slo-fail"),
+                new Entry("remain", Direction.INBOUND, "POST",
+                        request("_remain", "2.0", ""), null,
+                        Map.of("type", "LogoutRequest"), "https://suite.example/sp/slo"),
+                new Entry("final", Direction.INBOUND, "POST",
+                        response("_final", "2.0", "_init", success()), null, Map.of("type", "LogoutResponse")));
+        assertEquals(Outcome.NOT_VERIFIED,
+                unanswered.evaluate(LogoutTranscriptProfileCase.Rule.TARGET_PROPAGATION_CONTINUE));
     }
 
     private TranscriptEntry altered(TranscriptEntry e, String run, String decodedRef, int bytes, Map<String, Object> summary) {

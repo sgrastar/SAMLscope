@@ -580,71 +580,114 @@ public final class LogoutTranscriptProfileCase {
         var initiators = all.stream()
                 .filter(value -> value.entry().direction() == Direction.OUTBOUND)
                 .filter(value -> is(value.logout(), "LogoutRequest"))
-                .filter(value -> !sessionIndexes(value.logout()).isEmpty())
                 .toList();
         if (initiators.isEmpty()) {
-            return notVerifiedWithEvidence(List.of(), "slo.propagation.not-observed",
-                    "slo.propagation.not-observed");
+            return notVerified("slo.propagation.not-observed", "slo.propagation.not-observed");
         }
-        // Each initiating request defines one logout processing. Evidence from other processings,
-        // sessions, orderings or unrelated PartialLogout responses must not combine into a Success.
-        var bestReason = "slo.propagation.not-observed";
-        var bestEvidence = new java.util.ArrayList<EvidenceRef>();
+        // Each initiating request defines one logout processing bounded by its correlated final
+        // response. Evidence outside the window, or windows that cannot be attributed separately,
+        // must never combine into a Success.
+        var windows = new java.util.ArrayList<Processing>();
         for (var initiator : initiators) {
-            var sessions = sessionIndexes(initiator.logout());
             var responses = all.stream()
                     .filter(value -> value.entry().direction() == Direction.INBOUND)
                     .filter(value -> is(value.logout(), "LogoutResponse"))
                     .filter(value -> initiator.logout().getAttribute("ID")
                             .equals(value.logout().getAttribute("InResponseTo")))
                     .toList();
-            if (responses.isEmpty()) {
-                bestReason = "slo.propagation.initiator-response-unavailable";
-                bestEvidence = new java.util.ArrayList<>(evidence(List.of(initiator)));
+            if (responses.isEmpty()) continue;
+            var end = responses.stream().map(value -> value.entry().timestamp())
+                    .max(java.util.Comparator.naturalOrder()).orElseThrow();
+            windows.add(new Processing(initiator, responses, initiator.entry().timestamp(), end));
+        }
+        if (windows.isEmpty()) {
+            return notVerified("slo.propagation.initiator-response-unavailable",
+                    "slo.propagation.initiator-response-unavailable");
+        }
+        for (var i = 0; i < windows.size(); i++) {
+            for (var j = i + 1; j < windows.size(); j++) {
+                if (windows.get(i).overlaps(windows.get(j))) {
+                    return notVerified("slo.propagation.processing-ambiguous",
+                            "slo.propagation.processing-ambiguous");
+                }
+            }
+        }
+        var bestReason = "slo.propagation.not-observed";
+        var bestEvidence = new java.util.ArrayList<EvidenceRef>();
+        for (var processing : windows) {
+            if (!processing.start().isBefore(processing.end())) {
+                bestReason = "slo.propagation.processing-ambiguous";
                 continue;
             }
-            var sameProcessing = targetLogout.stream()
-                    .filter(value -> is(value.logout(), "LogoutRequest"))
-                    .filter(value -> !java.util.Collections.disjoint(
-                            new java.util.ArrayList<>(sessionIndexes(value.logout())), sessions))
+            var within = targetLogout.stream()
+                    .filter(value -> !value.entry().timestamp().isBefore(processing.start()))
+                    .filter(value -> !value.entry().timestamp().isAfter(processing.end()))
                     .toList();
-            var failing = sameProcessing.stream()
+            // The failure evidence is the Suite's issued failure response, not the arrival time.
+            var failing = within.stream()
                     .filter(value -> "SloFailParticipant".equals(value.entry().samlSummary().get("type")))
+                    .filter(value -> Integer.valueOf(500)
+                            .equals(value.entry().samlSummary().get("http_status")))
                     .toList();
             if (failing.isEmpty()) {
                 bestReason = "slo.propagation.failure-induction-unavailable";
-                bestEvidence = new java.util.ArrayList<>(evidence(sameProcessing));
+                bestEvidence = new java.util.ArrayList<>(evidence(within));
                 continue;
             }
             var failureAt = failing.stream().map(value -> value.entry().timestamp())
                     .max(java.util.Comparator.naturalOrder()).orElseThrow();
             var failingEndpoints = failing.stream().map(value -> String.valueOf(value.entry().url()))
                     .collect(java.util.stream.Collectors.toSet());
-            var continuation = sameProcessing.stream()
+            var continuation = within.stream()
+                    .filter(value -> is(value.logout(), "LogoutRequest"))
                     .filter(value -> !"SloFailParticipant".equals(value.entry().samlSummary().get("type")))
                     .filter(value -> !failingEndpoints.contains(String.valueOf(value.entry().url())))
                     .filter(value -> value.entry().timestamp().isAfter(failureAt))
                     .toList();
             if (continuation.isEmpty()) {
                 bestReason = "slo.propagation.continuation-unobserved";
-                bestEvidence = new java.util.ArrayList<>(evidence(sameProcessing));
+                bestEvidence = new java.util.ArrayList<>(evidence(within));
+                continue;
+            }
+            // The Suite must have answered the remaining participant inside the same processing.
+            var answered = continuation.stream().anyMatch(value -> all.stream()
+                    .filter(candidate -> candidate.entry().direction() == Direction.OUTBOUND)
+                    .filter(candidate -> is(candidate.logout(), "LogoutResponse"))
+                    .anyMatch(candidate -> !candidate.entry().timestamp().isBefore(value.entry().timestamp())
+                            && !candidate.entry().timestamp().isAfter(processing.end())));
+            if (!answered) {
+                bestReason = "slo.propagation.continuation-response-unavailable";
+                bestEvidence = new java.util.ArrayList<>(evidence(continuation));
                 continue;
             }
             var satisfiedEvidence = new java.util.ArrayList<EvidenceRef>();
-            satisfiedEvidence.addAll(evidence(List.of(initiator)));
-            satisfiedEvidence.addAll(evidence(responses));
+            satisfiedEvidence.addAll(evidence(List.of(processing.initiator())));
+            satisfiedEvidence.addAll(evidence(processing.responses()));
             satisfiedEvidence.addAll(evidence(failing));
             satisfiedEvidence.addAll(evidence(continuation));
             return new CaseOutcome(Outcome.SATISFIED, null, "slo.propagation.continue-after-failure",
                     "slo.propagation.continue-after-failure", satisfiedEvidence,
-                    Map.of("session_indexes", List.copyOf(sessions), "failing_attempts", failing.size(),
+                    Map.of("processing_start", processing.start().toString(),
+                            "processing_end", processing.end().toString(),
+                            "failing_attempts", failing.size(),
                             "remaining_endpoints", continuation.stream()
                                     .map(value -> String.valueOf(value.entry().url())).distinct().count(),
-                            "partial_logout_final", responses.stream().anyMatch(value ->
+                            "partial_logout_final", processing.responses().stream().anyMatch(value ->
                                     PARTIAL_LOGOUT_STATUS.equals(secondaryStatus(value.logout())))));
         }
         return new CaseOutcome(Outcome.NOT_VERIFIED, bestReason, bestReason, bestReason,
                 bestEvidence, Map.of());
+    }
+
+    private CaseOutcome notVerified(String reasonCode, String detail) {
+        return new CaseOutcome(Outcome.NOT_VERIFIED, detail, reasonCode, reasonCode, List.of(), Map.of());
+    }
+
+    private record Processing(Message initiator, List<Message> responses,
+            java.time.Instant start, java.time.Instant end) {
+        boolean overlaps(Processing other) {
+            return start.isBefore(other.end) && other.start.isBefore(end);
+        }
     }
 
     private java.util.Set<String> sessionIndexes(Element request) {

@@ -168,7 +168,7 @@ Suite SPがRedirect応答エンドポイントのみを広告する構成を、�
 
 - キャンペーン終了操作（`target-initiated/conclude`）だけで「未発行」「伝播不実装」のWarningにしないよう規則を修正しました。証拠がない場合は`not-observed`系の理由でNOT_VERIFIEDへ戻します。
 - 18-d（IdPによるRedirect応答の消費）は、200ページの観測だけでは消費の証明にならないためNOT_VERIFIEDへ戻し、`consumption-unobserved`/`unavailable`を理由とします。
-- r（伝播継続）のSuccess条件を厳格化しました。同一のログアウト処理で、**失敗参加者への試行記録**（`/sp/slo-fail`の試行エントリ）、**失敗**（PartialLogout）、**残参加者への試行**の3つが揃う場合のみSuccessとします。任意のLogoutRequestとの共存では確定しません。失敗参加者と残参加者の順序・セッション分離を確認する負の対照は、伝播ハーネス完成時に必須とします。
+- r（伝播継続）のSuccess条件を**実行単位の相関**で再実装しました。起点要求の記録時刻から相関する最終応答までの窓を1つのログアウト処理とし、窓内で (1) 失敗参加者エンドポイントへの**500応答の発行記録**（到着時刻ではなく発行応答）、(2) その後の**別参加者エンドポイント**への要求、(3) その要求へのSuite応答、が揃う場合のみSuccessとします。窓外・重複窓・到着のみ・応答なし・同一参加者への再試行・無関係なPartialLogout・SessionIndexが参加者間で異なる場合は、それぞれ対応する理由でNOT_VERIFIEDを返します。負の対照はユニットテストで検証済みです。
 - 監査で戻した観測: Keycloak/SimpleSAMLphpの17-c・18-c/d・r/s（10件）とShibboleth 18-d（1件）。Shibbolethの17-c（伝播を実測）と18-c（bindingを実測）は維持します。台帳は507→518観測。
 - メタデータ消費の原則: SuiteのXML→管理API属性変換は製品のメタデータ解釈の証拠にせず、製品自身の取込経路へ元fixtureを渡した後の挙動で判定します（[docs/33](33-keycloak-metadata-observation.md)）。
 
