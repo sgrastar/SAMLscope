@@ -25,6 +25,30 @@ class MetadataFixtureObservationTestCaseTest {
     private static final Instant NOW = Instant.parse("2026-08-30T00:00:00Z");
 
     @Test
+    void suiteIssuedSignaturePairCanCompleteKeyValueConsumption() {
+        var testCase = new MetadataFixtureObservationTestCase("key-value", TargetRole.IDP,
+                List.of(new MetadataFixtureObservationTestCase.Fixture("keyvalue-only",
+                        MetadataFixtureObservationTestCase.Behavior.ACCEPT, "consume signing key")),
+                ConfigurationFailureSemantics.TEST_PRECONDITION);
+        var entries = new java.util.ArrayList<>(List.of(fetch("control", 1), use("control", 2), fetch("keyvalue-only", 3)));
+        for (var control : List.of("invalid", "valid")) {
+            entries.add(new TranscriptEntry("request-" + control, RUN, Direction.OUTBOUND, NOW, null,
+                    "POST", "https://idp.example/sso", null, Map.of(), null, 0, "decoded", 10, null, null,
+                    Map.of("type", "AuthnRequest", "id", control, "variant", "keyvalue-only",
+                            "campaign", "metadata-polling", "metadataSignatureGroup", "campaign:1", "metadataSignatureControl", control)));
+            entries.add(entry(entries.size() + 1, "https://suite.example/sp/acs/0?mdv=keyvalue-only&run=" + RUN,
+                    10, Map.of("metadataProbeAccepted", true, "inResponseTo", control,
+                            "statusCode", "urn:oasis:names:tc:SAML:2.0:status:" + (control.equals("valid") ? "Success" : "Requester"))));
+        }
+        assertEquals(Outcome.SATISFIED, evaluate(testCase, entries));
+        assertEquals(true, testCase.evidenceStatus(context(entries)).ready());
+        // A valid response to the bad-signature control invalidates the discrimination.
+        entries.add(entry(20, "https://suite.example/sp/acs/0?mdv=keyvalue-only&run=" + RUN, 10,
+                Map.of("metadataProbeAccepted", true, "inResponseTo", "invalid", "statusCode", "urn:oasis:names:tc:SAML:2.0:status:Success")));
+        assertEquals(Outcome.NOT_VERIFIED, evaluate(testCase, entries));
+    }
+
+    @Test
     void successfulSsoCannotProveKeyValueConsumptionWithSignatureValidationDisabled() {
         var testCase = new MetadataFixtureObservationTestCase("key-value", TargetRole.IDP,
                 List.of(new MetadataFixtureObservationTestCase.Fixture("keyvalue-only",

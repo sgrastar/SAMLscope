@@ -28,12 +28,36 @@ def api(path, body=None):
 def save(path, value):
     path.write_text(json.dumps(value, indent=2) + '\n')
 
-def flow(run, record_path, signature_control=False):
+def recorded_exchange(run, variant, previous_ids):
+    entries=api('/api/runs/'+run+'/transcript')
+    requests=[e for e in entries if e['id'] not in previous_ids and e['direction']=='OUTBOUND'
+        and e['samlSummary'].get('type')=='AuthnRequest' and e['samlSummary'].get('variant')==variant]
+    if len(requests)!=1:return dict(success=False,reason='ambiguous-issued-request')
+    request=requests[0];request_id=request['samlSummary']['id']
+    responses=[e for e in entries if e['direction']=='INBOUND'
+        and e['samlSummary'].get('metadataProbeAccepted') is True
+        and e['samlSummary'].get('inResponseTo')==request_id]
+    statuses={e['samlSummary'].get('statusCode') for e in responses}
+    return dict(success=statuses=={'urn:oasis:names:tc:SAML:2.0:status:Success'},
+        request_id=request_id,status_codes=sorted(s for s in statuses if isinstance(s,str)),
+        transcript_ids=[request['id'],*[e['id'] for e in responses]])
+
+def flow(run, record_path, signature_control=False, suite_signature_control=False):
     import reference_flow as pc
     state = api('/api/runs/' + run + '/metadata-lab')
     variant, index = state['selectedVariant'], state['campaignIndex']
     control = None
-    if signature_control:
+    if suite_signature_control:
+        before_ids={e['id'] for e in api('/api/runs/'+run+'/transcript')}
+        receipt=pc.Client().flow(state['automaticStartUrl']+'&signatureControl=invalid',None,
+            os.environ.get('REFERENCE_USERNAME','samlscope-m0-user'),
+            os.environ.get('REFERENCE_PASSWORD','samlscope-m0-password'))
+        exchange=recorded_exchange(run,variant,before_ids)
+        control=dict(source='suite',receipt=receipt,exchange=exchange,correlated_success=exchange['success'])
+        save(record_path,dict(run=run,variant=variant,negative_control=control,correlated_success=False))
+        if api('/api/runs/'+run+'/metadata-lab')['campaignIndex']!=index:
+            raise RuntimeError('Suite negative control must not advance the fixture')
+    elif signature_control:
         mutation = pc.SignatureMutation()
         receipt = pc.Client(signature_mutation=mutation).flow(state['automaticStartUrl'], None,
             os.environ.get('REFERENCE_USERNAME','samlscope-m0-user'),
@@ -48,17 +72,21 @@ def flow(run, record_path, signature_control=False):
             raise RuntimeError('Corrupted signature accepted; this flow cannot prove key consumption')
         if after_negative['campaignIndex'] != index:
             raise RuntimeError('Unexpected campaign advancement during negative control')
+    before_ids={e['id'] for e in api('/api/runs/'+run+'/transcript')}
     receipt = pc.Client().flow(state['automaticStartUrl'], None,
         os.environ.get('REFERENCE_USERNAME','samlscope-m0-user'),
         os.environ.get('REFERENCE_PASSWORD','samlscope-m0-password'))
     after = api('/api/runs/' + run + '/metadata-lab')
-    # Advancement is permitted by Suite only after a correlated Success Response.
-    accepted = after['campaignIndex'] == index + 1
+    exchange=recorded_exchange(run,variant,before_ids)
+    # A correlated SAML error can also advance orchestration. Inspect the actual response.
+    accepted = after['campaignIndex'] == index + 1 and exchange['success']
     save(record_path, dict(run=run, variant=variant, before_index=index,
         after_index=after['campaignIndex'], receipt=receipt, correlated_success=accepted,
-        negative_control=control))
+        negative_control=control,positive_exchange=exchange))
     if not accepted:
         raise RuntimeError('No correlated Success; retain NOT_VERIFIED and inspect the saved evidence')
+    if suite_signature_control and control['correlated_success']:
+        raise RuntimeError('Suite-issued corrupt signature accepted; do not adopt key consumption')
 
 
 def main():
@@ -67,11 +95,12 @@ def main():
     parser.add_argument('--playwright-modules',type=pathlib.Path)
     parser.add_argument('--flow-run')
     parser.add_argument('--signature-control',action='store_true',help='Exercise a corrupt signature before each normal flow')
+    parser.add_argument('--suite-signature-control',action='store_true',help='Use Suite-issued and recorded invalid-signature controls')
     parser.add_argument('--run',help='Append a new fixture campaign to an existing reference Run')
     parser.add_argument('--variants',help='Comma-separated Suite fixture IDs, beginning with control')
     args=parser.parse_args()
     if args.flow_run:
-        flow(args.flow_run,args.output,args.signature_control);return
+        flow(args.flow_run,args.output,args.signature_control,args.suite_signature_control);return
     if args.playwright_modules is None:parser.error('--playwright-modules is required for a batch')
     out=args.output.resolve()
     if out.exists() and any(out.iterdir()):
@@ -113,6 +142,7 @@ def main():
             (folder/'fixture.xml').write_bytes(fixture)
             follow=shlex.join([sys.executable,str(pathlib.Path(__file__).resolve()),'--flow-run',run,'--output',str(folder/'flow.json')]
                 + (['--signature-control'] if args.signature_control else []))
+            if args.suite_signature_control:follow += ' --suite-signature-control'
             command=['node',str(stage/'console_import.mjs'),'--fixture',str(folder/'fixture.xml'),
                 '--record',str(folder/'import.json'),'--entity-id',BASE+'/p/'+plan_id,'--verify-command',follow,'--delete']
             result=subprocess.run(command,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,text=True,timeout=420)

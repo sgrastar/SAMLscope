@@ -709,15 +709,24 @@ public final class SamlScopeApplication {
         javalin.routes.get("/p/{plan}/start/m0-roundtrip", ctx ->
                 ctx.redirect(spPeer.start(ctx.pathParam("plan"), requiredQuery(ctx, "run")).toString()));
         javalin.routes.get("/p/{plan}/start/metadata-polling/{index}", ctx -> {
+            var signatureControl = ctx.queryParam("signatureControl");
+            if (signatureControl != null && !"invalid".equals(signatureControl)) {
+                throw new IllegalArgumentException("Unknown metadata signature control");
+            }
             var plan = requirePlan(plans, ctx.pathParam("plan"));
             var run = requireRun(runs, requiredQuery(ctx, "run"));
             var index = Integer.parseInt(ctx.pathParam("index"));
             var flow = metadataLab.requireAutomaticStartFlow(
                     run.id(), plan.id(), requiredQuery(ctx, "poll"), index);
+            if (signatureControl != null && flow.variant().requestFixture()
+                    != com.samlscope.saml.normal.SamlSignedRequestFactory.Fixture.VALID) {
+                throw new IllegalArgumentException("Signature control requires a normal signed-request fixture");
+            }
             if (!metadataLab.automaticStartReady(run.id(), plan.id(), flow.campaignToken(), index)) {
                 var next = "/p/" + plan.id() + "/start/metadata-polling/" + index
                         + "?run=" + run.id() + "&poll=" + java.net.URLEncoder.encode(
-                                flow.campaignToken(), java.nio.charset.StandardCharsets.UTF_8);
+                                flow.campaignToken(), java.nio.charset.StandardCharsets.UTF_8)
+                        + (signatureControl == null ? "" : "&signatureControl=invalid");
                 ctx.header("Cache-Control", "no-store")
                         .header("Content-Security-Policy", "default-src 'none'; frame-ancestors 'none'; base-uri 'none'")
                         .status(202).contentType("text/html; charset=utf-8")
@@ -739,7 +748,8 @@ public final class SamlScopeApplication {
             var acs = config.peerBaseUrl().resolve(
                     "/p/" + plan.id() + "/sp/acs/0?mdv=" + flow.variant().id() + "&run=" + run.id());
             var requestXml = new com.samlscope.saml.normal.SamlSignedRequestFactory().build(
-                    flow.variant().requestFixture(),
+                    signatureControl == null ? flow.variant().requestFixture()
+                            : com.samlscope.saml.normal.SamlSignedRequestFactory.Fixture.BAD_SIGNATURE_VALUE,
                     requestId, destination, peerEntityId(config, plan), acs,
                     clock.instant(), metadata.credentialsForPollingVariant(plan, flow.variant()));
             var relayState = "samlscope-metadata-polling|" + run.id() + "|"
@@ -754,6 +764,7 @@ public final class SamlScopeApplication {
             var context = new LinkedHashMap<String, Object>(run.context());
             context.put("metadata_polling_requests", Map.copyOf(requests));
             context.put("active_metadata_request_id", requestId);
+            context.put("active_metadata_signature_control", signatureControl == null ? "valid" : "invalid");
             runService.update(run, RunStatus.WAITING_BROWSER, run.targetToSuiteReachability(), context);
             transcript.record(new com.samlscope.core.transcript.TranscriptInput(
                     run.id(), com.samlscope.core.transcript.Direction.OUTBOUND, clock.instant(),
@@ -762,7 +773,9 @@ public final class SamlScopeApplication {
                             "type", "AuthnRequest",
                             "id", requestId,
                             "variant", flow.variant().id(),
-                            "campaign", "metadata-polling")));
+                            "campaign", "metadata-polling",
+                            "metadataSignatureControl", signatureControl == null ? "valid" : "invalid",
+                            "metadataSignatureGroup", flow.campaignToken() + ":" + flow.index())));
             var nonceBytes = new byte[18];
             NONCE_RANDOM.nextBytes(nonceBytes);
             var nonce = Base64.getUrlEncoder().withoutPadding().encodeToString(nonceBytes);
@@ -988,6 +1001,12 @@ public final class SamlScopeApplication {
             if (!correlated) {
                 throw new IllegalArgumentException(
                         "Automatic metadata campaign response does not match the issued AuthnRequest");
+            }
+            if ("invalid".equals(consumed.summary().get("metadataSignatureControl"))) {
+                ctx.header("Cache-Control", "no-store").contentType("text/html; charset=utf-8")
+                        .result("<!doctype html><html lang=\"en\"><body><h1>Signature control response recorded</h1>"
+                                + "<p>The fixture remains selected for its normal signed request.</p></body></html>");
+                return;
             }
             // Advance only after both the stable metadata fetch and the signed browser response
             // have been bound to the same current fixture and request ID.

@@ -180,6 +180,10 @@ public final class SpPeerService {
             // does not claim that the target accepted metadata or satisfied any obligation.
             analyzedSummary.put("metadataProbeAccepted",
                     matchesMetadataProbeRequest(run.context(), variant, actual));
+            if (actual.equals(run.context().get("active_metadata_request_id"))) {
+                analyzedSummary.put("metadataSignatureControl",
+                        run.context().getOrDefault("active_metadata_signature_control", "valid"));
+            }
         } else {
             var correlated = !expected.isBlank() && expected.equals(actual);
             var relayMatched = run.id().equals(message.relayState());

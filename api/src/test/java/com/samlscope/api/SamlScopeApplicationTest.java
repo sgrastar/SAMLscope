@@ -512,6 +512,10 @@ class SamlScopeApplicationTest {
         var waiting = client.send(HttpRequest.newBuilder(start).build(), HttpResponse.BodyHandlers.ofString());
         assertEquals(202, waiting.statusCode(), waiting.body());
         assertFalse(waiting.body().contains("SAMLRequest"));
+        var negativeWaiting = client.send(HttpRequest.newBuilder(URI.create(start + "&signatureControl=invalid")).build(),
+                HttpResponse.BodyHandlers.ofString());
+        assertEquals(202, negativeWaiting.statusCode());
+        assertTrue(negativeWaiting.body().contains("signatureControl=invalid"));
         var before = client.send(HttpRequest.newBuilder(base.resolve("/api/runs/" + runId + "/transcript")).build(),
                 HttpResponse.BodyHandlers.ofString());
         assertFalse(before.body().contains("metadata-polling"), "waiting must not record a request as sent");
@@ -536,6 +540,18 @@ class SamlScopeApplicationTest {
                 .generateCertificate(new java.io.ByteArrayInputStream(java.util.Base64.getMimeDecoder().decode(certText)));
         assertTrue(new com.samlscope.saml.crypto.XmlSignatureVerifier().hasValidEnvelopedSignature(
                 request.getDocumentElement(), certificate), "tokenless redirected metadata must advertise the actual request signing key");
+        var negative = client.send(HttpRequest.newBuilder(URI.create(start + "&signatureControl=invalid")).build(),
+                HttpResponse.BodyHandlers.ofString());
+        assertEquals(200, negative.statusCode(), negative.body());
+        var negativeMatcher = java.util.regex.Pattern.compile("name=\"SAMLRequest\" value=\"([^\"]+)\"").matcher(negative.body());
+        assertTrue(negativeMatcher.find());
+        var negativeXml = com.samlscope.saml.normal.SecureXml.parse(java.util.Base64.getDecoder().decode(negativeMatcher.group(1)));
+        assertFalse(new com.samlscope.saml.crypto.XmlSignatureVerifier().hasValidEnvelopedSignature(
+                negativeXml.getDocumentElement(), certificate));
+        var recorded = client.send(HttpRequest.newBuilder(base.resolve("/api/runs/" + runId + "/transcript")).build(),
+                HttpResponse.BodyHandlers.ofString());
+        assertTrue(recorded.body().contains("metadataSignatureGroup"));
+        assertTrue(recorded.body().contains("\"metadataSignatureControl\":\"invalid\""));
     }
 
     private static int occurrences(String value, String needle) {

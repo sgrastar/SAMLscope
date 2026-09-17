@@ -1,0 +1,116 @@
+#!/usr/bin/env python3
+"""Reference-only native SimpleSAMLphp parser import, protocol exercise, and exact restore.
+
+Invokes the installed product's XML validator and metadata parser used by its admin converter.
+No Suite XML-to-attribute translation is performed. This is a CLI parser path, not a UI test.
+"""
+import argparse
+import hashlib
+import json
+import pathlib
+import subprocess
+import sys
+import time
+import urllib.request
+
+REPO=pathlib.Path(__file__).resolve().parents[2]
+sys.path.insert(0,str(REPO/'dev/keycloak'))
+from import_metadata_batch import api, save, flow, BASE
+
+PHP = r'''
+require '/var/simplesamlphp/lib/_autoload.php';
+$xml=stream_get_contents(STDIN);
+(new \SimpleSAML\Utils\XML())->checkSAMLMessage($xml,'saml-meta');
+$entities=\SimpleSAML\Metadata\SAMLParser::parseDescriptorsString($xml);
+$entity=$argv[1];
+if (!isset($entities[$entity])) { throw new \RuntimeException('Expected entity missing'); }
+$metadata=$entities[$entity]->getMetadata20SP();
+if ($metadata===null) { throw new \RuntimeException('SP descriptor missing'); }
+// Match the product admin converter's documented static-import output.
+unset($metadata['entityDescriptor'],$metadata['expire']);
+echo json_encode(['entity_id'=>$entity,'validate_authnrequest'=>$metadata['validate.authnrequest']??null,
+ 'php'=>'$metadata['.var_export($entity,true).'] = '.var_export($metadata,true).';']);
+'''
+
+def main():
+    p=argparse.ArgumentParser(description=__doc__)
+    p.add_argument('--output',type=pathlib.Path,required=True)
+    p.add_argument('--variants',required=True)
+    args=p.parse_args();out=args.output.resolve()
+    if out.exists() and any(out.iterdir()):raise ValueError('Evidence directory must be empty')
+    out.mkdir(parents=True,exist_ok=True)
+    variants=args.variants.split(',')
+    if variants[0]!='control':raise ValueError('Start with control')
+    config=REPO/'build/acceptance/reference-20260914/ssp-config/saml20-sp-remote.php'
+    original=config.read_bytes()
+    if b'?>' in original:raise ValueError('Unexpected PHP closing tag')
+    created=api('/api/plans',dict(name='SimpleSAMLphp native metadata parser batch',profile='metadata_idp',
+        targetKind='IDP',targetEntityId='http://localhost:18380/idp',metadataSourceKind='URL',
+        metadataSourceLocation='http://samlscope-reference-ssp/simplesaml/module.php/saml/idp/metadata',
+        suiteMetadataDelivery='HTTP_URL',declaredFeatures={},parameters=dict(clockSkewToleranceSeconds=180,
+        metadataRefreshWaitSeconds=300,testUserHint='samlscope-m0-user',requestSigningMode='REQUIRED'),
+        interaction=dict(allowBrowserSteps=True,allowAttestation=False,preset='quick'),authorizedTarget=True))
+    save(out/'plan.json',created);plan=created['plan']['plan']['id'];entity=BASE+'/p/'+plan
+    if entity.encode() in original:raise ValueError('Refusing to overwrite an existing entity')
+    created=api('/api/plans/'+plan+'/runs',{});save(out/'created.json',created);run=created['run']['id']
+    save(out/'preflight.json',api('/api/runs/'+run+'/preflight',{}))
+    save(out/'campaign.json',api('/api/runs/'+run+'/metadata-lab/automatic-polling',dict(variants=variants,pollingDelaySeconds=0)))
+    operations=[]
+    try:
+        for variant in variants:
+            state=api('/api/runs/'+run+'/metadata-lab')
+            if state['selectedVariant']!=variant:raise RuntimeError('Unexpected campaign member')
+            folder=out/variant;folder.mkdir()
+            record=dict(variant=variant,product='simplesamlphp',import_path='native-parser-cli',status='incomplete')
+            try:
+                with urllib.request.urlopen(state['automaticStartUrl'],timeout=30) as response:
+                    if response.status!=202:raise RuntimeError('Expected fetch gate')
+                with urllib.request.urlopen(state['metadataUrl'],timeout=30) as response:fixture=response.read()
+                (folder/'fixture.xml').write_bytes(fixture)
+                record['fixture_sha256']=hashlib.sha256(fixture).hexdigest()
+                parsed=subprocess.run(['docker','exec','-i','samlscope-reference-ssp','php','-r',PHP,entity],
+                    input=fixture,stdout=subprocess.PIPE,stderr=subprocess.PIPE,timeout=40)
+                (folder/'parser.stderr').write_bytes(parsed.stderr)
+                if parsed.returncode:raise RuntimeError('Product native parser rejected fixture')
+                data=json.loads(parsed.stdout);record['entity_id']=data['entity_id']
+                record['validate_authnrequest']=data['validate_authnrequest']
+                record['parser_output_sha256']=hashlib.sha256(parsed.stdout).hexdigest()
+                (folder/'parser-output.json').write_bytes(parsed.stdout)
+                configured=original+b'\n'+data['php'].encode()+b'\n'
+                config.write_bytes(configured);record['configuration_written']=True
+                record['configuration_read_back']=config.read_bytes()==configured
+                # The pinned reference image enables OPcache timestamp validation with a
+                # two-second revalidation interval. Let Apache observe each new PHP file.
+                time.sleep(3)
+                record['configuration_settle_seconds']=3
+                flow(run,folder/'flow.json',suite_signature_control=True)
+                record['status']='success'
+            except Exception as error:
+                record['reason']=str(error)
+            finally:
+                if record.get('configuration_written'):
+                    config.write_bytes(original)
+                record['restored']=config.read_bytes()==original
+                save(folder/'import.json',record);operations.append(record);save(out/'operations.json',operations)
+            print(variant,record['status'],flush=True)
+            if not record['restored']:raise RuntimeError('Restore verification failed')
+            if variant=='control':
+                if record['status']!='success':raise RuntimeError('Baseline failed')
+                save(out/'tests-start.json',api('/api/runs/'+run+'/tests/start',{}))
+            pending=api('/api/runs/'+run+'/metadata-lab')
+            if pending['campaignIndex']==state['campaignIndex']:
+                with urllib.request.urlopen(urllib.request.Request(pending['automaticContinueUrl'],data=b''),timeout=30) as response:response.read()
+    finally:
+        config.write_bytes(original)
+        save(out/'restoration.json',dict(restored=config.read_bytes()==original,
+            original_sha256=hashlib.sha256(original).hexdigest(),final_sha256=hashlib.sha256(config.read_bytes()).hexdigest()))
+        try:save(out/'evaluation.json',api('/api/runs/'+run+'/protocol-evidence/evaluate',{}))
+        except Exception as error:save(out/'evaluation-error.json',dict(reason=str(error)))
+        for suffix in ['result.json','transcript','protocol-evidence']:
+            try:
+                with urllib.request.urlopen(BASE+'/api/runs/'+run+'/'+suffix,timeout=30) as response:
+                    (out/(suffix if '.' in suffix else suffix+'.json')).write_bytes(response.read())
+            except Exception as error:print('Export unavailable',suffix,type(error).__name__)
+        print('Run',run,flush=True)
+
+if __name__=='__main__':main()

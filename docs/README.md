@@ -129,3 +129,4 @@ not by differences in reference-implementation results ([00 §5](00-concept.md))
 - [Target-initiated acceptance](31-peer-intent-acceptance.md) — single-use intents for IdP-initiated SSO and target-initiated logout, reference results, and limits (2026-09-15).
 
 - [製品コンソール取込後のメタデータ挙動観測](34-native-metadata-import-acceptance.md)
+- [Suite発行の署名対照と製品ネイティブ取込](35-suite-signature-controls.md)

@@ -79,11 +79,11 @@ Shibbolethの`IIP-SSO01-fk/fu/gi`は、v8では事前生成された正常系要
 
 ## Not verifiedの内訳
 
-以下は表に採用したケース結果の延べ511件。†のケースは新Runの追加証拠を採用し、それ以外の既存証拠は保持しています。単一Runの集計や全試験の再完走を意味しません。比較表で設定不足として扱い直した旧FAILは、このNOT_VERIFIED集計には含めません。
+以下は表に採用したケース結果の延べ500件。†のケースは新Runの追加証拠を採用し、それ以外の既存証拠は保持しています。単一Runの集計や全試験の再完走を意味しません。比較表で設定不足として扱い直した旧FAILは、このNOT_VERIFIED集計には含めません。
 
 | 理由 | Keycloak | Shibboleth IdP | SimpleSAMLphp | 解消に必要なこと |
 |---|---:|---:|---:|---|
-| `case.pending-interaction` | 101 | 92 | 115 | 設定・受信待ちに加え、判定処理未実装の経路を含む。全件台帳を参照 |
+| `case.pending-interaction` | 101 | 92 | 104 | 設定・受信待ちに加え、判定処理未実装の経路を含む。全件台帳を参照 |
 | `attestation.interaction-disallowed` | 25 | 25 | 25 | 自己申告を無効にした構成。確認せずに申告を代行しない |
 | `browser_fixture_partial` | 20 | 21 | 20 | 一部の試験だけ実行。残るvariantの証拠が不足 |
 | `idp.signed-request.inconclusive` | 7 | 1 | 7 | 当該ケースの応答・対象設定・正常系対照を追加確認 |
@@ -300,7 +300,7 @@ Chromeと承認のブロックを解除するだけでは解消しません。�
 | `IIP-MD01-a-idp-01` | Not verified | Not verified | Not verified |
 | `IIP-MD02-a-idp-01` | Not verified | Not verified | Not verified |
 | `IIP-MD02-b-idp-01` | Not verified | Success | Not verified |
-| `IIP-MD02-c-idp-01` | Success † | Success | Not verified |
+| `IIP-MD02-c-idp-01` | Success † | Success | Success † |
 | `IIP-MD02-d-idp-01` | Not verified | Success | Not verified |
 | `IIP-MD03-a-idp-01` | Not verified | Not verified | Not verified |
 | `IIP-MD03-b-idp-01` | Not verified | Not verified | Not verified |
@@ -314,15 +314,15 @@ Chromeと承認のブロックを解除するだけでは解消しません。�
 | `IIP-MD05-a1-idp-01` | Not verified | Not verified | Not verified |
 | `IIP-MD05-a2-idp-01` | Not verified | Not verified | Not verified |
 | `IIP-MD05-a3-idp-01` | Not verified | Not verified | Not verified |
-| `IIP-MD05-a4-idp-01` | Success † | Success | Not verified |
-| `IIP-MD05-a5-idp-01` | Success † | Success | Not verified |
+| `IIP-MD05-a4-idp-01` | Success † | Success | Success † |
+| `IIP-MD05-a5-idp-01` | Success † | Success | Success † |
 | `IIP-MD05-a6-idp-01` | Success | Success | Success |
 | `IIP-MD05-a7-idp-01` | Warning | Warning | Warning |
 | `IIP-MD05-a8-idp-01` | Not verified | Not verified | Not verified |
 | `IIP-MD05-a9-idp-01` | Success | Success | Success |
 | `IIP-MD05-ab-idp-01` | Success | Success | Success |
 | `IIP-MD05-ac-idp-01` | Not verified | Not verified | Not verified |
-| `IIP-MD05-ad-idp-01` | Not verified | Success † | Not verified |
+| `IIP-MD05-ad-idp-01` | Not verified | Success † | Success † |
 | `IIP-MD05-ae-idp-01` | Not verified | Not verified | Not verified |
 | `IIP-MD05-af-idp-01` | Not verified | Not verified | Not verified |
 | `IIP-MD05-ag-idp-01` | Warning | Warning | Warning |
@@ -402,7 +402,7 @@ Chromeと承認のブロックを解除するだけでは解消しません。�
 | `IIP-MD05-fi-idp-01` | Warning † | Warning † | Warning † |
 | `IIP-MD05-fj-idp-01` | Not verified | Not verified | Not verified |
 | `IIP-MD05-fk-idp-01` | Warning | Warning | Warning |
-| `IIP-MD05-g-idp-01` | Success † | Success | Not verified |
+| `IIP-MD05-g-idp-01` | Success † | Success | Success † |
 | `IIP-MD06-a-idp-01` | Not verified | Not verified | Not verified |
 | `IIP-MD06-a1-idp-01` | Not verified | Success | Not verified |
 | `IIP-MD06-a2-idp-01` | Not verified | Not verified | Not verified |
@@ -412,20 +412,20 @@ Chromeと承認のブロックを解除するだけでは解消しません。�
 | `IIP-MD06-a6-idp-01` | Not verified | Not verified | Not verified |
 | `IIP-MD06-a7-idp-01` | Not verified | Success † | Not verified |
 | `IIP-MD06-a8-idp-01` | Not verified | Not verified | Not verified |
-| `IIP-MD06-a9-idp-01` | Not verified | Success † | Not verified |
+| `IIP-MD06-a9-idp-01` | Not verified | Success † | Success † |
 | `IIP-MD06-aa-idp-01` | Warning | Warning | Warning |
 | `IIP-MD06-ab-idp-01` | Not verified | Not verified | Not verified |
 | `IIP-MD06-b-idp-01` | Not verified | Not verified | Not verified |
 | `IIP-MD06-c-idp-01` | Not verified | Not verified | Not verified |
-| `IIP-MD07-a-idp-01` | Not verified | Success † | Not verified |
+| `IIP-MD07-a-idp-01` | Not verified | Success † | Success † |
 | `IIP-MD07-b-idp-01` | Not verified | Not verified | Not verified |
 | `IIP-MD09-a-idp-01` | Not verified | Not verified | Not verified |
 | `IIP-MD09-b-idp-01` | Not verified | Not verified | Not verified |
 | `IIP-MD11-a-idp-01` | Not verified | Not verified | Not verified |
-| `IIP-MD12-a-idp-01` | Success † | Success | Not verified |
-| `IIP-MD12-b-idp-01` | Not verified | Success | Not verified |
-| `IIP-MD12-c-idp-01` | Success † | Success | Not verified |
-| `IIP-MD12-d-idp-01` | Not verified | Success | Not verified |
+| `IIP-MD12-a-idp-01` | Success † | Success | Success † |
+| `IIP-MD12-b-idp-01` | Not verified | Success | Success † |
+| `IIP-MD12-c-idp-01` | Success † | Success | Success † |
+| `IIP-MD12-d-idp-01` | Not verified | Success | Success † |
 
 ### ecp_idp
 
@@ -591,7 +591,18 @@ Chromeと承認のブロックを解除するだけでは解消しません。�
 | metadata_idp († listed supplemental cases only) | shibboleth | `run_296ZHGM9XYDBAXHE3CP2XC3MC7` | `build/acceptance/reference-20260914/integrated-implementation/shibboleth/polling` |
 | metadata_idp | shibboleth | `run_BMEHBBM5QAAAV41HZZX1R70QXH` | `interaction-followup/after/shibboleth/metadata_idp` |
 | metadata_idp († listed supplemental cases only) | simplesamlphp | `run_CPWMJEQVVQYFYRDSCYFQWEC755` | `additional-implementation/simplesamlphp/metadata_idp` |
+| metadata_idp († listed supplemental cases only) | simplesamlphp | `run_KDFJDGNQQCVFANEG53YYWYS4A1` | `build/acceptance/reference-20260917/simplesamlphp-native-parser-3` |
+| metadata_idp († listed supplemental cases only) | simplesamlphp | `run_KDFJDGNQQCVFANEG53YYWYS4A1` | `build/acceptance/reference-20260917/simplesamlphp-native-parser-3` |
+| metadata_idp († listed supplemental cases only) | simplesamlphp | `run_KDFJDGNQQCVFANEG53YYWYS4A1` | `build/acceptance/reference-20260917/simplesamlphp-native-parser-3` |
+| metadata_idp († listed supplemental cases only) | simplesamlphp | `run_KDFJDGNQQCVFANEG53YYWYS4A1` | `build/acceptance/reference-20260917/simplesamlphp-native-parser-3` |
 | metadata_idp († listed supplemental cases only) | simplesamlphp | `run_CPWMJEQVVQYFYRDSCYFQWEC755` | `build/acceptance/reference-20260914/additional-implementation/simplesamlphp/metadata_idp` |
+| metadata_idp († listed supplemental cases only) | simplesamlphp | `run_KDFJDGNQQCVFANEG53YYWYS4A1` | `build/acceptance/reference-20260917/simplesamlphp-native-parser-3` |
+| metadata_idp († listed supplemental cases only) | simplesamlphp | `run_KDFJDGNQQCVFANEG53YYWYS4A1` | `build/acceptance/reference-20260917/simplesamlphp-native-parser-3` |
+| metadata_idp († listed supplemental cases only) | simplesamlphp | `run_KDFJDGNQQCVFANEG53YYWYS4A1` | `build/acceptance/reference-20260917/simplesamlphp-native-parser-3` |
+| metadata_idp († listed supplemental cases only) | simplesamlphp | `run_KDFJDGNQQCVFANEG53YYWYS4A1` | `build/acceptance/reference-20260917/simplesamlphp-native-parser-3` |
+| metadata_idp († listed supplemental cases only) | simplesamlphp | `run_KDFJDGNQQCVFANEG53YYWYS4A1` | `build/acceptance/reference-20260917/simplesamlphp-native-parser-3` |
+| metadata_idp († listed supplemental cases only) | simplesamlphp | `run_KDFJDGNQQCVFANEG53YYWYS4A1` | `build/acceptance/reference-20260917/simplesamlphp-native-parser-3` |
+| metadata_idp († listed supplemental cases only) | simplesamlphp | `run_KDFJDGNQQCVFANEG53YYWYS4A1` | `build/acceptance/reference-20260917/simplesamlphp-native-parser-3` |
 | metadata_idp | simplesamlphp | `run_YVZ8AB57K11T5XRZNEYVHMPQ1Z` | `interaction-followup/after/simplesamlphp/metadata_idp` |
 | ecp_idp († listed supplemental cases only) | keycloak | `run_B5BVZPZHA77V8B2SV0AKJZDJYC` | `build/acceptance/reference-20260915/algorithm-observation-batch/keycloak/ecp_idp` |
 | ecp_idp († listed supplemental cases only) | keycloak | `run_B05XBA5FYGXDV933K9PKA9X441` | `build/acceptance/reference-20260915/peer-intent/keycloak/ecp_alg` |

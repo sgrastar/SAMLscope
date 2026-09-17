@@ -145,7 +145,7 @@ public final class MetadataFixtureObservationTestCase
             var separator = value.indexOf(':');
             var kind = value.substring(0, separator);
             var variant = value.substring(separator + 1);
-            if ("signature-discrimination".equals(kind)) return false;
+            if ("signature-discrimination".equals(kind)) return observation.signatureDiscriminated().contains(variant);
             return "fetched".equals(kind)
                     ? observation.fetched().contains(variant)
                     : observation.used().contains(variant);
@@ -197,7 +197,10 @@ public final class MetadataFixtureObservationTestCase
         var used = new LinkedHashSet<String>();
         var wrongEndpoints = new LinkedHashSet<String>();
         var evidence = new ArrayList<EvidenceRef>();
-        for (var entry : context.transcript().list(context.runId())) {
+        var entries = context.transcript().list(context.runId());
+        var signature = MetadataSignatureObservation.observe(context.runId(), entries);
+        signature.evidence().stream().sorted().forEach(id -> evidence.add(new EvidenceRef("transcript", "transcript:" + id)));
+        for (var entry : entries) {
             if (entry.direction() != Direction.INBOUND) continue;
             if ("MetadataFetch".equals(entry.samlSummary().get("type"))) {
                 var variant = String.valueOf(entry.samlSummary().get("variant"));
@@ -216,6 +219,8 @@ public final class MetadataFixtureObservationTestCase
                 }
             }
             if (entry.decodedSamlBytes() <= 0 || entry.url() == null) continue;
+            if ("invalid".equals(entry.samlSummary().get("metadataSignatureControl"))
+                    || signature.invalidRequestIds().contains(String.valueOf(entry.samlSummary().get("inResponseTo")))) continue;
             if (!Boolean.TRUE.equals(entry.samlSummary().get("metadataProbeAccepted"))
                     || !"urn:oasis:names:tc:SAML:2.0:status:Success".equals(
                             entry.samlSummary().get("statusCode"))) continue;
@@ -248,8 +253,11 @@ public final class MetadataFixtureObservationTestCase
                 "wrong_endpoint_variants", List.copyOf(wrongEndpoints),
                 "transcript_complete", context.transcriptComplete()));
         if (requiresKeyValueDiscrimination()) {
-            details.put("missing_key_consumption_evidence", List.of("signature-discrimination:keyvalue-only"));
+            details.put("missing_key_consumption_evidence", signature.verified().contains("keyvalue-only")
+                    ? List.of() : List.of("signature-discrimination:keyvalue-only"));
         }
+        details.put("signature_discriminated_variants", signature.verified().stream().sorted().toList());
+        details.put("invalid_signature_accepted_variants", signature.acceptedInvalid().stream().sorted().toList());
         var allFetched = fixtures.stream().allMatch(value -> fetched.contains(value.variant()));
         var acceptedObserved = fixtures.stream()
                 .filter(value -> value.behavior() == Behavior.ACCEPT)
@@ -263,15 +271,15 @@ public final class MetadataFixtureObservationTestCase
         return new Observation(
                 fetched.contains(CONTROL) && used.contains(CONTROL)
                         && allFetched && conclusive && context.transcriptComplete()
-                        && !requiresKeyValueDiscrimination(),
-                fetched, used, wrongEndpoints, distinct(evidence), details);
+                        && (!requiresKeyValueDiscrimination() || signature.verified().contains("keyvalue-only")),
+                fetched, used, wrongEndpoints, signature.verified(), distinct(evidence), details);
     }
 
     private boolean requiresKeyValueDiscrimination() {
         // A native importer may silently disable signature validation when it cannot
         // import KeyValue. Successful SSO then proves neither key import nor use.
-        // The current transcript contract has no correlated invalid-signature control;
-        // keep these cases incomplete until that evidence path is implemented.
+        // Require a Suite-issued invalid control and normal request in the same campaign
+        // member; a missing response or externally submitted assertion is not enough.
         return fixtures.stream().anyMatch(fixture -> "keyvalue-only".equals(fixture.variant()));
     }
 
@@ -305,6 +313,7 @@ public final class MetadataFixtureObservationTestCase
             Set<String> fetched,
             Set<String> used,
             Set<String> wrongEndpoints,
+            Set<String> signatureDiscriminated,
             List<EvidenceRef> evidence,
             Map<String, Object> details) {}
 }
