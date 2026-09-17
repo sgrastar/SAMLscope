@@ -13,6 +13,14 @@ def verify(folder, variant):
         assert imported['fixture_sha256'] == digest
         assert imported['restored'] and imported['configuration_read_back']
         assert hashlib.sha256((path / 'parser-output.json').read_bytes()).hexdigest() == imported['parser_output_sha256']
+    elif imported.get('import_path') == 'native-filesystem-provider':
+        assert imported['product'] == 'shibboleth'
+        assert imported['fixture_sha256'] == digest
+        assert imported['configuration_read_back'] and imported['provider_reloaded'] and imported['restored']
+        restoration = json.loads((folder / 'restoration.json').read_text())
+        assert restoration['restored'] and restoration['temporary_file_removed']
+        assert restoration['original_sha256'] == restoration['final_sha256']
+        assert hashlib.sha256((folder / 'original-providers.xml').read_bytes()).hexdigest() == restoration['original_sha256']
     else:
         assert imported['fixture']['sha256'] == digest
         assert imported['import']['save_clicked']

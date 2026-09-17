@@ -570,7 +570,7 @@ def render(root,definitions,output):
             from verify_shared_gcm_batch import verify as verify_shared_gcm
             selected=verify_shared_gcm(root.parent.parent/'reference-20260918',
                 128 if row['case']=='IIP-ALG04-a-idp-01' else 256)
-        if row['product'] in {'simplesamlphp','keycloak'} and row['profile']=='metadata_idp' and row['case'] in {
+        if row['product'] in {'simplesamlphp','keycloak','shibboleth'} and row['profile']=='metadata_idp' and row['case'] in {
                 'IIP-MD05-ea-idp-01','IIP-MD05-eb-idp-01'}:
             from verify_metadata_algorithm_outcomes import verify as verify_algorithm_outcomes
             selected=verify_algorithm_outcomes(root.parent.parent/'reference-20260918',row['product'])

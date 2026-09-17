@@ -13,9 +13,9 @@ def load(folder, name):
 
 def verify(root, product='simplesamlphp'):
     root = Path(root)
-    assert product in {'simplesamlphp', 'keycloak'}
-    folder = root / ('algorithm-oracle-evaluation' if product == 'simplesamlphp' else 'keycloak-algorithm-evaluation')
-    source = root / ('simplesamlphp-algorithm-recorded-metadata' if product == 'simplesamlphp' else 'keycloak-algorithm-metadata')
+    assert product in {'simplesamlphp', 'keycloak', 'shibboleth'}
+    folder = root / ('algorithm-oracle-evaluation' if product == 'simplesamlphp' else product + '-algorithm-evaluation')
+    source = root / ('simplesamlphp-algorithm-recorded-metadata' if product == 'simplesamlphp' else product + '-algorithm-metadata')
     result = load(folder, 'result.json')
     original = load(source, 'result.json')
     run = result['run']['id']
@@ -43,6 +43,11 @@ def verify(root, product='simplesamlphp'):
         'IIP-MD05-ea-idp-01': ('NOT_VERIFIED', 'metadata.algorithms.local-policy-unverified'),
         'IIP-MD05-eb-idp-01': ('FAIL', 'metadata.algorithms.role-precedence-violated'),
     }
+    if product == 'shibboleth':
+        expected = {
+            'IIP-MD05-ea-idp-01': ('PASS', 'metadata.algorithms.first-supported-observed'),
+            'IIP-MD05-eb-idp-01': ('PASS', 'metadata.algorithms.role-precedence-observed'),
+        }
     for case_id in CASES:
         case = cases[case_id]
         assert (case['verdict'], case['reason_code']) == expected[case_id]
@@ -66,8 +71,12 @@ def verify(root, product='simplesamlphp'):
             assert any(p in evidence for p in prepared[variant]['prepared_entries'])
         assert all(entries[e]['runId'] == run for e in evidence)
     mismatches = load(folder, 'IIP-MD05-eb-idp-01-configure.json')['outcome']['details']['selection_mismatches']
-    assert 'algorithm-role-signing-384:outside-effective-list' in mismatches
-    assert 'algorithm-role-digest-384:outside-effective-list' in mismatches
+    if product == 'shibboleth':
+        assert not mismatches
+        assert not load(folder, 'IIP-MD05-ea-idp-01-configure.json')['outcome']['details']['selection_mismatches']
+    else:
+        assert 'algorithm-role-signing-384:outside-effective-list' in mismatches
+        assert 'algorithm-role-digest-384:outside-effective-list' in mismatches
     return folder / 'result.json', cases
 
 
