@@ -32,6 +32,10 @@ public final class SamlSubjectPrincipalCase {
         for (var message : messages) {
             try {
                 var document = SecureXml.parse(message.xml());
+                var opaque = document.getElementsByTagNameNS(ASSERTION, "EncryptedAssertion");
+                for (var index = 0; index < opaque.getLength(); index++) {
+                    unknown.add(new EvidenceRef("transcript", message.evidenceRef() + "#EncryptedAssertion[" + index + "]"));
+                }
                 var nodes = document.getElementsByTagNameNS(ASSERTION, "Subject");
                 for (var index = 0; index < nodes.getLength(); index++) {
                     subjects++;

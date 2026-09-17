@@ -97,7 +97,8 @@ public final class EncryptionAlgorithmBrowserEvidenceTestCase
 
     private List<EncryptionAlgorithmObservation.Observation> transcriptObservations(CaseContext context) {
         var key = decryptionKeys.keyFor(context.runId()).orElse(null);
-        if (key == null) return List.of();
+        var sharedKey = decryptionKeys.sharedKeyFor(context.runId()).orElse(null);
+        if (key == null && sharedKey == null) return List.of();
         var requests = new LinkedHashMap<String, TranscriptEntry>();
         var byCorrelation = new LinkedHashMap<String, TranscriptEntry>();
         for (var entry : context.transcript().list(context.runId())) {
@@ -139,7 +140,7 @@ public final class EncryptionAlgorithmBrowserEvidenceTestCase
             var wrappers = document.getElementsByTagNameNS(EncryptionAlgorithmObservation.ASSERTION, "EncryptedAssertion");
             for (var index = 0; index < wrappers.getLength(); index++) {
                 var wrapper = (Element) wrappers.item(index);
-                var decrypted = decrypted(wrapper, key);
+                var decrypted = decrypted(wrapper, key, sharedKey);
                 observations.add(EncryptionAlgorithmObservation.inspect(
                         new EvidenceRef("transcript", request.id()),
                         new EvidenceRef("transcript", entry.id()), wrapper, decrypted));
@@ -160,13 +161,16 @@ public final class EncryptionAlgorithmBrowserEvidenceTestCase
         }
     }
 
-    private boolean decrypted(Element wrapper, java.security.PrivateKey key) {
-        try {
-            decrypter.decrypt(wrapper, key);
-            return true;
-        } catch (SamlException unavailable) {
-            return false;
+    private boolean decrypted(Element wrapper, java.security.PrivateKey key, javax.crypto.SecretKey sharedKey) {
+        if (key != null) {
+            try { decrypter.decrypt(wrapper, key); return true; }
+            catch (SamlException unavailable) { /* A supplied Run shared key may be the direct data key. */ }
         }
+        if (sharedKey != null) {
+            try { decrypter.decryptSharedKey(wrapper, sharedKey); return true; }
+            catch (SamlException unavailable) { return false; }
+        }
+        return false;
     }
 
     private static String firstAttribute(Element root, String namespace, String localName, String attribute) {

@@ -14,15 +14,25 @@ public final class SamlXmlDecrypter implements SamlElementDecrypter {
     static { Init.init(); }
 
     @Override public Element decrypt(Element encryptedWrapper, PrivateKey privateKey) {
-        if (encryptedWrapper == null) throw new IllegalArgumentException("encryptedWrapper is required");
         if (privateKey == null) throw new IllegalArgumentException("privateKey is required");
+        return decryptWithKey(encryptedWrapper, privateKey, false);
+    }
+
+    @Override public Element decryptSharedKey(Element encryptedWrapper, javax.crypto.SecretKey key) {
+        if (key == null || !"AES".equalsIgnoreCase(key.getAlgorithm()))
+            throw new IllegalArgumentException("An AES shared key is required");
+        return decryptWithKey(encryptedWrapper, key, true);
+    }
+
+    private Element decryptWithKey(Element encryptedWrapper, java.security.Key key, boolean shared) {
+        if (encryptedWrapper == null) throw new IllegalArgumentException("encryptedWrapper is required");
         try {
             var isolated = isolate(encryptedWrapper);
             var encryptedData = encryptedData(isolated.getDocumentElement());
             var cipher = XMLCipher.getInstance();
             cipher.setSecureValidation(true);
-            cipher.init(XMLCipher.DECRYPT_MODE, null);
-            cipher.setKEK(privateKey);
+            cipher.init(XMLCipher.DECRYPT_MODE, shared ? key : null);
+            if (!shared) cipher.setKEK(key);
             cipher.doFinal(isolated, encryptedData);
             var plaintext = firstElementChild(isolated.getDocumentElement());
             if (plaintext == null) throw new SamlException("Decryption produced no element");

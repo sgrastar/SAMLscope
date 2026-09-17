@@ -557,6 +557,14 @@ def render(root,definitions,output):
         if row['product']=='keycloak' and row['profile']=='browser_sso_idp' and row['case']=='IIP-IDP12-c-idp-01':
             from audit_keycloak_default_acs import verify as verify_keycloak_acs
             selected=verify_keycloak_acs(root.parent.parent/'reference-20260918')
+        if row['product']=='simplesamlphp' and row['profile']=='browser_sso_idp' and row['case']=='IIP-SSO01-cz-idp-01':
+            path=root.parent.parent/'reference-20260918/simplesamlphp-opaque-principal-control/result.json'
+            result=json.loads(path.read_text())
+            cases={c['id']:c for req in result['requirements'] for c in req['cases']}
+            case=cases[row['case']]
+            assert (case['verdict'],case['reason_code'])==('NOT_VERIFIED','saml.subject-principal.undetermined')
+            assert cases['IIP-ALG06-a-idp-01']['reason_code']=='browser.encryption.rsa-oaep-mgf1p.decrypted'
+            selected=(path,cases)
         if selected is not None:
             path, selected_cases = selected
             raw=path.read_bytes(); result=json.loads(raw); case=selected_cases[row['case']]
@@ -608,6 +616,8 @@ def render(root,definitions,output):
             row['individual_diagnosis']='keycloak-decryption-keys/diagnosis.json'
         if row['product']=='shibboleth' and row['profile']=='browser_sso_idp' and row['case'] in {'IIP-SSO05-a-idp-01','IIP-SSO05-a2-idp-01'}:
             row['next_action']='persistent NameIDの成功応答が必要。IdPのpersistentId生成（saml-nameid.properties）を一時有効化して2回再試験したが、要求内のSubjectをcanonicalizeするflowがなくSubjectCanonicalizationErrorで拒否された。c14n設定を含む前提の整備後に再試験する。試行と復元はshib-config/diagnosis.jsonに記録。'
+        if row['product']=='simplesamlphp' and row['profile']=='browser_sso_idp' and row['case']=='IIP-SSO01-cz-idp-01':
+            row['next_action']='未復号EncryptedAssertionをSubject不在として成功にしない修正を実測済み。principal判定へ復号済み内容を安全に渡し、SubjectConfirmation・属性を含む識別子を認証principalへ意味的に対応付ける証拠が必要。'
         indexed[row['case']].append(row)
     assert sum(counts.values())==len(rows)
     (root/'implementation-audit.json').write_text(json.dumps(implementations,ensure_ascii=False,indent=2)+'\n')

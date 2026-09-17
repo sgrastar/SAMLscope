@@ -142,6 +142,7 @@ approved variant全体の入力生成と観測を実装する。追加ログイ�
 | `IIP-MD12-b-idp-01` | Not verified（今回の再試験対象外） | Not verified（今回の再試験対象外） | Success |
 | `IIP-MD12-c-idp-01` | Success | Not verified（今回の再試験対象外） | Success |
 | `IIP-MD12-d-idp-01` | Not verified（今回の再試験対象外） | Not verified（今回の再試験対象外） | Success |
+| `IIP-SSO01-cz-idp-01` | Not verified（今回の再試験対象外） | Not verified（今回の再試験対象外） | Not verified: saml.subject-principal.undetermined |
 | `IIP-SSO01-g-idp-01` | Success | Success | Not verified（今回の再試験対象外） |
 | `IIP-SSO01-k-idp-01` | Not verified（今回の再試験対象外） | Success | Not verified（今回の再試験対象外） |
 | `IIP-SSO01-z-idp-01` | Warning | Warning | Not verified（今回の再試験対象外） |

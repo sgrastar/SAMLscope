@@ -190,7 +190,7 @@ Chromeと承認のブロックを解除するだけでは解消しません。�
 | `IIP-SSO01-cm-idp-01` | Warning | Warning | Success |
 | `IIP-SSO01-cn-idp-01` | Warning | Warning | Success |
 | `IIP-SSO01-cy-idp-01` | Success | Success | Success |
-| `IIP-SSO01-cz-idp-01` | Warning | Warning | Not verified |
+| `IIP-SSO01-cz-idp-01` | Warning | Warning | Not verified † |
 | `IIP-SSO01-d-idp-01` | Not verified | Success | Not verified |
 | `IIP-SSO01-da-idp-01` | Warning | Warning | Warning |
 | `IIP-SSO01-db-idp-01` | Warning | Warning | Success |
@@ -562,6 +562,7 @@ Chromeと承認のブロックを解除するだけでは解消しません。�
 | browser_sso_idp († listed supplemental cases only) | simplesamlphp | `run_VRW5T0M31JGT71ZG6MR1JF92PJ` | `build/acceptance/reference-20260915/peer-intent/simplesamlphp/browser_alg_enc` |
 | browser_sso_idp († listed supplemental cases only) | simplesamlphp | `run_KXN09QNRGAKBGY31S8AHJZKHNA` | `build/acceptance/reference-20260914/literal-integrated-implementation/simplesamlphp/browser_sso_idp` |
 | browser_sso_idp († listed supplemental cases only) | simplesamlphp | `run_TS5JTACXSDMGB9PE8Z9ZS2MP5K` | `build/acceptance/reference-20260914/additional-implementation/simplesamlphp/browser_sso_idp` |
+| browser_sso_idp († listed supplemental cases only) | simplesamlphp | `run_NXTAXWN71DEJF02ZNAQXS4AZA8` | `build/acceptance/reference-20260918/simplesamlphp-opaque-principal-control` |
 | browser_sso_idp († listed supplemental cases only) | simplesamlphp | `run_XA01CQ82M03JJQ5JNECA47XFFQ` | `build/acceptance/reference-20260914/crypto-integrated-implementation/simplesamlphp/browser_sso_idp` |
 | browser_sso_idp († listed supplemental cases only) | simplesamlphp | `run_K811HY2DMZWV52HTT82251AVFZ` | `build/acceptance/reference-20260915/algorithm-observation-batch/simplesamlphp/browser_sso_idp` |
 | browser_sso_idp († listed supplemental cases only) | simplesamlphp | `run_K811HY2DMZWV52HTT82251AVFZ` | `build/acceptance/reference-20260915/algorithm-observation-batch/simplesamlphp/browser_sso_idp` |
