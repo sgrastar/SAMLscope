@@ -16,7 +16,7 @@ public final class MetadataAlgorithmConfigurationTestCase implements TestCase,Co
         this.fallback=Objects.requireNonNull(fallback);this.content=Objects.requireNonNull(content);this.metadata=Objects.requireNonNull(metadata);
         if(!supports(fallback.id()))throw new IllegalArgumentException("Unsupported metadata algorithm case");
     }
-    static boolean supports(String id) { return MetadataAlgorithmSelection.ORDER.equals(id)||MetadataAlgorithmSelection.ROLE.equals(id); }
+    static boolean supports(String id) { return MetadataAlgorithmSelection.ORDER.equals(id)||MetadataAlgorithmSelection.ROLE.equals(id)||MetadataAlgorithmSelection.SEQUENTIAL.equals(id); }
     @Override public boolean requiresPreparationConfirmation() { return true; }
     @Override public String id() { return fallback.id(); }
     @Override public TargetRole role() { return fallback.role(); }

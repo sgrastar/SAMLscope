@@ -69,7 +69,7 @@ final class TargetMetadataObservation {
                 || suffix(caseId, "d5") || suffix(caseId, "d6") || suffix(caseId, "d7")
                 || suffix(caseId, "d8") || suffix(caseId, "d9")
                 || suffix(caseId, "e1") || suffix(caseId, "e2") || suffix(caseId, "e3")
-                || suffix(caseId, "e4") || suffix(caseId, "e6") || suffix(caseId, "ed")
+                || suffix(caseId, "e4") || idpSuffix(caseId, "e5") || suffix(caseId, "e6") || suffix(caseId, "ed")
                 || suffix(caseId, "ec") || suffix(caseId, "f1") || suffix(caseId, "f2")
                 || suffix(caseId, "f3") || suffix(caseId, "f4") || suffix(caseId, "fk")
                 || idpSuffix(caseId, "f7") || suffix(caseId, "f8") || suffix(caseId, "fa")
@@ -89,6 +89,7 @@ final class TargetMetadataObservation {
             return publishedUiGuidance(caseId, document, evidence);
         }
         if (idpSuffix(caseId, "ae")) return uniquePublishedSigningKey(document, evidence);
+        if (idpSuffix(caseId, "e5")) return encryptionPreferenceAntecedent(document, evidence);
         if (suffix(caseId, "a3")) return Optional.of(extensionNamespaces(document, evidence));
         if (suffix(caseId, "a6")) return Optional.of(rootOnlyExpiration(document, evidence));
         if (suffix(caseId, "a7")) return Optional.of(roleOverlap(document, evidence));
@@ -168,6 +169,37 @@ final class TargetMetadataObservation {
         return Optional.of(result(Outcome.SATISFIED_WITH_NOTE,
                 "metadata.publisher.signing-key-unambiguous", evidence,
                 Map.of("distinct_signing_keys", 1, "role", "IDPSSODescriptor")));
+    }
+
+    /** The approved e5 control explicitly satisfies zero/singleton groups; multiple choices still need execution. */
+    private static Optional<CaseOutcome> encryptionPreferenceAntecedent(
+            Document document, List<EvidenceRef> evidence) {
+        var root = document.getDocumentElement();
+        if (!MD.equals(root.getNamespaceURI()) || !"EntityDescriptor".equals(root.getLocalName())
+                || root.getAttribute("entityID").isBlank()) return Optional.empty();
+        var roles = directElements(root, MD, "IDPSSODescriptor");
+        if (roles.isEmpty()) return Optional.empty();
+        int descriptors = 0;
+        for (var role : roles) {
+            if (!List.of(role.getAttribute("protocolSupportEnumeration").split("\\s+")).contains(SAML2)) return Optional.empty();
+            for (var key : directElements(role, MD, "KeyDescriptor")) {
+                if ("signing".equals(key.getAttribute("use"))) continue;
+                if (!key.getAttribute("use").isEmpty() && !"encryption".equals(key.getAttribute("use"))) return Optional.empty();
+                descriptors++;
+                int data = 0, transport = 0;
+                for (var method : directElements(key, MD, "EncryptionMethod")) {
+                    var algorithm = method.getAttribute("Algorithm");
+                    if (DATA_ENCRYPTION.contains(algorithm)) data++;
+                    else if (KEY_TRANSPORT_OR_AGREEMENT.contains(algorithm)) transport++;
+                    else return Optional.empty(); // Unknown types cannot establish singleton groups.
+                }
+                if (data > 1 || transport > 1) return Optional.empty();
+            }
+        }
+        return Optional.of(result(Outcome.SATISFIED, "metadata.publisher.encryption-preference-antecedent-false",
+                evidence, Map.of("encryption_key_descriptors", descriptors,
+                        "multiple_algorithms_of_same_type", false,
+                        "scope", "published-metadata-snapshot")));
     }
 
     private static Optional<CaseOutcome> publishedUiGuidance(

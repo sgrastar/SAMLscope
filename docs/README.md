@@ -149,3 +149,5 @@ not by differences in reference-implementation results ([00 §5](00-concept.md))
 - [Keycloakへのアルゴリズム選択試験の展開](46-keycloak-algorithm-oracle.md)
 
 - [Shibbolethのネイティブ読込経路と方式選択の実証](47-shibboleth-native-algorithm-batch.md)
+
+- [未対応方式のスキップと暗号方式順序の条件判定](48-algorithm-order-followup.md)

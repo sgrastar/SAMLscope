@@ -23,6 +23,20 @@ class MetadataAlgorithmSelectionTest {
         var unknown=MetadataAlgorithmSelection.evaluate(MetadataAlgorithmSelection.ORDER,fixed,List.of());
         assertEquals(Outcome.NOT_VERIFIED,unknown.outcome());assertEquals("metadata.algorithms.local-policy-unverified",unknown.reasonCode());
     }
+    @Test void sequentialSelectionMustSkipUnsupportedAndProveBothSupportedOrders() {
+        var id=MetadataAlgorithmSelection.SEQUENTIAL;
+        var unconditionalFirst=correct(id);
+        assertEquals(Outcome.NOT_VERIFIED,MetadataAlgorithmSelection.evaluate(id,unconditionalFirst,List.of()).outcome());
+        var samples=unconditionalFirst.stream().map(s->!s.variant().equals("algorithm-unsupported-first")?s:
+            new MetadataAlgorithmSelection.Sample(s.campaign(),s.variant(),s.advertised(),List.of(
+                new MetadataAlgorithmSelection.Methods(List.of(MetadataAlgorithmSelection.D256),List.of(MetadataAlgorithmSelection.S256))),s.evidence())).toList();
+        assertEquals(Outcome.SATISFIED,MetadataAlgorithmSelection.evaluate(id,samples,List.of()).outcome());
+        assertEquals(Outcome.NOT_VERIFIED,MetadataAlgorithmSelection.evaluate(id,
+            samples.stream().filter(s->!s.variant().equals("algorithm-unsupported-first")).toList(),List.of()).outcome());
+        var fixed=samples.stream().map(s->new MetadataAlgorithmSelection.Sample(s.campaign(),s.variant(),s.advertised(),List.of(
+            new MetadataAlgorithmSelection.Methods(List.of(MetadataAlgorithmSelection.D256),List.of(MetadataAlgorithmSelection.S256))),s.evidence())).toList();
+        assertEquals(Outcome.NOT_VERIFIED,MetadataAlgorithmSelection.evaluate(id,fixed,List.of()).outcome());
+    }
     @Test void roleOverridesArePerAlgorithmTypeAndCannotMergeEntityLists() {
         var samples=correct(MetadataAlgorithmSelection.ROLE);
         assertEquals(Outcome.SATISFIED,MetadataAlgorithmSelection.evaluate(MetadataAlgorithmSelection.ROLE,samples,List.of()).outcome());

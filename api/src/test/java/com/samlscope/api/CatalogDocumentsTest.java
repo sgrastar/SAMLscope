@@ -235,13 +235,13 @@ class CatalogDocumentsTest {
         var questionnaireFree = automated + browserActions + conclusiveAttested + conclusiveConfig;
 
         assertEquals(413, totalIdpFull);
-        assertEquals(244, conclusive,
+        assertEquals(246, conclusive,
                 "Update this explicit IDP Full automatic-oracle inventory when an oracle changes: automated="
                         + automated + ", browser=" + conclusiveBrowser + ", attested="
                         + conclusiveAttested + ", config=" + conclusiveConfig);
         assertTrue(conclusive * 2 > totalIdpFull,
                 "At least half of IDP Full must conclude without an operator-supplied verdict");
-        assertEquals(288, questionnaireFree,
+        assertEquals(290, questionnaireFree,
                 "Update this explicit IDP Full no-questionnaire inventory when an interaction changes");
     }
 

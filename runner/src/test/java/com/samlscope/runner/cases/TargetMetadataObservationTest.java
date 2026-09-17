@@ -23,6 +23,26 @@ class TargetMetadataObservationTest {
     @TempDir java.nio.file.Path directory;
 
     @Test
+    void encryptionPreferenceAntecedentRequiresZeroOrOnePerTypeWithinEachKey() {
+        var id = "IIP-MD05-e5-idp-01";
+        var data = "<md:EncryptionMethod Algorithm='http://www.w3.org/2001/04/xmlenc#aes128-cbc'/>";
+        var transport = "<md:EncryptionMethod Algorithm='http://www.w3.org/2001/04/xmlenc#rsa-oaep-mgf1p'/>";
+        var role = "<md:IDPSSODescriptor protocolSupportEnumeration='" + SAML2 + "'>%s</md:IDPSSODescriptor>";
+        for (var keys : List.of("", "<md:KeyDescriptor/>", "<md:KeyDescriptor>" + data + transport + "</md:KeyDescriptor>",
+                "<md:KeyDescriptor>" + data + "</md:KeyDescriptor><md:KeyDescriptor>" + data + "</md:KeyDescriptor>")) {
+            assertOutcome(id, Outcome.SATISFIED, metadata(role.formatted(keys)));
+        }
+        for (var methods : List.of(data + data, transport + transport,
+                "<md:EncryptionMethod Algorithm='urn:unknown'/>", "<md:EncryptionMethod/>")) {
+            assertTrue(TargetMetadataObservation.evaluate(id,
+                    metadata(role.formatted("<md:KeyDescriptor>" + methods + "</md:KeyDescriptor>")), NOW).isEmpty());
+        }
+        assertTrue(TargetMetadataObservation.evaluate(id, metadata(""), NOW).isEmpty());
+        assertTrue(TargetMetadataObservation.evaluate(id, metadata("<md:SPSSODescriptor/>"), NOW).isEmpty());
+        assertTrue(TargetMetadataObservation.evaluate(id, metadata("<md:IDPSSODescriptor/>"), NOW).isEmpty());
+    }
+
+    @Test
     void aSingleSigningKeyMakesIdentificationUnambiguousButUnknownCandidatesDoNot() throws Exception {
         var cert = certificate();
         var key = "<md:KeyDescriptor use='signing'><ds:KeyInfo><ds:X509Data><ds:X509Certificate>"
