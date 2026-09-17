@@ -19,7 +19,7 @@ ADOPTED = dict(COMMON, **{
         'certificate-no-digital-signature','certificate-unrelated-eku','certificate-empty-subject','certificate-unknown-ca','entity-root'],
 })
 
-def verify(root, *, folder="simplesamlphp-native-parser-3", adopted=None):
+def verify(root, *, folder="simplesamlphp-native-parser-3", adopted=None, require_signature_control=True):
     adopted = ADOPTED if adopted is None else adopted
     final=Path(root)/folder
     path=final/'result.json';result=json.loads(path.read_text());run=result['run']['id']
@@ -40,9 +40,10 @@ def verify(root, *, folder="simplesamlphp-native-parser-3", adopted=None):
             assert hashlib.sha256((folder/'parser-output.json').read_bytes()).hexdigest()==data['parser_output_sha256']
             flow=json.loads((folder/'flow.json').read_text())
             assert flow['run']==run and flow['variant']==variant and flow['correlated_success']
-            negative=flow['negative_control']
-            assert negative['source']=='suite' and negative['correlated_success'] is False
-            assert negative['receipt']=='no-response:HTTP-500'
+            if require_signature_control:
+                negative=flow['negative_control']
+                assert negative['source']=='suite' and negative['correlated_success'] is False
+                assert negative['receipt']=='no-response:HTTP-500'
             exchange=flow['positive_exchange'];assert exchange['success']
             refs=exchange['transcript_ids'];assert len(refs)>=2
             issued=entries[refs[0]]

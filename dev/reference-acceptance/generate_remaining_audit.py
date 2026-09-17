@@ -19,6 +19,14 @@ GROUPS = {
 
 # Current code can supersede an old interaction mode without superseding its verdict.
 IMPLEMENTATION_UPDATES = {
+    'IIP-MD05-a3-idp-01': {
+        'source_marker': 'id.startsWith("IIP-MD05-a3-")',
+        'category': 'metadata_evidence',
+        'source': 'runner/src/main/java/com/samlscope/runner/cases/MetadataFixtureObservationTestCase.java',
+        'registry': 'runner/src/main/java/com/samlscope/runner/cases/MetadataConfigCaseFactory.java',
+        'registration': 'Map.entry("IIP-MD05.a3",',
+        'next_action': 'Organization・ContactPerson・AffiliationDescriptorの入力とOrganization/Extensions負の対照を追加済み。入力受理と名前空間修飾義務を分離し、受理だけで製品FAILにしない。公開・設定した拡張点の名前空間を直接確認する経路が必要。',
+    },
     'IIP-IDP19-b-idp-01': {
         'category': 'configuration_evidence',
         'source': 'runner/src/main/java/com/samlscope/runner/cases/MultipleDecryptionKeysConfigurationTestCase.java',
@@ -161,7 +169,7 @@ def implementation_audit():
     for case_id, update in IMPLEMENTATION_UPDATES.items():
         source = Path(update['source']).read_bytes()
         registry = Path(update['registry']).read_bytes()
-        if update['registration'] not in registry.decode() or case_id not in source.decode():
+        if update['registration'] not in registry.decode() or update.get('source_marker', case_id) not in source.decode():
             raise ValueError(f'Implementation registration needs re-audit: {case_id}')
         result[case_id] = dict(update, source_sha256=hashlib.sha256(source).hexdigest(),
                               registry_sha256=hashlib.sha256(registry).hexdigest())
@@ -519,6 +527,20 @@ def render(root,definitions,output):
             selected = verify_ssp_import(root.parent.parent/'reference-20260918',
                 folder='simplesamlphp-aggregate-import', adopted={
                     'IIP-MD02-d-idp-01': ['entities-root-one','entities-root-two','entities-root-fifty']})
+        if row['product']=='simplesamlphp' and row['profile']=='browser_sso_idp' and row['case']=='IIP-IDP12-c-idp-01':
+            from verify_default_acs_batch import verify as verify_default_acs
+            selected = verify_default_acs(root.parent.parent/'reference-20260918')
+        if row['product']=='simplesamlphp' and row['profile']=='metadata_idp' and row['case']=='IIP-MD05-a3-idp-01':
+            path=root.parent.parent/'reference-20260918/simplesamlphp-extension-points-corrected/result.json'
+            result=json.loads(path.read_text())
+            cases={c['id']:c for req in result['requirements'] for c in req['cases']}
+            assert cases[row['case']]['verdict']=='NOT_VERIFIED'
+            protocol=json.loads((path.parent/'protocol-evidence.json').read_text())
+            observed=next(c for c in protocol['cases'] if c['caseId']==row['case'])
+            assert not observed['ready']
+            assert observed['details']['consumer_acceptance_proves_namespace_qualification'] is False
+            assert observed['details']['missing_namespace_qualification_evidence']==['extension-points']
+            selected=(path,cases)
         if selected is not None:
             path, selected_cases = selected
             raw=path.read_bytes(); result=json.loads(raw); case=selected_cases[row['case']]

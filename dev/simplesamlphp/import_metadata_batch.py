@@ -36,6 +36,7 @@ def main():
     p=argparse.ArgumentParser(description=__doc__)
     p.add_argument('--output',type=pathlib.Path,required=True)
     p.add_argument('--variants',required=True)
+    p.add_argument('--profile', choices=['metadata_idp','browser_sso_idp'], default='metadata_idp')
     args=p.parse_args();out=args.output.resolve()
     if out.exists() and any(out.iterdir()):raise ValueError('Evidence directory must be empty')
     out.mkdir(parents=True,exist_ok=True)
@@ -44,7 +45,7 @@ def main():
     config=REPO/'build/acceptance/reference-20260914/ssp-config/saml20-sp-remote.php'
     original=config.read_bytes()
     if b'?>' in original:raise ValueError('Unexpected PHP closing tag')
-    created=api('/api/plans',dict(name='SimpleSAMLphp native metadata parser batch',profile='metadata_idp',
+    created=api('/api/plans',dict(name='SimpleSAMLphp native metadata parser batch',profile=args.profile,
         targetKind='IDP',targetEntityId='http://localhost:18380/idp',metadataSourceKind='URL',
         metadataSourceLocation='http://samlscope-reference-ssp/simplesaml/module.php/saml/idp/metadata',
         suiteMetadataDelivery='HTTP_URL',declaredFeatures={},parameters=dict(clockSkewToleranceSeconds=180,
@@ -83,7 +84,12 @@ def main():
                 # two-second revalidation interval. Let Apache observe each new PHP file.
                 time.sleep(3)
                 record['configuration_settle_seconds']=3
-                flow(run,folder/'flow.json',suite_signature_control=True)
+                # Default-ACS requests deliberately omit destination-selection attributes.
+                # Their control is the observed destination change after changing metadata;
+                # the API's separate signature mutant currently supports ordinary requests only.
+                signature_control = not variant.startswith('default-acs-')
+                record['signature_control_requested'] = signature_control
+                flow(run,folder/'flow.json',suite_signature_control=signature_control)
                 record['status']='success'
             except Exception as error:
                 record['reason']=str(error)

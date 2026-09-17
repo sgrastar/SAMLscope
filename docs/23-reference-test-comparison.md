@@ -79,13 +79,13 @@ Shibbolethの`IIP-SSO01-fk/fu/gi`は、v8では事前生成された正常系要
 
 ## Not verifiedの内訳
 
-以下は表に採用したケース結果の延べ490件。†のケースは新Runの追加証拠を採用し、それ以外の既存証拠は保持しています。単一Runの集計や全試験の再完走を意味しません。比較表で設定不足として扱い直した旧FAILは、このNOT_VERIFIED集計には含めません。
+以下は表に採用したケース結果の延べ489件。†のケースは新Runの追加証拠を採用し、それ以外の既存証拠は保持しています。単一Runの集計や全試験の再完走を意味しません。比較表で設定不足として扱い直した旧FAILは、このNOT_VERIFIED集計には含めません。
 
 | 理由 | Keycloak | Shibboleth IdP | SimpleSAMLphp | 解消に必要なこと |
 |---|---:|---:|---:|---|
 | `case.pending-interaction` | 98 | 89 | 100 | 設定・受信待ちに加え、判定処理未実装の経路を含む。全件台帳を参照 |
 | `attestation.interaction-disallowed` | 25 | 25 | 25 | 自己申告を無効にした構成。確認せずに申告を代行しない |
-| `browser_fixture_partial` | 20 | 21 | 20 | 一部の試験だけ実行。残るvariantの証拠が不足 |
+| `browser_fixture_partial` | 20 | 21 | 19 | 一部の試験だけ実行。残るvariantの証拠が不足 |
 | `idp.signed-request.inconclusive` | 7 | 1 | 7 | 当該ケースの応答・対象設定・正常系対照を追加確認 |
 | `idp.acs-probe.inconclusive` | 3 | 3 | 1 | 当該ケースの応答・対象設定・正常系対照を追加確認 |
 | `request.signing.unavailable` | 3 | 0 | 3 | 署名必須構成でSuiteが当該要求を署名できない |
@@ -163,7 +163,7 @@ Chromeと承認のブロックを解除するだけでは解消しません。�
 | `IIP-IDP11-a-idp-01` | Not verified | Not verified | Not verified |
 | `IIP-IDP12-a-idp-01` | Not verified (Configuration) [C1] | Success | Success |
 | `IIP-IDP12-b-idp-01` | Not verified | Not verified | Success |
-| `IIP-IDP12-c-idp-01` | Not verified | Success † | Not verified |
+| `IIP-IDP12-c-idp-01` | Not verified | Success † | Success † |
 | `IIP-IDP12-d-idp-01` | Success | Not verified | Success |
 | `IIP-IDP12-e-idp-01` | Not verified | Success | Success |
 | `IIP-IDP12-f-idp-01` | Not verified | Not verified | Not verified |
@@ -313,7 +313,7 @@ Chromeと承認のブロックを解除するだけでは解消しません。�
 | `IIP-MD05-a-idp-01` | Not verified | Not verified | Not verified |
 | `IIP-MD05-a1-idp-01` | Not verified | Not verified | Not verified |
 | `IIP-MD05-a2-idp-01` | Not verified | Not verified | Not verified |
-| `IIP-MD05-a3-idp-01` | Not verified | Not verified | Not verified |
+| `IIP-MD05-a3-idp-01` | Not verified | Not verified | Not verified † |
 | `IIP-MD05-a4-idp-01` | Success † | Success | Success † |
 | `IIP-MD05-a5-idp-01` | Success † | Success | Success † |
 | `IIP-MD05-a6-idp-01` | Success | Success | Success |
@@ -571,6 +571,7 @@ Chromeと承認のブロックを解除するだけでは解消しません。�
 | browser_sso_idp († listed supplemental cases only) | simplesamlphp | `run_KXN09QNRGAKBGY31S8AHJZKHNA` | `build/acceptance/reference-20260914/literal-integrated-implementation/simplesamlphp/browser_sso_idp` |
 | browser_sso_idp († listed supplemental cases only) | simplesamlphp | `run_J7Z6YANJCXYTHVJXX820D4NNPY` | `build/acceptance/reference-20260914/queue-integrated-implementation/simplesamlphp/browser_sso_idp` |
 | browser_sso_idp († listed supplemental cases only) | simplesamlphp | `run_VRW5T0M31JGT71ZG6MR1JF92PJ` | `build/acceptance/reference-20260915/peer-intent/simplesamlphp/browser_alg_enc` |
+| browser_sso_idp († listed supplemental cases only) | simplesamlphp | `run_XKNHNHTS27D8V15RGGVWPPNWX4` | `build/acceptance/reference-20260918/simplesamlphp-default-acs` |
 | browser_sso_idp | simplesamlphp | `run_SJWWBQT1S24VSJGRZMSQ8TJYM4` | `interaction-followup/after/simplesamlphp/browser_sso_idp` |
 | metadata_idp († listed supplemental cases only) | keycloak | `run_HRAC88P0KKA5WQX8MF75WD198X` | `additional-implementation/keycloak/metadata_idp` |
 | metadata_idp († listed supplemental cases only) | keycloak | `run_J7HCGRMNJHC614BA103CNGMVZ5` | `build/acceptance/reference-20260917/keycloak-signature-control-3` |
@@ -599,6 +600,7 @@ Chromeと承認のブロックを解除するだけでは解消しません。�
 | metadata_idp († listed supplemental cases only) | simplesamlphp | `run_CPWMJEQVVQYFYRDSCYFQWEC755` | `additional-implementation/simplesamlphp/metadata_idp` |
 | metadata_idp († listed supplemental cases only) | simplesamlphp | `run_KDFJDGNQQCVFANEG53YYWYS4A1` | `build/acceptance/reference-20260917/simplesamlphp-native-parser-3` |
 | metadata_idp († listed supplemental cases only) | simplesamlphp | `run_47A3XNG2QG2D7E64BDWH6XW5S3` | `build/acceptance/reference-20260918/simplesamlphp-aggregate-import` |
+| metadata_idp († listed supplemental cases only) | simplesamlphp | `run_NTB45B0333JF88W97SGWEMZD0D` | `build/acceptance/reference-20260918/simplesamlphp-extension-points-corrected` |
 | metadata_idp († listed supplemental cases only) | simplesamlphp | `run_KDFJDGNQQCVFANEG53YYWYS4A1` | `build/acceptance/reference-20260917/simplesamlphp-native-parser-3` |
 | metadata_idp († listed supplemental cases only) | simplesamlphp | `run_KDFJDGNQQCVFANEG53YYWYS4A1` | `build/acceptance/reference-20260917/simplesamlphp-native-parser-3` |
 | metadata_idp († listed supplemental cases only) | simplesamlphp | `run_KDFJDGNQQCVFANEG53YYWYS4A1` | `build/acceptance/reference-20260917/simplesamlphp-native-parser-3` |

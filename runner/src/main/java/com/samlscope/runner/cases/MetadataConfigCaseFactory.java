@@ -48,7 +48,10 @@ final class MetadataConfigCaseFactory {
                     accept("unknown-extension", "consume an entity-level extension from a non-SAML namespace"),
                     accept("unknown-role-extension", "consume a role-level extension from a non-SAML namespace"),
                     accept("unknown-endpoint-extension", "consume endpoint extensions from a non-SAML namespace"),
-                    reject("invalid-saml-extension", "reject a SAML-defined element at an extension point"))),
+                    accept("unknown-organization-extension", "consume an Organization extension from a non-SAML namespace"),
+                    accept("unknown-contact-extension", "consume a ContactPerson extension from a non-SAML namespace"),
+                    accept("unknown-affiliation-extension", "consume an AffiliationDescriptor extension from a non-SAML namespace"),
+                    reject("invalid-organization-saml-extension", "reject a SAML-defined element in Organization/Extensions"))),
             Map.entry("IIP-MD05.a4", List.of(
                     accept("entity-root", "consume the single-entity root"),
                     accept("entities-root-one", "consume the multiple-entity root"))),

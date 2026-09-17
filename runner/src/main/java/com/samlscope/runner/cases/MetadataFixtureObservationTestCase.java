@@ -141,10 +141,12 @@ public final class MetadataFixtureObservationTestCase
             }
         });
         if (requiresKeyValueDiscrimination()) required.add("signature-discrimination:keyvalue-only");
+        if (requiresNamespaceQualification()) required.add("namespace-qualification:extension-points");
         var completed = required.stream().filter(value -> {
             var separator = value.indexOf(':');
             var kind = value.substring(0, separator);
             var variant = value.substring(separator + 1);
+            if ("namespace-qualification".equals(kind)) return false;
             if ("signature-discrimination".equals(kind)) return observation.signatureDiscriminated().contains(variant);
             return "fetched".equals(kind)
                     ? observation.fetched().contains(variant)
@@ -252,6 +254,10 @@ public final class MetadataFixtureObservationTestCase
                         .map(Fixture::variant).filter(value -> !used.contains(value)).toList(),
                 "wrong_endpoint_variants", List.copyOf(wrongEndpoints),
                 "transcript_complete", context.transcriptComplete()));
+        if (requiresNamespaceQualification()) {
+            details.put("missing_namespace_qualification_evidence", List.of("extension-points"));
+            details.put("consumer_acceptance_proves_namespace_qualification", false);
+        }
         if (requiresKeyValueDiscrimination()) {
             details.put("missing_key_consumption_evidence", signature.verified().contains("keyvalue-only")
                     ? List.of() : List.of("signature-discrimination:keyvalue-only"));
@@ -271,8 +277,18 @@ public final class MetadataFixtureObservationTestCase
         return new Observation(
                 fetched.contains(CONTROL) && used.contains(CONTROL)
                         && allFetched && conclusive && context.transcriptComplete()
+                        && !requiresNamespaceQualification()
                         && (!requiresKeyValueDiscrimination() || signature.verified().contains("keyvalue-only")),
                 fetched, used, wrongEndpoints, signature.verified(), distinct(evidence), details);
+    }
+
+    private boolean requiresNamespaceQualification() {
+        // The signed MD05.a3 constraint explicitly separates namespace qualification
+        // from unknown-extension acceptance (MD05.g). Accepting a Suite-produced invalid
+        // extension is not evidence that the target publishes invalid extension content.
+        // Keep these fixtures available for observation, but require a dedicated evidence
+        // path before assigning either a satisfied or violated outcome for this obligation.
+        return id.startsWith("IIP-MD05-a3-");
     }
 
     private boolean requiresKeyValueDiscrimination() {

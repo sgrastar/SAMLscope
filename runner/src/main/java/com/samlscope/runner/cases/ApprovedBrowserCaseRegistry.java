@@ -211,7 +211,13 @@ public final class ApprovedBrowserCaseRegistry {
                     new MetadataFixtureObservationTestCase.Fixture("default-acs-second",
                             MetadataFixtureObservationTestCase.Behavior.ACCEPT, "follow the changed explicit default", 1),
                     new MetadataFixtureObservationTestCase.Fixture("default-acs-implicit",
-                            MetadataFixtureObservationTestCase.Behavior.ACCEPT, "select the first endpoint when defaults are omitted", 0)),
+                            MetadataFixtureObservationTestCase.Behavior.ACCEPT, "select the first endpoint when defaults are omitted", 0),
+                    new MetadataFixtureObservationTestCase.Fixture("default-acs-first-omitted",
+                            MetadataFixtureObservationTestCase.Behavior.ACCEPT, "skip explicit false and select the first omitted default", 1),
+                    new MetadataFixtureObservationTestCase.Fixture("default-acs-all-false",
+                            MetadataFixtureObservationTestCase.Behavior.ACCEPT, "select the first endpoint when all defaults are false", 0),
+                    new MetadataFixtureObservationTestCase.Fixture("default-acs-multiple-true",
+                            MetadataFixtureObservationTestCase.Behavior.ACCEPT, "select the first of multiple explicit defaults", 0)),
                     com.samlscope.core.caseexec.ConfigurationFailureSemantics.TEST_PRECONDITION);
         }
         if (List.of(

@@ -400,6 +400,59 @@ class MetadataServiceTest {
     }
 
     @Test
+    void additionalExtensionPointsKeepSchemaRequiredParentsAndNegativeLocation() {
+        var clock = Clock.fixed(Instant.parse("2026-08-29T00:00:00Z"), ZoneOffset.UTC);
+        var service = new MetadataService(URI.create("https://peer.example"),
+                new FilePlanKeyStore(directory, clock), new XmlSigner(), clock);
+        var variants = java.util.Map.of(
+                MetadataService.Variant.UNKNOWN_ORGANIZATION_EXTENSION, "Organization",
+                MetadataService.Variant.UNKNOWN_CONTACT_EXTENSION, "ContactPerson",
+                MetadataService.Variant.UNKNOWN_AFFILIATION_EXTENSION, "AffiliationDescriptor",
+                MetadataService.Variant.INVALID_ORGANIZATION_SAML_EXTENSION, "Organization");
+        for (var pair : variants.entrySet()) {
+            var doc = SecureXml.parse(service.generate(SamlTestFixtures.idpPlan(), pair.getKey(), "run_probe"));
+            var invalid = pair.getKey() == MetadataService.Variant.INVALID_ORGANIZATION_SAML_EXTENSION;
+            var probe = (org.w3c.dom.Element) doc.getElementsByTagNameNS(
+                    invalid ? MetadataService.SAML : "urn:samlscope:test:metadata-extension",
+                    invalid ? "Attribute" : "Probe").item(0);
+            assertEquals("Extensions", probe.getParentNode().getLocalName());
+            assertEquals(pair.getValue(), probe.getParentNode().getParentNode().getLocalName());
+            assertEquals(0, doc.getElementsByTagNameNS(MetadataExtensionAttributeFixtures.FOREIGN, "*").getLength());
+            if (pair.getValue().equals("Organization")) {
+                assertEquals(1, doc.getElementsByTagNameNS(MetadataService.MD, "OrganizationName").getLength());
+                assertEquals(1, doc.getElementsByTagNameNS(MetadataService.MD, "OrganizationDisplayName").getLength());
+                assertEquals(1, doc.getElementsByTagNameNS(MetadataService.MD, "OrganizationURL").getLength());
+            }
+            if (pair.getValue().equals("AffiliationDescriptor")) {
+                var parent = (org.w3c.dom.Element) probe.getParentNode().getParentNode().getParentNode();
+                assertEquals(0, parent.getElementsByTagNameNS(MetadataService.MD, "SPSSODescriptor").getLength());
+                assertEquals(1, doc.getElementsByTagNameNS(MetadataService.MD, "SPSSODescriptor").getLength());
+                assertEquals(1, parent.getElementsByTagNameNS(MetadataService.MD, "AffiliateMember").getLength());
+            }
+        }
+    }
+
+    @Test
+    void defaultAcsFixturesDistinguishFalseOmittedAndDuplicateIndex() {
+        var clock = Clock.fixed(Instant.parse("2026-08-29T00:00:00Z"), ZoneOffset.UTC);
+        var service = new MetadataService(URI.create("https://peer.example"),
+                new FilePlanKeyStore(directory, clock), new XmlSigner(), clock);
+        for (var variant : java.util.List.of(MetadataService.Variant.DEFAULT_ACS_FIRST_OMITTED,
+                MetadataService.Variant.DEFAULT_ACS_ALL_FALSE, MetadataService.Variant.DEFAULT_ACS_MULTIPLE_TRUE,
+                MetadataService.Variant.DEFAULT_ACS_DUPLICATE_INDEX)) {
+            var doc = SecureXml.parse(service.generate(SamlTestFixtures.idpPlan(), variant, "run_probe"));
+            var endpoints = doc.getElementsByTagNameNS(MetadataService.MD, "AssertionConsumerService");
+            var first = (org.w3c.dom.Element) endpoints.item(0);
+            var second = (org.w3c.dom.Element) endpoints.item(1);
+            assertEquals(variant == MetadataService.Variant.DEFAULT_ACS_MULTIPLE_TRUE ? "true" : "false", first.getAttribute("isDefault"));
+            assertEquals(variant != MetadataService.Variant.DEFAULT_ACS_FIRST_OMITTED, second.hasAttribute("isDefault"));
+            assertEquals(variant == MetadataService.Variant.DEFAULT_ACS_DUPLICATE_INDEX ? "0" : "1", second.getAttribute("index"));
+            assertTrue(variant.defaultAcsProbe());
+            assertEquals(com.samlscope.saml.normal.SamlSignedRequestFactory.Fixture.DEFAULT_ACS, variant.requestFixture());
+        }
+    }
+
+    @Test
     void secondaryIdpUsesADistinctEntityAndSigningKey() throws Exception {
         var clock = Clock.fixed(Instant.parse("2026-08-29T00:00:00Z"), ZoneOffset.UTC);
         var keyStore = new FilePlanKeyStore(directory, clock);

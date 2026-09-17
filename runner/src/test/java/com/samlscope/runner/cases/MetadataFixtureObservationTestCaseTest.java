@@ -25,6 +25,18 @@ class MetadataFixtureObservationTestCaseTest {
     private static final Instant NOW = Instant.parse("2026-08-30T00:00:00Z");
 
     @Test
+    void acceptingSuiteInvalidExtensionDoesNotProveTargetNamespaceViolation() {
+        var testCase = new MetadataFixtureObservationTestCase("IIP-MD05-a3-idp-01", TargetRole.IDP,
+                List.of(new MetadataFixtureObservationTestCase.Fixture("invalid-organization-saml-extension",
+                        MetadataFixtureObservationTestCase.Behavior.REJECT, "namespace qualification control")),
+                ConfigurationFailureSemantics.TEST_PRECONDITION);
+        var entries = List.of(fetch("control", 1), use("control", 2),
+                fetch("invalid-organization-saml-extension", 3), use("invalid-organization-saml-extension", 4));
+        assertEquals(Outcome.NOT_VERIFIED, evaluate(testCase, entries));
+        assertEquals(false, testCase.evidenceStatus(context(entries)).ready());
+    }
+
+    @Test
     void suiteIssuedSignaturePairCanCompleteKeyValueConsumption() {
         var testCase = new MetadataFixtureObservationTestCase("key-value", TargetRole.IDP,
                 List.of(new MetadataFixtureObservationTestCase.Fixture("keyvalue-only",

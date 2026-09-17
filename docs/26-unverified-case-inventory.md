@@ -4,14 +4,14 @@
 
 | 再試験前 | 確定（Success / Failed / Warning） | 現在の未検証 | 未検証の異なるケースID |
 |---:|---:|---:|---:|
-| 594 | 104 | 490 | 161 |
+| 594 | 105 | 489 | 161 |
 
 ## 内訳
 
 | 原因・現在の経路 | 件数 | 次に扱う範囲 |
 |---|---:|---|
 | ブラウザ完了後の自動判定がない | 20 | Suite実装 |
-| 一部の試験条件しか実装されていない | 61 | Suite実装 |
+| 一部の試験条件しか実装されていない | 60 | Suite実装 |
 | 設定後の証拠確認・自己申告経路 | 183 | 設定・証拠 |
 | 自己申告が無効 | 75 | 設定・証拠 |
 | メタデータの追加試験・観測不足 | 56 | 試験経路確認 |
@@ -100,7 +100,7 @@ approved variant全体の入力生成と観測を実装する。追加ログイ�
 | `IIP-IDP06-a-idp-01` | Not verified（今回の再試験対象外） | Not verified（今回の再試験対象外） | Success |
 | `IIP-IDP06-b-idp-01` | Not verified（今回の再試験対象外） | Not verified（今回の再試験対象外） | Success |
 | `IIP-IDP09-a-idp-01` | Not verified（今回の再試験対象外） | Not verified（今回の再試験対象外） | Success |
-| `IIP-IDP12-c-idp-01` | Not verified（今回の再試験対象外） | Success | Not verified（今回の再試験対象外） |
+| `IIP-IDP12-c-idp-01` | Not verified（今回の再試験対象外） | Success | Success |
 | `IIP-IDP17-a-idp-01` | Success | Success | Success |
 | `IIP-IDP17-aa-idp-01` | Warning | Warning | Warning |
 | `IIP-IDP17-al-idp-01` | Failed (Product) | Success | Success |
@@ -124,6 +124,7 @@ approved variant全体の入力生成と観測を実装する。追加ログイ�
 | `IIP-IDP19-c-idp-01` | Not verified: slo.encrypted-id.multiple-keys.key-unavailable | Success | Not verified: slo.encrypted-id.multiple-keys.configuration-unavailable |
 | `IIP-MD02-c-idp-01` | Success | Not verified（今回の再試験対象外） | Success |
 | `IIP-MD02-d-idp-01` | Not verified（今回の再試験対象外） | Not verified（今回の再試験対象外） | Success |
+| `IIP-MD05-a3-idp-01` | Not verified（今回の再試験対象外） | Not verified（今回の再試験対象外） | Not verified: case.pending-interaction |
 | `IIP-MD05-a4-idp-01` | Success | Not verified（今回の再試験対象外） | Success |
 | `IIP-MD05-a5-idp-01` | Success | Not verified（今回の再試験対象外） | Success |
 | `IIP-MD05-ad-idp-01` | Not verified（今回の再試験対象外） | Success | Success |
@@ -181,7 +182,7 @@ approved variant全体の入力生成と観測を実装する。追加ログイ�
 | `IIP-IDP10-d-idp-01` | browser_sso_idp | — | — | 実行したが確定できない |
 | `IIP-IDP11-a-idp-01` | browser_sso_idp | browser_sso_idp | browser_sso_idp | 設定後の証拠確認・自己申告経路 |
 | `IIP-IDP12-b-idp-01` | browser_sso_idp | browser_sso_idp | — | 実行したが確定できない |
-| `IIP-IDP12-c-idp-01` | browser_sso_idp | — | browser_sso_idp | 一部の試験条件しか実装されていない |
+| `IIP-IDP12-c-idp-01` | browser_sso_idp | — | — | 一部の試験条件しか実装されていない |
 | `IIP-IDP12-d-idp-01` | — | browser_sso_idp | — | 実行したが確定できない |
 | `IIP-IDP12-e-idp-01` | browser_sso_idp | — | — | 実行したが確定できない |
 | `IIP-IDP12-f-idp-01` | browser_sso_idp | browser_sso_idp | browser_sso_idp | 実行したが確定できない |
@@ -319,7 +320,7 @@ Verdictは変更せず、未検証の理由だけを分類します。feature-ab
 
 | 診断 | 件数 | 意味 | 表示案 |
 |---|---:|---|---|
-| `suite-observation-gap` | 331 | Suite側の観測・実行経路が未接続 | Suite側の実装で解消可能なNot verified |
+| `suite-observation-gap` | 330 | Suite側の観測・実行経路が未接続 | Suite側の実装で解消可能なNot verified |
 | `operator-attestation-available` | 77 | 自己申告または運用者証言で確認可能 | 運用者証言（ケースごとに1回答）で確認可能。現在のPlanは自己申告無効 |
 | `evidence-form-mismatch` | 46 | 承認済み判定条件が要求する証拠形式と製品応答が不一致 | 証拠形式が承認済み条件と一致しないためNot verified（要件解釈の再確認が必要） |
 | `role-inapplicable` | 24 | ロール上、対象が消費しない成果物を要求するvariant | IdPロールでは消費されないvariantのため実行対象外（対象外であることは判定済み） |

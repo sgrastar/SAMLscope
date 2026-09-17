@@ -45,6 +45,9 @@ public final class MetadataService {
     private static final List<Variant> PRELOADED_CAMPAIGN_VARIANTS = List.of(
             Variant.UNKNOWN_EXTENSION,
             Variant.UNKNOWN_ROLE_EXTENSION,
+            Variant.UNKNOWN_ORGANIZATION_EXTENSION,
+            Variant.UNKNOWN_CONTACT_EXTENSION,
+            Variant.UNKNOWN_AFFILIATION_EXTENSION,
             Variant.UNKNOWN_ENDPOINT_EXTENSION,
             Variant.MDRPI_REGISTRATION_INFO,
             Variant.ENTITY_CACHE_DURATION,
@@ -224,6 +227,7 @@ public final class MetadataService {
         // Deliberately advertise a Redirect ACS so SSO01.x can detect a target that emits a
         // advertising it never turns the binding into an allowed target behavior.
         service(document, sp, "AssertionConsumerService", REDIRECT, endpoint(plan, "/sp/acs/3", variant, runId), 3, false);
+        applyDefaultAcsFixture(sp, variant);
         root.appendChild(sp);
 
         var idp = element(document, MD, "md:IDPSSODescriptor");
@@ -242,6 +246,7 @@ public final class MetadataService {
         addExtensionFixture(document, root, variant);
         root = applyStructureFixture(document, root, plan, variant, runId);
         root = MetadataExtensionAttributeFixtures.apply(document, root, variant);
+        root = MetadataExtensionPlacementFixtures.apply(document, root, variant);
         applyValidityFixture(root, variant);
         if (variant != Variant.UNSIGNED) {
             signer.sign(root, signingCredentials, root.getFirstChild() instanceof Element e ? e : null,
@@ -585,6 +590,20 @@ public final class MetadataService {
         }
     }
 
+    private void applyDefaultAcsFixture(Element role, Variant variant) {
+        if (!java.util.Set.of(Variant.DEFAULT_ACS_FIRST_OMITTED, Variant.DEFAULT_ACS_ALL_FALSE,
+                Variant.DEFAULT_ACS_MULTIPLE_TRUE, Variant.DEFAULT_ACS_DUPLICATE_INDEX).contains(variant)) return;
+        // Only the ACS set participates: another indexed endpoint type is independent.
+        var endpoints = role.getElementsByTagNameNS(MD, "AssertionConsumerService");
+        for (int index = 0; index < endpoints.getLength(); index++) {
+            var endpoint = (Element) endpoints.item(index);
+            endpoint.setAttribute("isDefault", "false");
+            if (variant == Variant.DEFAULT_ACS_FIRST_OMITTED && index > 0) endpoint.removeAttribute("isDefault");
+            if (variant == Variant.DEFAULT_ACS_MULTIPLE_TRUE && index < 2) endpoint.setAttribute("isDefault", "true");
+            if (variant == Variant.DEFAULT_ACS_DUPLICATE_INDEX && index < 2) endpoint.setAttribute("index", "0");
+        }
+    }
+
     private void addExtensionFixture(Document document, Element entity, Variant variant) {
         if (variant != Variant.UNKNOWN_EXTENSION
                 && variant != Variant.UNKNOWN_ROLE_EXTENSION
@@ -711,6 +730,10 @@ public final class MetadataService {
         DEFAULT_ACS_FIRST("default-acs-first"),
         DEFAULT_ACS_SECOND("default-acs-second"),
         DEFAULT_ACS_IMPLICIT("default-acs-implicit"),
+        DEFAULT_ACS_FIRST_OMITTED("default-acs-first-omitted"),
+        DEFAULT_ACS_ALL_FALSE("default-acs-all-false"),
+        DEFAULT_ACS_MULTIPLE_TRUE("default-acs-multiple-true"),
+        DEFAULT_ACS_DUPLICATE_INDEX("default-acs-duplicate-index"),
         ENTITIES_ROOT_ONE("entities-root-one"),
         ENTITIES_ROOT_TWO("entities-root-two"),
         ENTITIES_ROOT_FIFTY("entities-root-fifty"),
@@ -725,8 +748,12 @@ public final class MetadataService {
         ENTITIES_VALID_UNTIL("entities-valid-until"),
         UNKNOWN_EXTENSION("unknown-extension"),
         UNKNOWN_ROLE_EXTENSION("unknown-role-extension"),
+        UNKNOWN_ORGANIZATION_EXTENSION("unknown-organization-extension"),
+        UNKNOWN_CONTACT_EXTENSION("unknown-contact-extension"),
+        UNKNOWN_AFFILIATION_EXTENSION("unknown-affiliation-extension"),
         UNKNOWN_ENDPOINT_EXTENSION("unknown-endpoint-extension"),
         INVALID_SAML_EXTENSION("invalid-saml-extension"),
+        INVALID_ORGANIZATION_SAML_EXTENSION("invalid-organization-saml-extension"),
         MDRPI_REGISTRATION_INFO("mdrpi-registration-info"),
         XPATH_IDENTITY("xpath-identity"),
         XPATH_EXCLUDE_ROLE_DESCRIPTORS("xpath-exclude-role-descriptors"),
@@ -763,7 +790,9 @@ public final class MetadataService {
         public String id() { return id; }
 
         public boolean defaultAcsProbe() {
-            return this == DEFAULT_ACS_FIRST || this == DEFAULT_ACS_SECOND || this == DEFAULT_ACS_IMPLICIT;
+            return this == DEFAULT_ACS_FIRST || this == DEFAULT_ACS_SECOND || this == DEFAULT_ACS_IMPLICIT
+                    || this == DEFAULT_ACS_FIRST_OMITTED || this == DEFAULT_ACS_ALL_FALSE
+                    || this == DEFAULT_ACS_MULTIPLE_TRUE || this == DEFAULT_ACS_DUPLICATE_INDEX;
         }
 
         public com.samlscope.saml.normal.SamlSignedRequestFactory.Fixture requestFixture() {
