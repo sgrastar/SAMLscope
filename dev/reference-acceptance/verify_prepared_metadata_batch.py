@@ -3,6 +3,7 @@
 import hashlib
 import json
 from pathlib import Path
+from native_algorithm_preparation import verify as verify_preparation
 
 def load(folder,name):return json.loads((folder/name).read_text())
 def verify(folder):
@@ -14,8 +15,7 @@ def verify(folder):
     for imported in operations:
         variant=imported['variant'];fixture=(folder/variant/'fixture.xml').read_bytes()
         digest=hashlib.sha256(fixture).hexdigest()
-        assert imported['fixture_sha256']==digest and imported['configuration_read_back'] and imported['restored']
-        assert imported['status']=='success'
+        assert imported['fixture_sha256']==digest==verify_preparation(folder,variant)
         matches=[]
         for entry in entries.values():
             summary=entry['samlSummary']

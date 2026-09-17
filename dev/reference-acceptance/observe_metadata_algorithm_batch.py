@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 import subprocess
 import xml.etree.ElementTree as ET
+from native_algorithm_preparation import verify as verify_preparation
 
 MD='urn:oasis:names:tc:SAML:2.0:metadata'
 ALG='urn:oasis:names:tc:SAML:metadata:algsupport'
@@ -49,8 +50,8 @@ def observe(folder):
         if request is None:continue
         variant=request['samlSummary'].get('variant')
         if not variant or (variant!='control' and not variant.startswith('algorithm-')):continue
-        imported=read(folder/variant/'import.json');assert imported['restored'] and imported['configuration_read_back']
-        fixture_raw=(folder/variant/'fixture.xml').read_bytes();assert digest(fixture_raw)==imported['fixture_sha256']
+        expected_digest=verify_preparation(folder,variant)
+        fixture_raw=(folder/variant/'fixture.xml').read_bytes();assert digest(fixture_raw)==expected_digest
         fixture=ET.fromstring(fixture_raw)
         signatures=[]
         for parent in [xml,*xml.findall('{'+ASSERTION+'}Assertion')]:

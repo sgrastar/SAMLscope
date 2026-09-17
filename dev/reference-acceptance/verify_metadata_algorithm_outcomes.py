@@ -2,6 +2,7 @@
 import hashlib
 import json
 from pathlib import Path
+from native_algorithm_preparation import verify as verify_preparation
 
 CASES = {'IIP-MD05-ea-idp-01', 'IIP-MD05-eb-idp-01'}
 
@@ -10,10 +11,11 @@ def load(folder, name):
     return json.loads((folder / name).read_text())
 
 
-def verify(root):
+def verify(root, product='simplesamlphp'):
     root = Path(root)
-    folder = root / 'algorithm-oracle-evaluation'
-    source = root / 'simplesamlphp-algorithm-recorded-metadata'
+    assert product in {'simplesamlphp', 'keycloak'}
+    folder = root / ('algorithm-oracle-evaluation' if product == 'simplesamlphp' else 'keycloak-algorithm-evaluation')
+    source = root / ('simplesamlphp-algorithm-recorded-metadata' if product == 'simplesamlphp' else 'keycloak-algorithm-metadata')
     result = load(folder, 'result.json')
     original = load(source, 'result.json')
     run = result['run']['id']
@@ -23,10 +25,11 @@ def verify(root):
     assert basis['run_id'] == run
     for name, digest in basis['sha256'].items():
         assert hashlib.sha256((source / name).read_bytes()).hexdigest() == digest
-    native = load(folder, 'native-import-path-audit.json')
-    assert native['driver_matches_native_static_conversion']
-    assert hashlib.sha256((folder / 'native-admin-Federation.php').read_bytes()).hexdigest() == native['sha256']
-    assert native['native_static_output_removals'] == ['entityDescriptor', 'expire']
+    if product == 'simplesamlphp':
+        native = load(folder, 'native-import-path-audit.json')
+        assert native['driver_matches_native_static_conversion']
+        assert hashlib.sha256((folder / 'native-admin-Federation.php').read_bytes()).hexdigest() == native['sha256']
+        assert native['native_static_output_removals'] == ['entityDescriptor', 'expire']
     operations = {o['variant']: o for o in load(source, 'operations.json')}
     prepared = {o['variant']: o for o in load(source, 'prepared-metadata-verification.json')['receipts']}
     signatures = {o['variant']: o for o in load(source, 'verified-algorithm-signatures.json')['observations']}
@@ -54,9 +57,9 @@ def verify(root):
         evidence = {e['reference'] for e in case['evidence'] if e['kind'] == 'transcript'}
         for variant in details['required_variants']:
             operation = operations[variant]
-            assert operation['status'] == 'success' and operation['restored'] and operation['configuration_read_back']
-            assert hashlib.sha256((source / variant / 'fixture.xml').read_bytes()).hexdigest() == operation['fixture_sha256']
-            assert hashlib.sha256((source / variant / 'parser-output.json').read_bytes()).hexdigest() == operation['parser_output_sha256']
+            assert operation['fixture_sha256'] == verify_preparation(source, variant)
+            if product == 'keycloak':
+                assert operation['driver_exit'] == 0
             signed = signatures[variant]
             assert signed['signed_response_verified']
             assert {signed['request'], signed['response']} <= evidence
@@ -70,5 +73,5 @@ def verify(root):
 
 if __name__ == '__main__':
     import sys
-    path, cases = verify(sys.argv[1])
+    path, cases = verify(sys.argv[1], sys.argv[2] if len(sys.argv) > 2 else 'simplesamlphp')
     print({case: cases[case]['verdict'] for case in sorted(CASES)})

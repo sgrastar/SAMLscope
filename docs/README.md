@@ -145,3 +145,5 @@ not by differences in reference-implementation results ([00 §5](00-concept.md))
 - [メタデータ原本のRun内記録](44-prepared-metadata-evidence.md)
 
 - [メタデータ方式選択の判定接続と実証](45-metadata-algorithm-oracle.md)
+
+- [Keycloakへのアルゴリズム選択試験の展開](46-keycloak-algorithm-oracle.md)
