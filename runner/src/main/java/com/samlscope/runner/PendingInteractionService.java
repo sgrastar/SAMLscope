@@ -54,7 +54,7 @@ public final class PendingInteractionService implements InteractionQuery {
                 result.add(new PendingInteraction(
                         execution.caseId(), Kind.CONFIGURATION, wait.promptKey(), configuration.instructionEn(),
                         null, wait.expiresAt(),
-                        testCase instanceof ProtocolEvidenceCase
+                        testCase instanceof ProtocolEvidenceCase protocol && !protocol.requiresPreparationConfirmation()
                                 ? PROTOCOL_UNAVAILABILITY_ANSWERS : CONFIGURATION_ANSWERS,
                         testCase instanceof ProtocolEvidenceCase
                                 ? CompletionMode.TRANSCRIPT_OR_OPERATOR : CompletionMode.OPERATOR));

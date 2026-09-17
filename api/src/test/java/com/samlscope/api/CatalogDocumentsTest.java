@@ -193,7 +193,7 @@ class CatalogDocumentsTest {
                 cases, Milestone.M2, ignored -> """
                         <md:EntityDescriptor xmlns:md="urn:oasis:names:tc:SAML:2.0:metadata"
                           entityID="https://idp.example"/>
-                        """.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+                        """.getBytes(java.nio.charset.StandardCharsets.UTF_8), content, ignored -> java.util.Optional.empty());
         var m1Config = ApprovedConfigCaseRegistry.create(
                 cases, Milestone.M1, ignored -> """
                         <md:EntityDescriptor xmlns:md="urn:oasis:names:tc:SAML:2.0:metadata"
@@ -235,13 +235,13 @@ class CatalogDocumentsTest {
         var questionnaireFree = automated + browserActions + conclusiveAttested + conclusiveConfig;
 
         assertEquals(413, totalIdpFull);
-        assertEquals(242, conclusive,
+        assertEquals(244, conclusive,
                 "Update this explicit IDP Full automatic-oracle inventory when an oracle changes: automated="
                         + automated + ", browser=" + conclusiveBrowser + ", attested="
                         + conclusiveAttested + ", config=" + conclusiveConfig);
         assertTrue(conclusive * 2 > totalIdpFull,
                 "At least half of IDP Full must conclude without an operator-supplied verdict");
-        assertEquals(286, questionnaireFree,
+        assertEquals(288, questionnaireFree,
                 "Update this explicit IDP Full no-questionnaire inventory when an interaction changes");
     }
 

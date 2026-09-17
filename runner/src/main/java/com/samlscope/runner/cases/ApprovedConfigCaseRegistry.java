@@ -92,6 +92,9 @@ public final class ApprovedConfigCaseRegistry {
                 configurationPrompt(definition),
                 CONFIG_TTL,
                 definition.configurationFailureSemantics());
+        if (targetMetadata != null && transcriptContent != null && MetadataAlgorithmConfigurationTestCase.supports(definition.id())) {
+            return new MetadataAlgorithmConfigurationTestCase(fallback, transcriptContent, targetMetadata);
+        }
         if (targetMetadata != null && TargetMetadataObservation.supports(definition.id())) {
             return new AutoConfigurationEvidenceTestCase(fallback, targetMetadata);
         }

@@ -360,7 +360,7 @@ final class M1Runtime {
                 null, null, null, null, null, runMetadata);
         var m2Config = ApprovedConfigCaseRegistry.create(
                 definitions, com.samlscope.core.casedef.CaseDefinitionCatalog.Milestone.M2,
-                runMetadata);
+                runMetadata, transcriptContent, runDecryptionKeys);
         var m2Browser = ApprovedBrowserCaseRegistry.create(
                 definitions, config.publicBaseUrl(),
                 com.samlscope.core.casedef.CaseDefinitionCatalog.Milestone.M2,

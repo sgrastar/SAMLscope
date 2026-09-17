@@ -570,6 +570,10 @@ def render(root,definitions,output):
             from verify_shared_gcm_batch import verify as verify_shared_gcm
             selected=verify_shared_gcm(root.parent.parent/'reference-20260918',
                 128 if row['case']=='IIP-ALG04-a-idp-01' else 256)
+        if row['product']=='simplesamlphp' and row['profile']=='metadata_idp' and row['case'] in {
+                'IIP-MD05-ea-idp-01','IIP-MD05-eb-idp-01'}:
+            from verify_metadata_algorithm_outcomes import verify as verify_algorithm_outcomes
+            selected=verify_algorithm_outcomes(root.parent.parent/'reference-20260918')
         if selected is not None:
             path, selected_cases = selected
             raw=path.read_bytes(); result=json.loads(raw); case=selected_cases[row['case']]
@@ -636,7 +640,7 @@ def render(root,definitions,output):
             row['additional_observations']={'run':diagnosis['run'],'diagnosis_sha256':hashlib.sha256(path.read_bytes()).hexdigest(),
                 'prepared_metadata_verification_sha256':hashlib.sha256(prepared_path.read_bytes()).hexdigest(),
                 'evidence_folder':str(folder.relative_to(root.parents[3])),'affects_verdict':False}
-            row['next_action']='Suiteが記録したメタデータ原本と製品へ取り込んだXMLの一致、取得記録との相関、Run固定のIdP鍵による応答署名検証を新Runで確認済み。SHA384広告時もSHA256を選ぶ証拠を、署名方式・Digest方式別の判定処理へ接続する。順序選択ではローカルポリシーの例外を確認し、配信準備だけを製品消費の証拠にしない。'
+            row['next_action']='原本・ネイティブ取込・署名済み応答の相関から判定済み。Role優先のMD05.ebは別途FAIL確定。MD05.eaは順序交換時もSHA256を選ぶが、ローカルポリシーとSHA384の使用可能性が未確認のためNOT_VERIFIEDを維持。ポリシーを確認した再試験が必要。'
         if row['product']=='simplesamlphp' and row['profile']=='browser_sso_idp' and row['case']=='IIP-SSO01-cz-idp-01':
             row['next_action']='未復号EncryptedAssertionをSubject不在として成功にしない修正を実測済み。principal判定へ復号済み内容を安全に渡し、SubjectConfirmation・属性を含む識別子を認証principalへ意味的に対応付ける証拠が必要。'
         indexed[row['case']].append(row)

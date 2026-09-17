@@ -24,7 +24,7 @@ public final class ConfigurationService implements ConfigurationExecutor {
         text(caseId, "caseId");
         var testCase = registry.require(caseId);
         var answer = ConfigurationAnswer.parse(value);
-        if (testCase instanceof ProtocolEvidenceCase && answer == ConfigurationAnswer.CONFIRMED) {
+        if (testCase instanceof ProtocolEvidenceCase protocol && !protocol.requiresPreparationConfirmation() && answer == ConfigurationAnswer.CONFIRMED) {
             throw new IllegalStateException(
                     "Transcript-driven configuration cases cannot be confirmed by an operator");
         }

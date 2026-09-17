@@ -126,6 +126,23 @@ class FunctionalProfileFlowTest {
             assertEquals(200, started.statusCode(), started.body());
             assertEquals(profile == FunctionalProfile.ECP_IDP,
                     json.readTree(started.body()).path("ecpProbesRequired").asBoolean());
+            if (profile == FunctionalProfile.METADATA_IDP) {
+                var status = http.send(HttpRequest.newBuilder(base.resolve(
+                        "/api/runs/" + runId + "/protocol-evidence")).build(), HttpResponse.BodyHandlers.ofString());
+                assertEquals(200, status.statusCode(), status.body());
+                for (var id : java.util.List.of("IIP-MD05-ea-idp-01", "IIP-MD05-eb-idp-01")) {
+                    var found = java.util.stream.StreamSupport.stream(
+                            json.readTree(status.body()).path("cases").spliterator(), false)
+                            .filter(value -> id.equals(value.path("caseId").asText())).findFirst().orElseThrow();
+                    assertTrue(found.at("/details/configuration_confirmation_required").asBoolean(), status.body());
+                    assertEquals(false, found.path("ready").asBoolean());
+                    var confirmed = post(base, "/api/runs/" + runId + "/cases/" + id + "/configure",
+                            "{\"value\":\"confirmed\"}");
+                    assertEquals(200, confirmed.statusCode(), confirmed.body());
+                    assertEquals("NOT_VERIFIED", json.readTree(confirmed.body()).at("/outcome/outcome").asText(),
+                            "Preparation confirmation must not manufacture a satisfied outcome");
+                }
+            }
             var executions = new com.samlscope.store.SqliteCaseExecutionRepository(
                     new SqliteDatabase(dataDirectory), new JsonCodec());
             var firstCaseIds = executions.list(runId).stream().map(value -> value.caseId())

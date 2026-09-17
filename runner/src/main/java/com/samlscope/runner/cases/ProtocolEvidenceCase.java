@@ -8,6 +8,10 @@ import com.samlscope.core.caseexec.CaseContext;
 public interface ProtocolEvidenceCase extends com.samlscope.runner.ExternallyObservedCase {
     EvidenceStatus evidenceStatus(CaseContext context);
 
+    /** True only when native input preparation must be confirmed before the evidence is evaluated.
+     * The confirmation supplies no outcome; resume must still derive it from recorded evidence. */
+    default boolean requiresPreparationConfirmation() { return false; }
+
     record EvidenceStatus(
             boolean ready,
             List<String> requiredObservations,
