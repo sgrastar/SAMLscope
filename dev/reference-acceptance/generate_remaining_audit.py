@@ -621,6 +621,18 @@ def render(root,definitions,output):
             row['individual_diagnosis']='keycloak-decryption-keys/diagnosis.json'
         if row['product']=='shibboleth' and row['profile']=='browser_sso_idp' and row['case'] in {'IIP-SSO05-a-idp-01','IIP-SSO05-a2-idp-01'}:
             row['next_action']='persistent NameIDの成功応答が必要。IdPのpersistentId生成（saml-nameid.properties）を一時有効化して2回再試験したが、要求内のSubjectをcanonicalizeするflowがなくSubjectCanonicalizationErrorで拒否された。c14n設定を含む前提の整備後に再試験する。試行と復元はshib-config/diagnosis.jsonに記録。'
+        if row['product']=='simplesamlphp' and row['profile']=='metadata_idp' and row['case'] in {'IIP-MD05-ea-idp-01','IIP-MD05-eb-idp-01'}:
+            folder=root.parent.parent/'reference-20260918/simplesamlphp-algorithm-metadata'
+            path=folder/'algorithm-selection-diagnosis.json'
+            diagnosis=json.loads(path.read_text())
+            for name,digest in diagnosis['source_sha256'].items():
+                assert hashlib.sha256((folder/name).read_bytes()).hexdigest()==digest
+            proof=json.loads((folder/'verified-algorithm-signatures.json').read_text())
+            assert diagnosis['run']==proof['run']
+            assert len(proof['observations'])==13 and all(o['signed_response_verified'] for o in proof['observations'])
+            row['additional_observations']={'run':diagnosis['run'],'diagnosis_sha256':hashlib.sha256(path.read_bytes()).hexdigest(),
+                'evidence_folder':str(folder.relative_to(root.parents[3])),'affects_verdict':False}
+            row['next_action']='単独方式・順序入替え・Role競合の元fixtureを製品へ取込済み。Run固定のIdP鍵で全応答の署名を検証し、SHA384広告時もSHA256を選ぶ実測を追加した。メタデータ消費の証拠と承認済み対照をSuiteの判定経路へ結び付ける。順序選択ではローカルポリシーの例外も確認する。'
         if row['product']=='simplesamlphp' and row['profile']=='browser_sso_idp' and row['case']=='IIP-SSO01-cz-idp-01':
             row['next_action']='未復号EncryptedAssertionをSubject不在として成功にしない修正を実測済み。principal判定へ復号済み内容を安全に渡し、SubjectConfirmation・属性を含む識別子を認証principalへ意味的に対応付ける証拠が必要。'
         indexed[row['case']].append(row)

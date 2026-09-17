@@ -139,3 +139,5 @@ not by differences in reference-implementation results ([00 §5](00-concept.md))
 - [SimpleSAMLphp共有鍵GCMの実機検証](41-shared-key-gcm-acceptance.md)
 
 - [メタデータのアルゴリズム順序・Role優先の実行条件](42-metadata-algorithm-fixtures.md)
+
+- [方式選択の署名検証付き証拠](43-verified-algorithm-evidence.md)
