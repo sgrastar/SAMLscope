@@ -647,6 +647,20 @@ def render(root,definitions,output):
             row['next_action']='原本・ネイティブ取込・署名済み応答の相関から判定済み。Role優先のMD05.ebは別途FAIL確定。MD05.eaは順序交換時もSHA256を選ぶが、ローカルポリシーとSHA384の使用可能性が未確認のためNOT_VERIFIEDを維持。ポリシーを確認した再試験が必要。'
         if row['product']=='simplesamlphp' and row['profile']=='browser_sso_idp' and row['case']=='IIP-SSO01-cz-idp-01':
             row['next_action']='未復号EncryptedAssertionをSubject不在として成功にしない修正を実測済み。principal判定へ復号済み内容を安全に渡し、SubjectConfirmation・属性を含む識別子を認証principalへ意味的に対応付ける証拠が必要。'
+        if row['product']=='shibboleth' and row['profile']=='metadata_idp' and row['case'] in {'IIP-MD05-e-idp-01','IIP-MD05-e8-idp-01'}:
+            folder=root.parent.parent/'reference-20260918/shibboleth-encryption-metadata'
+            path=folder/'encryption-selection-observations.json'
+            observation=json.loads(path.read_text())
+            for name,digest in observation['source_sha256'].items():
+                assert hashlib.sha256((folder/name).read_bytes()).hexdigest()==digest
+            decrypted=json.loads((folder/'verified-encryption-decryption.json').read_text())
+            assert decrypted['run']==observation['run']
+            assert decrypted['signed_evidence_sha256']==hashlib.sha256((folder/'verified-algorithm-signatures.json').read_bytes()).hexdigest()
+            assert len(decrypted['observations'])==16 and all(x['decrypted_assertions']>0 and x['wrong_key_rejected'] and x['advertised_key_matched'] for x in decrypted['observations'])
+            row['additional_observations']={'run':observation['run'],'evidence_folder':str(folder.relative_to(root.parents[3])),
+                'encryption_observation_sha256':hashlib.sha256(path.read_bytes()).hexdigest(),
+                'decryption_verification_sha256':hashlib.sha256((folder/'verified-encryption-decryption.json').read_bytes()).hexdigest(),'affects_verdict':False}
+            row['next_action']='暗号化方式・OAEPのDigest/MGF・鍵サイズを変える15入力を追加し、対照を含む16条件で原本一致、署名応答、対応鍵での復号と別鍵での失敗を実証済み。metadata campaignのvariant鍵を判定経路へ渡し、承認済みケースの全条件と対照を確認して接続する。現時点の実測だけで全ケースをSuccessにはしない。'
         indexed[row['case']].append(row)
     assert sum(counts.values())==len(rows)
     (root/'implementation-audit.json').write_text(json.dumps(implementations,ensure_ascii=False,indent=2)+'\n')

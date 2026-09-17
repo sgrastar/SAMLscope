@@ -151,3 +151,5 @@ not by differences in reference-implementation results ([00 §5](00-concept.md))
 - [Shibbolethのネイティブ読込経路と方式選択の実証](47-shibboleth-native-algorithm-batch.md)
 
 - [未対応方式のスキップと暗号方式順序の条件判定](48-algorithm-order-followup.md)
+
+- [暗号化方式・OAEPパラメータ・鍵サイズの入力条件](49-encryption-metadata-fixtures.md)

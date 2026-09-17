@@ -38,6 +38,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--variants', required=True)
+    parser.add_argument('--continue-inconclusive', action='store_true', help='Continue after a non-baseline protocol attempt; never infer a verdict')
     args = parser.parse_args()
     out = args.output.resolve()
     if out.exists() and any(out.iterdir()):
@@ -101,9 +102,21 @@ def main():
                     write(CONFIG, configured)
                 reload(folder, 'import')
                 record['provider_reloaded'] = True
-                flow(run, folder / 'flow.json', suite_signature_control=True)
-                record['status'] = 'success'
-                print(variant, 'verified', flush=True)
+                try:
+                    flow(run, folder / 'flow.json', suite_signature_control=True)
+                    record['status'] = 'success'
+                    print(variant, 'verified', flush=True)
+                except RuntimeError as error:
+                    record['protocol_attempt_error'] = str(error)
+                    if variant == 'control' or not args.continue_inconclusive:
+                        raise
+                    pending = api('/api/runs/' + run + '/metadata-lab')
+                    if pending['campaignIndex'] == state['campaignIndex']:
+                        request = urllib.request.Request(pending['automaticContinueUrl'], data=b'')
+                        with urllib.request.urlopen(request, timeout=30) as response:
+                            response.read()
+                        record['continued_without_verdict'] = True
+                    print(variant, 'inconclusive', flush=True)
                 if variant == 'control':
                     save(out / 'tests-start.json', api('/api/runs/' + run + '/tests/start', {}))
             finally:
