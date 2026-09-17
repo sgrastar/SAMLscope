@@ -62,7 +62,7 @@ final class TargetMetadataObservation {
     static boolean supports(String caseId) {
         return isAlgorithmPublicationCapability(caseId)
                 || suffix(caseId, "a3") || suffix(caseId, "a6") || suffix(caseId, "a7")
-                || suffix(caseId, "a9") || suffix(caseId, "ab")
+                || suffix(caseId, "a9") || suffix(caseId, "ab") || idpSuffix(caseId, "ae")
                 || suffix(caseId, "c8") || suffix(caseId, "c9") || suffix(caseId, "ca")
                 || suffix(caseId, "cb") || suffix(caseId, "cc") || suffix(caseId, "ce")
                 || suffix(caseId, "d2") || suffix(caseId, "d3") || suffix(caseId, "d4")
@@ -88,6 +88,7 @@ final class TargetMetadataObservation {
         if (idpSuffix(caseId, "f7") || suffix(caseId, "f8") || suffix(caseId, "fa")) {
             return publishedUiGuidance(caseId, document, evidence);
         }
+        if (idpSuffix(caseId, "ae")) return uniquePublishedSigningKey(document, evidence);
         if (suffix(caseId, "a3")) return Optional.of(extensionNamespaces(document, evidence));
         if (suffix(caseId, "a6")) return Optional.of(rootOnlyExpiration(document, evidence));
         if (suffix(caseId, "a7")) return Optional.of(roleOverlap(document, evidence));
@@ -127,6 +128,46 @@ final class TargetMetadataObservation {
                 document, "DiscoHints", "metadata.publisher.disco-hints-cardinality", evidence));
         if (suffix(caseId, "fk")) return Optional.of(logoDimensions(document, evidence));
         return Optional.empty();
+    }
+
+    private static Optional<CaseOutcome> uniquePublishedSigningKey(Document document, List<EvidenceRef> evidence) {
+        var root = document.getDocumentElement();
+        if (!MD.equals(root.getNamespaceURI()) || !"EntityDescriptor".equals(root.getLocalName())) return Optional.empty();
+        var roles = directElements(root, MD, "IDPSSODescriptor");
+        if (roles.isEmpty()) return Optional.empty();
+        var keys = new java.util.LinkedHashSet<String>();
+        for (var role : roles) {
+            boolean signingKeyFound = false;
+            for (var descriptor : directElements(role, MD, "KeyDescriptor")) {
+                var use = descriptor.getAttribute("use");
+                if ("encryption".equals(use)) continue;
+                if (!use.isEmpty() && !"signing".equals(use)) return Optional.empty();
+                var infos = directElements(descriptor, DS, "KeyInfo");
+                if (infos.size() != 1) return Optional.empty();
+                var info = infos.getFirst();
+                // Additional key representations need equality proof, not a guessed key count.
+                for (var child = info.getFirstChild(); child != null; child = child.getNextSibling()) {
+                    if (child instanceof Element element && (!DS.equals(element.getNamespaceURI())
+                            || !Set.of("X509Data", "KeyName").contains(element.getLocalName()))) return Optional.empty();
+                }
+                var containers = directElements(info, DS, "X509Data");
+                if (containers.size() != 1) return Optional.empty();
+                for (var child = containers.getFirst().getFirstChild(); child != null; child = child.getNextSibling()) {
+                    if (child instanceof Element element && (!DS.equals(element.getNamespaceURI())
+                            || !"X509Certificate".equals(element.getLocalName()))) return Optional.empty();
+                }
+                var certificates = directElements(containers.getFirst(), DS, "X509Certificate");
+                if (certificates.size() != 1) return Optional.empty();
+                try { keys.add(Base64.getEncoder().encodeToString(certificate(certificates.getFirst()).getPublicKey().getEncoded())); }
+                catch (IllegalArgumentException invalid) { return Optional.empty(); }
+                signingKeyFound = true;
+            }
+            if (!signingKeyFound) return Optional.empty();
+        }
+        if (keys.size() != 1) return Optional.empty();
+        return Optional.of(result(Outcome.SATISFIED_WITH_NOTE,
+                "metadata.publisher.signing-key-unambiguous", evidence,
+                Map.of("distinct_signing_keys", 1, "role", "IDPSSODescriptor")));
     }
 
     private static Optional<CaseOutcome> publishedUiGuidance(

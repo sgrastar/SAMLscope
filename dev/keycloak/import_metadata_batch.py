@@ -97,6 +97,7 @@ def main():
     parser.add_argument('--signature-control',action='store_true',help='Exercise a corrupt signature before each normal flow')
     parser.add_argument('--suite-signature-control',action='store_true',help='Use Suite-issued and recorded invalid-signature controls')
     parser.add_argument('--run',help='Append a new fixture campaign to an existing reference Run')
+    parser.add_argument('--profile',choices=['metadata_idp','browser_sso_idp'],default='metadata_idp')
     parser.add_argument('--variants',help='Comma-separated Suite fixture IDs, beginning with control')
     args=parser.parse_args()
     if args.flow_run:
@@ -116,11 +117,11 @@ def main():
         plan_id=existing['planId']
         save(out/'created.json',dict(run=dict(id=run,planId=plan_id),reused=True))
     else:
-        plan=api('/api/plans',dict(name='Keycloak original metadata import batch',profile='metadata_idp',
+        plan=api('/api/plans',dict(name='Keycloak original metadata import batch',profile=args.profile,
             targetKind='IDP',targetEntityId='http://localhost:18180/realms/samlscope',
             metadataSourceKind='URL',metadataSourceLocation='http://samlscope-reference-keycloak:8080/realms/samlscope/protocol/saml/descriptor',
             suiteMetadataDelivery='HTTP_URL',declaredFeatures={},
-            parameters=dict(clockSkewToleranceSeconds=180,metadataRefreshWaitSeconds=300,testUserHint='samlscope-m0-user'),
+            parameters=dict(clockSkewToleranceSeconds=180,metadataRefreshWaitSeconds=300,testUserHint='samlscope-m0-user',requestSigningMode='REQUIRED'),
             interaction=dict(allowBrowserSteps=True,allowAttestation=False,preset='quick'),authorizedTarget=True))
         save(out/'plan.json',plan);plan_id=plan['plan']['plan']['id']
         created=api('/api/plans/'+plan_id+'/runs',{});save(out/'created.json',created);run=created['run']['id']
@@ -142,7 +143,8 @@ def main():
             (folder/'fixture.xml').write_bytes(fixture)
             follow=shlex.join([sys.executable,str(pathlib.Path(__file__).resolve()),'--flow-run',run,'--output',str(folder/'flow.json')]
                 + (['--signature-control'] if args.signature_control else []))
-            if args.suite_signature_control:follow += ' --suite-signature-control'
+            if args.suite_signature_control and not variant.startswith('default-acs-'):
+                follow += ' --suite-signature-control'
             command=['node',str(stage/'console_import.mjs'),'--fixture',str(folder/'fixture.xml'),
                 '--record',str(folder/'import.json'),'--entity-id',BASE+'/p/'+plan_id,'--verify-command',follow,'--delete']
             result=subprocess.run(command,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,text=True,timeout=420)

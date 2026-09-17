@@ -23,6 +23,25 @@ class TargetMetadataObservationTest {
     @TempDir java.nio.file.Path directory;
 
     @Test
+    void aSingleSigningKeyMakesIdentificationUnambiguousButUnknownCandidatesDoNot() throws Exception {
+        var cert = certificate();
+        var key = "<md:KeyDescriptor use='signing'><ds:KeyInfo><ds:X509Data><ds:X509Certificate>"
+                + cert + "</ds:X509Certificate></ds:X509Data></ds:KeyInfo></md:KeyDescriptor>";
+        var id = "IIP-MD05-ae-idp-01";
+        assertOutcome(id, Outcome.SATISFIED_WITH_NOTE, metadata(role("IDPSSODescriptor", SAML2, key)));
+        assertOutcome(id, Outcome.SATISFIED_WITH_NOTE, metadata(role("IDPSSODescriptor", SAML2, key + key)));
+        assertTrue(TargetMetadataObservation.evaluate(id, metadata(role("IDPSSODescriptor", SAML2, "")), NOW).isEmpty());
+        assertTrue(TargetMetadataObservation.evaluate(id, metadata(role("SPSSODescriptor", SAML2, key)), NOW).isEmpty());
+        assertTrue(TargetMetadataObservation.evaluate(id, metadata(role("IDPSSODescriptor", SAML2, key.replace("use='signing'", "use='encryption'"))), NOW).isEmpty());
+        assertTrue(TargetMetadataObservation.evaluate(id, metadata(role("IDPSSODescriptor", SAML2, key.replace(cert, "invalid"))), NOW).isEmpty());
+        var other = Base64.getEncoder().encodeToString(new FilePlanKeyStore(directory, Clock.fixed(NOW, ZoneOffset.UTC))
+                .getOrCreate("plan_0123456789ABCDEFGHJKMNPQRS", "different").certificate().getEncoded());
+        assertTrue(TargetMetadataObservation.evaluate(id, metadata(role("IDPSSODescriptor", SAML2, key + key.replace(cert, other))), NOW).isEmpty());
+        assertTrue(TargetMetadataObservation.evaluate(id, metadata(role("IDPSSODescriptor", SAML2,
+                key.replace("</ds:KeyInfo>", "<ds:KeyValue/></ds:KeyInfo>"))), NOW).isEmpty());
+    }
+
+    @Test
     void unpublishedUiGuidanceUsesOnlyTheExplicitApprovedNoteBranches() {
         for (var suffix : List.of("f7", "f8", "fa")) {
             var id = "IIP-MD05-" + suffix + "-idp-01";

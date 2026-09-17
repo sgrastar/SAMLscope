@@ -14,6 +14,10 @@ MD = '{urn:oasis:names:tc:SAML:2.0:metadata}'
 def verify(root):
     path, cases = verify_native(root, folder='simplesamlphp-default-acs', adopted=ADOPTED,
                                require_signature_control=False)
+    return verify_selection(path, cases)
+
+def selection_mismatches(path, cases):
+    mismatches = []
     folder = path.parent
     result = json.loads(path.read_text())
     run = result['run']['id']
@@ -48,9 +52,16 @@ def verify(root):
             assert response.get('InResponseTo') == request.get('ID')
             assert response.find('{urn:oasis:names:tc:SAML:2.0:protocol}Status/{urn:oasis:names:tc:SAML:2.0:protocol}StatusCode').get('Value') == 'urn:oasis:names:tc:SAML:2.0:status:Success'
             url = entries[ref]['url']
-            assert url == selected.get('Location')
+            assert response.get('Destination') == url
+            assert url in [e.get('Location') for e in endpoints]
+            if url != selected.get('Location'):
+                mismatches.append({'variant':variant,'expected_url':selected.get('Location'),'observed_url':url})
             query = parse_qs(urlparse(url).query)
             assert query.get('run') == [run] and query.get('mdv') == [variant]
+    return mismatches
+
+def verify_selection(path, cases):
+    assert not selection_mismatches(path, cases)
     return path, cases
 
 if __name__ == '__main__':

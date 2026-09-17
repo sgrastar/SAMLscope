@@ -541,6 +541,12 @@ def render(root,definitions,output):
             assert observed['details']['consumer_acceptance_proves_namespace_qualification'] is False
             assert observed['details']['missing_namespace_qualification_evidence']==['extension-points']
             selected=(path,cases)
+        if row['profile']=='metadata_idp' and row['case']=='IIP-MD05-ae-idp-01':
+            from verify_single_signing_key_batch import verify as verify_single_key
+            selected=verify_single_key(root.parent.parent/'reference-20260918',row['product'])
+        if row['product']=='keycloak' and row['profile']=='browser_sso_idp' and row['case']=='IIP-IDP12-c-idp-01':
+            from audit_keycloak_default_acs import verify as verify_keycloak_acs
+            selected=verify_keycloak_acs(root.parent.parent/'reference-20260918')
         if selected is not None:
             path, selected_cases = selected
             raw=path.read_bytes(); result=json.loads(raw); case=selected_cases[row['case']]
