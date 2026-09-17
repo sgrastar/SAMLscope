@@ -35,6 +35,13 @@ CONFIRMED_FAILURES = {
 }
 
 def render(root, output):
+    # The audited ledger owns the final per-case selection, including withdrawn conclusions.
+    # Older feature-specific selections above must not resurrect a result rejected by that audit.
+    ledger_selection = {}
+    delta_path = root / "remaining-audit/retest-delta.json"
+    if delta_path.exists():
+        for row in json.loads(delta_path.read_text()):
+            ledger_selection[(row["product"], row["profile"], row["case"])] = row
     sections = []
     manifest = []
     alg_adopted = set()
@@ -208,7 +215,8 @@ def render(root, output):
                 ('simplesamlphp', 'browser_sso_idp'): {
                     'folder': '../reference-20260915/peer-intent/simplesamlphp/browser_alg_enc',
                     'cases': {
-                        'IIP-ALG06-a-idp-01': ('PASS', 'browser.encryption.rsa-oaep-mgf1p.decrypted')}},
+                        'IIP-ALG06-a-idp-01': ('PASS', 'browser.encryption.rsa-oaep-mgf1p.decrypted'),
+                        'IIP-IDP09-a-idp-01': ('PASS', 'configuration.passive.assertion-encryption-capability')}},
                 ('simplesamlphp', 'ecp_idp'): {
                     'folder': '../reference-20260915/peer-intent/simplesamlphp/ecp_alg_enc',
                     'cases': {
@@ -242,6 +250,27 @@ def render(root, output):
                                  'run': peer_result['run']['id'], 'cases': sorted(peer['cases']),
                                  'result_sha256': hashlib.sha256(peer_raw).hexdigest(),
                                  'suite_image': peer_result['suite']['image_digest']})
+            for (selected_product, selected_profile, case_id), row in ledger_selection.items():
+                if (selected_product, selected_profile) != (product, profile):
+                    continue
+                selected_folder = Path(row["evidence_folder"])
+                result_path = selected_folder / "result.json"
+                if not result_path.exists():
+                    result_path = root / selected_folder / "result.json"
+                selected_raw = result_path.read_bytes()
+                assert hashlib.sha256(selected_raw).hexdigest() == row["result_sha256"]
+                selected = json.loads(selected_raw)
+                assert selected["run"]["id"] == row["run"]
+                matches = [c for req in selected["requirements"] for c in req["cases"] if c["id"] == case_id]
+                assert len(matches) == 1
+                replacement = matches[0]
+                assert (replacement["verdict"], replacement["reason_code"]) == (row["verdict"], row["reason_code"])
+                cases[case_id] = replacement
+                peer_adopted.add((product, profile, case_id))
+                manifest.append({"profile": profile, "product": product, "folder": str(result_path.parent),
+                                 "run": row["run"], "cases": [case_id],
+                                 "result_sha256": row["result_sha256"],
+                                 "suite_image": selected["suite"]["image_digest"], "selection": "audited-ledger"})
             columns.append(cases)
             unresolved[product].update(c["reason_code"] for c in cases.values() if c["verdict"] == "NOT_VERIFIED")
             manifest.append({"profile": profile, "product": product, "folder": folder,
@@ -263,12 +292,14 @@ def render(root, output):
                     cells.append(f"{qualification[0]} [{qualification[1]}]")
                     continue
                 verdict = case["verdict"]
-                if verdict == "FAIL" and case_id not in CONFIRMED_FAILURES:
+                if verdict == "FAIL" and case_id not in CONFIRMED_FAILURES and (product, profile, case_id) not in ledger_selection:
                     raise ValueError(f"Unreviewed failure: {product} {case_id}")
                 display = {"PASS": "Success", "FAIL": "**Failed (Product)**", "WARNING": "Warning",
                            "NOT_VERIFIED": "Not verified", "NOT_APPLICABLE": "N/A",
                            "NOT_OBSERVABLE": "Not observable", "INDETERMINATE": "Indeterminate",
                            "INCONSISTENT": "Inconsistent", "ERROR": "Error (Suite)"}.get(verdict, verdict)
+                if verdict == "FAIL" and case_id not in CONFIRMED_FAILURES:
+                    display = "**Failed (台帳採用・原因分類未確認)**"
                 if product == 'simplesamlphp' and profile == 'browser_sso_idp' and case_id == 'IIP-IDP06-b-idp-01':
                     display += " (prior run; latest precision not verified)"
                 cells.append(display + (" †" if (product == "shibboleth" and profile == "browser_sso_idp" and case_id in {'IIP-SSO01-fk-idp-01','IIP-SSO01-fu-idp-01','IIP-SSO01-gi-idp-01'}) or (product == "simplesamlphp" and profile == "browser_sso_idp" and case_id in {"IIP-IDP06-a-idp-01", "IIP-IDP06-b-idp-01"}) or (profile == "single_logout_idp" and (case_id in COMMON_RETESTS or case_id == "IIP-IDP17-a-idp-01" or case_id == "IIP-IDP18-a-idp-01" or case_id == "IIP-IDP19-a-idp-01" or case_id == "IIP-IDP19-c-idp-01" or (product == "shibboleth" and case_id == "IIP-IDP19-b-idp-01"))) or case_id in ADDITIONAL_RETESTS.get(profile, set()) or (product, profile, case_id) in alg_adopted or (product, profile, case_id) in peer_adopted or (product == "shibboleth" and ((profile == "metadata_idp" and case_id in POLLING_RETESTS) or (profile == "browser_sso_idp" and case_id == "IIP-IDP12-c-idp-01"))) else ""))
@@ -293,11 +324,12 @@ def render(root, output):
                    "| 理由 | Keycloak | Shibboleth IdP | SimpleSAMLphp | 解消に必要なこと |",
                    "|---|---:|---:|---:|---|"]
     reasons = set().union(*(counter.keys() for counter in unresolved.values()))
-    for reason in sorted(reasons, key=lambda key: -sum(c[key] for c in unresolved.values())):
+    for reason in sorted(reasons, key=lambda key: (-sum(c[key] for c in unresolved.values()), key)):
         counts = " | ".join(str(unresolved[p][reason]) for p in PRODUCTS)
         label = reason_labels.get(reason, "当該ケースの応答・対象設定・正常系対照を追加確認")
         reason_lines.append(f"| `{reason}` | {counts} | {label} |")
     reason_lines += ["", "Chromeと承認のブロックを解除するだけでは解消しません。自動判定やfixtureの未実装にはSuiteの実装が必要です。設定・自己申告の経路は証拠の裏付けが必要です。[全件台帳](26-unverified-case-inventory.md)にケースごとの原因と再試験を記録しています。"]
+    template += "\n\n台帳で採用済みの追加結果は、Run・SHA-256・Verdictを照合して比較表へ反映しています。`Failed (台帳採用・原因分類未確認)`は保存済み判定の転記であり、この更新で製品への原因帰属を追加承認したものではありません。"
     text = template + "\n\n" + "\n".join(reason_lines) + "\n\n## テスト別比較\n\n" + "\n\n".join(sections) + "\n\n## 採用した実行証拠\n\n" + "\n".join(rows) + "\n"
     output.write_text(text)
     (root / "fix-verification/comparison-provenance.json").write_text(json.dumps(manifest, indent=2) + "\n")

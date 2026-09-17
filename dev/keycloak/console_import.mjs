@@ -21,6 +21,7 @@ function arg(name, fallback) {
 const fixturePath = arg('--fixture');
 const recordPath = arg('--record', 'import-record.json');
 const verifyCommand = arg('--verify-command');
+const expectedEntityId = arg('--entity-id');
 const deleteAfter = process.argv.includes('--delete');
 if (!fixturePath) {
   console.error('usage: node console_import.mjs --fixture <xml> [--record <json>] [--verify-command <cmd>] [--delete]');
@@ -54,18 +55,21 @@ async function readBack(token, clientId) {
   return await detail.json();
 }
 
-let browser;
+let browser, page;
 try {
   const bytes = fs.readFileSync(fixturePath);
   record.fixture = { path: fixturePath, sha256: crypto.createHash('sha256').update(bytes).digest('hex'), bytes: bytes.length };
   // The fixture's entityID is the clientId the product must derive by itself.
   const entityMatch = /entityID="([^"]+)"/.exec(bytes.toString('utf8'));
   if (!entityMatch) throw new Error('fixture has no entityID');
-  const entityId = entityMatch[1];
+  const entityId = expectedEntityId ?? entityMatch[1];
+  if (expectedEntityId && !Array.from(bytes.toString('utf8').matchAll(/entityID="([^"]+)"/g))
+      .some(match => match[1] === expectedEntityId)) throw new Error('Expected entity is absent from the original fixture');
   record.fixture.entity_id = entityId;
 
+  if (await readBack(await adminToken(), entityId)) throw new Error('Refusing to overwrite an existing client');
   browser = await chromium.launch({ channel: 'chrome', headless: true });
-  const page = await browser.newPage();
+  page = await browser.newPage();
   await page.goto(CONSOLE, { waitUntil: 'networkidle', timeout: 60000 });
   if (await page.locator('#username').count()) {
     await page.fill('#username', 'admin');
@@ -76,6 +80,10 @@ try {
   await page.getByText('Import client', { exact: true }).click({ timeout: 30000 });
   await page.locator('input[type=file]').setInputFiles(fixturePath);
   pass('file-selected');
+  // File selection completes before the console's asynchronous metadata parser.
+  await page.waitForFunction(expected => Array.from(document.querySelectorAll('input'))
+    .some(input => input.value === expected), entityId, { timeout: 30000 });
+  pass('product-parsed-entity-id');
   await page.getByRole('button', { name: /^save$/i }).first().click({ timeout: 30000 });
   record.import.save_clicked = true;
 
@@ -92,6 +100,10 @@ try {
   const idMatch = /\/clients\/([0-9a-f-]+)\/settings/.exec(page.url());
   record.client.database_id = idMatch ? idMatch[1] : null;
   record.import.final_url = page.url();
+  if (!idMatch) {
+    await page.screenshot({ path: recordPath.replace(/\.json$/, '.png'), fullPage: true });
+    record.import.page_text = (await page.locator('body').innerText()).slice(0, 2500);
+  }
   if (!idMatch) throw new Error(`import did not reach the client settings page (${uiStatus})`);
   pass('product-import-signal', uiStatus);
 
@@ -131,7 +143,10 @@ try {
   if (record.status === 'running') record.status = 'success';
 } catch (error) {
   fail('import-run', String(error).slice(0, 600));
-  try { await browser?.pages()[0]?.screenshot({ path: recordPath.replace(/\.json$/, '.png'), fullPage: true }); } catch {}
+  if (deleteAfter && record.fixture.entity_id && !record.import.save_clicked) {
+    try { record.cleanup = { no_save_attempted: true, read_back_absent: (await readBack(await adminToken(), record.fixture.entity_id)) === null }; } catch {}
+  }
+  try { await page?.screenshot({ path: recordPath.replace(/\.json$/, '.png'), fullPage: true }); } catch {}
 } finally {
   await browser?.close();
 }

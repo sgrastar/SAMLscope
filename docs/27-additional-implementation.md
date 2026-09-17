@@ -743,3 +743,21 @@ API `GET/POST /api/runs/{id}/target-initiated` とRun workspaceの準備パネ�
 <!--g1-literal--> 未検証548件の解消理由を、Verdictを変えずに`capability_diagnosis`として分類しました。内訳はsuite-observation-gap 379、operator-attestation-available 77、evidence-form-mismatch 47、role-inapplicable 24、feature-absent 21です。公開診断の許可キーに同キーと固定トークンを追加し、将来の表示（OIDF Conformanceのskipped相当を含む）に備えました。分類は台帳生成器が作成し、[全件台帳](26-unverified-case-inventory.md)に記録しています。
 
 <!--g1-literal--> SimpleSAMLphpのSuite SPメタデータへ`assertion.encryption=true`を設定し、browser_sso_idpとecp_idpのRunでAssertion暗号化を観測しました。鍵輸送はRSA-OAEP-MGF1Pで`IIP-ALG06-a`がSuccess、内容暗号はCBCのため`IIP-ALG04.a`は未検証を維持しました。設定はin-placeで復元し、コンテナ再起動後にPHP構文と値（NULL）を確認しています。未検証は548から546へ減少しました。
+
+
+### 保存済み実証と台帳の照合（2026-09-17）
+
+<!--g1-literal--> 現在の未検証に対して保存済みresult.jsonの確定判定を照合し、24観測の候補を確認しました。採用できたのはSimpleSAMLphpのbrowser_sso_idp、`IIP-IDP09-a-idp-01`（Assertion暗号化能力）の1観測です。未検証は518→517、異なるケースIDは171→170、基準からの確定は76→77になりました。新しい製品試験は実行していません。
+
+採用Runは `run_VRW5T0M31JGT71ZG6MR1JF92PJ`、元結果は `build/acceptance/reference-20260915/peer-intent/simplesamlphp/browser_alg_enc/result.json`、SHA-256は `503d257c71742219b1dac6574dc96ebf631cdc7642007c2c905b29e3cdc62b50` です。`configuration.passive.assertion-encryption-capability` のPASSを採用しました。復号済みEncryptedAssertionの応答参照は `tx_5R7TGFK6S2CR86125YH70J5PQJ` と `tx_YTZYN207T7VA49N6WEY7N4EB5S` で、同Runですでに採用済みのALG06.aの証拠集合にも含まれます。承認済み条件はSuiteメタデータの暗号化鍵に対するEncryptedAssertionの返却で、判定処理はRun鍵でのAssertion復号を確認します。
+
+古いSLOの未発行・未実装・消費確認の判定は監査で撤回済みのため再採用しません。SimpleSAMLphpのSSO01.czのWarningは証拠参照が空で、暗号化されたAssertion内のSubjectを評価した証明にならないため採用しません。過去の署名・エラー・NameID試験も、現在採用している結果とSuite側の留保を覆す新しい証拠ではないため維持しました。候補別の採否と元結果のSHA-256は `build/acceptance/reference-20260917/ledger-reconciliation/audit.json` に保存しました。
+
+比較表の生成器も、全件台帳の再試験差分から最終採用Run・SHA-256・Verdict・理由を照合して反映するよう修正しました。これにより以前のSLO採用漏れと撤回済み判定の再表示を防ぎます。台帳で採用済みでも比較表の製品原因確認リストにないFAILは、原因分類未確認と明記し、今回の更新で製品への原因帰属を追加承認しません。
+
+<!--g1-literal--> 製品設定変更・復元・ブラウザ操作・本人操作はいずれも0回です。Dockerは停止したままで、過去の実証の採用漏れを反映した更新です。再起動後に欠けていた一時allowed-signersファイルは、既存の公開署名鍵から復元しました。
+
+
+### 製品コンソール取込後のSSOによる確定（2026-09-17）
+
+<!--g1-literal--> Keycloakの元メタデータ取込と署名付きSSOの連続実行を実装し、MD02.c、MD05.a4、MD05.a5、MD05.g、MD12.a、MD12.cの6観測を確定しました。未検証は517→511、異なるケースIDは170のままです。KeyValue-onlyで署名検証が無効になっても旧判定がPASSを返す問題も検出し、その2ケースは採用しません。必要条件と設定作業量、失敗試行、採用証拠は [製品コンソール取込の受入記録](34-native-metadata-import-acceptance.md) を参照してください。

@@ -332,7 +332,8 @@ def render(root,definitions,output):
                 'IIP-ALG04-a-idp-01':('PASS','browser.encryption.aes128-gcm.decrypted'),
                 'IIP-ALG06-a-idp-01':('PASS','browser.encryption.rsa-oaep-mgf1p.decrypted')},
             ('simplesamlphp','browser_sso_idp'):{
-                'IIP-ALG06-a-idp-01':('PASS','browser.encryption.rsa-oaep-mgf1p.decrypted')},
+                'IIP-ALG06-a-idp-01':('PASS','browser.encryption.rsa-oaep-mgf1p.decrypted'),
+                'IIP-IDP09-a-idp-01':('PASS','configuration.passive.assertion-encryption-capability')},
             ('simplesamlphp','ecp_idp'):{
                 'IIP-ALG06-a-idp-01':('PASS','browser.encryption.rsa-oaep-mgf1p.decrypted')},
             ('keycloak','single_logout_idp'):{
@@ -479,6 +480,18 @@ def render(root,definitions,output):
             case=next(c for req in result['requirements'] for c in req['cases'] if c['id']==row['case'])
             want=target_expectations[row['product']][row['case']]
             assert (case['verdict'],case['reason_code'])==want,(row['product'],row['case'],case['verdict'],case['reason_code'])
+            row['baseline']={k:row.get(k) for k in ('run','reason_code','result_sha256','evidence_folder','interaction')}
+            row.update(run=result['run']['id'],reason_code=case['reason_code'],
+                       result_sha256=hashlib.sha256(raw).hexdigest(),
+                       evidence_folder=str(path.parent.relative_to(root.parents[3])),
+                       interaction=None,verdict=case['verdict'],evidence=case['evidence'],
+                       diagnostics=case.get('diagnostics',{}))
+            transitions.append(dict(row))
+        # Native console import followed by signed SSO, with per-fixture cleanup evidence.
+        from verify_keycloak_import_batch import ADOPTED, verify as verify_import_batch
+        if row['product']=='keycloak' and row['profile']=='metadata_idp' and row['case'] in ADOPTED:
+            path, imported_cases = verify_import_batch(root.parent.parent/'reference-20260917')
+            raw=path.read_bytes(); result=json.loads(raw); case=imported_cases[row['case']]
             row['baseline']={k:row.get(k) for k in ('run','reason_code','result_sha256','evidence_folder','interaction')}
             row.update(run=result['run']['id'],reason_code=case['reason_code'],
                        result_sha256=hashlib.sha256(raw).hexdigest(),
