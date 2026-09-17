@@ -110,7 +110,8 @@ class CatalogDocumentsTest {
         var defaults = org.junit.jupiter.api.Assertions.assertInstanceOf(
                 com.samlscope.runner.cases.MetadataFixtureObservationTestCase.class,
                 browser.require("IIP-IDP12-c-idp-01"));
-        assertEquals(java.util.List.of("control", "default-acs-first", "default-acs-second", "default-acs-implicit"),
+        assertEquals(java.util.List.of("control", "default-acs-first", "default-acs-second", "default-acs-implicit",
+                "default-acs-first-omitted", "default-acs-all-false", "default-acs-multiple-true"),
                 defaults.evidenceActionKeys());
         assertTrue(com.samlscope.saml.metadata.MetadataService.preloadedCampaignVariants().stream()
                 .noneMatch(com.samlscope.saml.metadata.MetadataService.Variant::defaultAcsProbe),
@@ -234,13 +235,13 @@ class CatalogDocumentsTest {
         var questionnaireFree = automated + browserActions + conclusiveAttested + conclusiveConfig;
 
         assertEquals(413, totalIdpFull);
-        assertEquals(241, conclusive,
+        assertEquals(242, conclusive,
                 "Update this explicit IDP Full automatic-oracle inventory when an oracle changes: automated="
                         + automated + ", browser=" + conclusiveBrowser + ", attested="
                         + conclusiveAttested + ", config=" + conclusiveConfig);
         assertTrue(conclusive * 2 > totalIdpFull,
                 "At least half of IDP Full must conclude without an operator-supplied verdict");
-        assertEquals(285, questionnaireFree,
+        assertEquals(286, questionnaireFree,
                 "Update this explicit IDP Full no-questionnaire inventory when an interaction changes");
     }
 

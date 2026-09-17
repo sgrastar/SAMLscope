@@ -79,11 +79,11 @@ Shibbolethの`IIP-SSO01-fk/fu/gi`は、v8では事前生成された正常系要
 
 ## Not verifiedの内訳
 
-以下は表に採用したケース結果の延べ485件。†のケースは新Runの追加証拠を採用し、それ以外の既存証拠は保持しています。単一Runの集計や全試験の再完走を意味しません。比較表で設定不足として扱い直した旧FAILは、このNOT_VERIFIED集計には含めません。
+以下は表に採用したケース結果の延べ483件。†のケースは新Runの追加証拠を採用し、それ以外の既存証拠は保持しています。単一Runの集計や全試験の再完走を意味しません。比較表で設定不足として扱い直した旧FAILは、このNOT_VERIFIED集計には含めません。
 
 | 理由 | Keycloak | Shibboleth IdP | SimpleSAMLphp | 解消に必要なこと |
 |---|---:|---:|---:|---|
-| `case.pending-interaction` | 97 | 88 | 99 | 設定・受信待ちに加え、判定処理未実装の経路を含む。全件台帳を参照 |
+| `case.pending-interaction` | 97 | 88 | 97 | 設定・受信待ちに加え、判定処理未実装の経路を含む。全件台帳を参照 |
 | `attestation.interaction-disallowed` | 25 | 25 | 25 | 自己申告を無効にした構成。確認せずに申告を代行しない |
 | `browser_fixture_partial` | 19 | 21 | 19 | 一部の試験だけ実行。残るvariantの証拠が不足 |
 | `idp.signed-request.inconclusive` | 7 | 1 | 7 | 当該ケースの応答・対象設定・正常系対照を追加確認 |
@@ -123,8 +123,8 @@ Chromeと承認のブロックを解除するだけでは解消しません。�
 | `IIP-ALG01-a-idp-01` | Success | Success | Success |
 | `IIP-ALG02-a-idp-01` | Success | Success | Success |
 | `IIP-ALG03-a-idp-01` | Not verified | Not verified | Not verified |
-| `IIP-ALG04-a-idp-01` | Success † | Success † | Not verified † |
-| `IIP-ALG04-b-idp-01` | Success † | Not verified † | Not verified † |
+| `IIP-ALG04-a-idp-01` | Success † | Success † | Success † |
+| `IIP-ALG04-b-idp-01` | Success † | Not verified † | Success † |
 | `IIP-ALG05-a-idp-01` | Warning | Warning | Warning |
 | `IIP-ALG06-a-idp-01` | Success † | Success † | Success † |
 | `IIP-ALG06-b-idp-01` | Success † | Not verified † | Not verified † |
@@ -564,8 +564,8 @@ Chromeと承認のブロックを解除するだけでは解消しません。�
 | browser_sso_idp († listed supplemental cases only) | simplesamlphp | `run_TS5JTACXSDMGB9PE8Z9ZS2MP5K` | `build/acceptance/reference-20260914/additional-implementation/simplesamlphp/browser_sso_idp` |
 | browser_sso_idp († listed supplemental cases only) | simplesamlphp | `run_NXTAXWN71DEJF02ZNAQXS4AZA8` | `build/acceptance/reference-20260918/simplesamlphp-opaque-principal-control` |
 | browser_sso_idp († listed supplemental cases only) | simplesamlphp | `run_XA01CQ82M03JJQ5JNECA47XFFQ` | `build/acceptance/reference-20260914/crypto-integrated-implementation/simplesamlphp/browser_sso_idp` |
-| browser_sso_idp († listed supplemental cases only) | simplesamlphp | `run_K811HY2DMZWV52HTT82251AVFZ` | `build/acceptance/reference-20260915/algorithm-observation-batch/simplesamlphp/browser_sso_idp` |
-| browser_sso_idp († listed supplemental cases only) | simplesamlphp | `run_K811HY2DMZWV52HTT82251AVFZ` | `build/acceptance/reference-20260915/algorithm-observation-batch/simplesamlphp/browser_sso_idp` |
+| browser_sso_idp († listed supplemental cases only) | simplesamlphp | `run_00MKHH590BSDDG411ST76J02AD` | `build/acceptance/reference-20260918/simplesamlphp-shared-gcm128` |
+| browser_sso_idp († listed supplemental cases only) | simplesamlphp | `run_30QS0MMCHGS3Q02VGHJ5VYEP9J` | `build/acceptance/reference-20260918/simplesamlphp-shared-gcm256` |
 | browser_sso_idp († listed supplemental cases only) | simplesamlphp | `run_VRW5T0M31JGT71ZG6MR1JF92PJ` | `build/acceptance/reference-20260915/peer-intent/simplesamlphp/browser_alg_enc` |
 | browser_sso_idp († listed supplemental cases only) | simplesamlphp | `run_K811HY2DMZWV52HTT82251AVFZ` | `build/acceptance/reference-20260915/algorithm-observation-batch/simplesamlphp/browser_sso_idp` |
 | browser_sso_idp († listed supplemental cases only) | simplesamlphp | `run_K811HY2DMZWV52HTT82251AVFZ` | `build/acceptance/reference-20260915/algorithm-observation-batch/simplesamlphp/browser_sso_idp` |

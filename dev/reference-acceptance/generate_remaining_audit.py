@@ -565,6 +565,11 @@ def render(root,definitions,output):
             assert (case['verdict'],case['reason_code'])==('NOT_VERIFIED','saml.subject-principal.undetermined')
             assert cases['IIP-ALG06-a-idp-01']['reason_code']=='browser.encryption.rsa-oaep-mgf1p.decrypted'
             selected=(path,cases)
+        if row['product']=='simplesamlphp' and row['profile']=='browser_sso_idp' and row['case'] in {
+                'IIP-ALG04-a-idp-01','IIP-ALG04-b-idp-01'}:
+            from verify_shared_gcm_batch import verify as verify_shared_gcm
+            selected=verify_shared_gcm(root.parent.parent/'reference-20260918',
+                128 if row['case']=='IIP-ALG04-a-idp-01' else 256)
         if selected is not None:
             path, selected_cases = selected
             raw=path.read_bytes(); result=json.loads(raw); case=selected_cases[row['case']]

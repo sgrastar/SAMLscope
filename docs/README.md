@@ -135,3 +135,5 @@ not by differences in reference-implementation results ([00 §5](00-concept.md))
 - [Keycloak既定ACSの実証と署名鍵の一意性判定](38-keycloak-acs-and-signing-key.md)
 - [SimpleSAMLphp暗号化SSOの実行経路と不足理由](39-encrypted-sso-execution.md)
 - [共有鍵GCM復号の基盤と不透明なAssertionの判定修正](40-shared-key-decryption-foundation.md)
+
+- [SimpleSAMLphp共有鍵GCMの実機検証](41-shared-key-gcm-acceptance.md)

@@ -64,6 +64,7 @@ final class M1Runtime {
     private final com.samlscope.runner.TargetInitiatedIntents targetInitiated;
     private final com.samlscope.runner.SupplementalDecryptionKeyService supplementalKeys;
     private final java.util.function.Function<String, com.samlscope.runner.SupplementalDecryptionKeyService.Scope> supplementalKeyScopes;
+    private final com.samlscope.runner.cases.ScopedSharedDecryptionKeys runDecryptionKeys;
     private final AppConfig config;
     private final QuickCheckService quickCheck;
     private final ResultPublicationService results;
@@ -123,7 +124,9 @@ final class M1Runtime {
             com.samlscope.runner.ApplicabilityProvider applicability,
             com.samlscope.runner.SupplementalDecryptionKeyService supplementalKeys,
             java.util.function.Function<String, com.samlscope.runner.SupplementalDecryptionKeyService.Scope> supplementalKeyScopes,
-            com.samlscope.runner.TargetInitiatedIntents targetInitiated) {
+            com.samlscope.runner.TargetInitiatedIntents targetInitiated,
+            com.samlscope.runner.cases.ScopedSharedDecryptionKeys runDecryptionKeys) {
+        this.runDecryptionKeys = runDecryptionKeys;
         this.targetInitiated = targetInitiated;
         this.supplementalKeys = supplementalKeys;
         this.supplementalKeyScopes = supplementalKeyScopes;
@@ -325,11 +328,11 @@ final class M1Runtime {
                     try { return targetCertificates.certificatesFor(plan, runId); }
                     catch (RuntimeException unavailable) { return List.of(); }
                 });
-        var runDecryptionKeys = (com.samlscope.runner.cases.SamlDecryptionKeyProvider) runId -> {
+        var runDecryptionKeys = new com.samlscope.runner.cases.ScopedSharedDecryptionKeys(runId -> {
             var run = runs.find(runId)
                     .orElseThrow(() -> new IllegalArgumentException("Unknown Run"));
             return java.util.Optional.of(keys.getOrCreate(run.planId()).privateKey());
-        };
+        }, new com.samlscope.store.SqliteRunSharedKeyCommitments(database)::bind);
         var m1Config = ApprovedConfigCaseRegistry.create(
                 definitions, com.samlscope.core.casedef.CaseDefinitionCatalog.Milestone.M1,
                 runMetadata, transcriptContent, runDecryptionKeys);
@@ -550,7 +553,7 @@ final class M1Runtime {
                 configurations, browserCompletions, caseExecutions, publications,
                 reconciliationLimiter, hostedRunProvisioner, activeProbes, timeouts,
                 campaigns, campaignActions, profileDefinitions, coverage, applicability, supplementalKeys,
-                supplementalKeyScopes, targetInitiated);
+                supplementalKeyScopes, targetInitiated, runDecryptionKeys);
     }
 
     java.util.Set<com.samlscope.core.profile.FunctionalProfile> installedProfiles() {
@@ -793,6 +796,19 @@ final class M1Runtime {
             reconcileTranscriptEvidenceNow(runId);
             return protocolEvidence.status(runId);
         });
+    }
+
+    com.samlscope.runner.ProtocolEvidenceAutomationService.Evaluation evaluateProtocolEvidence(String runId, byte[] sharedKey) {
+        try {
+            return withManualEvidenceWork(runId, () -> {
+                requireRun(runId);
+                return runDecryptionKeys.evaluate(runId, sharedKey, () -> {
+                    var value = protocolEvidence.evaluateReady(runId);
+                    if (results != null) results.generate(runId);
+                    return value;
+                });
+            });
+        } finally { if (sharedKey != null) java.util.Arrays.fill(sharedKey, (byte) 0); }
     }
 
     com.samlscope.runner.ProtocolEvidenceAutomationService.Evaluation evaluateProtocolEvidence(String runId) {
