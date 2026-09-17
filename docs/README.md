@@ -137,3 +137,5 @@ not by differences in reference-implementation results ([00 §5](00-concept.md))
 - [共有鍵GCM復号の基盤と不透明なAssertionの判定修正](40-shared-key-decryption-foundation.md)
 
 - [SimpleSAMLphp共有鍵GCMの実機検証](41-shared-key-gcm-acceptance.md)
+
+- [メタデータのアルゴリズム順序・Role優先の実行条件](42-metadata-algorithm-fixtures.md)

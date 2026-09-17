@@ -43,6 +43,18 @@ public final class MetadataService {
     public static final String SOAP = "urn:oasis:names:tc:SAML:2.0:bindings:SOAP";
     public static final String PAOS = "urn:oasis:names:tc:SAML:2.0:bindings:PAOS";
     private static final List<Variant> PRELOADED_CAMPAIGN_VARIANTS = List.of(
+            Variant.ALGORITHM_ENTITY_SHA256,
+            Variant.ALGORITHM_ENTITY_SHA384,
+            Variant.ALGORITHM_ENTITY_ORDER_256_384,
+            Variant.ALGORITHM_ENTITY_ORDER_384_256,
+            Variant.ALGORITHM_ROLE_ORDER_256_384,
+            Variant.ALGORITHM_ROLE_ORDER_384_256,
+            Variant.ALGORITHM_ROLE_SIGNING_384,
+            Variant.ALGORITHM_ROLE_DIGEST_384,
+            Variant.ALGORITHM_ROLE_BOTH_384,
+            Variant.ALGORITHM_ROLE_BOTH_256,
+            Variant.ALGORITHM_UNSUPPORTED_FIRST,
+            Variant.ALGORITHM_ABSENT,
             Variant.UNKNOWN_EXTENSION,
             Variant.UNKNOWN_ROLE_EXTENSION,
             Variant.UNKNOWN_ORGANIZATION_EXTENSION,
@@ -247,6 +259,7 @@ public final class MetadataService {
         root = applyStructureFixture(document, root, plan, variant, runId);
         root = MetadataExtensionAttributeFixtures.apply(document, root, variant);
         root = MetadataExtensionPlacementFixtures.apply(document, root, variant);
+        root = MetadataAlgorithmFixtures.apply(document, root, variant);
         applyValidityFixture(root, variant);
         if (variant != Variant.UNSIGNED) {
             signer.sign(root, signingCredentials, root.getFirstChild() instanceof Element e ? e : null,
@@ -746,6 +759,18 @@ public final class MetadataService {
         ENTITY_CACHE_DURATION("entity-cache-duration"),
         ENTITIES_CACHE_DURATION("entities-cache-duration"),
         ENTITIES_VALID_UNTIL("entities-valid-until"),
+        ALGORITHM_ENTITY_SHA256("algorithm-entity-sha256"),
+        ALGORITHM_ENTITY_SHA384("algorithm-entity-sha384"),
+        ALGORITHM_ENTITY_ORDER_256_384("algorithm-entity-order-256-384"),
+        ALGORITHM_ENTITY_ORDER_384_256("algorithm-entity-order-384-256"),
+        ALGORITHM_ROLE_ORDER_256_384("algorithm-role-order-256-384"),
+        ALGORITHM_ROLE_ORDER_384_256("algorithm-role-order-384-256"),
+        ALGORITHM_ROLE_SIGNING_384("algorithm-role-signing-384"),
+        ALGORITHM_ROLE_DIGEST_384("algorithm-role-digest-384"),
+        ALGORITHM_ROLE_BOTH_384("algorithm-role-both-384"),
+        ALGORITHM_ROLE_BOTH_256("algorithm-role-both-256"),
+        ALGORITHM_UNSUPPORTED_FIRST("algorithm-unsupported-first"),
+        ALGORITHM_ABSENT("algorithm-absent"),
         UNKNOWN_EXTENSION("unknown-extension"),
         UNKNOWN_ROLE_EXTENSION("unknown-role-extension"),
         UNKNOWN_ORGANIZATION_EXTENSION("unknown-organization-extension"),
