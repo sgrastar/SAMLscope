@@ -141,3 +141,5 @@ not by differences in reference-implementation results ([00 §5](00-concept.md))
 - [メタデータのアルゴリズム順序・Role優先の実行条件](42-metadata-algorithm-fixtures.md)
 
 - [方式選択の署名検証付き証拠](43-verified-algorithm-evidence.md)
+
+- [メタデータ原本のRun内記録](44-prepared-metadata-evidence.md)

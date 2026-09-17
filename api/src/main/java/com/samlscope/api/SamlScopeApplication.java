@@ -534,20 +534,23 @@ public final class SamlScopeApplication {
             confirmReachabilityProbe(ctx.queryParam("probe"), plan.id(), runs, runService);
             var variant = MetadataService.Variant.parse(ctx.queryParam("variant"));
             var runId = ctx.queryParam("run");
+            com.samlscope.core.transcript.TranscriptEntry metadataFetch = null;
             if (variant != MetadataService.Variant.BASELINE) {
                 runId = requiredQuery(ctx, "run");
                 var run = requireRun(runs, runId);
                 if (!plan.id().equals(run.planId())) {
                     throw new IllegalArgumentException("Run belongs to another Test Plan");
                 }
-                transcript.record(new com.samlscope.core.transcript.TranscriptInput(
+                metadataFetch = transcript.record(new com.samlscope.core.transcript.TranscriptInput(
                         run.id(), com.samlscope.core.transcript.Direction.INBOUND, clock.instant(),
                         "metadata:" + variant.id(), "GET", absoluteRequestUrl(ctx), 200,
                         headers(ctx), new byte[0], null, ctx.req().getQueryString(), new byte[0],
                         Map.of("type", "MetadataFetch", "variant", variant.id())));
                 ctx.header("Cache-Control", "no-store");
             }
-            ctx.contentType("application/samlmetadata+xml").result(metadata.generate(plan, variant, runId));
+            var payload = metadata.generate(plan, variant, runId);
+            if (metadataFetch != null) MetadataResponseEvidence.record(transcript, metadataFetch, payload, clock);
+            ctx.contentType("application/samlmetadata+xml").result(payload);
         });
         javalin.routes.get("/p/{plan}/metadata/live", ctx -> {
             var plan = requirePlan(plans, ctx.pathParam("plan"));
@@ -559,7 +562,7 @@ public final class SamlScopeApplication {
                 throw new IllegalArgumentException("Run belongs to another Test Plan");
             }
             var redirectStatus = metadataRedirectStatus(variant);
-            transcript.record(new com.samlscope.core.transcript.TranscriptInput(
+            var metadataFetch = transcript.record(new com.samlscope.core.transcript.TranscriptInput(
                     run.id(), com.samlscope.core.transcript.Direction.INBOUND, clock.instant(),
                     "metadata-live:" + variant.id(), "GET", absoluteRequestUrl(ctx),
                     redirectStatus == null ? 200 : redirectStatus.getCode(),
@@ -582,10 +585,11 @@ public final class SamlScopeApplication {
                 ctx.redirect(location.toString(), redirectStatus);
                 return;
             }
-            ctx.contentType("application/samlmetadata+xml")
-                    .result(labState.ingestionMode() == MetadataLabService.IngestionMode.AUTOMATIC_POLLING
-                            ? metadata.generatePolling(plan, variant, runId)
-                            : metadata.generate(plan, variant, runId));
+            var payload = labState.ingestionMode() == MetadataLabService.IngestionMode.AUTOMATIC_POLLING
+                    ? metadata.generatePolling(plan, variant, runId)
+                    : metadata.generate(plan, variant, runId);
+            MetadataResponseEvidence.record(transcript, metadataFetch, payload, clock);
+            ctx.contentType("application/samlmetadata+xml").result(payload);
         });
         javalin.routes.get("/p/{plan}/metadata/preloaded", ctx -> {
             var plan = requirePlan(plans, ctx.pathParam("plan"));
@@ -613,7 +617,7 @@ public final class SamlScopeApplication {
                     });
             var variants = metadataLab.recordPreloadedFetch(
                     run.id(), plan.id(), preload);
-            transcript.record(new com.samlscope.core.transcript.TranscriptInput(
+            var metadataFetch = transcript.record(new com.samlscope.core.transcript.TranscriptInput(
                     run.id(), com.samlscope.core.transcript.Direction.INBOUND, clock.instant(),
                     "metadata-preloaded", "GET", absoluteRequestUrl(ctx), 200,
                     headers(ctx), new byte[0], null, ctx.req().getQueryString(), new byte[0],
@@ -623,8 +627,8 @@ public final class SamlScopeApplication {
                             "variants", variants,
                             "feed", "preloaded")));
             ctx.header("Cache-Control", "no-store");
-            ctx.contentType("application/samlmetadata+xml")
-                    .result(payload);
+            MetadataResponseEvidence.record(transcript, metadataFetch, payload, clock);
+            ctx.contentType("application/samlmetadata+xml").result(payload);
         });
         javalin.routes.get("/p/{plan}/metadata/preloaded/download", ctx -> {
             var plan = requirePlan(plans, ctx.pathParam("plan"));
@@ -651,7 +655,7 @@ public final class SamlScopeApplication {
                         }
                         return metadata.generatePreloadedCampaign(plan, run.id());
                     });
-            transcript.record(new com.samlscope.core.transcript.TranscriptInput(
+            var metadataFetch = transcript.record(new com.samlscope.core.transcript.TranscriptInput(
                     run.id(), com.samlscope.core.transcript.Direction.INBOUND, clock.instant(),
                     "metadata-preloaded-download", "GET", absoluteRequestUrl(ctx), 200,
                     Map.of(), new byte[0], null, ctx.req().getQueryString(), new byte[0],
@@ -661,6 +665,7 @@ public final class SamlScopeApplication {
                             "variants", variants,
                             "feed", "preloaded-download")));
             ctx.header("Cache-Control", "no-store");
+            MetadataResponseEvidence.record(transcript, metadataFetch, payload, clock);
             ctx.header("Content-Disposition", "attachment; filename=\"samlscope-metadata-campaign.xml\"");
             ctx.contentType("application/samlmetadata+xml").result(payload);
         });
@@ -680,16 +685,17 @@ public final class SamlScopeApplication {
                 throw new IllegalArgumentException("Metadata redirect fixture is no longer selected");
             }
             metadataLab.recordLiveFetch(run.id(), plan.id(), variant.id(), ctx.queryParam("poll"));
-            transcript.record(new com.samlscope.core.transcript.TranscriptInput(
+            var metadataFetch = transcript.record(new com.samlscope.core.transcript.TranscriptInput(
                     run.id(), com.samlscope.core.transcript.Direction.INBOUND, clock.instant(),
                     "metadata-live-content:" + variant.id(), "GET", absoluteRequestUrl(ctx), 200,
                     headers(ctx), new byte[0], null, ctx.req().getQueryString(), new byte[0],
                     Map.of("type", "MetadataFetch", "variant", variant.id(), "feed", "live-content")));
             ctx.header("Cache-Control", "no-store");
-            ctx.contentType("application/samlmetadata+xml")
-                    .result(labState.ingestionMode() == MetadataLabService.IngestionMode.AUTOMATIC_POLLING
-                            ? metadata.generatePolling(plan, variant, runId)
-                            : metadata.generate(plan, variant, runId));
+            var payload = labState.ingestionMode() == MetadataLabService.IngestionMode.AUTOMATIC_POLLING
+                    ? metadata.generatePolling(plan, variant, runId)
+                    : metadata.generate(plan, variant, runId);
+            MetadataResponseEvidence.record(transcript, metadataFetch, payload, clock);
+            ctx.contentType("application/samlmetadata+xml").result(payload);
         });
         javalin.routes.get("/mdq/<entityId>", ctx -> {
             var entityId = URLDecoder.decode(ctx.pathParam("entityId"), StandardCharsets.UTF_8);

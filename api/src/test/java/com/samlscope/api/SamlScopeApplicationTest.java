@@ -336,6 +336,28 @@ class SamlScopeApplicationTest {
             assertTrue(transcript.body().contains("MetadataFetch"));
             assertTrue(transcript.body().contains("no-key-info"));
             assertTrue(transcript.body().contains("\"feed\":\"live\""));
+            var entries = new com.fasterxml.jackson.databind.ObjectMapper().readTree(transcript.body());
+            var byId = new java.util.HashMap<String, com.fasterxml.jackson.databind.JsonNode>();
+            entries.forEach(entry -> byId.put(entry.path("id").asText(), entry));
+            boolean exactLiveBody = false;
+            for (var entry : entries) {
+                var summary = entry.path("samlSummary");
+                if (!"MetadataPrepared".equals(summary.path("type").asText())) continue;
+                var fetch = byId.get(summary.path("fetchTranscriptId").asText());
+                assertNotNull(fetch);
+                assertEquals(200, fetch.path("status").asInt(), "Redirect-only responses have no prepared metadata body");
+                assertEquals("OUTBOUND", entry.path("direction").asText());
+                assertEquals("PREPARED", summary.path("delivery").asText());
+                assertEquals(fetch.path("id").asText(), entry.path("correlationId").asText());
+                byte[] recorded = Files.readAllBytes(dataDirectory.resolve(entry.path("decodedSamlRef").asText()));
+                assertEquals(java.util.HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256").digest(recorded)),
+                        summary.path("metadataSha256").asText());
+                if ("live".equals(summary.path("feed").asText()) && "no-key-info".equals(summary.path("variant").asText())) {
+                    assertArrayEquals(liveMetadata.body().getBytes(java.nio.charset.StandardCharsets.UTF_8), recorded);
+                    exactLiveBody = true;
+                }
+            }
+            assertTrue(exactLiveBody, "Record exactly the bytes returned to the metadata consumer");
         } finally {
             app.stop();
         }
