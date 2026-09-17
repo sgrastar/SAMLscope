@@ -18,7 +18,7 @@ ADOPTED = {
 
 def verify(root):
     root=Path(root)
-    final=root/'keycloak-import-batch-7'
+    final=root/'keycloak-signature-control-3'
     result_path=final/'result.json'
     result=json.loads(result_path.read_text())
     run=result['run']['id']
@@ -27,12 +27,19 @@ def verify(root):
     assert len(by_id)==len(entries)
     cases={c['id']:c for req in result['requirements'] for c in req['cases']}
     imports={}
-    for batch in ['keycloak-import-batch-5','keycloak-import-batch-6','keycloak-import-batch-7']:
+    for batch in ['keycloak-signature-control-3']:
         for path in (root/batch).glob('*/import.json'):
             data=json.loads(path.read_text())
             if data['status']!='success':continue
             flow=json.loads((path.parent/'flow.json').read_text())
             if flow['run']!=run or not flow['correlated_success']:continue
+            negative=flow.get('negative_control') or {}
+            assert negative.get('correlated_success') is False
+            assert negative.get('receipt') == 'no-response:Invalid requester'
+            mutations=negative.get('mutations',[])
+            assert len(mutations)==1 and mutations[0]['binding']=='post'
+            assert mutations[0]['original_request_sha256']!=mutations[0]['mutated_request_sha256']
+            assert flow['after_index']==flow['before_index']+1
             imports.setdefault(flow['variant'],[]).append((path,data))
     for case_id,variants in ADOPTED.items():
         case=cases[case_id]

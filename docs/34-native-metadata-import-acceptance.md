@@ -41,3 +41,19 @@ Suiteが生成した元XMLを加工せず、KeycloakのImport clientへ投入し
 ## 証拠
 
 `build/acceptance/reference-20260917/keycloak-import-batch-5/` と `keycloak-import-batch-7/` に元XML、製品の取込・削除記録、SSO記録を保存しています。最終result、Transcript、復号前のSAML XMLコピーとハッシュ一覧は後者です。同じ親ディレクトリの `operations-summary.json`、`cleanup-verification.json`、`import-adoption-verification.json` が集計・最終削除確認・証拠検証記録です。証拠ディレクトリはGit管理対象外です。
+
+## 署名対照を加えた再検証
+
+<!--g1-literal--> 続行バッチでは、異なるfixture 30条件を延べ36回取り込み試験しました。新規に確定できるケースはなく、未検証は511観測のままです。既採用6件は正負署名対照付きの `run_J7HCGRMNJHC614BA103CNGMVZ5` の証拠へ更新しました。条件数・SSO成功数をケースの解消数として数えていません。
+
+`--signature-control` を追加し、同じ取込設定で破損署名の要求を先に試し、正常署名の要求で相関するSuccess Responseが得られることを確認します。署名値だけを変更し、SignedInfoや署名対象のXML、Redirectの他のクエリ要素は元のバイト列を保持します。XMLの改行文字参照にも対応しています。署名が見つからない・複数ある場合は試験を失敗として止めます。
+
+<!--g1-literal--> 破損署名の送信を31回記録し、そのうちKeyValue-onlyとuse省略の複数鍵の両条件、計3回では相関するSuccess Responseが返りました。これらは鍵消費の成功として採用していません。通常の証明書取込では破損署名にInvalid requesterが返り、正常署名は成功しました。画面エラーや無応答だけから製品FAILや拒否義務のSuccessを新たに確定してはいません。
+
+Suiteの汎用メタデータ判定では、KeyValue-onlyのSSO成功だけで鍵消費を確定しないようにしました。署名の正負を識別する相関証拠を要求し、現在のTranscript契約にはその経路がないため未検証を維持します。参照ドライバの外部記録をSuite内の自動判定へ接続する部分は未実装です。これを実装するまで、ドライバの成功記録だけでこの保留を解除しません。
+
+<!--g1-literal--> Runner全473テストと署名変異のPythonテスト4件が成功しました。ローカルイメージ `samlscope:reference-keyvalue-guard-v23` にRunnerのみ反映し、JARのSHA-256一致を確認しました。既存の未コミットAPI差分は取り込んでいません。反映後の `run_Q702A3RAKW9S48CPYZZFCA4GV5` で正常SSOが成立してもMD05.cdとMD06.a7はNOT_VERIFIEDに留まり、protocol-evidenceで不足する署名対照が公開されることを確認しました。
+
+<!--g1-literal--> 操作は取込試行36、保存クリック35、作成35・削除35（製品設定書き込み70）、後続フロー呼出35、正常系の相関成功26でした。全試行の削除または未作成を読み戻し確認済みです。Docker build 1、Suiteと転送コンテナの再作成各1、製品再起動0、本人操作0です。全UI操作数と全管理API読取数は未計測です。最初の署名中の改行文字参照処理の失敗試行も含めています。
+
+証拠は同じ親ディレクトリの `keycloak-signature-control-1/`、`keycloak-signature-control-2/`、`keycloak-signature-control-3/`、`keycloak-keyvalue-guard-smoke/`、集計は `signature-control-operations.json`、実環境の更新・JAR照合は `keyvalue-guard-runtime/` に保存しています。台帳採用検査も正常系・破損署名・取込・削除の全記録を要求するよう更新しました。既存の証拠ディレクトリを上書きする再実行は拒否します。

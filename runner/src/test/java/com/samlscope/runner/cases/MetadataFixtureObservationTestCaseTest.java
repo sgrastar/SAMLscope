@@ -25,6 +25,21 @@ class MetadataFixtureObservationTestCaseTest {
     private static final Instant NOW = Instant.parse("2026-08-30T00:00:00Z");
 
     @Test
+    void successfulSsoCannotProveKeyValueConsumptionWithSignatureValidationDisabled() {
+        var testCase = new MetadataFixtureObservationTestCase("key-value", TargetRole.IDP,
+                List.of(new MetadataFixtureObservationTestCase.Fixture("keyvalue-only",
+                        MetadataFixtureObservationTestCase.Behavior.ACCEPT, "consume the signing key")),
+                ConfigurationFailureSemantics.TEST_PRECONDITION);
+        var entries = List.of(fetch("control", 1), use("control", 2),
+                fetch("keyvalue-only", 3), use("keyvalue-only", 4));
+        assertEquals(Outcome.NOT_VERIFIED, evaluate(testCase, entries));
+        var status = testCase.evidenceStatus(context(entries));
+        assertEquals(false, status.ready());
+        assertEquals(true, status.requiredObservations().contains("signature-discrimination:keyvalue-only"));
+        assertEquals(false, status.completedObservations().contains("signature-discrimination:keyvalue-only"));
+    }
+
+    @Test
     void requiresWorkingControlAndAllFixtureFetchesBeforeItIsReady() {
         var testCase = testCase();
         var incomplete = testCase.evidenceStatus(context(List.of(fetch("control", 1), use("control", 2))));

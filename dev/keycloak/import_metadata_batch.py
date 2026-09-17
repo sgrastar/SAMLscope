@@ -28,10 +28,26 @@ def api(path, body=None):
 def save(path, value):
     path.write_text(json.dumps(value, indent=2) + '\n')
 
-def flow(run, record_path):
+def flow(run, record_path, signature_control=False):
     import reference_flow as pc
     state = api('/api/runs/' + run + '/metadata-lab')
     variant, index = state['selectedVariant'], state['campaignIndex']
+    control = None
+    if signature_control:
+        mutation = pc.SignatureMutation()
+        receipt = pc.Client(signature_mutation=mutation).flow(state['automaticStartUrl'], None,
+            os.environ.get('REFERENCE_USERNAME','samlscope-m0-user'),
+            os.environ.get('REFERENCE_PASSWORD','samlscope-m0-password'))
+        after_negative = api('/api/runs/' + run + '/metadata-lab')
+        control = dict(receipt=receipt, mutations=mutation.records,
+            correlated_success=after_negative['campaignIndex'] == index + 1)
+        save(record_path, dict(run=run,variant=variant,negative_control=control,correlated_success=False))
+        if len(mutation.records) != 1:
+            raise RuntimeError('Negative control did not mutate exactly one signed request')
+        if control['correlated_success']:
+            raise RuntimeError('Corrupted signature accepted; this flow cannot prove key consumption')
+        if after_negative['campaignIndex'] != index:
+            raise RuntimeError('Unexpected campaign advancement during negative control')
     receipt = pc.Client().flow(state['automaticStartUrl'], None,
         os.environ.get('REFERENCE_USERNAME','samlscope-m0-user'),
         os.environ.get('REFERENCE_PASSWORD','samlscope-m0-password'))
@@ -39,7 +55,8 @@ def flow(run, record_path):
     # Advancement is permitted by Suite only after a correlated Success Response.
     accepted = after['campaignIndex'] == index + 1
     save(record_path, dict(run=run, variant=variant, before_index=index,
-        after_index=after['campaignIndex'], receipt=receipt, correlated_success=accepted))
+        after_index=after['campaignIndex'], receipt=receipt, correlated_success=accepted,
+        negative_control=control))
     if not accepted:
         raise RuntimeError('No correlated Success; retain NOT_VERIFIED and inspect the saved evidence')
 
@@ -49,13 +66,17 @@ def main():
     parser.add_argument('--output',type=pathlib.Path,required=True)
     parser.add_argument('--playwright-modules',type=pathlib.Path)
     parser.add_argument('--flow-run')
+    parser.add_argument('--signature-control',action='store_true',help='Exercise a corrupt signature before each normal flow')
     parser.add_argument('--run',help='Append a new fixture campaign to an existing reference Run')
     parser.add_argument('--variants',help='Comma-separated Suite fixture IDs, beginning with control')
     args=parser.parse_args()
     if args.flow_run:
-        flow(args.flow_run,args.output);return
+        flow(args.flow_run,args.output,args.signature_control);return
     if args.playwright_modules is None:parser.error('--playwright-modules is required for a batch')
-    out=args.output.resolve();out.mkdir(parents=True,exist_ok=True)
+    out=args.output.resolve()
+    if out.exists() and any(out.iterdir()):
+        raise ValueError('Output directory must be empty; do not overwrite prior evidence')
+    out.mkdir(parents=True,exist_ok=True)
     stage=out/'driver';stage.mkdir(exist_ok=True)
     shutil.copy2(REPO/'dev/keycloak/console_import.mjs',stage/'console_import.mjs')
     if not (stage/'node_modules').exists():(stage/'node_modules').symlink_to(args.playwright_modules.resolve(),target_is_directory=True)
@@ -90,7 +111,8 @@ def main():
                 response.read()
             with urllib.request.urlopen(state['metadataUrl'],timeout=30) as response:fixture=response.read()
             (folder/'fixture.xml').write_bytes(fixture)
-            follow=shlex.join([sys.executable,str(pathlib.Path(__file__).resolve()),'--flow-run',run,'--output',str(folder/'flow.json')])
+            follow=shlex.join([sys.executable,str(pathlib.Path(__file__).resolve()),'--flow-run',run,'--output',str(folder/'flow.json')]
+                + (['--signature-control'] if args.signature_control else []))
             command=['node',str(stage/'console_import.mjs'),'--fixture',str(folder/'fixture.xml'),
                 '--record',str(folder/'import.json'),'--entity-id',BASE+'/p/'+plan_id,'--verify-command',follow,'--delete']
             result=subprocess.run(command,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,text=True,timeout=420)
@@ -108,9 +130,12 @@ def main():
             if result.returncode:
                 # Advance orchestration only; no rejection or product verdict is fabricated.
                 pending=api('/api/runs/'+run+'/metadata-lab')
-                with urllib.request.urlopen(urllib.request.Request(pending['automaticContinueUrl'],data=b''),timeout=30) as response:
-                    response.read()
-                operations[-1]['continued_without_verdict']=True
+                # A corrupted request can itself produce a correlated response. Do not skip
+                # the following fixture when the negative control advanced the campaign.
+                if pending['campaignIndex'] == state['campaignIndex']:
+                    with urllib.request.urlopen(urllib.request.Request(pending['automaticContinueUrl'],data=b''),timeout=30) as response:
+                        response.read()
+                    operations[-1]['continued_without_verdict']=True
                 save(out/'operations.json',operations)
     finally:
         # Evaluate only Suite-recorded evidence; never submit an operator verdict.

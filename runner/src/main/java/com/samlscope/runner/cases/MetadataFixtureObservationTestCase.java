@@ -140,10 +140,12 @@ public final class MetadataFixtureObservationTestCase
                 required.add("conclusive-rejection:" + fixture.variant());
             }
         });
+        if (requiresKeyValueDiscrimination()) required.add("signature-discrimination:keyvalue-only");
         var completed = required.stream().filter(value -> {
             var separator = value.indexOf(':');
             var kind = value.substring(0, separator);
             var variant = value.substring(separator + 1);
+            if ("signature-discrimination".equals(kind)) return false;
             return "fetched".equals(kind)
                     ? observation.fetched().contains(variant)
                     : observation.used().contains(variant);
@@ -232,7 +234,7 @@ public final class MetadataFixtureObservationTestCase
                 }
             }
         }
-        var details = Map.<String, Object>of(
+        var details = new LinkedHashMap<String, Object>(Map.<String, Object>of(
                 "fixtures", fixtures.stream().map(Fixture::variant).toList(),
                 "fetched_variants", List.copyOf(fetched),
                 "used_variants", List.copyOf(used),
@@ -244,7 +246,10 @@ public final class MetadataFixtureObservationTestCase
                 "unresolved_rejection", fixtures.stream().filter(value -> value.behavior() == Behavior.REJECT)
                         .map(Fixture::variant).filter(value -> !used.contains(value)).toList(),
                 "wrong_endpoint_variants", List.copyOf(wrongEndpoints),
-                "transcript_complete", context.transcriptComplete());
+                "transcript_complete", context.transcriptComplete()));
+        if (requiresKeyValueDiscrimination()) {
+            details.put("missing_key_consumption_evidence", List.of("signature-discrimination:keyvalue-only"));
+        }
         var allFetched = fixtures.stream().allMatch(value -> fetched.contains(value.variant()));
         var acceptedObserved = fixtures.stream()
                 .filter(value -> value.behavior() == Behavior.ACCEPT)
@@ -257,8 +262,17 @@ public final class MetadataFixtureObservationTestCase
         var conclusive = forbiddenUseObserved || !wrongEndpoints.isEmpty() || (rejected.isEmpty() && acceptedObserved);
         return new Observation(
                 fetched.contains(CONTROL) && used.contains(CONTROL)
-                        && allFetched && conclusive && context.transcriptComplete(),
+                        && allFetched && conclusive && context.transcriptComplete()
+                        && !requiresKeyValueDiscrimination(),
                 fetched, used, wrongEndpoints, distinct(evidence), details);
+    }
+
+    private boolean requiresKeyValueDiscrimination() {
+        // A native importer may silently disable signature validation when it cannot
+        // import KeyValue. Successful SSO then proves neither key import nor use.
+        // The current transcript contract has no correlated invalid-signature control;
+        // keep these cases incomplete until that evidence path is implemented.
+        return fixtures.stream().anyMatch(fixture -> "keyvalue-only".equals(fixture.variant()));
     }
 
     private static List<EvidenceRef> distinct(List<EvidenceRef> evidence) {

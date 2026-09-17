@@ -573,13 +573,13 @@ Chromeと承認のブロックを解除するだけでは解消しません。�
 | browser_sso_idp († listed supplemental cases only) | simplesamlphp | `run_VRW5T0M31JGT71ZG6MR1JF92PJ` | `build/acceptance/reference-20260915/peer-intent/simplesamlphp/browser_alg_enc` |
 | browser_sso_idp | simplesamlphp | `run_SJWWBQT1S24VSJGRZMSQ8TJYM4` | `interaction-followup/after/simplesamlphp/browser_sso_idp` |
 | metadata_idp († listed supplemental cases only) | keycloak | `run_HRAC88P0KKA5WQX8MF75WD198X` | `additional-implementation/keycloak/metadata_idp` |
-| metadata_idp († listed supplemental cases only) | keycloak | `run_23BNMTA3K9G83SMEN2F2HFRMGK` | `build/acceptance/reference-20260917/keycloak-import-batch-7` |
-| metadata_idp († listed supplemental cases only) | keycloak | `run_23BNMTA3K9G83SMEN2F2HFRMGK` | `build/acceptance/reference-20260917/keycloak-import-batch-7` |
-| metadata_idp († listed supplemental cases only) | keycloak | `run_23BNMTA3K9G83SMEN2F2HFRMGK` | `build/acceptance/reference-20260917/keycloak-import-batch-7` |
+| metadata_idp († listed supplemental cases only) | keycloak | `run_J7HCGRMNJHC614BA103CNGMVZ5` | `build/acceptance/reference-20260917/keycloak-signature-control-3` |
+| metadata_idp († listed supplemental cases only) | keycloak | `run_J7HCGRMNJHC614BA103CNGMVZ5` | `build/acceptance/reference-20260917/keycloak-signature-control-3` |
+| metadata_idp († listed supplemental cases only) | keycloak | `run_J7HCGRMNJHC614BA103CNGMVZ5` | `build/acceptance/reference-20260917/keycloak-signature-control-3` |
 | metadata_idp († listed supplemental cases only) | keycloak | `run_HRAC88P0KKA5WQX8MF75WD198X` | `build/acceptance/reference-20260914/additional-implementation/keycloak/metadata_idp` |
-| metadata_idp († listed supplemental cases only) | keycloak | `run_23BNMTA3K9G83SMEN2F2HFRMGK` | `build/acceptance/reference-20260917/keycloak-import-batch-7` |
-| metadata_idp († listed supplemental cases only) | keycloak | `run_23BNMTA3K9G83SMEN2F2HFRMGK` | `build/acceptance/reference-20260917/keycloak-import-batch-7` |
-| metadata_idp († listed supplemental cases only) | keycloak | `run_23BNMTA3K9G83SMEN2F2HFRMGK` | `build/acceptance/reference-20260917/keycloak-import-batch-7` |
+| metadata_idp († listed supplemental cases only) | keycloak | `run_J7HCGRMNJHC614BA103CNGMVZ5` | `build/acceptance/reference-20260917/keycloak-signature-control-3` |
+| metadata_idp († listed supplemental cases only) | keycloak | `run_J7HCGRMNJHC614BA103CNGMVZ5` | `build/acceptance/reference-20260917/keycloak-signature-control-3` |
+| metadata_idp († listed supplemental cases only) | keycloak | `run_J7HCGRMNJHC614BA103CNGMVZ5` | `build/acceptance/reference-20260917/keycloak-signature-control-3` |
 | metadata_idp | keycloak | `run_HEGZFSAG1WFGFCXX1XE6N1C52B` | `keycloak/metadata_idp/run2` |
 | metadata_idp († listed supplemental cases only) | shibboleth | `run_WPY618QSZEMJKGGQ6W1ZZ5YWZ6` | `additional-implementation/shibboleth/metadata_idp` |
 | metadata_idp († listed supplemental cases only) | shibboleth | `run_296ZHGM9XYDBAXHE3CP2XC3MC7` | `integrated-implementation/shibboleth/polling` |
