@@ -86,6 +86,7 @@ public final class AutoConfigurationTranscriptEvidenceTestCase
         for (var entry : entries) {
             if (!context.runId().equals(entry.runId())) return unavailable("run_mismatch");
             if (!ids.add(entry.id())) return unavailable("ambiguous_entry_id");
+            if (MetadataProbeCorrelation.signatureControl(entry)) continue;
             if (entry.direction() != Direction.INBOUND
                     || !"Response".equals(entry.samlSummary().get("type"))
                     || !(Boolean.TRUE.equals(entry.samlSummary().get("normalFlowAccepted"))

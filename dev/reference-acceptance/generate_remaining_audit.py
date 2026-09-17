@@ -510,6 +510,25 @@ def render(root,definitions,output):
                        interaction=None,verdict=case['verdict'],evidence=case['evidence'],
                        diagnostics=case.get('diagnostics',{}))
             transitions.append(dict(row))
+        # Adopt only explicit absence notes and the tested aggregate child-count obligation.
+        from verify_publisher_ui_batch import ADOPTED as UI_ADOPTED, verify as verify_ui
+        selected = None
+        if row['profile']=='metadata_idp' and row['case'] in UI_ADOPTED:
+            selected = verify_ui(root.parent.parent/'reference-20260918', row['product'])
+        if row['product']=='simplesamlphp' and row['profile']=='metadata_idp' and row['case']=='IIP-MD02-d-idp-01':
+            selected = verify_ssp_import(root.parent.parent/'reference-20260918',
+                folder='simplesamlphp-aggregate-import', adopted={
+                    'IIP-MD02-d-idp-01': ['entities-root-one','entities-root-two','entities-root-fifty']})
+        if selected is not None:
+            path, selected_cases = selected
+            raw=path.read_bytes(); result=json.loads(raw); case=selected_cases[row['case']]
+            row['baseline']={k:row.get(k) for k in ('run','reason_code','result_sha256','evidence_folder','interaction')}
+            row.update(run=result['run']['id'],reason_code=case['reason_code'],
+                       result_sha256=hashlib.sha256(raw).hexdigest(),
+                       evidence_folder=str(path.parent.relative_to(root.parents[3])),
+                       interaction=None,verdict=case['verdict'],evidence=case['evidence'],
+                       diagnostics=case.get('diagnostics',{}))
+            transitions.append(dict(row))
         if row.get('verdict','NOT_VERIFIED')=='NOT_VERIFIED':refreshed.append(row)
     rows=refreshed
     (root/'retest-delta.json').write_text(json.dumps(transitions,ensure_ascii=False,indent=2)+'\n')

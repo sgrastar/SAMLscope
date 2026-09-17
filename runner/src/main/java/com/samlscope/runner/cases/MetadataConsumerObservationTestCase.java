@@ -169,6 +169,7 @@ public final class MetadataConsumerObservationTestCase
         var used = new LinkedHashSet<String>();
         var evidence = new ArrayList<EvidenceRef>();
         for (var entry : entries) {
+            if (MetadataProbeCorrelation.signatureControl(entry)) continue;
             if (entry.direction() != Direction.INBOUND) continue;
             if ("MetadataFetch".equals(entry.samlSummary().get("type"))) {
                 var variant = String.valueOf(entry.samlSummary().get("variant"));

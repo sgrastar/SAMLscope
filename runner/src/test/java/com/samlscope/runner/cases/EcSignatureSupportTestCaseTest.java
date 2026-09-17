@@ -16,6 +16,14 @@ class EcSignatureSupportTestCaseTest {
     private static final String VALID = "ecdsa-sha256";
     private static final String INVALID = "ecdsa-sha256-invalid-signature";
     private static final Instant NOW = Instant.parse("2026-09-14T00:00:00Z");
+    @Test void separateSignatureControlCannotSupplyTheNormalEcSuccess() {
+        var entries = new ArrayList<TranscriptEntry>();
+        append(entries,"control",1);append(entries,VALID,1);append(entries,INVALID,2);
+        var old=entries.get(3);var summary=new HashMap<String,Object>(old.samlSummary());
+        summary.put("metadataSignatureControl","invalid");
+        entries.set(3,entry(old.id(),RUN,old.url(),10,summary));
+        assertFalse(new EcSignatureSupportTestCase().evidenceStatus(context(entries,true)).ready());
+    }
     @Test void allResponseCombinationsRequireSuccessfulControlsAndExplicitRejection() {
         // 4^3 combinations, repeated with incomplete history. Missing/unknown statuses are not errors.
         for (int control=0; control<4; control++) for (int valid=0; valid<4; valid++) for (int invalid=0; invalid<4; invalid++) {

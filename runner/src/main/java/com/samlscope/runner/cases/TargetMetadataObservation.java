@@ -72,6 +72,7 @@ final class TargetMetadataObservation {
                 || suffix(caseId, "e4") || suffix(caseId, "e6") || suffix(caseId, "ed")
                 || suffix(caseId, "ec") || suffix(caseId, "f1") || suffix(caseId, "f2")
                 || suffix(caseId, "f3") || suffix(caseId, "f4") || suffix(caseId, "fk")
+                || idpSuffix(caseId, "f7") || suffix(caseId, "f8") || suffix(caseId, "fa")
                 || idpSuffix(caseId, "fc") || idpSuffix(caseId, "fd") || idpSuffix(caseId, "fe");
     }
 
@@ -83,6 +84,9 @@ final class TargetMetadataObservation {
         var evidence = List.of(new EvidenceRef("target-metadata", digest(metadata)));
         if (isAlgorithmPublicationCapability(caseId)) {
             return algorithmPublicationCapability(document, evidence);
+        }
+        if (idpSuffix(caseId, "f7") || suffix(caseId, "f8") || suffix(caseId, "fa")) {
+            return publishedUiGuidance(caseId, document, evidence);
         }
         if (suffix(caseId, "a3")) return Optional.of(extensionNamespaces(document, evidence));
         if (suffix(caseId, "a6")) return Optional.of(rootOnlyExpiration(document, evidence));
@@ -122,6 +126,45 @@ final class TargetMetadataObservation {
         if (idpSuffix(caseId, "fe")) return Optional.of(singlePerExtensions(
                 document, "DiscoHints", "metadata.publisher.disco-hints-cardinality", evidence));
         if (suffix(caseId, "fk")) return Optional.of(logoDimensions(document, evidence));
+        return Optional.empty();
+    }
+
+    private static Optional<CaseOutcome> publishedUiGuidance(
+            String caseId, Document document, List<EvidenceRef> evidence) {
+        var root = document.getDocumentElement();
+        if (!MD.equals(root.getNamespaceURI())
+                || !Set.of("EntityDescriptor", "EntitiesDescriptor").contains(root.getLocalName())) return Optional.empty();
+        var roleName = caseId.contains("-idp-") ? "IDPSSODescriptor" : "SPSSODescriptor";
+        var roles = elements(document, MD, roleName);
+        if (roles.isEmpty()) return Optional.empty();
+        var elementName = idpSuffix(caseId, "f7") ? "Description" : suffix(caseId, "f8") ? "Logo" : "InformationURL";
+        var published = new ArrayList<Element>();
+        for (var role : roles) {
+            var extensions = direct(role, MD, "Extensions");
+            if (extensions == null) continue;
+            // Only role UIInfo counts; Organization or another role's content cannot stand in.
+            for (var info : elements(extensions, UI, "UIInfo")) {
+                for (var child = info.getFirstChild(); child != null; child = child.getNextSibling()) {
+                    if (child instanceof Element element && UI.equals(element.getNamespaceURI())
+                            && elementName.equals(element.getLocalName())) published.add(element);
+                }
+            }
+        }
+        if (published.isEmpty()) return Optional.of(result(Outcome.SATISFIED_WITH_NOTE,
+                "metadata.publisher.ui-guidance-not-published", evidence,
+                Map.of("role", roleName, "element", elementName, "published_elements", 0)));
+        if ("Logo".equals(elementName)) {
+            var nonHttps = published.stream().map(Element::getTextContent).map(String::strip)
+                    .filter(value -> {
+                        try { return !"https".equalsIgnoreCase(java.net.URI.create(value).getScheme()); }
+                        catch (IllegalArgumentException invalid) { return true; }
+                    }).count();
+            if (nonHttps > 0) return Optional.of(result(Outcome.VIOLATED,
+                    "metadata.publisher.logo-https-guidance", evidence,
+                    Map.of("published_elements", published.size(), "non_https_logos", nonHttps)));
+        }
+        // Natural-language usefulness, retrieved image format, and an appropriate background
+        // require their actual evidence. URL suffixes and empty text are not absence proofs.
         return Optional.empty();
     }
 

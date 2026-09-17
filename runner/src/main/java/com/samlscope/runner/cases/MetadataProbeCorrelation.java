@@ -9,6 +9,11 @@ import java.util.HashMap;
 final class MetadataProbeCorrelation {
     private MetadataProbeCorrelation() {}
 
+    static boolean signatureControl(com.samlscope.core.transcript.TranscriptEntry entry) {
+        return entry.samlSummary().get("metadataSignatureControl") instanceof String value
+                && !"valid".equals(value);
+    }
+
     static boolean matches(String url, String runId, String variant) {
         if (url == null) return false;
         try {

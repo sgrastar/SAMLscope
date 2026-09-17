@@ -19,14 +19,15 @@ ADOPTED = dict(COMMON, **{
         'certificate-no-digital-signature','certificate-unrelated-eku','certificate-empty-subject','certificate-unknown-ca','entity-root'],
 })
 
-def verify(root):
-    final=Path(root)/'simplesamlphp-native-parser-3'
+def verify(root, *, folder="simplesamlphp-native-parser-3", adopted=None):
+    adopted = ADOPTED if adopted is None else adopted
+    final=Path(root)/folder
     path=final/'result.json';result=json.loads(path.read_text());run=result['run']['id']
     restored=json.loads((final/'restoration.json').read_text())
     assert restored['restored'] and restored['original_sha256']==restored['final_sha256']
     entries={e['id']:e for e in json.loads((final/'transcript.json').read_text())}
     cases={c['id']:c for r in result['requirements'] for c in r['cases']}
-    for case_id,variants in ADOPTED.items():
+    for case_id,variants in adopted.items():
         case=cases[case_id]
         assert (case['verdict'],case['reason_code'])==('PASS','metadata.fixture-probe.satisfied')
         assert set(variants).issubset(case['diagnostics']['used_variants'])

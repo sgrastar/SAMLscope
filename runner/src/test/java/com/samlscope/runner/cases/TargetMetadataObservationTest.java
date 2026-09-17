@@ -23,6 +23,38 @@ class TargetMetadataObservationTest {
     @TempDir java.nio.file.Path directory;
 
     @Test
+    void unpublishedUiGuidanceUsesOnlyTheExplicitApprovedNoteBranches() {
+        for (var suffix : List.of("f7", "f8", "fa")) {
+            var id = "IIP-MD05-" + suffix + "-idp-01";
+            assertOutcome(id, Outcome.SATISFIED_WITH_NOTE, metadata(role("IDPSSODescriptor", SAML2, "")));
+            assertTrue(TargetMetadataObservation.evaluate(id,
+                    metadata(role("SPSSODescriptor", SAML2, "")), NOW).isEmpty());
+            assertTrue(TargetMetadataObservation.evaluate(id, "<unrelated/>".getBytes(StandardCharsets.UTF_8), NOW).isEmpty());
+        }
+        for (var suffix : List.of("f9", "fb", "fh", "fj")) {
+            assertFalse(TargetMetadataObservation.supports("IIP-MD05-" + suffix + "-idp-01"),
+                    "a publisher document cannot prove absence of a consumer UI");
+        }
+    }
+
+    @Test
+    void presentUiContentNeedsActualSemanticOrAssetEvidence() {
+        for (var pair : List.of(new String[]{"f7", "Description"}, new String[]{"f8", "Logo"}, new String[]{"fa", "InformationURL"})) {
+            for (var text : List.of("", "https://example.test/image.png")) {
+                if (pair[0].equals("f8") && text.isEmpty()) continue;
+                var xml = metadata(role("IDPSSODescriptor", SAML2,
+                        "<md:Extensions><mdui:UIInfo xmlns:mdui=\"urn:oasis:names:tc:SAML:metadata:ui\"><mdui:"
+                                + pair[1] + ">" + text + "</mdui:" + pair[1] + "></mdui:UIInfo></md:Extensions>"));
+                assertTrue(TargetMetadataObservation.evaluate("IIP-MD05-" + pair[0] + "-idp-01",
+                        xml, NOW).isEmpty());
+            }
+        }
+        assertOutcome("IIP-MD05-f8-idp-01", Outcome.VIOLATED, metadata(role("IDPSSODescriptor", SAML2,
+                "<md:Extensions><u:UIInfo xmlns:u=\"urn:oasis:names:tc:SAML:metadata:ui\">"
+                        + "<u:Logo>http://example.test/logo.png</u:Logo></u:UIInfo></md:Extensions>")));
+    }
+
+    @Test
     void detectsOverlappingSameTypeRolesWithoutTreatingOneRoleAsAnOverlap() {
         assertOutcome("IIP-MD05-a7-idp-01", Outcome.SATISFIED_WITH_NOTE,
                 metadata(role("IDPSSODescriptor", SAML2, "")));

@@ -130,6 +130,7 @@ public final class AutoBrowserEvidenceTestCase
         var messages = new ArrayList<NormalFlowBrowserObservation.Message>();
         var key = decryptionKeys.keyFor(context.runId()).orElse(null);
         for (var entry : context.transcript().list(context.runId())) {
+            if (MetadataProbeCorrelation.signatureControl(entry)) continue;
             if (entry.decodedSamlRef() == null || entry.decodedSamlBytes() <= 0) continue;
             // Inbound SAML is recorded before protocol parsing and then updated atomically with
             // the validated summary. Never conclude from the durable-but-unvalidated first form.

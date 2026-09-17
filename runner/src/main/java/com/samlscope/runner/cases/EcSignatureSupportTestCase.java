@@ -68,6 +68,7 @@ public final class EcSignatureSupportTestCase implements TestCase, Configuration
         var errors = new LinkedHashSet<String>();
         var evidence = new LinkedHashSet<EvidenceRef>();
         for (var entry : context.transcript().list(context.runId())) {
+            if (MetadataProbeCorrelation.signatureControl(entry)) continue;
             if (entry.direction() != Direction.INBOUND || !context.runId().equals(entry.runId())) continue;
             if ("MetadataFetch".equals(entry.samlSummary().get("type"))) {
                 var advertised = new ArrayList<String>();

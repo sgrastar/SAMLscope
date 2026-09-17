@@ -130,3 +130,4 @@ not by differences in reference-implementation results ([00 §5](00-concept.md))
 
 - [製品コンソール取込後のメタデータ挙動観測](34-native-metadata-import-acceptance.md)
 - [Suite発行の署名対照と製品ネイティブ取込](35-suite-signature-controls.md)
+- [公開UI情報の注記判定と集合メタデータの再試験](36-published-ui-acceptance.md)

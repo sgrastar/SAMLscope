@@ -59,7 +59,9 @@ public final class ApprovedBrowserCaseRegistry {
         return new TestCaseRegistry(registry.all().stream().map(testCase ->
                 PublishedUiUrlTestCase.ID.equals(testCase.id())
                         ? (com.samlscope.core.caseexec.TestCase) new PublishedUiUrlTestCase(metadata, entityIds)
-                        : testCase).toList());
+                        : java.util.Set.of("IIP-MD05-f7-idp-01", "IIP-MD05-f8-idp-01", "IIP-MD05-fa-idp-01").contains(testCase.id())
+                                ? new AutoBrowserMetadataEvidenceTestCase(testCase, metadata, entityIds)
+                                : testCase).toList());
     }
 
     public static TestCaseRegistry create(CaseDefinitionCatalog definitions, URI publicBase) {
