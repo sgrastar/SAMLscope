@@ -41,6 +41,27 @@ final class EncryptionAlgorithmObservation {
 
     private EncryptionAlgorithmObservation() {}
 
+    static Map<String,Object> diagnostics(List<Observation> observations, boolean complete) {
+        var decrypted = observations.stream().filter(Observation::decrypted).toList();
+        return Map.of("encrypted_assertions_observed", observations.size(),
+                "decrypted_assertions", decrypted.size(),
+                "observed_content_algorithms", decrypted.stream().map(value -> algorithmToken(value.contentAlgorithm())).distinct().sorted().toList(),
+                "observed_key_transport_algorithms", decrypted.stream().map(value -> algorithmToken(value.transportAlgorithm())).distinct().sorted().toList(),
+                "observation_state", complete ? "required-algorithm-observed"
+                        : observations.isEmpty() ? "encrypted-assertion-unobserved"
+                        : decrypted.isEmpty() ? "assertion-decryption-unavailable" : "required-algorithm-unobserved");
+    }
+
+    private static String algorithmToken(String value) {
+        if (AES128_GCM.equals(value)) return "aes128-gcm";
+        if (AES256_GCM.equals(value)) return "aes256-gcm";
+        if ((XENC+"aes128-cbc").equals(value)) return "aes128-cbc";
+        if ((XENC+"aes256-cbc").equals(value)) return "aes256-cbc";
+        if (OAEP.equals(value)) return "rsa-oaep";
+        if (OAEP_MGF1P.equals(value)) return "rsa-oaep-mgf1p";
+        return value == null || value.isBlank() ? "absent" : "other";
+    }
+
     static boolean supports(String caseId) {
         return List.of(ALG04_A, ALG04_B, ALG06_A, ALG06_B, ALG06_C, ALG06_D).contains(caseId);
     }

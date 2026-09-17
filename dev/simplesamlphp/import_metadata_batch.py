@@ -28,7 +28,9 @@ $metadata=$entities[$entity]->getMetadata20SP();
 if ($metadata===null) { throw new \RuntimeException('SP descriptor missing'); }
 // Match the product admin converter's documented static-import output.
 unset($metadata['entityDescriptor'],$metadata['expire']);
+if (($argv[2] ?? '') === 'encrypt') { $metadata['assertion.encryption'] = true; }
 echo json_encode(['entity_id'=>$entity,'validate_authnrequest'=>$metadata['validate.authnrequest']??null,
+ 'assertion_encryption'=>$metadata['assertion.encryption']??null,
  'php'=>'$metadata['.var_export($entity,true).'] = '.var_export($metadata,true).';']);
 '''
 
@@ -36,6 +38,7 @@ def main():
     p=argparse.ArgumentParser(description=__doc__)
     p.add_argument('--output',type=pathlib.Path,required=True)
     p.add_argument('--variants',required=True)
+    p.add_argument('--encrypt-assertions',action='store_true',help='Enable the product assertion.encryption setting for each imported test client')
     p.add_argument('--profile', choices=['metadata_idp','browser_sso_idp'], default='metadata_idp')
     args=p.parse_args();out=args.output.resolve()
     if out.exists() and any(out.iterdir()):raise ValueError('Evidence directory must be empty')
@@ -69,12 +72,16 @@ def main():
                 with urllib.request.urlopen(state['metadataUrl'],timeout=30) as response:fixture=response.read()
                 (folder/'fixture.xml').write_bytes(fixture)
                 record['fixture_sha256']=hashlib.sha256(fixture).hexdigest()
-                parsed=subprocess.run(['docker','exec','-i','samlscope-reference-ssp','php','-r',PHP,entity],
+                parsed=subprocess.run(['docker','exec','-i','samlscope-reference-ssp','php','-r',PHP,entity,'encrypt' if args.encrypt_assertions else 'default'],
                     input=fixture,stdout=subprocess.PIPE,stderr=subprocess.PIPE,timeout=40)
                 (folder/'parser.stderr').write_bytes(parsed.stderr)
                 if parsed.returncode:raise RuntimeError('Product native parser rejected fixture')
                 data=json.loads(parsed.stdout);record['entity_id']=data['entity_id']
                 record['validate_authnrequest']=data['validate_authnrequest']
+                record['assertion_encryption_override']=args.encrypt_assertions
+                record['assertion_encryption']=data['assertion_encryption']
+                if args.encrypt_assertions and data['assertion_encryption'] is not True:
+                    raise RuntimeError('Product encryption setting was not applied')
                 record['parser_output_sha256']=hashlib.sha256(parsed.stdout).hexdigest()
                 (folder/'parser-output.json').write_bytes(parsed.stdout)
                 configured=original+b'\n'+data['php'].encode()+b'\n'

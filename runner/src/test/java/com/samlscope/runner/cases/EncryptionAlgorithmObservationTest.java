@@ -26,6 +26,22 @@ class EncryptionAlgorithmObservationTest {
     private static final String ASSERTION = "urn:oasis:names:tc:SAML:2.0:assertion";
     private static final KeyPair SUITE_KEY = suiteKey();
 
+    @Test
+    void diagnosticsDistinguishAbsentUnusableAndDifferentAlgorithmsWithoutChangingVerdict() {
+        var request = new EvidenceRef("transcript", "request");
+        var response = new EvidenceRef("transcript", "response");
+        var encrypted = new EncryptionAlgorithmObservation.Observation(request,response,
+                EncryptionAlgorithmObservation.XENC+"aes128-cbc", EncryptionAlgorithmObservation.OAEP_MGF1P,
+                null,null,true);
+        assertEquals("encrypted-assertion-unobserved", EncryptionAlgorithmObservation.diagnostics(List.of(),false).get("observation_state"));
+        assertEquals("required-algorithm-unobserved", EncryptionAlgorithmObservation.diagnostics(List.of(encrypted),false).get("observation_state"));
+        assertEquals(List.of("aes128-cbc"), EncryptionAlgorithmObservation.diagnostics(List.of(encrypted),false).get("observed_content_algorithms"));
+        assertTrue(EncryptionAlgorithmObservation.evaluate("IIP-ALG04-a-idp-01",List.of(encrypted)).isEmpty());
+        var unavailable = new EncryptionAlgorithmObservation.Observation(request,response,"https://untrusted.invalid/value",null,null,null,false);
+        assertEquals("assertion-decryption-unavailable",EncryptionAlgorithmObservation.diagnostics(List.of(unavailable),false).get("observation_state"));
+        assertEquals(List.of(),EncryptionAlgorithmObservation.diagnostics(List.of(unavailable),false).get("observed_content_algorithms"));
+    }
+
     private static KeyPair suiteKey() {
         try { return keyPair(); } catch (Exception failure) { throw new IllegalStateException(failure); }
     }

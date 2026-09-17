@@ -83,22 +83,25 @@ public final class EncryptionAlgorithmBrowserEvidenceTestCase
 
     @Override
     public EvidenceStatus evidenceStatus(CaseContext context) {
-        var outcome = transcriptOutcome(context);
+        var observations = transcriptObservations(context);
+        var outcome = EncryptionAlgorithmObservation.evaluate(id(), observations);
         var required = List.of("decrypted-target-assertion:" + id());
         return new EvidenceStatus(outcome.isPresent(), required,
                 outcome.isPresent() ? required : List.of(),
-                outcome.<java.util.Map<String, Object>>map(value -> java.util.Map.of(
-                        "outcome", value.outcome().name(),
-                        "evidence_count", value.evidence().size())).orElseGet(java.util.Map::of));
+                EncryptionAlgorithmObservation.diagnostics(observations, outcome.isPresent()));
     }
 
     private Optional<CaseOutcome> transcriptOutcome(CaseContext context) {
+        return EncryptionAlgorithmObservation.evaluate(id(), transcriptObservations(context));
+    }
+
+    private List<EncryptionAlgorithmObservation.Observation> transcriptObservations(CaseContext context) {
         var key = decryptionKeys.keyFor(context.runId()).orElse(null);
-        if (key == null) return Optional.empty();
+        if (key == null) return List.of();
         var requests = new LinkedHashMap<String, TranscriptEntry>();
         var byCorrelation = new LinkedHashMap<String, TranscriptEntry>();
         for (var entry : context.transcript().list(context.runId())) {
-            if (entry.direction() != Direction.OUTBOUND || entry.decodedSamlRef() == null) continue;
+            if (!context.runId().equals(entry.runId()) || entry.direction() != Direction.OUTBOUND || entry.decodedSamlRef() == null) continue;
             if (entry.correlationId() != null) byCorrelation.put(entry.correlationId(), entry);
             if (!"AuthnRequest".equals(entry.samlSummary().get("type"))) continue;
             var id = requestId(entry);
@@ -106,7 +109,7 @@ public final class EncryptionAlgorithmBrowserEvidenceTestCase
         }
         var observations = new ArrayList<EncryptionAlgorithmObservation.Observation>();
         for (var entry : context.transcript().list(context.runId())) {
-            if (entry.direction() != Direction.INBOUND || !"Response".equals(entry.samlSummary().get("type"))
+            if (!context.runId().equals(entry.runId()) || entry.direction() != Direction.INBOUND || !"Response".equals(entry.samlSummary().get("type"))
                     || entry.decodedSamlRef() == null) continue;
             if (entry.url() != null && entry.url().contains("mdv=")) continue;
             var active = entry.correlationId() != null
@@ -130,7 +133,7 @@ public final class EncryptionAlgorithmBrowserEvidenceTestCase
             // ECP probe responses correlate to the outbox action rather than an AuthnRequest ID.
             if (request == null && inResponseTo.startsWith("_"))
                 request = byCorrelation.get(inResponseTo.substring(1));
-            if (request == null) continue;
+            if (request == null || entry.timestamp().isBefore(request.timestamp())) continue;
             if (!SUCCESS.equals(firstAttribute(document.getDocumentElement(), PROTOCOL, "StatusCode", "Value")))
                 continue;
             var wrappers = document.getElementsByTagNameNS(EncryptionAlgorithmObservation.ASSERTION, "EncryptedAssertion");
@@ -142,7 +145,7 @@ public final class EncryptionAlgorithmBrowserEvidenceTestCase
                         new EvidenceRef("transcript", entry.id()), wrapper, decrypted));
             }
         }
-        return EncryptionAlgorithmObservation.evaluate(id(), observations);
+        return List.copyOf(observations);
     }
 
     private String requestId(TranscriptEntry entry) {

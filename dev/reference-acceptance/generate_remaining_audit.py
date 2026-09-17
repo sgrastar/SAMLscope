@@ -71,6 +71,16 @@ IMPLEMENTATION_UPDATES = {
     },
 }
 
+# The decryption-backed algorithm oracle exists even when an old Run says oracle-unavailable.
+from verify_encrypted_sso_diagnosis import CASES as ENCRYPTION_DIAGNOSIS_CASES
+IMPLEMENTATION_UPDATES.update({case_id: {
+    'category': 'browser_transcript',
+    'source': 'runner/src/main/java/com/samlscope/runner/cases/EncryptionAlgorithmObservation.java',
+    'registry': 'runner/src/main/java/com/samlscope/runner/cases/ApprovedBrowserCaseRegistry.java',
+    'registration': 'new EncryptionAlgorithmBrowserEvidenceTestCase(',
+    'next_action': '復号を伴う暗号アルゴリズム判定は実装済み。通常SSOで対象の暗号化生成を有効にし、必要な生成アルゴリズムと全組合せの応答を観測する。',
+} for case_id in ENCRYPTION_DIAGNOSIS_CASES})
+
 # Classification only: these labels describe why an observation is still unresolved.
 # They never change a Verdict and are not product failures.
 DIAGNOSIS = {
@@ -587,6 +597,12 @@ def render(root,definitions,output):
         if row['case'] in implementations:
             row['implementation_observation']=implementations[row['case']]
             row['next_action']=implementations[row['case']]['next_action']
+        if row['product']=='simplesamlphp' and row['profile']=='browser_sso_idp' and row['case'] in ENCRYPTION_DIAGNOSIS_CASES:
+            from verify_encrypted_sso_diagnosis import verify as verify_encryption_diagnosis
+            diagnostic_run,diagnostic_cases=verify_encryption_diagnosis(root.parent.parent/'reference-20260918')
+            row['individual_diagnosis']='reference-20260918/simplesamlphp-normal-encrypted-sso/protocol-evidence-diagnostics.json'
+            row['additional_observation']={'run':diagnostic_run,'details':diagnostic_cases[row['case']]['details']}
+            row['next_action']='通常SSOで暗号化生成とRun鍵での復号を実証済み。AES128-CBCとrsa-oaep-mgf1pを観測した。GCM・rsa-oaep(1.1)・要求されたDigest/MGF組合せを生成する設定または別経路が必要。既定値だけでは非対応と判定しない。'
         if row['product']=='keycloak' and row['case'] in {'IIP-IDP19-a-idp-01','IIP-IDP19-b-idp-01','IIP-IDP19-c-idp-01'}:
             row['next_action']='暗号化プロバイダーは既存。SAMLメタデータ生成が署名鍵だけを選ぶことを稼働バイトコードで確認。鍵を増やすだけではSuiteの鍵取得は解消しない。公開メタデータを改変せず、出所を固定した試験用公開鍵の補助入力経路を追加して対照を実行する。'
             row['individual_diagnosis']='keycloak-decryption-keys/diagnosis.json'

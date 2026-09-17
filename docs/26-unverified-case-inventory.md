@@ -10,12 +10,12 @@
 
 | 原因・現在の経路 | 件数 | 次に扱う範囲 |
 |---|---:|---|
-| ブラウザ完了後の自動判定がない | 20 | Suite実装 |
+| ブラウザ完了後の自動判定がない | 15 | Suite実装 |
 | 一部の試験条件しか実装されていない | 59 | Suite実装 |
 | 設定後の証拠確認・自己申告経路 | 180 | 設定・証拠 |
 | 自己申告が無効 | 75 | 設定・証拠 |
 | メタデータの追加試験・観測不足 | 56 | 試験経路確認 |
-| ブラウザ・SLOの追加観測不足 | 28 | 試験経路確認 |
+| ブラウザ・SLOの追加観測不足 | 33 | 試験経路確認 |
 | 古い待機結果・再開時には期限切れ | 0 | 新Runで再試験 |
 | 実行したが確定できない | 67 | 個別診断 |
 
@@ -156,11 +156,11 @@ approved variant全体の入力生成と観測を実装する。追加ログイ�
 | `IIP-ALG01-a-idp-01` | ecp_idp、metadata_idp、single_logout_idp | — | ecp_idp、metadata_idp、single_logout_idp | 実行したが確定できない |
 | `IIP-ALG02-a-idp-01` | ecp_idp、metadata_idp、single_logout_idp | — | ecp_idp、metadata_idp、single_logout_idp | 実行したが確定できない |
 | `IIP-ALG03-a-idp-01` | browser_sso_idp、ecp_idp、metadata_idp、single_logout_idp | browser_sso_idp、ecp_idp、metadata_idp、single_logout_idp | browser_sso_idp、ecp_idp、metadata_idp、single_logout_idp | メタデータの追加試験・観測不足 |
-| `IIP-ALG04-a-idp-01` | — | — | browser_sso_idp、ecp_idp | ブラウザ完了後の自動判定がない / ブラウザ・SLOの追加観測不足 |
-| `IIP-ALG04-b-idp-01` | — | browser_sso_idp、ecp_idp | browser_sso_idp、ecp_idp | ブラウザ完了後の自動判定がない / ブラウザ・SLOの追加観測不足 |
-| `IIP-ALG06-b-idp-01` | — | browser_sso_idp、ecp_idp | browser_sso_idp、ecp_idp | ブラウザ完了後の自動判定がない / ブラウザ・SLOの追加観測不足 |
-| `IIP-ALG06-c-idp-01` | ecp_idp | browser_sso_idp、ecp_idp | browser_sso_idp、ecp_idp | ブラウザ完了後の自動判定がない / ブラウザ・SLOの追加観測不足 |
-| `IIP-ALG06-d-idp-01` | ecp_idp | browser_sso_idp、ecp_idp | browser_sso_idp、ecp_idp | ブラウザ完了後の自動判定がない / ブラウザ・SLOの追加観測不足 |
+| `IIP-ALG04-a-idp-01` | — | — | browser_sso_idp、ecp_idp | ブラウザ・SLOの追加観測不足 |
+| `IIP-ALG04-b-idp-01` | — | browser_sso_idp、ecp_idp | browser_sso_idp、ecp_idp | ブラウザ・SLOの追加観測不足 |
+| `IIP-ALG06-b-idp-01` | — | browser_sso_idp、ecp_idp | browser_sso_idp、ecp_idp | ブラウザ・SLOの追加観測不足 |
+| `IIP-ALG06-c-idp-01` | ecp_idp | browser_sso_idp、ecp_idp | browser_sso_idp、ecp_idp | ブラウザ・SLOの追加観測不足 |
+| `IIP-ALG06-d-idp-01` | ecp_idp | browser_sso_idp、ecp_idp | browser_sso_idp、ecp_idp | ブラウザ・SLOの追加観測不足 |
 | `IIP-ALG07-a-idp-01` | browser_sso_idp、ecp_idp、metadata_idp、single_logout_idp | browser_sso_idp、ecp_idp、metadata_idp、single_logout_idp | browser_sso_idp、ecp_idp、metadata_idp、single_logout_idp | 自己申告が無効 |
 | `IIP-ALG08-a-idp-01` | browser_sso_idp、ecp_idp | browser_sso_idp、ecp_idp | browser_sso_idp、ecp_idp | 設定後の証拠確認・自己申告経路 |
 | `IIP-ALG08-b-idp-01` | browser_sso_idp、ecp_idp | browser_sso_idp、ecp_idp | browser_sso_idp、ecp_idp | 設定後の証拠確認・自己申告経路 |
