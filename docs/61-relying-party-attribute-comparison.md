@@ -73,3 +73,19 @@ M1Runtimeでは事前取込に対応するPlanの鍵を渡す。polling variant�
 <!--g1-literal--> `VerifyRelyingPartyAttributeExperiment.java`で保存原本とエクスポート済み準備記録を正式比較処理へ渡し、SATISFIEDを得た。欠落、重複、別応答、設定変更、ログイン入力変更、固定入力変更という6種類の負の対照はNOT_VERIFIEDを返した。これは正式な台帳採用前に必要な判定境界の検査として実施した。機能テスト群の一括実行は引き続き保留。API全体のJavaコンパイルも成功。
 
 <!--g1-literal--> 証拠は同じ実証ディレクトリ内の`production-comparison.json`と`preparation-receipts/`。本工程で製品設定変更・プロトコル送信・本人操作は0回。稼働版への反映と結果採用を残し、台帳は466観測のまま。
+
+## 正式Runの採用
+
+署名済み実装から隔離ビルドして参照環境へ反映し、既存Runの通常ログイン前提を完了して準備記録を配置した。最初の正式確認はNOT_VERIFIEDへ戻った。通常ログインのAuthnRequestにvariantがなく、immutable Setのcontains(null)が例外になり、collector全体を未完了にしていたSuite側の不具合だった。対象外の通常要求は文字列化したvariantで除外するよう修正した。
+
+修正後は、通常ログインを含む現在のRecorder原本でも比較が成立した。`RecordedEvidenceReevaluation`へ明示的に接続し、対応するNOT_VERIFIED理由に限って現在の原本を再検証する。既存の監査付き結果revisionを使い、製品への再送や結果の手動上書きは行わない。準備確認だけ・保存診断のOutcomeだけでは採用しない。
+
+正式結果は`IIP-IDP02-a-idp-01`がSATISFIED/PASS、`attested=false`。同じ設定でSPごとに異なる属性を返し、元のSPへ戻したときも元の属性集合になる能力を実証した。これはShibbolethの当該browser SSOプロファイルだけの採用であり、他製品や他ケースへ転用しない。
+
+`verify_relying_party_attribute_acceptance.py`は、ネイティブ準備の再監査・準備記録再生成との一致・実配置の読戻し・署名検証済み比較・負の対照・通常ログインと設定復元・正式Outcome・原本参照の不変性を確認する。これを通した結果だけを台帳生成へ接続した。
+
+<!--g1-literal--> 未検証466→465（−1）。ケースID数は他製品の未検証が残るため157のまま。正式採用した証拠参照は8件。実証Runは`run_Z43RFP9ZF0175WP18Y1FZD70P9`、評価記録は`build/acceptance/reference-20260918/shibboleth-relying-party-attribute-evaluation/`。
+
+<!--g1-literal--> 今回の反映・評価操作はイメージbuild 2、Suite/転送コンテナ再作成各2、準備記録配置1、tests/start 1、準備確認1、明示的再評価API呼出1。通常ログイン用の一時設定書込3、再読込2、削除1、プロトコル往復1。属性比較の再試験と本人操作は0回。最初の未検証結果も記録へ残した。製品設定は完全復元済み。
+
+稼働版は`samlscope:reference-rp-attribute-v49`、digest `sha256:56636b7e26ce3cfb45baf6ac3e9798558ea82911c56a9e6c8148ccb97c90f824`。実装修正の署名付きコミットは`8a673a56`。別件の未コミットSOAP変更は含めていない。G2の既存G2-30は未解消であり、今回の実証をリリース承認と扱わない。

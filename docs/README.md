@@ -176,4 +176,4 @@ not by differences in reference-implementation results ([00 §5](00-concept.md))
 
 - [UI URLスキームの比較入力](60-ui-url-scheme-inputs.md)
 
-- [異なるSPへの属性解放比較](61-relying-party-attribute-comparison.md) — IDP02.aの内部比較とネイティブ設定。実行・collector接続は未完了。
+- [異なるSPへの属性解放比較](61-relying-party-attribute-comparison.md) — IDP02.aの内部比較・ネイティブ設定・原本検証とShibbolethの正式採用。
