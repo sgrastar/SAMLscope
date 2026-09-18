@@ -15,7 +15,10 @@ if (target.origin !== 'http://localhost:18080' || !target.pathname.startsWith('/
 }
 let browser;
 try {
-  browser = await chromium.launch({ channel: 'chrome', headless: true });
+  const assetSpki = process.env.SAMLSCOPE_UI_ASSET_SPKI;
+  if (assetSpki && !/^[A-Za-z0-9+/]{43}=$/.test(assetSpki)) throw new Error('Invalid fixture certificate pin');
+  browser = await chromium.launch({ channel: 'chrome', headless: true,
+    args: assetSpki ? [`--ignore-certificate-errors-spki-list=${assetSpki}`] : [] });
   const context = await browser.newContext({ locale: 'en-US' });
   const page = await context.newPage();
   const requestSamples = [];
@@ -57,6 +60,7 @@ try {
   });
   const samples = await Promise.all(requestSamples);
   record.browser_request = samples.length === 1 ? samples[0] : { status: 'ambiguous-or-missing-request', count: samples.length };
+  record.fixture_certificate_pin = assetSpki ?? null;
   record.document_language = await page.evaluate(() => {
     const language = document.documentElement.lang;
     return /^[A-Za-z]{2,8}(?:-[A-Za-z0-9]{1,8})*$/.test(language) ? language : null;

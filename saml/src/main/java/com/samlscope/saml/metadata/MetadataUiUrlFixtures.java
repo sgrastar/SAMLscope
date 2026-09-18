@@ -1,6 +1,5 @@
 package com.samlscope.saml.metadata;
 
-import java.net.URI;
 import javax.xml.XMLConstants;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
@@ -8,7 +7,7 @@ import org.w3c.dom.Element;
 /** Each fixture changes one URL-bearing UI element; image reachability is a separate prerequisite. */
 final class MetadataUiUrlFixtures {
     private MetadataUiUrlFixtures() {}
-    static Element apply(Document doc, Element entity, MetadataService.Variant variant, URI peerBase) {
+    static Element apply(Document doc, Element entity, MetadataService.Variant variant, MetadataUiAssetLocations assets) {
         if (!variant.id().startsWith("ui-url-")) return entity;
         var tokens = variant.id().split("-");
         if (tokens.length != 4) throw new IllegalArgumentException("Invalid UI URL variant");
@@ -22,7 +21,8 @@ final class MetadataUiUrlFixtures {
             case "data" -> MetadataUiFixtureAsset.dataUri();
             case "javascript" -> "javascript:void(0)";
             case "file" -> "file:///samlscope-fixture-nonexistent/ui-url.svg";
-            case "http", "https" -> networkUri(peerBase, tokens[3]);
+            case "http" -> assets.http().toASCIIString();
+            case "https" -> assets.https().toASCIIString();
             default -> throw new IllegalArgumentException("Unknown UI URL scheme");
         };
         var sp = (Element) entity.getElementsByTagNameNS(MetadataService.MD, "SPSSODescriptor").item(0);
@@ -43,11 +43,5 @@ final class MetadataUiUrlFixtures {
         extensions.appendChild(info);
         sp.insertBefore(extensions, sp.getFirstChild());
         return entity;
-    }
-    private static String networkUri(URI peerBase, String scheme) {
-        try {
-            if (peerBase.getHost() == null || peerBase.getUserInfo() != null) throw new IllegalArgumentException("Invalid fixture origin");
-            return new URI(scheme, null, peerBase.getHost(), peerBase.getPort(), MetadataUiFixtureAsset.PATH, null, null).toASCIIString();
-        } catch (java.net.URISyntaxException invalid) { throw new IllegalArgumentException("Invalid fixture URL", invalid); }
     }
 }

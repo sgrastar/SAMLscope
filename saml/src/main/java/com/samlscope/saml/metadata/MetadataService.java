@@ -137,12 +137,19 @@ public final class MetadataService {
     private final FilePlanKeyStore keyStore;
     private final XmlSigner signer;
     private final Clock clock;
+    private final MetadataUiAssetLocations uiAssets;
 
     public MetadataService(URI peerBase, FilePlanKeyStore keyStore, XmlSigner signer, Clock clock) {
+        this(peerBase, keyStore, signer, clock, MetadataUiAssetLocations.forPeer(peerBase));
+    }
+
+    public MetadataService(URI peerBase, FilePlanKeyStore keyStore, XmlSigner signer, Clock clock,
+            MetadataUiAssetLocations uiAssets) {
         this.peerBase = peerBase;
         this.keyStore = keyStore;
         this.signer = signer;
         this.clock = clock;
+        this.uiAssets = java.util.Objects.requireNonNull(uiAssets);
     }
 
     public byte[] generate(TestPlan plan) {
@@ -293,7 +300,7 @@ public final class MetadataService {
         root = MetadataExtensionPlacementFixtures.apply(document, root, variant);
         root = MetadataAttributePolicyFixtures.apply(document, root, variant);
         root = MetadataUiConsumerFixtures.apply(document, root, variant);
-        root = MetadataUiUrlFixtures.apply(document, root, variant, peerBase);
+        root = MetadataUiUrlFixtures.apply(document, root, variant, uiAssets);
         root = MetadataAlgorithmFixtures.apply(document, root, variant);
         root = MetadataEncryptionAlgorithmFixtures.apply(document, root, variant);
         applyValidityFixture(root, variant);

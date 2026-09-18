@@ -108,7 +108,7 @@ public final class SamlScopeApplication {
         var signer = new XmlSigner();
         var metadataParser = new TargetMetadataParser();
         var saml = new SamlProtocolService(config.peerBaseUrl(), keyStore, signer, new OpenSamlReader(), clock);
-        var metadata = new MetadataService(config.peerBaseUrl(), keyStore, signer, clock);
+        var metadata = MetadataUiAssetConfiguration.create(config.peerBaseUrl(), keyStore, signer, clock);
         var preflight = new PreflightService(config.peerBaseUrl(), plans, runs, runService, metadataCache,
                 metadataParser, new OutboundPolicy(config.outboundAllowPrivate()), clock, json.mapper());
         var idpPeer = new IdpPeerService(plans, runs, runService, metadataCache, metadataParser, saml, transcript, clock);
