@@ -115,7 +115,8 @@ final class EncryptionAlgorithmObservation {
     private static boolean defaultMgfOaep(Observation observation) {
         if (!OAEP.equals(observation.transportAlgorithm())) return false;
         var mgf = observation.mgfAlgorithm();
-        return mgf == null || MGF1_SHA1.equals(mgf);
+        // The approved variant specifically exercises the omitted MGF, not an explicit SHA-1 parameter.
+        return mgf == null;
     }
 
     private static CaseOutcome outcome(List<Observation> observations, String reason) {

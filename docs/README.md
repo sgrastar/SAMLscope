@@ -155,3 +155,5 @@ not by differences in reference-implementation results ([00 §5](00-concept.md))
 - [暗号化方式・OAEPパラメータ・鍵サイズの入力条件](49-encryption-metadata-fixtures.md)
 
 - [暗号・署名・パラメーター共通部分の判定と実証](50-metadata-intersection-oracle.md)
+
+- [暗号方式生成能力の条件別証拠とMGF省略の監査](51-producer-algorithm-metadata-evidence.md)

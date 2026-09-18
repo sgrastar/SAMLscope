@@ -87,6 +87,10 @@ class EncryptionAlgorithmObservationTest {
         assertTrue(EncryptionAlgorithmObservation.evaluate("IIP-ALG06-b-idp-01", List.of(aes128Mgf1p)).isEmpty());
         // The default-MGF variant applies to the XML Encryption 1.1 rsa-oaep URI only.
         assertTrue(EncryptionAlgorithmObservation.evaluate("IIP-ALG06-d-idp-01", List.of(aes128Mgf1p)).isEmpty());
+        var explicitSha1Mgf = observation(suite, new SamlEncryptionFixtureFactory.Algorithms(
+                SamlEncryptionFixtureFactory.Content.AES128_GCM, SamlEncryptionFixtureFactory.Transport.RSA_OAEP_11,
+                SamlEncryptionFixtureFactory.Digest.SHA256, SamlEncryptionFixtureFactory.Mgf.SHA1), true);
+        assertTrue(EncryptionAlgorithmObservation.evaluate("IIP-ALG06-d-idp-01", List.of(explicitSha1Mgf)).isEmpty());
         var explicitOtherMgf = observation(suite, new SamlEncryptionFixtureFactory.Algorithms(
                 SamlEncryptionFixtureFactory.Content.AES128_GCM, SamlEncryptionFixtureFactory.Transport.RSA_OAEP_11,
                 SamlEncryptionFixtureFactory.Digest.SHA256, SamlEncryptionFixtureFactory.Mgf.SHA256), true);

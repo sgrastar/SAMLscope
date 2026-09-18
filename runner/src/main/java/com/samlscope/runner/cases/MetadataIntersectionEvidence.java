@@ -2,9 +2,7 @@ package com.samlscope.runner.cases;
 
 import static com.samlscope.runner.cases.MetadataAlgorithmEvidence.children;
 import java.util.*;
-import java.security.interfaces.RSAPrivateKey;
 import java.security.interfaces.RSAPublicKey;
-import java.security.cert.*;
 import java.security.MessageDigest;
 import java.util.function.BiFunction;
 import org.w3c.dom.Element;
@@ -12,7 +10,6 @@ import com.samlscope.core.caseexec.CaseContext;
 import com.samlscope.core.evaluation.*;
 import com.samlscope.core.transcript.TranscriptContentReader;
 import com.samlscope.saml.crypto.PlanCredentials;
-import com.samlscope.saml.crypto.SamlXmlDecrypter;
 
 /** Peer-aware intersection: original input, verified output and matching-key decryption are all required. */
 final class MetadataIntersectionEvidence {
@@ -40,17 +37,7 @@ final class MetadataIntersectionEvidence {
     static Sample inspect(MetadataAlgorithmEvidence.Exchange e,PlanCredentials key) throws Exception {
         var role=children(e.metadata(),MD,"SPSSODescriptor").getFirst();
         var expected=expectedEncryption(e.variant());
-        var descriptors=children(role,MD,"KeyDescriptor").stream().filter(k->k.getAttribute("use").isEmpty() || "encryption".equals(k.getAttribute("use"))).toList();
-        require(descriptors.size()==1);
-        var descriptor=descriptors.getFirst();
-        require(key.privateKey() instanceof RSAPrivateKey && key.certificate().getPublicKey() instanceof RSAPublicKey);
-        require(((RSAPrivateKey)key.privateKey()).getModulus().equals(((RSAPublicKey)key.certificate().getPublicKey()).getModulus()));
-        var certificateBytes=new ArrayList<byte[]>();
-        for(var info:children(descriptor,DS,"KeyInfo"))for(var data:children(info,DS,"X509Data"))for(var certificate:children(data,DS,"X509Certificate")) {
-            var parsed=(X509Certificate)CertificateFactory.getInstance("X.509").generateCertificate(new java.io.ByteArrayInputStream(Base64.getDecoder().decode(certificate.getTextContent().replaceAll("\\s+",""))));
-            certificateBytes.add(parsed.getPublicKey().getEncoded());
-        }
-        require(certificateBytes.size()==1 && Arrays.equals(certificateBytes.getFirst(),key.certificate().getPublicKey().getEncoded()));
+        var descriptor=MetadataEncryptionProof.descriptor(role,key);
         checkEncryptionInput(descriptor,expected);
         checkSignatureInput(e.metadata(),role,e.variant());
         var mismatches=new ArrayList<String>();var actualSignatures=new ArrayList<String>();
@@ -62,17 +49,7 @@ final class MetadataIntersectionEvidence {
             var method=single(data,X,"EncryptionMethod");
             var transportKeys=wrapper.getElementsByTagNameNS(X,"EncryptedKey");require(transportKeys.getLength()==1);
             var transport=single((Element)transportKeys.item(0),X,"EncryptionMethod");
-            var plain=new SamlXmlDecrypter().decrypt(wrapper,key.privateKey());
-            require(S.equals(plain.getNamespaceURI()) && "Assertion".equals(plain.getLocalName()));
-            require(children(plain,S,"Issuer").size()==1 && children(e.response(),S,"Issuer").getFirst().getTextContent().equals(children(plain,S,"Issuer").getFirst().getTextContent()));
-            if(!children(plain,DS,"Signature").isEmpty()) {
-                var document=com.samlscope.saml.normal.SecureXml.newDocument();
-                var envelope=document.createElementNS("urn:oasis:names:tc:SAML:2.0:protocol","p:Response");document.appendChild(envelope);
-                envelope.appendChild(document.importNode(plain,true));
-                var verified=new com.samlscope.saml.crypto.VerifiedSignatureAlgorithms().read(envelope,
-                        children(e.response(),S,"Issuer").getFirst().getTextContent(),e.signingKeys());
-                require(verified.size()==1 && "Assertion".equals(verified.getFirst().element()));signatures.addAll(verified);
-            }
+            signatures.addAll(MetadataEncryptionProof.decrypt(e,wrapper,key));
             if(expected!=null) {
                 if(!expected.data().equals(method.getAttribute("Algorithm")))mismatches.add("encryption-intersection");
                 if(expected.bits()!=null && !Objects.equals(expected.bits(),dataBits(method.getAttribute("Algorithm"))))mismatches.add("encryption-keysize-intersection");

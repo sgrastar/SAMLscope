@@ -79,11 +79,11 @@ Shibbolethの`IIP-SSO01-fk/fu/gi`は、v8では事前生成された正常系要
 
 ## Not verifiedの内訳
 
-以下は表に採用したケース結果の延べ474件。†のケースは新Runの追加証拠を採用し、それ以外の既存証拠は保持しています。単一Runの集計や全試験の再完走を意味しません。比較表で設定不足として扱い直した旧FAILは、このNOT_VERIFIED集計には含めません。
+以下は表に採用したケース結果の延べ472件。†のケースは新Runの追加証拠を採用し、それ以外の既存証拠は保持しています。単一Runの集計や全試験の再完走を意味しません。比較表で設定不足として扱い直した旧FAILは、このNOT_VERIFIED集計には含めません。
 
 | 理由 | Keycloak | Shibboleth IdP | SimpleSAMLphp | 解消に必要なこと |
 |---|---:|---:|---:|---|
-| `case.pending-interaction` | 93 | 83 | 93 | 設定・受信待ちに加え、判定処理未実装の経路を含む。全件台帳を参照 |
+| `case.pending-interaction` | 94 | 80 | 93 | 設定・受信待ちに加え、判定処理未実装の経路を含む。全件台帳を参照 |
 | `attestation.interaction-disallowed` | 25 | 25 | 25 | 自己申告を無効にした構成。確認せずに申告を代行しない |
 | `browser_fixture_partial` | 19 | 21 | 19 | 一部の試験だけ実行。残るvariantの証拠が不足 |
 | `idp.signed-request.inconclusive` | 7 | 1 | 7 | 当該ケースの応答・対象設定・正常系対照を追加確認 |
@@ -125,12 +125,12 @@ Chromeと承認のブロックを解除するだけでは解消しません。�
 | `IIP-ALG02-a-idp-01` | Success | Success | Success |
 | `IIP-ALG03-a-idp-01` | Not verified | Not verified | Not verified |
 | `IIP-ALG04-a-idp-01` | Success † | Success † | Success † |
-| `IIP-ALG04-b-idp-01` | Success † | Not verified † | Success † |
+| `IIP-ALG04-b-idp-01` | Success † | Success † | Success † |
 | `IIP-ALG05-a-idp-01` | Warning | Warning | Warning |
 | `IIP-ALG06-a-idp-01` | Success † | Success † | Success † |
-| `IIP-ALG06-b-idp-01` | Success † | Not verified † | Not verified † |
-| `IIP-ALG06-c-idp-01` | Success † | Not verified † | Not verified † |
-| `IIP-ALG06-d-idp-01` | Success † | Not verified † | Not verified † |
+| `IIP-ALG06-b-idp-01` | Success † | Success † | Not verified † |
+| `IIP-ALG06-c-idp-01` | Success † | Success † | Not verified † |
+| `IIP-ALG06-d-idp-01` | Not verified † | Not verified † | Not verified † |
 | `IIP-ALG07-a-idp-01` | Not verified | Not verified | Not verified |
 | `IIP-ALG08-a-idp-01` | Not verified | Not verified | Not verified |
 | `IIP-ALG08-b-idp-01` | Not verified | Not verified | Not verified |
@@ -531,7 +531,7 @@ Chromeと承認のブロックを解除するだけでは解消しません。�
 | browser_sso_idp († listed supplemental cases only) | keycloak | `run_6AD6T3VS8H87WQQBB1T2DEB3MX` | `build/acceptance/reference-20260915/algorithm-observation-batch/keycloak/browser_alg_combo` |
 | browser_sso_idp († listed supplemental cases only) | keycloak | `run_5X1B1RGKPNK7C7J3C1KT4B3EFM` | `build/acceptance/reference-20260915/algorithm-observation-batch/keycloak/browser_sso_idp` |
 | browser_sso_idp († listed supplemental cases only) | keycloak | `run_6AD6T3VS8H87WQQBB1T2DEB3MX` | `build/acceptance/reference-20260915/algorithm-observation-batch/keycloak/browser_alg_combo` |
-| browser_sso_idp († listed supplemental cases only) | keycloak | `run_6AD6T3VS8H87WQQBB1T2DEB3MX` | `build/acceptance/reference-20260915/algorithm-observation-batch/keycloak/browser_alg_combo` |
+| browser_sso_idp († listed supplemental cases only) | keycloak | `run_5X1B1RGKPNK7C7J3C1KT4B3EFM` | `build/acceptance/reference-20260915/algorithm-observation-batch/keycloak/browser_sso_idp` |
 | browser_sso_idp († listed supplemental cases only) | keycloak | `run_ZZQH3B5136N955F9W1NAMJ4GSG` | `build/acceptance/reference-20260918/keycloak-default-acs` |
 | browser_sso_idp | keycloak | `run_0WQJR9TGK0MC4TFTVT1AFKWDKP` | `interaction-followup/after/keycloak/browser_sso_idp` |
 | browser_sso_idp († listed supplemental cases only) | shibboleth | `run_DMGDE6GB0DGZ8HTYRJPY3QY7QG` | `additional-implementation/shibboleth/browser_sso_idp` |
@@ -548,10 +548,10 @@ Chromeと承認のブロックを解除するだけでは解消しません。�
 | browser_sso_idp († listed supplemental cases only) | shibboleth | `run_7ZBVHFJ7RNAT5EDQ16NKM2H5K6` | `build/acceptance/reference-20260915/algorithm-observation-batch/shibboleth/browser_sso_idp` |
 | browser_sso_idp († listed supplemental cases only) | shibboleth | `run_BD24PBN5E7QBPNGZH12KH08X39` | `build/acceptance/reference-20260914/crypto-integrated-implementation/shibboleth/browser_sso_idp` |
 | browser_sso_idp († listed supplemental cases only) | shibboleth | `run_7ZBVHFJ7RNAT5EDQ16NKM2H5K6` | `build/acceptance/reference-20260915/algorithm-observation-batch/shibboleth/browser_sso_idp` |
+| browser_sso_idp († listed supplemental cases only) | shibboleth | `run_0TMTHFWK5HEM14WFNJ10RD5D1X` | `build/acceptance/reference-20260918/shibboleth-producer-evaluation` |
 | browser_sso_idp († listed supplemental cases only) | shibboleth | `run_7ZBVHFJ7RNAT5EDQ16NKM2H5K6` | `build/acceptance/reference-20260915/algorithm-observation-batch/shibboleth/browser_sso_idp` |
-| browser_sso_idp († listed supplemental cases only) | shibboleth | `run_7ZBVHFJ7RNAT5EDQ16NKM2H5K6` | `build/acceptance/reference-20260915/algorithm-observation-batch/shibboleth/browser_sso_idp` |
-| browser_sso_idp († listed supplemental cases only) | shibboleth | `run_7ZBVHFJ7RNAT5EDQ16NKM2H5K6` | `build/acceptance/reference-20260915/algorithm-observation-batch/shibboleth/browser_sso_idp` |
-| browser_sso_idp († listed supplemental cases only) | shibboleth | `run_7ZBVHFJ7RNAT5EDQ16NKM2H5K6` | `build/acceptance/reference-20260915/algorithm-observation-batch/shibboleth/browser_sso_idp` |
+| browser_sso_idp († listed supplemental cases only) | shibboleth | `run_0TMTHFWK5HEM14WFNJ10RD5D1X` | `build/acceptance/reference-20260918/shibboleth-producer-evaluation` |
+| browser_sso_idp († listed supplemental cases only) | shibboleth | `run_0TMTHFWK5HEM14WFNJ10RD5D1X` | `build/acceptance/reference-20260918/shibboleth-producer-evaluation` |
 | browser_sso_idp († listed supplemental cases only) | shibboleth | `run_7ZBVHFJ7RNAT5EDQ16NKM2H5K6` | `build/acceptance/reference-20260915/algorithm-observation-batch/shibboleth/browser_sso_idp` |
 | browser_sso_idp († listed supplemental cases only) | shibboleth | `run_YVEJ7H1J1K1161V8GY4WM3NSXF` | `build/acceptance/reference-20260914/integrated-implementation/shibboleth/polling-bssso` |
 | browser_sso_idp | shibboleth | `run_JGADJKCN6GBGKJ68D1WP0G3GMX` | `interaction-followup/after/shibboleth/browser_sso_idp` |

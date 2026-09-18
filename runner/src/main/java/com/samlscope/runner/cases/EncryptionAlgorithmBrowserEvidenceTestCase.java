@@ -35,6 +35,7 @@ public final class EncryptionAlgorithmBrowserEvidenceTestCase
     private final TranscriptContentReader content;
     private final SamlDecryptionKeyProvider decryptionKeys;
     private final SamlElementDecrypter decrypter;
+    private final MetadataEncryptionAlgorithmEvidence metadataEvidence;
 
     public EncryptionAlgorithmBrowserEvidenceTestCase(
             BrowserEvidenceTestCase fallback,
@@ -48,6 +49,11 @@ public final class EncryptionAlgorithmBrowserEvidenceTestCase
             TranscriptContentReader content,
             SamlDecryptionKeyProvider decryptionKeys,
             SamlElementDecrypter decrypter) {
+        this(fallback,content,decryptionKeys,decrypter,null);
+    }
+    private EncryptionAlgorithmBrowserEvidenceTestCase(BrowserEvidenceTestCase fallback,TranscriptContentReader content,
+            SamlDecryptionKeyProvider decryptionKeys,SamlElementDecrypter decrypter,MetadataEncryptionAlgorithmEvidence metadataEvidence) {
+        this.metadataEvidence=metadataEvidence;
         this.fallback = Objects.requireNonNull(fallback, "fallback");
         this.content = Objects.requireNonNull(content, "content");
         this.decryptionKeys = Objects.requireNonNull(decryptionKeys, "decryptionKeys");
@@ -55,6 +61,10 @@ public final class EncryptionAlgorithmBrowserEvidenceTestCase
         if (!EncryptionAlgorithmObservation.supports(fallback.id())) {
             throw new IllegalArgumentException("No encryption algorithm oracle for " + fallback.id());
         }
+    }
+
+    EncryptionAlgorithmBrowserEvidenceTestCase withMetadataEvidence(MetadataEncryptionAlgorithmEvidence evidence) {
+        return new EncryptionAlgorithmBrowserEvidenceTestCase(fallback,content,decryptionKeys,decrypter,evidence);
     }
 
     @Override public String id() { return fallback.id(); }
@@ -96,9 +106,10 @@ public final class EncryptionAlgorithmBrowserEvidenceTestCase
     }
 
     private List<EncryptionAlgorithmObservation.Observation> transcriptObservations(CaseContext context) {
+        var metadataObservations=metadataEvidence==null?List.<EncryptionAlgorithmObservation.Observation>of():metadataEvidence.observe(context);
         var key = decryptionKeys.keyFor(context.runId()).orElse(null);
         var sharedKey = decryptionKeys.sharedKeyFor(context.runId()).orElse(null);
-        if (key == null && sharedKey == null) return List.of();
+        if (key == null && sharedKey == null) return metadataObservations;
         var requests = new LinkedHashMap<String, TranscriptEntry>();
         var byCorrelation = new LinkedHashMap<String, TranscriptEntry>();
         for (var entry : context.transcript().list(context.runId())) {
@@ -108,7 +119,7 @@ public final class EncryptionAlgorithmBrowserEvidenceTestCase
             var id = requestId(entry);
             if (id != null) requests.put(id, entry);
         }
-        var observations = new ArrayList<EncryptionAlgorithmObservation.Observation>();
+        var observations = new ArrayList<EncryptionAlgorithmObservation.Observation>(metadataObservations);
         for (var entry : context.transcript().list(context.runId())) {
             if (!context.runId().equals(entry.runId()) || entry.direction() != Direction.INBOUND || !"Response".equals(entry.samlSummary().get("type"))
                     || entry.decodedSamlRef() == null) continue;

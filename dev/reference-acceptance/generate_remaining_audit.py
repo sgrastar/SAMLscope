@@ -339,7 +339,6 @@ def render(root,definitions,output):
                 'IIP-ALG04-a-idp-01':('PASS','browser.encryption.aes128-gcm.decrypted'),
                 'IIP-ALG06-a-idp-01':('PASS','browser.encryption.rsa-oaep-mgf1p.decrypted'),
                 'IIP-ALG06-c-idp-01':('PASS','browser.encryption.digest-combinations.decrypted'),
-                'IIP-ALG06-d-idp-01':('PASS','browser.encryption.mgf1-sha1-default.decrypted'),
                 'IIP-SSO01-g-idp-01':('PASS','browser.normal-flow.success-responses-have-assertions'),
                 'IIP-SSO01-z-idp-01':('WARNING','browser.normal-flow.unsolicited-sso-observed')},
             ('shibboleth','browser_sso_idp'):{
@@ -581,6 +580,14 @@ def render(root,definitions,output):
         if row['product']=='shibboleth' and row['profile']=='metadata_idp' and row['case']=='IIP-MD05-e8-idp-01':
             from verify_metadata_intersection import verify as verify_intersection
             selected=verify_intersection(root.parent.parent/'reference-20260918')
+        if row['product']=='shibboleth' and row['profile']=='browser_sso_idp' and row['case'] in {
+                'IIP-ALG04-b-idp-01','IIP-ALG06-b-idp-01','IIP-ALG06-c-idp-01'}:
+            from verify_producer_algorithms import verify as verify_producer
+            selected=verify_producer(root.parent.parent/'reference-20260918')
+        if row['product']=='keycloak' and row['profile']=='browser_sso_idp' and row['case']=='IIP-ALG06-d-idp-01':
+            from verify_producer_algorithms import verify_default_mgf_withdrawal
+            row['audit_withdrawal']=verify_default_mgf_withdrawal(root.parent.parent/'reference-20260918')
+            assert row.get('verdict','NOT_VERIFIED')=='NOT_VERIFIED'
         if selected is not None:
             path, selected_cases = selected
             raw=path.read_bytes(); result=json.loads(raw); case=selected_cases[row['case']]

@@ -38,6 +38,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--variants', required=True)
+    parser.add_argument('--profile', choices=['metadata_idp', 'browser_sso_idp'], default='metadata_idp')
     parser.add_argument('--continue-inconclusive', action='store_true', help='Continue after a non-baseline protocol attempt; never infer a verdict')
     args = parser.parse_args()
     out = args.output.resolve()
@@ -50,7 +51,7 @@ def main():
     original = docker('cat', CONFIG)
     (out / 'original-providers.xml').write_bytes(original)
     created = api('/api/plans', dict(name='Shibboleth native filesystem metadata batch',
-        profile='metadata_idp', targetKind='IDP', targetEntityId='http://localhost:18280/idp/shibboleth',
+        profile=args.profile, targetKind='IDP', targetEntityId='http://localhost:18280/idp/shibboleth',
         metadataSourceKind='URL', metadataSourceLocation='http://samlscope-reference-shibboleth:8080/idp/shibboleth',
         suiteMetadataDelivery='HTTP_URL', declaredFeatures={},
         parameters=dict(clockSkewToleranceSeconds=180, metadataRefreshWaitSeconds=300,

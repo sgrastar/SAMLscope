@@ -22,6 +22,15 @@ public final class ApprovedBrowserCaseRegistry {
 
     private ApprovedBrowserCaseRegistry() {}
 
+    public static TestCaseRegistry withMetadataEncryption(TestCaseRegistry registry,TranscriptContentReader content,
+            java.util.function.Function<String,byte[]> metadata,
+            java.util.function.BiFunction<String,String,java.util.Optional<com.samlscope.saml.crypto.PlanCredentials>> keys) {
+        var evidence=new MetadataEncryptionAlgorithmEvidence(content,metadata,keys);
+        return new TestCaseRegistry(registry.all().stream().map(testCase ->
+                testCase instanceof EncryptionAlgorithmBrowserEvidenceTestCase algorithm
+                        ? (com.samlscope.core.caseexec.TestCase)algorithm.withMetadataEvidence(evidence) : testCase).toList());
+    }
+
     public static TestCaseRegistry withBasicLogout(TestCaseRegistry registry,
             java.util.function.Function<String, IdpBasicLogoutScenarioTestCase.Configuration> configurations) {
         return new TestCaseRegistry(registry.all().stream().map(testCase ->
