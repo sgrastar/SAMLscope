@@ -185,3 +185,5 @@ not by differences in reference-implementation results ([00 §5](00-concept.md))
 - [NameID省略の証拠検査と比較処理](64-nameid-omission-evidence.md)
 
 - [Keycloakの属性名・NameFormat生成の実測](65-keycloak-attribute-name-diagnosis.md)
+
+- [認証コンテキストの強度比較・優先順の共通実装](66-authn-context-comparison-inputs.md)

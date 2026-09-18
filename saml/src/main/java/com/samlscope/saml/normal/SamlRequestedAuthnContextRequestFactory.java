@@ -7,7 +7,7 @@ import javax.xml.XMLConstants;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 
-/** Builds deterministic exact RequestedAuthnContext fixtures without a vendor control API. */
+/** Builds deterministic RequestedAuthnContext inputs without inventing a target strength ordering. */
 public final class SamlRequestedAuthnContextRequestFactory {
     public static final String PASSWORD_PROTECTED_TRANSPORT =
             "urn:oasis:names:tc:SAML:2.0:ac:classes:PasswordProtectedTransport";
@@ -17,14 +17,44 @@ public final class SamlRequestedAuthnContextRequestFactory {
 
     public enum Fixture { BASELINE, SATISFIABLE_CLASS, SATISFIABLE_DECLARATION, UNSATISFIABLE_CLASS }
 
-    public byte[] build(
-            Fixture fixture,
-            String requestId,
-            URI destination,
-            String issuer,
-            URI acs,
-            Instant issueInstant) {
+    public enum Comparison { EXACT, MINIMUM, BETTER, MAXIMUM }
+    public enum ReferenceKind { CLASS, DECLARATION }
+    public record ContextRequest(Comparison comparison, ReferenceKind kind, java.util.List<String> references) {
+        public ContextRequest {
+            java.util.Objects.requireNonNull(comparison, "comparison");
+            java.util.Objects.requireNonNull(kind, "kind");
+            references = java.util.List.copyOf(references);
+            if (references.isEmpty() || references.stream().anyMatch(String::isBlank)
+                    || new java.util.HashSet<>(references).size() != references.size()) {
+                throw new IllegalArgumentException("A nonempty ordered set of context references is required");
+            }
+        }
+    }
+
+    public byte[] build(Fixture fixture, String requestId, URI destination, String issuer, URI acs, Instant issueInstant) {
         java.util.Objects.requireNonNull(fixture, "fixture");
+        requireText(requestId, "requestId");
+        ContextRequest requested = switch (fixture) {
+            case BASELINE -> null;
+            case SATISFIABLE_CLASS -> new ContextRequest(Comparison.EXACT, ReferenceKind.CLASS,
+                    java.util.List.of(PASSWORD_PROTECTED_TRANSPORT));
+            case SATISFIABLE_DECLARATION -> new ContextRequest(Comparison.EXACT, ReferenceKind.DECLARATION,
+                    java.util.List.of(FIXTURE_DECLARATION));
+            case UNSATISFIABLE_CLASS -> new ContextRequest(Comparison.EXACT, ReferenceKind.CLASS,
+                    java.util.List.of("urn:samlscope:probe:unavailable-authn-context:" + token(requestId)));
+        };
+        return buildInternal(requested, requestId, destination, issuer, acs, issueInstant);
+    }
+
+    /** References retain the caller's preference order; their positions do not imply strength. */
+    public byte[] buildConfiguredContext(ContextRequest requested, String requestId, URI destination,
+            String issuer, URI acs, Instant issueInstant) {
+        java.util.Objects.requireNonNull(requested, "requested");
+        return buildInternal(requested, requestId, destination, issuer, acs, issueInstant);
+    }
+
+    private byte[] buildInternal(ContextRequest context, String requestId, URI destination,
+            String issuer, URI acs, Instant issueInstant) {
         requireText(requestId, "requestId");
         requireText(issuer, "issuer");
         java.util.Objects.requireNonNull(destination, "destination");
@@ -44,24 +74,15 @@ public final class SamlRequestedAuthnContextRequestFactory {
         var issuerElement = element(document, ASSERTION, "saml:Issuer");
         issuerElement.setTextContent(issuer);
         request.appendChild(issuerElement);
-        if (fixture != Fixture.BASELINE) {
+        if (context != null) {
             var requested = element(document, PROTOCOL, "samlp:RequestedAuthnContext");
-            requested.setAttribute("Comparison", "exact");
-            var reference = switch (fixture) {
-                case SATISFIABLE_DECLARATION -> element(
-                        document, ASSERTION, "saml:AuthnContextDeclRef");
-                case SATISFIABLE_CLASS, UNSATISFIABLE_CLASS -> element(
-                        document, ASSERTION, "saml:AuthnContextClassRef");
-                case BASELINE -> throw new IllegalStateException("baseline has no context reference");
-            };
-            reference.setTextContent(switch (fixture) {
-                case SATISFIABLE_CLASS -> PASSWORD_PROTECTED_TRANSPORT;
-                case SATISFIABLE_DECLARATION -> FIXTURE_DECLARATION;
-                case UNSATISFIABLE_CLASS -> "urn:samlscope:probe:unavailable-authn-context:"
-                        + token(requestId);
-                case BASELINE -> throw new IllegalStateException("baseline has no context reference");
-            });
-            requested.appendChild(reference);
+            requested.setAttribute("Comparison", context.comparison().name().toLowerCase(java.util.Locale.ROOT));
+            for (String value : context.references()) {
+                var reference = element(document, ASSERTION, context.kind() == ReferenceKind.CLASS
+                        ? "saml:AuthnContextClassRef" : "saml:AuthnContextDeclRef");
+                reference.setTextContent(value);
+                requested.appendChild(reference);
+            }
             request.appendChild(requested);
         }
         return SecureXml.serialize(document);
