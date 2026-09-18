@@ -11,7 +11,7 @@ import com.samlscope.saml.crypto.PlanCredentials;
 
 /** Native preparation enables protocol comparison; manual evidence review remains available. */
 public final class RelyingPartyAttributeConfigurationTestCase implements TestCase, ConfigurationPrompt,
-        ProtocolEvidenceCase, com.samlscope.runner.EvidenceCampaignCase {
+        ProtocolEvidenceCase, com.samlscope.runner.EvidenceCampaignCase, com.samlscope.runner.RecordedEvidenceReevaluation {
     private final TestCase fallback;
     private final TranscriptContentReader content;
     private final Function<String, byte[]> metadata;
@@ -71,6 +71,21 @@ public final class RelyingPartyAttributeConfigurationTestCase implements TestCas
         var outcome = observe(context);
         var details = new LinkedHashMap<String, Object>(outcome.details());
         details.put("configuration_confirmation_required", true);
-        return new EvidenceStatus(false, evidenceActionKeys(), List.of(), details);
+        return new EvidenceStatus(outcome.outcome() == Outcome.SATISFIED, evidenceActionKeys(), List.of(), details);
     }
+    @Override public boolean supportsRecordedEvidenceReevaluation(CaseOutcome previous) {
+        return previous != null && previous.outcome() == Outcome.NOT_VERIFIED
+                && Set.of("attestation.interaction-disallowed", "configuration.relying-party-attributes.evidence-incomplete")
+                    .contains(String.valueOf(previous.reasonCode()));
+    }
+    @Override public Optional<CaseOutcome> reevaluateRecordedEvidence(CaseContext context, CaseOutcome previous) {
+        if (!supportsRecordedEvidenceReevaluation(previous)) return Optional.empty();
+        var next = observe(context);
+        var details = new LinkedHashMap<String, Object>(next.details());
+        details.put("preparation_source", "local-native-adapter");
+        details.put("recorded_evidence_rechecked", true);
+        return com.samlscope.runner.RecordedEvidenceReevaluation.conclusiveUpdate(previous,
+                new CaseOutcome(next.outcome(), next.notVerifiedReason(), next.reasonCode(), next.reasonMessageKey(), next.evidence(), details));
+    }
+
 }

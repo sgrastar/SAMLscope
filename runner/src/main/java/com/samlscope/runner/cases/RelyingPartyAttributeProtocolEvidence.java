@@ -59,7 +59,7 @@ final class RelyingPartyAttributeProtocolEvidence {
             var requestIds = new HashSet<String>();
             for (var request : entries) {
                 if (request.direction() != Direction.OUTBOUND || !"AuthnRequest".equals(request.samlSummary().get("type"))
-                        || !VARIANTS.contains(request.samlSummary().get("variant"))) continue;
+                        || !VARIANTS.contains(String.valueOf(request.samlSummary().get("variant")))) continue;
                 try {
                     require("metadata-preloaded".equals(request.samlSummary().get("campaign")));
                     var sent = SecureXml.parse(content.readDecodedSaml(request)).getDocumentElement();
