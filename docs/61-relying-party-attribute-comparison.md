@@ -41,3 +41,21 @@
 <!--g1-literal--> 操作はRun/preflight各1、事前取込原本の取得1、ネイティブ書込7（メタデータ1、設定3、復元3）、再読込8（AttributeRegistryを含む）、一時ファイル削除1、プロトコル往復3、本人操作0。設定読戻しは各往復の前後に行い、終了後の設定は元のハッシュと一致した。製品再起動・Suite再ビルドは0回。
 
 `AttributePolicyAttributeReader.readRelyingParty`を追加した。既存の署名・暗号化Assertion復号・単一Assertion確認に加え、ResponseとSubjectConfirmationDataのInResponseTo/宛先、すべてのAudienceRestrictionに対象SPが含まれることを確認する。Suite専用のanchor/first/second属性だけを取り出し、同じ属性入力のfingerprintは公開診断へ出さない。既存の属性比較APIは動作を維持する。新しい経路はコンパイル済みで、原本collectorおよびregistryへの接続は次の工程である。
+
+## 原本の署名・復号と準備記録の結合
+
+`RelyingPartyAttributeProtocolEvidence`を追加した。同一Runの単一preloaded原本と取得記録、元のAuthnRequestのIssuer/宛先/ACS、唯一の相関応答を結合する。原本ハッシュ、時系列、メタデータ内の重複entityID、要求ID重複を検査する。応答の署名、公開暗号鍵との対応、復号後のAudience/SubjectConfirmationDataは属性readerで再検証する。複数取込の時刻だけを使って原本を選ばない。
+
+`ObserveRelyingPartyAttributeExperiment.java`は保存済み原本をこのcollectorへ渡す読み取り専用の診断であり、鍵の生成や変更を行わない。記録済みRunの生応答を再処理した結果は次のとおり。
+
+| 条件 | 検証後のSuite属性マーカー |
+|---|---|
+| first | anchor, first |
+| second | anchor, second |
+| first-repeat | anchor, first |
+
+<!--g1-literal--> 3応答すべてで署名・復号・宛先・Audienceの確認が成功し、同じ属性入力のfingerprintを得た。診断へのfingerprint値や属性値の出力は行わない。`production-observation.json`に原本ハッシュ、マーカー、証拠参照だけを保存した。collectorの問題記録は0件。
+
+`verify_relying_party_attribute_experiment.py`は、記録されたネイティブノードをRequester単位の期待する設定構造へ再照合し、前後の全設定ハッシュとメモリ内ログイン入力の固定記録を照合する。各条件で新規に記録された要求・応答と、collectorの証拠参照が完全に一致すること、取り込んだ集約原本がRecorder原本と一致することも検査する。結果は`native-protocol-binding.json`。このローカル診断JSONを公開の自己申告や正式なOutcomeとして採用しない。
+
+<!--g1-literal--> 本工程は保存原本の再処理のみ。製品設定書込、再読込、Run作成、本人操作は0回。診断用クラスと既存証拠をSuiteコンテナ内の一時ディレクトリへコピーして実行し、稼働アプリケーションのクラスや設定は変更していない。Javaコンパイルと実証原本の処理は成功。機能テスト群は引き続き統合バッチ待ち。正式registryと準備記録の検証経路への接続が残り、未検証466観測を維持する。
