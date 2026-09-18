@@ -137,7 +137,23 @@ def main():
         save(out / 'operations.json', dict(run=run, operations=operations, restored=restored, verdict_adopted=False))
         save(out / 'restoration.json', dict(restored=restored, original_sha256=SHA(original),
             final_sha256=SHA(docker('cat', config_path)), temporary_removed=removed, failures=failures))
-        save(out / 'transcript.json', api('/api/runs/' + run + '/transcript'))
+        transcript = api('/api/runs/' + run + '/transcript')
+        save(out / 'transcript.json', transcript)
+        manifest = []
+        for entry in transcript:
+            if not entry.get('decodedSamlRef'):
+                continue
+            if not re.fullmatch(r'tx_[0-9A-HJKMNP-TV-Z]{26}', entry['id']):
+                raise ValueError('Invalid transcript ID')
+            expected = 'transcripts/' + run + '/' + entry['id'] + '.saml.xml'
+            if entry['decodedSamlRef'] != expected:
+                raise ValueError('Unexpected transcript path')
+            destination = out / 'decoded' / (entry['id'] + '.xml')
+            destination.parent.mkdir(exist_ok=True)
+            subprocess.run(['docker', 'cp', 'samlscope-reference-suite:/data/' + expected, str(destination)],
+                           check=True, capture_output=True, timeout=30)
+            manifest.append(dict(id=entry['id'], file=str(destination.relative_to(out)), sha256=SHA(destination.read_bytes())))
+        save(out / 'decoded-manifest.json', manifest)
         # This diagnostic stops before authentication and never starts case evaluation.
         # Consequently no result artifact is expected; do not start tests merely to create one.
         save(out / 'evaluation-status.json', dict(evaluation_started=False, verdict_adopted=False))

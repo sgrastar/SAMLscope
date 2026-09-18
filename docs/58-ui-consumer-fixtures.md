@@ -54,6 +54,18 @@ UIInfoはSPSSODescriptorのExtensionsに配置する。ServiceNameを含むAttri
 
 <!--g1-literal--> 今回も正式判定の追加はなく未検証467観測を維持する。G2の署名差分は未解消。
 
+### 実送信要求と元fixtureの相関
+
+ブラウザアダプターに、対象IdPのSSO入口へメインフレームが送るSAMLRequestの観測を追加した。送信本文はメモリー内でのみデコードし、SHA-256とバイト長を保存する。RedirectのDEFLATEは出力上限を設ける。重複パラメーター、複数の候補要求、デコード失敗は相関不能とする。記録するヘッダーはAccept-Languageだけで、Cookie・Authorization・完全URL・要求本文は保存しない。
+
+`bind_ui_consumer_evidence.py`は、ブラウザの要求ハッシュと取得済みTranscript原本を照合する。Run・条件・Issuer/entityID・要求ID・Destination・HTTPメソッド・観測画面path・バイト長を検査し、同じ要求の再利用を拒否する。同じfixture原本のMetadataPrepared、そのMetadataFetch、AuthnRequest、画面観測の順序も検査する。native-importのハッシュと実際の設定書込／読戻し・Resolver再読込記録、完全復元を併せて要求する。
+
+この結合はローカルアダプターの操作記録を信頼する。単独のファイルハッシュから製品の処理や管理者の真正性を証明するものではなく、比較判定・正負対照の代替でもない。元の観測記録は書き換えず、別の`ui-evidence-binding.json`へ`originals_bound=true`、`native_readback_bound=true`、`verdict_adopted=false`を記録する。
+
+<!--g1-literal--> 新しい実測Runは`run_NHWX1F64WMGT7BMKZG5BQ7QTD2`。証拠は`build/acceptance/reference-20260918/shibboleth-ui-consumer-correlated/`。5条件で相関が成立し、各要求のAccept-Languageは`en-US`。HTMLルートのlangは記録可能な値がなくnullだった。観測された表示候補は前回と同じで、フォールバックの未解決条件も変わらない。
+
+<!--g1-literal--> この追加バッチの操作は設定書込7回・一時ファイル削除1回・Resolver再読込6回・ブラウザ起動5回・Run/preflight各1回。認証情報投入・SSO完了・本人操作・コンテナ変更は0回。設定完全復元済み。機能テストの小刻みな再実行は行わず、実証と証拠結合を実施した。判定の正式採用前に負の対照を含む統合検証が必要。
+
 <!--g1-literal--> コンパイルは成功。追加した2テストの実行は次の統合バッチまで保留し、成功扱いにしていない。ユーザー指定に従い、小さな追加のたびに機能テストを再実行しない。G1生成確認と構造検査は変更ごとの必須確認として実行する。
 
 <!--g1-literal--> 未検証467観測／157ケースIDを維持。製品設定書込・コンテナ変更・プロトコル実行・本人操作は0回。新fixtureは作業ソースに追加した段階で、稼働中のイメージには未反映。
