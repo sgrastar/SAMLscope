@@ -17,6 +17,7 @@ public final class SamlSignedRequestFactory {
 
     public enum Fixture {
         VALID,
+        VALID_NO_NAMEID_POLICY,
         DEFAULT_ACS,
         TAMPERED_ACS,
         BAD_REFERENCE,
@@ -85,15 +86,15 @@ public final class SamlSignedRequestFactory {
         request.appendChild(issuerElement);
         var policy = document.createElementNS(PROTOCOL, "samlp:NameIDPolicy");
         policy.setAttribute("Format", "urn:oasis:names:tc:SAML:2.0:nameid-format:transient");
-        request.appendChild(policy);
+        if (fixture != Fixture.VALID_NO_NAMEID_POLICY) request.appendChild(policy);
         if (fixture == Fixture.XPATH_EXCLUDE_SCOPING) {
             var scoping = document.createElementNS(PROTOCOL, "samlp:Scoping");
             scoping.setAttribute("ProxyCount", "1");
             request.appendChild(scoping);
         }
-        signer.sign(request, credentials, policy, signatureOptions(fixture));
+        signer.sign(request, credentials, fixture == Fixture.VALID_NO_NAMEID_POLICY ? null : policy, signatureOptions(fixture));
         switch (fixture) {
-            case VALID, DEFAULT_ACS -> { }
+            case VALID, VALID_NO_NAMEID_POLICY, DEFAULT_ACS -> { }
             case TAMPERED_ACS -> request.setAttribute(
                     "AssertionConsumerServiceURL", alternateAcs(acs).toString());
             case BAD_REFERENCE -> {

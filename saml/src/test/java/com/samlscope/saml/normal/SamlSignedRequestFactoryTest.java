@@ -18,6 +18,26 @@ class SamlSignedRequestFactoryTest {
     private static final Instant NOW = Instant.parse("2026-08-30T00:00:00Z");
 
     @Test
+    void omissionProbeDoesNotRequireANameIdAndRemainsFullySigned() throws Exception {
+        var credentials = new FilePlanKeyStore(Files.createTempDirectory("nameid-omission-request"),
+                Clock.fixed(NOW, ZoneOffset.UTC)).getOrCreate("plan_0123456789ABCDEFGHJKMNPQRS");
+        var factory = new SamlSignedRequestFactory();
+        var verifier = new XmlSignatureVerifier();
+        for (var fixture : java.util.List.of(SamlSignedRequestFactory.Fixture.VALID,
+                SamlSignedRequestFactory.Fixture.VALID_NO_NAMEID_POLICY)) {
+            var request = SecureXml.parse(factory.build(fixture, "_omission_request", URI.create("https://idp.example/sso"),
+                    "https://suite.example/sp", URI.create("https://suite.example/acs"), NOW, credentials)).getDocumentElement();
+            assertEquals(fixture == SamlSignedRequestFactory.Fixture.VALID ? 1 : 0,
+                    request.getElementsByTagNameNS("urn:oasis:names:tc:SAML:2.0:protocol", "NameIDPolicy").getLength());
+            assertTrue(verifier.hasValidEnvelopedSignature(request, credentials.certificate()));
+            request.setAttribute("AssertionConsumerServiceURL", "https://other.example/acs");
+            assertFalse(verifier.hasValidEnvelopedSignature(request, credentials.certificate()));
+        }
+        assertEquals(SamlSignedRequestFactory.Fixture.VALID_NO_NAMEID_POLICY,
+                com.samlscope.saml.metadata.MetadataService.Variant.NAMEID_OMISSION.requestFixture());
+    }
+
+    @Test
     void attributeServiceSelectionIsSignedAndIndependentOfAssertionConsumerService() throws Exception {
         var credentials = new FilePlanKeyStore(Files.createTempDirectory("attribute-request"),
                 Clock.fixed(NOW, ZoneOffset.UTC)).getOrCreate("plan_0123456789ABCDEFGHJKMNPQRS");

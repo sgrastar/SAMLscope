@@ -54,6 +54,7 @@ public final class MetadataService {
             Variant.UI_CONSUMER_DISPLAY_ENTITY,
             Variant.UI_CONSUMER_LOGO_LOCALIZED,
             Variant.UI_CONSUMER_LOGO_FALLBACK,
+            Variant.NAMEID_OMISSION,
             Variant.ATTRIBUTE_POLICY_ENTITY_PRESENT,
             Variant.ATTRIBUTE_POLICY_ENTITY_ABSENT,
             Variant.ATTRIBUTE_POLICY_REQUESTED_REQUIRED,
@@ -823,6 +824,7 @@ public final class MetadataService {
         UI_CONSUMER_LOGO_LOCALIZED("ui-consumer-logo-localized"),
         UI_CONSUMER_LOGO_FALLBACK("ui-consumer-logo-fallback"),
         ATTRIBUTE_POLICY_ENTITY_PRESENT("attribute-policy-entity-present"),
+        NAMEID_OMISSION("nameid-omission"),
         ATTRIBUTE_POLICY_ENTITY_ABSENT("attribute-policy-entity-absent"),
         ATTRIBUTE_POLICY_REQUESTED_REQUIRED("attribute-policy-requested-required"),
         ATTRIBUTE_POLICY_REQUESTED_OPTIONAL("attribute-policy-requested-optional"),
@@ -905,6 +907,7 @@ public final class MetadataService {
         }
 
         public com.samlscope.saml.normal.SamlSignedRequestFactory.Fixture requestFixture() {
+            if (this == NAMEID_OMISSION) return com.samlscope.saml.normal.SamlSignedRequestFactory.Fixture.VALID_NO_NAMEID_POLICY;
             if (defaultAcsProbe()) return com.samlscope.saml.normal.SamlSignedRequestFactory.Fixture.DEFAULT_ACS;
             return this == ECDSA_SHA256_INVALID_SIGNATURE
                     ? com.samlscope.saml.normal.SamlSignedRequestFactory.Fixture.BAD_SIGNATURE_VALUE
