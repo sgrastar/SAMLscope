@@ -365,6 +365,11 @@ final class M1Runtime {
                         .map(plan -> pollingMetadata.credentialsForPollingVariant(plan,
                                 com.samlscope.saml.metadata.MetadataService.Variant.parse(variant))),
                 config.dataDirectory().resolve("attribute-policy-preparations"));
+        m1Config = ApprovedConfigCaseRegistry.withRelyingPartyAttributePreparation(m1Config, transcriptContent, runMetadata,
+                (runId, variant) -> runs.find(runId).flatMap(run -> plans.find(run.planId()))
+                        .map(plan -> pollingMetadata.credentialsForVariant(plan,
+                                com.samlscope.saml.metadata.MetadataService.Variant.parse(variant))),
+                config.dataDirectory().resolve("relying-party-attribute-preparations"));
         m1Browser = ApprovedBrowserCaseRegistry.withMetadataEncryption(m1Browser,transcriptContent,runMetadata,
                 (runId, variant) -> runs.find(runId).flatMap(run -> plans.find(run.planId()))
                         .map(plan -> pollingMetadata.credentialsForPollingVariant(plan,

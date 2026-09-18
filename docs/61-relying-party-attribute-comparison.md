@@ -59,3 +59,17 @@
 `verify_relying_party_attribute_experiment.py`は、記録されたネイティブノードをRequester単位の期待する設定構造へ再照合し、前後の全設定ハッシュとメモリ内ログイン入力の固定記録を照合する。各条件で新規に記録された要求・応答と、collectorの証拠参照が完全に一致すること、取り込んだ集約原本がRecorder原本と一致することも検査する。結果は`native-protocol-binding.json`。このローカル診断JSONを公開の自己申告や正式なOutcomeとして採用しない。
 
 <!--g1-literal--> 本工程は保存原本の再処理のみ。製品設定書込、再読込、Run作成、本人操作は0回。診断用クラスと既存証拠をSuiteコンテナ内の一時ディレクトリへコピーして実行し、稼働アプリケーションのクラスや設定は変更していない。Javaコンパイルと実証原本の処理は成功。機能テスト群は引き続き統合バッチ待ち。正式registryと準備記録の検証経路への接続が残り、未検証466観測を維持する。
+
+## CONFIGケースへの実装接続
+
+`RelyingPartyAttributeExperimentBinding`で、準備記録の条件と原本collectorの要求・応答参照を厳密に結合する。別の取込原本、追加・不足した交換、条件の入れ替え、同一属性入力が確認できない場合はNOT_VERIFIEDへ戻す。メタデータ取得・準備・要求・応答の参照をOutcomeの証拠へ保持する。
+
+`RelyingPartyAttributePreparationFile`はRun専用のローカルファイルだけを読み、ネットワーク投稿を受け付けない。Run、現在の対象メタデータのentityIDとSHA-256、現在のRecorder原本ハッシュ、暗号学的に収集された交換との一致を再検証する。ネイティブ設定と入力固定の証拠は、監査済みローカルアダプターを信頼境界とする。自己申告の診断JSONを公開APIから渡す仕組みではない。
+
+`export_relying_party_attribute_preparation.py`は前節の監査を通した記録からのみ、変更不可の準備記録を生成する。`RelyingPartyAttributeConfigurationTestCase`をCONFIG registryへ接続し、準備確認時にOutcomeを比較処理から取得する。準備記録や実証が欠ける場合は従来の手動確認経路を維持する。単一SPのpolling操作と混同しないよう、この作業をCONFIGURATIONとして示す。
+
+M1Runtimeでは事前取込に対応するPlanの鍵を渡す。polling variant用の鍵は使用しない。準備記録の配置先は`/data/relying-party-attribute-preparations/<run>.json`。この時点ではソースへ接続した段階であり、稼働アプリへの反映と正式Runの再評価は未実施である。
+
+<!--g1-literal--> `VerifyRelyingPartyAttributeExperiment.java`で保存原本とエクスポート済み準備記録を正式比較処理へ渡し、SATISFIEDを得た。欠落、重複、別応答、設定変更、ログイン入力変更、固定入力変更という6種類の負の対照はNOT_VERIFIEDを返した。これは正式な台帳採用前に必要な判定境界の検査として実施した。機能テスト群の一括実行は引き続き保留。API全体のJavaコンパイルも成功。
+
+<!--g1-literal--> 証拠は同じ実証ディレクトリ内の`production-comparison.json`と`preparation-receipts/`。本工程で製品設定変更・プロトコル送信・本人操作は0回。稼働版への反映と結果採用を残し、台帳は466観測のまま。
