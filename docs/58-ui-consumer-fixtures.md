@@ -30,6 +30,30 @@ UIInfoはSPSSODescriptorのExtensionsに配置する。ServiceNameを含むAttri
 
 負の対照を含むブラウザ境界テストコードを追加した。構文確認のみ実施し、実ブラウザでのテスト実行は統合バッチ待ち。プロジェクトルートにはPlaywrightの解決可能なインストールがなく、既存の参照ブラウザ環境への接続も実行前に必要である。未実行を成功として集計しない。
 
+### Shibboleth実画面への接続
+
+`dev/shibboleth/ui_consumer_campaign.py`で元fixtureを一時FilesystemMetadataProviderへ渡し、読戻し・Resolver再読込後に`observe_ui_consumer.mjs`が製品の標準ログイン画面を開く。ブラウザは毎条件新しいコンテキストを使い、英語の優先言語で認証前に観測を止める。ログイン情報の投入やSSO完了の主張はしない。元のプロバイダー設定は完全一致で復元し、一時メタデータも削除する。
+
+参照環境のPlaywrightはCodex同梱依存を`SAMLSCOPE_PLAYWRIGHT_MODULE`で明示して接続した。製品テンプレートは`header h1`に固定英語接頭辞を付けたSP名を、`img.service-logo`にSPロゴを表示する。IdP自身のヘッダーロゴは選択しない。
+
+| 入力 | 実画面での観測 | 判定に残る条件 |
+|---|---|---|
+| DisplayNameとServiceNameあり | DisplayNameを表示 | 取込・要求・画面の厳密相関と全条件の対照 |
+| DisplayNameなし | ServiceNameを表示 | 同上 |
+| 名前候補なし | 対象見出しが存在しない | 別の表示画面の調査。標準login.vmはSP IDを含む名前の見出しを抑止する |
+| 英語ロゴあり | 言語付きロゴを表示 | 製品側の実際の言語選択条件の確認 |
+| フランス語ロゴのみ＋言語なしロゴ | フランス語候補を表示 | 同上。ブラウザ優先言語だけで製品違反を確定しない |
+
+実測は`build/acceptance/reference-20260918/shibboleth-ui-consumer-campaign-v2/`、Runは`run_7HK04E50WDXFR6NH3QSN5EH0JA`。保存した画像候補値との完全一致を観測し、隠れたDOMの存在やimport成功のみを表示証拠にしていない。ただし観測モジュールは引き続き`import_binding_verified=false`であり、正式なケース判定には採用しない。
+
+初回Run `run_NC94WEZVKV6P8Z75J6YKZE52FH`は`shibboleth-ui-consumer-campaign/`に保持。製品がPOST入口へ遷移したのに観測側がRedirect入口だけを許可していたため全条件を拒否した。固定参照メタデータに広告された両入口に限定して修正した。また、未評価Runにresult.jsonを要求した終了時のエラーを修正し、未生成の結果を作るためにケースを開始せず`evaluation-status.json`を記録するようにした。初回でも設定復元は完了していた。
+
+<!--g1-literal--> 実環境操作は各バッチで設定書込7回・一時ファイル削除1回・MetadataResolver再読込6回・ブラウザ起動5回。初回の失敗分込みで合計書込14回・削除2回・再読込12回・ブラウザ起動10回、Run/preflight各2回。SSO完了・本人操作・製品再起動は0回。各バッチのoperations.jsonとrestoration.jsonが原本である。
+
+<!--g1-literal--> Suiteイメージbuild1回、Suite／転送コンテナ再作成各1回。`samlscope:reference-ui-consumer-v44`のdigestは`sha256:5631b8c2463afa95bbcedab550a2146b67f1687e6e5ac136c40b24fb7c07cee9`。署名済みのUI fixtureソースからSAML jarだけを更新し、別件のAPI作業ツリー変更は含めていない。ヘルスチェック成功。境界テスト一式は統合バッチ待ちであり、この実画面観測をその代わりの成功として数えない。
+
+<!--g1-literal--> 今回も正式判定の追加はなく未検証467観測を維持する。G2の署名差分は未解消。
+
 <!--g1-literal--> コンパイルは成功。追加した2テストの実行は次の統合バッチまで保留し、成功扱いにしていない。ユーザー指定に従い、小さな追加のたびに機能テストを再実行しない。G1生成確認と構造検査は変更ごとの必須確認として実行する。
 
 <!--g1-literal--> 未検証467観測／157ケースIDを維持。製品設定書込・コンテナ変更・プロトコル実行・本人操作は0回。新fixtureは作業ソースに追加した段階で、稼働中のイメージには未反映。
