@@ -20,8 +20,11 @@ final class AttributePolicyProtocolEvidence {
                        List<EvidenceRef> evidence) {
         Observation { evidence = List.copyOf(evidence); }
     }
-    record Collected(List<Observation> observations, List<String> issues) {
-        Collected { observations = List.copyOf(observations); issues = List.copyOf(issues); }
+    record Collected(String runId, List<Observation> observations, List<String> issues) {
+        Collected {
+            if (runId == null || runId.isBlank()) throw new IllegalArgumentException("Run is required");
+            observations = List.copyOf(observations); issues = List.copyOf(issues);
+        }
     }
 
     static Collected collect(CaseContext context, TranscriptContentReader content, byte[] targetMetadata,
@@ -34,7 +37,7 @@ final class AttributePolicyProtocolEvidence {
             var entries = new HashMap<String, TranscriptEntry>();
             for (var entry : context.transcript().list(context.runId())) {
                 if (!context.runId().equals(entry.runId()) || entries.put(entry.id(), entry) != null) {
-                    return new Collected(List.of(), List.of("ambiguous_history"));
+                    return new Collected(context.runId(), List.of(), List.of("ambiguous_history"));
                 }
             }
             for (var exchange : collected.exchanges()) {
@@ -69,6 +72,6 @@ final class AttributePolicyProtocolEvidence {
             issues.add("attribute_protocol_collection_unavailable");
         }
         observations.sort(Comparator.comparing(Observation::issued));
-        return new Collected(observations, issues.stream().distinct().toList());
+        return new Collected(context.runId(), observations, issues.stream().distinct().toList());
     }
 }
