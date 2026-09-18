@@ -179,3 +179,5 @@ not by differences in reference-implementation results ([00 §5](00-concept.md))
 - [異なるSPへの属性解放比較](61-relying-party-attribute-comparison.md) — IDP02.aの内部比較・ネイティブ設定・原本検証とShibbolethの正式採用。
 
 - [必要なSPだけの事前取込とSimpleSAMLphp属性比較](62-scoped-preloaded-campaigns.md)
+
+- [KeycloakのSP別属性解放の実証](63-keycloak-relying-party-attributes.md)

@@ -16,6 +16,57 @@ def digest(raw):
     return hashlib.sha256(raw).hexdigest()
 
 
+def verify_keycloak_preparation(folder, prepared, run, restoration):
+    if prepared['run'] != run or prepared.get('metadata_interpretation_claimed') is not False \
+            or prepared.get('source_attribute') != 'firstName':
+        raise ValueError('Invalid native Keycloak preparation scope')
+    entities = prepared['entity_ids']
+    if set(entities) != {'first', 'second'} or len(set(entities.values())) != 2:
+        raise ValueError('Distinct native clients required')
+    if restoration['failures'] or restoration['existing_clients_overwritten'] is not False:
+        raise ValueError('Native client restoration incomplete')
+    recipes = json.loads((folder / 'client-recipes.json').read_text())
+    if set(recipes) != set(entities) or set(prepared['native']) != set(entities):
+        raise ValueError('Native client scope differs')
+    md = '{urn:oasis:names:tc:SAML:2.0:metadata}'
+    ds = '{http://www.w3.org/2000/09/xmldsig#}'
+    original = ET.fromstring((folder / 'fixture.xml').read_bytes())
+    policies = {}
+    for side, entity_id in entities.items():
+        matches = [entity for entity in original.findall(md+'EntityDescriptor') if entity.get('entityID') == entity_id]
+        if len(matches) != 1: raise ValueError('Original client identity ambiguous')
+        roles = matches[0].findall(md+'SPSSODescriptor')
+        if len(roles) != 1: raise ValueError('Original SP role ambiguous')
+        certificates = {''.join(node.itertext()).strip() for node in roles[0].findall('.//'+ds+'X509Certificate')}
+        if len(certificates) != 1: raise ValueError('Original SP key ambiguous')
+        certificate = certificates.pop()
+        acs = [node.get('Location') for node in roles[0].findall(md+'AssertionConsumerService')
+               if node.get('Binding') == 'urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST']
+        if not acs: raise ValueError('Original POST endpoint missing')
+        mappers = [dict(name='samlscope-rp-'+marker, protocol='saml', protocolMapper='saml-user-property-mapper',
+                       consentRequired=False, config={'user.attribute':'firstName',
+                       'attribute.name':'urn:samlscope:test:relying-party:'+marker,
+                       'attribute.nameformat':'URI Reference'}) for marker in ['anchor', side]]
+        expected = dict(clientId=entity_id, protocol='saml', enabled=True, redirectUris=acs,
+            fullScopeAllowed=False, defaultClientScopes=[], optionalClientScopes=[], protocolMappers=mappers,
+            attributes={'saml.client.signature':'true', 'saml.signing.certificate':certificate,
+                'saml.server.signature':'true', 'saml.assertion.signature':'true', 'saml.encrypt':'true',
+                'saml.encryption.certificate':certificate, 'saml.force.post.binding':'true',
+                'saml_assertion_consumer_url_post':acs[0]})
+        actual = dict(prepared['native'][side])
+        identifier = actual.pop('id')
+        if not re.fullmatch(r'[a-f0-9-]{36}', identifier) or restoration['deleted_client_ids'].get(side) != identifier:
+            raise ValueError('Native client deletion identity differs')
+        for candidate in [expected, actual, recipes[side]]:
+            candidate['protocolMappers'] = sorted(candidate['protocolMappers'], key=lambda mapper:mapper['name'])
+        if actual != expected or recipes[side] != expected:
+            raise ValueError('Native Keycloak mapper semantics differ')
+        policies[side] = mappers
+    encode = lambda value: json.dumps(value,sort_keys=True,separators=(',',':')).encode()
+    return dict(run=run, entity_ids=entities, policy_sha256=digest(encode(policies)),
+        configuration_sha256={'clients':digest(encode(prepared['native']))}, source_attribute='firstName')
+
+
 def verify_ssp_preparation(folder, prepared, run):
     if prepared['run'] != run or set(prepared['entity_ids']) != {'first', 'second'}:
         raise ValueError('Invalid native SSP preparation scope')
@@ -52,11 +103,14 @@ def verify(folder):
     run = read('created.json')['run']['id']
     restoration = read('restoration.json')
     prepared = read('preparation.json')
-    if not restoration['restored'] or restoration['original_sha256'] != restoration['final_sha256']:
+    keycloak = prepared.get('source') == 'native-admin-client-user-property-mapper'
+    if not restoration['restored'] or (not keycloak and restoration['original_sha256'] != restoration['final_sha256']):
         raise ValueError('Native restoration unproven')
     if prepared['login_provenance'] != 'fixed-in-memory-driver-input':
         raise ValueError('Login preparation scope unproven')
-    if prepared.get('source') == 'native-parser-cli-and-core-AttributeCopy':
+    if keycloak:
+        native = verify_keycloak_preparation(folder, prepared, run, restoration)
+    elif prepared.get('source') == 'native-parser-cli-and-core-AttributeCopy':
         native = verify_ssp_preparation(folder, prepared, run)
     else:
         if restoration['failures'] or not restoration['temporary_removed']:
@@ -114,7 +168,8 @@ def verify(folder):
         bindings.append(dict(condition=observation['condition'], entity_id=observation['entity_id'],
             request_reference=refs[2], response_reference=refs[3], markers=verified['markers']))
     return dict(run=run, native_preparation_bound=True, exchanges=bindings,
-                native_binding={key: native[key] for key in ['policy_sha256', 'configuration_sha256']},
+                native_binding={**{key: native[key] for key in ['policy_sha256', 'configuration_sha256']},
+                                'source_attribute': native.get('source_attribute', 'uid')},
                 same_attribute_input=True, verdict_adopted=False,
                 reason='formal-case-registration-and-receipt-verification-pending')
 

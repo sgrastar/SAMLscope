@@ -12,10 +12,10 @@ def export(folder, output):
     audited = verify(folder)
     prepared = json.loads((folder / 'preparation.json').read_text())
     native = audited['native_binding']
-    # The validated native Requester rules inspect the RP identity and common uid-derived markers.
+    # Validated native rules inspect the RP identity and copy one common source attribute.
     # Hold the complete native configuration and driver login input fixed across the RP change.
     stable = hashlib.sha256(json.dumps(dict(policy=native['policy_sha256'],
-        configuration=native['configuration_sha256'], source_attribute='uid'),
+        configuration=native['configuration_sha256'], source_attribute=native['source_attribute']),
         sort_keys=True, separators=(',', ':')).encode()).hexdigest()
     conditions = {'first': 'FIRST', 'second': 'SECOND', 'first-repeat': 'FIRST_REPEAT'}
     target = (folder / 'target-metadata.xml').read_bytes()

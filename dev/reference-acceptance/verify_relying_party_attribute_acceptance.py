@@ -10,7 +10,7 @@ CASE = 'IIP-IDP02-a-idp-01'
 
 def verify(root, product="shibboleth"):
     root = Path(root)
-    if product not in {'shibboleth', 'simplesamlphp'}: raise ValueError('Unsupported reference product')
+    if product not in {'shibboleth', 'simplesamlphp', 'keycloak'}: raise ValueError('Unsupported reference product')
     evidence = root / (product + '-relying-party-attributes' + ('-scoped' if product == 'simplesamlphp' else ''))
     evaluation = root / (product + '-relying-party-attribute-evaluation')
     audited = verify_experiment(evidence)
@@ -29,9 +29,19 @@ def verify(root, product="shibboleth"):
     assert baseline['restored'] and baseline['run'] == audited['run']
     if product == 'shibboleth':
         assert not baseline['failures'] and baseline['temporary_removed']
-    else:
+    elif product == 'simplesamlphp':
         assert baseline['configuration_write_attempts'] == 2 and baseline['restoration_write_attempts'] == 1
-    assert baseline['original_sha256'] == baseline['final_sha256']
+    else:
+        assert not baseline['failures'] and baseline['existing_clients_overwritten'] is False
+        native = read(evaluation / 'baseline', 'native-readback.json')
+        assert native['id'] == baseline['created_client_id']
+        assert native['clientId'] == 'http://localhost:18080/p/' + read(evidence, 'created.json')['run']['planId']
+        operations = baseline['admin_operations']
+        assert len([row for row in operations if row['method']=='POST' and row['status']==201]) == 1
+        assert len([row for row in operations if row['method']=='DELETE' and row['status']==204]) == 1
+        assert operations[-1]['method']=='GET' and operations[-1]['status']==200
+    if product != 'keycloak':
+        assert baseline['original_sha256'] == baseline['final_sha256']
     assert read(evaluation / 'baseline', 'flow.json') == 'recorded'
     result = read(evaluation, 'result.json')
     assert result['run']['id'] == audited['run'] == receipt['runId']
