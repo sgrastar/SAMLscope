@@ -153,3 +153,5 @@ not by differences in reference-implementation results ([00 §5](00-concept.md))
 - [未対応方式のスキップと暗号方式順序の条件判定](48-algorithm-order-followup.md)
 
 - [暗号化方式・OAEPパラメータ・鍵サイズの入力条件](49-encryption-metadata-fixtures.md)
+
+- [暗号・署名・パラメーター共通部分の判定と実証](50-metadata-intersection-oracle.md)

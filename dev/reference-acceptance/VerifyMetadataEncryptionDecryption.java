@@ -33,6 +33,13 @@ public final class VerifyMetadataEncryptionDecryption {
         require(result.at("/run/id").asText().equals(proof.path("run").asText()));
         var originals = new HashMap<String,JsonNode>();
         for (var entry : read(folder.resolve("decoded-manifest.json"))) require(originals.put(entry.path("id").asText(), entry) == null);
+        var alternate = new ArrayList<String>();
+        for (var observation : proof.path("observations")) {
+            var variant = observation.path("variant").asText();
+            require(variant.matches("[a-z0-9-]+"));
+            if (!variant.equals("control")) alternate.add(variant);
+        }
+        require(!alternate.isEmpty());
         var outcomes = new ArrayList<Map<String,Object>>();
         var decrypt = new SamlXmlDecrypter();
         for (var signed : proof.path("observations")) {
@@ -41,7 +48,7 @@ public final class VerifyMetadataEncryptionDecryption {
             require(variant.matches("[a-z0-9-]+"));
             var keyFolder = keyFolder(data, plan, variant);
             var own = key(keyFolder);
-            var wrong = key(keyFolder(data, plan, variant.equals("control") ? "algorithm-encryption-aes128-cbc" : "control"));
+            var wrong = key(keyFolder(data, plan, variant.equals("control") ? alternate.getFirst() : "control"));
             var certificate = (X509Certificate) CertificateFactory.getInstance("X.509").generateCertificate(
                     Files.newInputStream(keyFolder.resolve("signing-certificate.der")));
             byte[] fixture = Files.readAllBytes(folder.resolve(variant).resolve("fixture.xml"));

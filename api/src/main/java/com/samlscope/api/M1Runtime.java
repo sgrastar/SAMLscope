@@ -358,9 +358,14 @@ final class M1Runtime {
         var m2Attested = ApprovedAttestedCaseRegistry.create(
                 definitions, com.samlscope.core.casedef.CaseDefinitionCatalog.Milestone.M2,
                 null, null, null, null, null, runMetadata);
+        var pollingMetadata = new com.samlscope.saml.metadata.MetadataService(config.peerBaseUrl(), keys,
+                new com.samlscope.saml.crypto.XmlSigner(), clock);
         var m2Config = ApprovedConfigCaseRegistry.create(
                 definitions, com.samlscope.core.casedef.CaseDefinitionCatalog.Milestone.M2,
-                runMetadata, transcriptContent, runDecryptionKeys);
+                runMetadata, transcriptContent, runDecryptionKeys,
+                (runId, variant) -> runs.find(runId).flatMap(run -> plans.find(run.planId()))
+                        .map(plan -> pollingMetadata.credentialsForPollingVariant(plan,
+                                com.samlscope.saml.metadata.MetadataService.Variant.parse(variant))));
         var m2Browser = ApprovedBrowserCaseRegistry.create(
                 definitions, config.publicBaseUrl(),
                 com.samlscope.core.casedef.CaseDefinitionCatalog.Milestone.M2,

@@ -578,6 +578,9 @@ def render(root,definitions,output):
                 'IIP-MD05-e5-idp-01','IIP-MD05-e9-idp-01'}:
             from verify_algorithm_followup import verify as verify_algorithm_followup
             selected=verify_algorithm_followup(root.parent.parent/'reference-20260918',row['product'])
+        if row['product']=='shibboleth' and row['profile']=='metadata_idp' and row['case']=='IIP-MD05-e8-idp-01':
+            from verify_metadata_intersection import verify as verify_intersection
+            selected=verify_intersection(root.parent.parent/'reference-20260918')
         if selected is not None:
             path, selected_cases = selected
             raw=path.read_bytes(); result=json.loads(raw); case=selected_cases[row['case']]

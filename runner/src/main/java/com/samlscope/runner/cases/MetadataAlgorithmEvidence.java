@@ -15,19 +15,29 @@ final class MetadataAlgorithmEvidence {
     private static final String MD="urn:oasis:names:tc:SAML:2.0:metadata", ALG="urn:oasis:names:tc:SAML:metadata:algsupport";
     private static final String SAML="urn:oasis:names:tc:SAML:2.0:assertion", P="urn:oasis:names:tc:SAML:2.0:protocol", DS="http://www.w3.org/2000/09/xmldsig#";
     record Prepared(TranscriptEntry entry,TranscriptEntry fetch,Element xml) {}
+    record Exchange(String campaign,String variant,Element metadata,Element response,
+                    List<VerifiedSignatureAlgorithms.Observation> signatures,List<X509Certificate> signingKeys,List<EvidenceRef> evidence) {}
+    record Collected(List<Exchange> exchanges,List<String> issues) {}
     static CaseOutcome observe(String id,CaseContext context,TranscriptContentReader content,byte[] targetMetadata) {
-        var samples=new ArrayList<MetadataAlgorithmSelection.Sample>();var issues=new ArrayList<String>();
+        var collected=collect(MetadataAlgorithmSelection.required(id),context,content,targetMetadata);
+        var samples=collected.exchanges().stream().map(e->new MetadataAlgorithmSelection.Sample(e.campaign(),e.variant(),
+                new MetadataAlgorithmSelection.Input(methods(e.metadata()),methods(children(e.metadata(),MD,"SPSSODescriptor").getFirst())),
+                e.signatures().stream().map(s->new MetadataAlgorithmSelection.Methods(List.of(s.digestAlgorithm()),List.of(s.signatureAlgorithm()))).toList(),e.evidence())).toList();
+        return MetadataAlgorithmSelection.evaluate(id,samples,collected.issues());
+    }
+    static Collected collect(List<String> required,CaseContext context,TranscriptContentReader content,byte[] targetMetadata) {
+        var exchanges=new ArrayList<Exchange>();var issues=new ArrayList<String>();
         try {
-            if(!context.transcriptComplete())return MetadataAlgorithmSelection.evaluate(id,samples,List.of("history_incomplete"));
+            if(!context.transcriptComplete())return new Collected(List.of(),List.of("history_incomplete"));
             var target=SecureXml.parse(targetMetadata).getDocumentElement();
             if(!MD.equals(target.getNamespaceURI()) || !"EntityDescriptor".equals(target.getLocalName()) || target.getAttribute("entityID").isBlank())
-                return MetadataAlgorithmSelection.evaluate(id,samples,List.of("target_entity_unavailable"));
+                return new Collected(List.of(),List.of("target_entity_unavailable"));
             var certificates=signingKeys(target);
-            if(certificates.isEmpty())return MetadataAlgorithmSelection.evaluate(id,samples,List.of("target_signing_keys_unavailable"));
+            if(certificates.isEmpty())return new Collected(List.of(),List.of("target_signing_keys_unavailable"));
             var entries=context.transcript().list(context.runId());var byId=new HashMap<String,TranscriptEntry>();
             for(var entry:entries)if(!context.runId().equals(entry.runId()) || byId.put(entry.id(),entry)!=null)
-                return MetadataAlgorithmSelection.evaluate(id,samples,List.of("ambiguous_history"));
-            var required=MetadataAlgorithmSelection.required(id);var requests=new HashMap<String,TranscriptEntry>();var requestXml=new HashMap<String,Element>();
+                return new Collected(List.of(),List.of("ambiguous_history"));
+            var requests=new HashMap<String,TranscriptEntry>();var requestXml=new HashMap<String,Element>();
             var duplicates=new HashSet<String>();var seenRequestIds=new HashSet<String>();var prepared=new HashMap<String,List<Prepared>>();
             for(var entry:entries) {
                 var summary=entry.samlSummary();var variant=String.valueOf(summary.get("variant"));
@@ -85,16 +95,15 @@ final class MetadataAlgorithmEvidence {
                 if(signatures.stream().noneMatch(s->s.element().equals("Response")) || signatures.size()!=signatureCount) {
                     issues.add("target_signature_unverified:"+variant);continue;
                 }
-                var selected=signatures.stream().map(s->new MetadataAlgorithmSelection.Methods(List.of(s.digestAlgorithm()),List.of(s.signatureAlgorithm()))).toList();
                 var group=String.valueOf(request.samlSummary().get("metadataSignatureGroup"));
                 int separator=group.lastIndexOf(':');
                 if(!group.startsWith("poll_") || separator<6) { issues.add("campaign_unavailable:"+variant);continue; }
                 var campaign=group.substring(0,separator);
-                samples.add(new MetadataAlgorithmSelection.Sample(campaign,variant,new MetadataAlgorithmSelection.Input(methods(xml),methods(roles.getFirst())),selected,
+                exchanges.add(new Exchange(campaign,variant,xml,response,signatures,certificates,
                         List.of(ref(original.fetch()),ref(original.entry()),ref(request),ref(entry))));
             }
         } catch(Exception unavailable) { issues.add("evidence_unreadable"); }
-        return MetadataAlgorithmSelection.evaluate(id,samples,issues);
+        return new Collected(List.copyOf(exchanges),List.copyOf(issues));
     }
     private static EvidenceRef ref(TranscriptEntry entry) { return new EvidenceRef("transcript",entry.id()); }
     static List<Element> children(Element parent,String ns,String name) {

@@ -49,13 +49,20 @@ public final class ApprovedConfigCaseRegistry {
             Function<String, byte[]> targetMetadata,
             TranscriptContentReader transcriptContent,
             SamlDecryptionKeyProvider decryptionKeys) {
+        return create(definitions,milestone,targetMetadata,transcriptContent,decryptionKeys,(run,variant)->java.util.Optional.empty());
+    }
+
+    public static TestCaseRegistry create(CaseDefinitionCatalog definitions, Milestone milestone,
+            Function<String, byte[]> targetMetadata, TranscriptContentReader transcriptContent,
+            SamlDecryptionKeyProvider decryptionKeys,
+            java.util.function.BiFunction<String,String,java.util.Optional<com.samlscope.saml.crypto.PlanCredentials>> metadataKeys) {
         Objects.requireNonNull(definitions, "definitions");
         Objects.requireNonNull(milestone, "milestone");
         var cases = new ArrayList<TestCase>();
         definitions.cases().stream()
                 .filter(value -> value.milestone() == milestone)
                 .filter(value -> value.mode() == ExecutionMode.CONFIG)
-                .map(value -> createCase(value, targetMetadata, transcriptContent, decryptionKeys))
+                .map(value -> createCase(value, targetMetadata, transcriptContent, decryptionKeys, metadataKeys))
                 .forEach(cases::add);
         var registry = new TestCaseRegistry(cases);
         CaseImplementationAudit.requireExact(definitions, registry, milestone, ExecutionMode.CONFIG);
@@ -66,7 +73,8 @@ public final class ApprovedConfigCaseRegistry {
             CaseDefinition definition,
             Function<String, byte[]> targetMetadata,
             TranscriptContentReader transcriptContent,
-            SamlDecryptionKeyProvider decryptionKeys) {
+            SamlDecryptionKeyProvider decryptionKeys,
+            java.util.function.BiFunction<String,String,java.util.Optional<com.samlscope.saml.crypto.PlanCredentials>> metadataKeys) {
         if (List.of(
                 "IIP-MD03-e-idp-01", "IIP-MD05-at-idp-01", "IIP-MD05-au-idp-01",
                 "IIP-MD05-c4-idp-01", "IIP-MD06-a4-idp-01", "IIP-MD06-aa-idp-01")
@@ -93,7 +101,7 @@ public final class ApprovedConfigCaseRegistry {
                 CONFIG_TTL,
                 definition.configurationFailureSemantics());
         if (targetMetadata != null && transcriptContent != null && MetadataAlgorithmConfigurationTestCase.supports(definition.id())) {
-            return new MetadataAlgorithmConfigurationTestCase(fallback, transcriptContent, targetMetadata);
+            return new MetadataAlgorithmConfigurationTestCase(fallback, transcriptContent, targetMetadata, metadataKeys);
         }
         if (targetMetadata != null && TargetMetadataObservation.supports(definition.id())) {
             return new AutoConfigurationEvidenceTestCase(fallback, targetMetadata);

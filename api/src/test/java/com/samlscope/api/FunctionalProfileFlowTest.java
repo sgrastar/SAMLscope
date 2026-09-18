@@ -130,7 +130,7 @@ class FunctionalProfileFlowTest {
                 var status = http.send(HttpRequest.newBuilder(base.resolve(
                         "/api/runs/" + runId + "/protocol-evidence")).build(), HttpResponse.BodyHandlers.ofString());
                 assertEquals(200, status.statusCode(), status.body());
-                for (var id : java.util.List.of("IIP-MD05-ea-idp-01", "IIP-MD05-eb-idp-01", "IIP-MD05-e9-idp-01")) {
+                for (var id : java.util.List.of("IIP-MD05-ea-idp-01", "IIP-MD05-eb-idp-01", "IIP-MD05-e9-idp-01", "IIP-MD05-e8-idp-01")) {
                     var found = java.util.stream.StreamSupport.stream(
                             json.readTree(status.body()).path("cases").spliterator(), false)
                             .filter(value -> id.equals(value.path("caseId").asText())).findFirst().orElseThrow();
