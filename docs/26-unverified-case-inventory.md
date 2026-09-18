@@ -4,7 +4,7 @@
 
 | 再試験前 | 確定（Success / Failed / Warning） | 現在の未検証 | 未検証の異なるケースID |
 |---:|---:|---:|---:|
-| 594 | 131 | 463 | 156 |
+| 594 | 132 | 462 | 156 |
 
 ## 内訳
 
@@ -12,7 +12,7 @@
 |---|---:|---|
 | ブラウザ完了後の自動判定がない | 14 | Suite実装 |
 | 一部の試験条件しか実装されていない | 59 | Suite実装 |
-| 設定後の証拠確認・自己申告経路 | 158 | 設定・証拠 |
+| 設定後の証拠確認・自己申告経路 | 157 | 設定・証拠 |
 | 自己申告が無効 | 75 | 設定・証拠 |
 | メタデータの追加試験・観測不足 | 56 | 試験経路確認 |
 | ブラウザ・SLOの追加観測不足 | 29 | 試験経路確認 |
@@ -105,6 +105,7 @@ approved variant全体の入力生成と観測を実装する。追加ログイ�
 | `IIP-IDP06-a-idp-01` | Not verified（今回の再試験対象外） | Not verified（今回の再試験対象外） | Success |
 | `IIP-IDP06-b-idp-01` | Not verified（今回の再試験対象外） | Not verified（今回の再試験対象外） | Success |
 | `IIP-IDP09-a-idp-01` | Not verified（今回の再試験対象外） | Not verified（今回の再試験対象外） | Success |
+| `IIP-IDP11-a-idp-01` | Not verified（今回の再試験対象外） | Success | Not verified（今回の再試験対象外） |
 | `IIP-IDP12-c-idp-01` | Failed (Product) | Success | Success |
 | `IIP-IDP17-a-idp-01` | Success | Success | Success |
 | `IIP-IDP17-aa-idp-01` | Warning | Warning | Warning |
@@ -192,7 +193,7 @@ approved variant全体の入力生成と観測を実装する。追加ログイ�
 | `IIP-IDP06-b-idp-01` | browser_sso_idp | browser_sso_idp | — | 実行したが確定できない |
 | `IIP-IDP08-a-idp-01` | browser_sso_idp | browser_sso_idp | — | 実行したが確定できない |
 | `IIP-IDP10-d-idp-01` | browser_sso_idp | — | — | 実行したが確定できない |
-| `IIP-IDP11-a-idp-01` | browser_sso_idp | browser_sso_idp | browser_sso_idp | 設定後の証拠確認・自己申告経路 |
+| `IIP-IDP11-a-idp-01` | browser_sso_idp | — | browser_sso_idp | 設定後の証拠確認・自己申告経路 |
 | `IIP-IDP12-b-idp-01` | browser_sso_idp | browser_sso_idp | — | 実行したが確定できない |
 | `IIP-IDP12-d-idp-01` | — | browser_sso_idp | — | 実行したが確定できない |
 | `IIP-IDP12-e-idp-01` | browser_sso_idp | — | — | 実行したが確定できない |
@@ -328,7 +329,7 @@ Verdictは変更せず、未検証の理由だけを分類します。feature-ab
 
 | 診断 | 件数 | 意味 | 表示案 |
 |---|---:|---|---|
-| `suite-observation-gap` | 305 | Suite側の観測・実行経路が未接続 | Suite側の実装で解消可能なNot verified |
+| `suite-observation-gap` | 304 | Suite側の観測・実行経路が未接続 | Suite側の実装で解消可能なNot verified |
 | `operator-attestation-available` | 77 | 自己申告または運用者証言で確認可能 | 運用者証言（ケースごとに1回答）で確認可能。現在のPlanは自己申告無効 |
 | `evidence-form-mismatch` | 46 | 承認済み判定条件が要求する証拠形式と製品応答が不一致 | 証拠形式が承認済み条件と一致しないためNot verified（要件解釈の再確認が必要） |
 | `role-inapplicable` | 24 | ロール上、対象が消費しない成果物を要求するvariant | IdPロールでは消費されないvariantのため実行対象外（対象外であることは判定済み） |

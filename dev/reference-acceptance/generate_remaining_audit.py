@@ -603,6 +603,9 @@ def render(root,definitions,output):
         if row['product'] in {'shibboleth','simplesamlphp','keycloak'} and row['profile']=='browser_sso_idp' and row['case']=='IIP-IDP02-a-idp-01':
             from verify_relying_party_attribute_acceptance import verify as verify_relying_party_attributes
             selected=verify_relying_party_attributes(root.parent.parent/'reference-20260918',row['product'])
+        if row['product']=='shibboleth' and row['profile']=='browser_sso_idp' and row['case']=='IIP-IDP11-a-idp-01':
+            from verify_nameid_omission_acceptance import verify as verify_nameid_omission
+            selected=verify_nameid_omission(root.parent.parent/'reference-20260918')
         if selected is not None:
             path, selected_cases = selected
             raw=path.read_bytes(); result=json.loads(raw); case=selected_cases[row['case']]
