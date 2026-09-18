@@ -163,3 +163,5 @@ not by differences in reference-implementation results ([00 §5](00-concept.md))
 - [属性名・NameFormat生成能力の実証](53-attribute-name-capability.md)
 
 - [属性公開ポリシーの比較入力](54-attribute-policy-fixtures.md)
+
+- [固定した属性公開ポリシーでの比較観測](55-fixed-attribute-policy-observations.md)
