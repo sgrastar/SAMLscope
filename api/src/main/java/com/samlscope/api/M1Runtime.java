@@ -395,6 +395,8 @@ final class M1Runtime {
         m2Browser = ApprovedBrowserCaseRegistry.withPublishedMetadata(m2Browser, runMetadata,
                 runId -> runs.find(runId).flatMap(run -> plans.find(run.planId()))
                         .map(plan -> plan.target().entityId()));
+        m2Browser = ApprovedBrowserCaseRegistry.withNativeUiLogo(m2Browser, transcriptContent, runMetadata,
+                config.dataDirectory().resolve("ui-logo-evidence"));
         var m2Automated = M2AutomatedCaseRegistry.create(runId -> {
             try {
                 return runMetadata.apply(runId);

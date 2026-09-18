@@ -22,6 +22,14 @@ public final class ApprovedBrowserCaseRegistry {
 
     private ApprovedBrowserCaseRegistry() {}
 
+    public static TestCaseRegistry withNativeUiLogo(TestCaseRegistry registry, TranscriptContentReader content,
+            java.util.function.Function<String, byte[]> metadata, java.nio.file.Path directory) {
+        return new TestCaseRegistry(registry.all().stream().map(testCase ->
+                UiLogoComparison.CASE_ID.equals(testCase.id())
+                        ? (com.samlscope.core.caseexec.TestCase)new UiLogoBrowserEvidenceTestCase(content, metadata, directory)
+                        : testCase).toList());
+    }
+
     public static TestCaseRegistry withMetadataEncryption(TestCaseRegistry registry,TranscriptContentReader content,
             java.util.function.Function<String,byte[]> metadata,
             java.util.function.BiFunction<String,String,java.util.Optional<com.samlscope.saml.crypto.PlanCredentials>> keys) {
