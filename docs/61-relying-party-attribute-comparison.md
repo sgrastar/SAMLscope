@@ -1,0 +1,31 @@
+# 異なるSPへの属性解放比較
+
+対象は`IIP-IDP02-a-idp-01`。承認済み条件は異なるsecondary peerのentityIDへ別の属性解放ポリシーを設定し、返る属性集合の違いを確認する。既存の`AttributePolicyComparison`は同じSP内のEntityAttributesやRequestedAttributeの比較であり、entityIDが変わると不確実としている。その判定をこの義務へ流用しない。
+
+## 追加した比較処理
+
+`RelyingPartyAttributeComparison`は収集済み・検証済みの内部Sampleだけを受け取る。公開の申告APIや手動確認だけでSampleを作成しない。
+
+設定全体を固定した状態で、最初のSP、別のSP、最初のSPの再確認を比較する。SPごとに共通anchorと専用のSuite属性が返ること、最初と最後でentityID・メタデータが一致すること、別SPのentityIDが異なることを確認する。順序・要求と応答の一意性・政策設定・ログイン入力・属性入力・その他の固定条件も照合する。
+
+最後の再確認は時間経過や設定切替をSP別の判断と取り違えないための対照である。SAML仕様の追加義務にしない。対照や設定が足りないときはNOT_VERIFIEDであり、製品違反にはしない。返す値はOutcomeであり、Verdictの変換はEvaluatorが行う。
+
+この比較は能力実証用であり、別の正当な属性解放方針を誤ってFAILとしない。Suite専用マーカーの集合だけを比較し、属性値・ログイン識別情報をCaseOutcomeへ出さない。
+
+## Shibbolethのネイティブ設定
+
+`relying_party_attribute_preparation.py`は元の設定を保ち、実験専用のFilesystemMetadataProvider、AttributeDefinition、Requester単位のAttributeFilterPolicyを生成する。共通属性とSPごとの専用属性は同じuidから解決し、属性入力が別ユーザーになった差を判定へ持ち込まない。設定操作・再読込自体はこのモジュールでは実行しない。
+
+既存設定とのID衝突、同一entityID、同一メタデータファイルを拒否する。読戻しはファイル全体の一致に加え、Requester値と各属性ルールを期待するネイティブXML構造へ照合する。ハッシュが一致するだけでは正しいポリシーと扱わない。設定は各ネイティブnamespaceをdefaultとして出力し、xsi:typeの非修飾名も正しく解決できる形にする。
+
+## 未完了の接続
+
+この時点で本比較処理はregistryへ登録していない。必要な残作業は以下。
+
+- 同一の実験へ異なるsecondary SPを関連付けるメタデータ・要求の生成経路。
+- 同一の設定とメモリ内ログイン入力を固定した実行・設定読戻し・復元の記録。
+- 元の要求と署名検証済み応答の厳密な相関、SPごとのAudience/Recipient・復号鍵確認。
+- 実メタデータからの固定入力比較と、共通属性値からの属性入力の同一性確認。ユーザー申告のfingerprintを採用しない。
+- ローカルの準備記録を再検証するcollector、既存CONFIGケースへの登録、正式Runの結果採用。
+
+<!--g1-literal--> Java比較処理はコンパイル成功。正常差分、未完了、同一SP、固定条件改変、混在要求などを扱う検証コードを追加したが、機能テスト群は統合バッチ待ち。Pythonは構文確認済み。今回の製品設定変更・実機試験・本人操作は0回。未検証466観測・157ケースIDを維持し、解消として数えない。
