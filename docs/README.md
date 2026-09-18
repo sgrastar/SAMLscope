@@ -183,3 +183,5 @@ not by differences in reference-implementation results ([00 §5](00-concept.md))
 - [KeycloakのSP別属性解放の実証](63-keycloak-relying-party-attributes.md)
 
 - [NameID省略の証拠検査と比較処理](64-nameid-omission-evidence.md)
+
+- [Keycloakの属性名・NameFormat生成の実測](65-keycloak-attribute-name-diagnosis.md)

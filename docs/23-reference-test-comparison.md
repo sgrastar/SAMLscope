@@ -83,7 +83,7 @@ Shibbolethの`IIP-SSO01-fk/fu/gi`は、v8では事前生成された正常系要
 
 | 理由 | Keycloak | Shibboleth IdP | SimpleSAMLphp | 解消に必要なこと |
 |---|---:|---:|---:|---|
-| `case.pending-interaction` | 93 | 73 | 90 | 設定・受信待ちに加え、判定処理未実装の経路を含む。全件台帳を参照 |
+| `case.pending-interaction` | 92 | 73 | 90 | 設定・受信待ちに加え、判定処理未実装の経路を含む。全件台帳を参照 |
 | `attestation.interaction-disallowed` | 25 | 25 | 25 | 自己申告を無効にした構成。確認せずに申告を代行しない |
 | `browser_fixture_partial` | 19 | 21 | 19 | 一部の試験だけ実行。残るvariantの証拠が不足 |
 | `idp.signed-request.inconclusive` | 7 | 1 | 7 | 当該ケースの応答・対象設定・正常系対照を追加確認 |
@@ -99,6 +99,7 @@ Shibbolethの`IIP-SSO01-fk/fu/gi`は、v8では事前生成された正常系要
 | `slo.partial-logout.not-observed` | 1 | 0 | 1 | 当該ケースの応答・対象設定・正常系対照を追加確認 |
 | `slo.redirect-request.not-observed` | 1 | 0 | 1 | 当該ケースの応答・対象設定・正常系対照を追加確認 |
 | `slo.redirect-response.not-observed` | 1 | 0 | 1 | 当該ケースの応答・対象設定・正常系対照を追加確認 |
+| `configuration.attribute-name.evidence-incomplete` | 1 | 0 | 0 | 当該ケースの応答・対象設定・正常系対照を追加確認 |
 | `idp.error-response.inconclusive` | 1 | 0 | 0 | 当該ケースの応答・対象設定・正常系対照を追加確認 |
 | `idp.nameid-policy.inconclusive` | 1 | 0 | 0 | 当該ケースの応答・対象設定・正常系対照を追加確認 |
 | `metadata.algorithms.intersection-evidence-incomplete` | 0 | 0 | 1 | 当該ケースの応答・対象設定・正常系対照を追加確認 |
@@ -146,7 +147,7 @@ Chromeと承認のブロックを解除するだけでは解消しません。�
 | `IIP-G02-c-idp-01` | Not verified | Not verified | Not verified |
 | `IIP-G03-a-idp-01` | Success | Success | Success |
 | `IIP-G03-b-idp-01` | Not verified † | Not verified † | Not verified † |
-| `IIP-IDP01-a-idp-01` | Not verified | Success † | Success † |
+| `IIP-IDP01-a-idp-01` | Not verified † | Success † | Success † |
 | `IIP-IDP02-a-idp-01` | Success † | Success † | Success † |
 | `IIP-IDP03-a-idp-01` | Not verified | Success † | Not verified |
 | `IIP-IDP04-a-idp-01` | Not verified | Success † | Not verified |
@@ -533,6 +534,7 @@ Chromeと承認のブロックを解除するだけでは解消しません。�
 | browser_sso_idp († listed supplemental cases only) | keycloak | `run_5X1B1RGKPNK7C7J3C1KT4B3EFM` | `build/acceptance/reference-20260915/algorithm-observation-batch/keycloak/browser_sso_idp` |
 | browser_sso_idp († listed supplemental cases only) | keycloak | `run_6AD6T3VS8H87WQQBB1T2DEB3MX` | `build/acceptance/reference-20260915/algorithm-observation-batch/keycloak/browser_alg_combo` |
 | browser_sso_idp († listed supplemental cases only) | keycloak | `run_5X1B1RGKPNK7C7J3C1KT4B3EFM` | `build/acceptance/reference-20260915/algorithm-observation-batch/keycloak/browser_sso_idp` |
+| browser_sso_idp († listed supplemental cases only) | keycloak | `run_8EC5HRA77MZWGCHCXR1DKB9ADE` | `build/acceptance/reference-20260918/keycloak-attribute-name-capability` |
 | browser_sso_idp († listed supplemental cases only) | keycloak | `run_EEAG5F4CFPVHYP90GGDZXB8VN4` | `build/acceptance/reference-20260918/keycloak-relying-party-attribute-evaluation` |
 | browser_sso_idp († listed supplemental cases only) | keycloak | `run_ZZQH3B5136N955F9W1NAMJ4GSG` | `build/acceptance/reference-20260918/keycloak-default-acs` |
 | browser_sso_idp | keycloak | `run_0WQJR9TGK0MC4TFTVT1AFKWDKP` | `interaction-followup/after/keycloak/browser_sso_idp` |

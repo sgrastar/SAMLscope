@@ -606,6 +606,9 @@ def render(root,definitions,output):
         if row['product']=='shibboleth' and row['profile']=='browser_sso_idp' and row['case']=='IIP-IDP11-a-idp-01':
             from verify_nameid_omission_acceptance import verify as verify_nameid_omission
             selected=verify_nameid_omission(root.parent.parent/'reference-20260918')
+        if row['product']=='keycloak' and row['profile']=='browser_sso_idp' and row['case']=='IIP-IDP01-a-idp-01':
+            from verify_keycloak_attribute_name_diagnosis import verify as verify_keycloak_attribute_names
+            selected=verify_keycloak_attribute_names(root.parent.parent/'reference-20260918')
         if selected is not None:
             path, selected_cases = selected
             raw=path.read_bytes(); result=json.loads(raw); case=selected_cases[row['case']]
@@ -652,6 +655,12 @@ def render(root,definitions,output):
             row['individual_diagnosis']='reference-20260918/simplesamlphp-normal-encrypted-sso/protocol-evidence-diagnostics.json'
             row['additional_observation']={'run':diagnostic_run,'details':diagnostic_cases[row['case']]['details']}
             row['next_action']='通常SSOで暗号化生成とRun鍵での復号を実証済み。AES128-CBCとrsa-oaep-mgf1pを観測した。GCM・rsa-oaep(1.1)・要求されたDigest/MGF組合せを生成する設定または別経路が必要。既定値だけでは非対応と判定しない。'
+        if row['product']=='keycloak' and row['profile']=='browser_sso_idp' and row['case']=='IIP-IDP01-a-idp-01':
+            diagnostic_path=root.parent.parent/'reference-20260918/keycloak-attribute-name-capability/configure.json'
+            row['individual_diagnosis']='reference-20260918/keycloak-attribute-name-capability/configure.json'
+            row['additional_observation']={'details':json.loads(diagnostic_path.read_text())['outcome']['details'],
+                'sha256':hashlib.sha256(diagnostic_path.read_bytes()).hexdigest()}
+            row['next_action']='URI属性名と任意文字列属性名は署名・復号した応答で確認済み。独自NameFormatは標準User Property mapperへの設定読戻しでは保持されたが、応答で未観測。別の標準設定経路を調査する。設定保存成功を生成能力の成功にはしない。'
         if row['product']=='keycloak' and row['case'] in {'IIP-IDP19-a-idp-01','IIP-IDP19-b-idp-01','IIP-IDP19-c-idp-01'}:
             row['next_action']='暗号化プロバイダーは既存。SAMLメタデータ生成が署名鍵だけを選ぶことを稼働バイトコードで確認。鍵を増やすだけではSuiteの鍵取得は解消しない。公開メタデータを改変せず、出所を固定した試験用公開鍵の補助入力経路を追加して対照を実行する。'
             row['individual_diagnosis']='keycloak-decryption-keys/diagnosis.json'

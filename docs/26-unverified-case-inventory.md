@@ -12,12 +12,12 @@
 |---|---:|---|
 | ブラウザ完了後の自動判定がない | 14 | Suite実装 |
 | 一部の試験条件しか実装されていない | 59 | Suite実装 |
-| 設定後の証拠確認・自己申告経路 | 157 | 設定・証拠 |
+| 設定後の証拠確認・自己申告経路 | 156 | 設定・証拠 |
 | 自己申告が無効 | 75 | 設定・証拠 |
 | メタデータの追加試験・観測不足 | 56 | 試験経路確認 |
 | ブラウザ・SLOの追加観測不足 | 29 | 試験経路確認 |
 | 古い待機結果・再開時には期限切れ | 0 | 新Runで再試験 |
-| 実行したが確定できない | 72 | 個別診断 |
+| 実行したが確定できない | 73 | 個別診断 |
 
 ### G02の確認済み条件と残条件
 
@@ -97,7 +97,7 @@ approved variant全体の入力生成と観測を実装する。追加ログイ�
 | `IIP-G01-a-idp-01` | Not verified: browser_fixture_partial | Not verified: browser_fixture_partial | Not verified: browser_fixture_partial |
 | `IIP-G02-a-idp-01` | Not verified: browser_fixture_partial | Not verified: browser_fixture_partial | Not verified: browser_fixture_partial |
 | `IIP-G03-b-idp-01` | Not verified: request.signing.unavailable | Not verified: browser_fixture_partial | Not verified: request.signing.unavailable |
-| `IIP-IDP01-a-idp-01` | Not verified（今回の再試験対象外） | Success | Success |
+| `IIP-IDP01-a-idp-01` | Not verified: configuration.attribute-name.evidence-incomplete | Success | Success |
 | `IIP-IDP02-a-idp-01` | Success | Success | Success |
 | `IIP-IDP03-a-idp-01` | Not verified（今回の再試験対象外） | Success | Not verified（今回の再試験対象外） |
 | `IIP-IDP04-a-idp-01` | Not verified（今回の再試験対象外） | Success | Not verified（今回の再試験対象外） |
@@ -184,7 +184,7 @@ approved variant全体の入力生成と観測を実装する。追加ログイ�
 | `IIP-G02-a-idp-01` | browser_sso_idp | browser_sso_idp | browser_sso_idp | 一部の試験条件しか実装されていない |
 | `IIP-G02-c-idp-01` | browser_sso_idp | browser_sso_idp | browser_sso_idp | 自己申告が無効 |
 | `IIP-G03-b-idp-01` | browser_sso_idp | browser_sso_idp | browser_sso_idp | 実行したが確定できない / 一部の試験条件しか実装されていない |
-| `IIP-IDP01-a-idp-01` | browser_sso_idp | — | — | 設定後の証拠確認・自己申告経路 |
+| `IIP-IDP01-a-idp-01` | browser_sso_idp | — | — | 実行したが確定できない |
 | `IIP-IDP03-a-idp-01` | browser_sso_idp | — | browser_sso_idp | 設定後の証拠確認・自己申告経路 |
 | `IIP-IDP04-a-idp-01` | browser_sso_idp | — | browser_sso_idp | 設定後の証拠確認・自己申告経路 |
 | `IIP-IDP04-b-idp-01` | browser_sso_idp | — | browser_sso_idp | 設定後の証拠確認・自己申告経路 |
