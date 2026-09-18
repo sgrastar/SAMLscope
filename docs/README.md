@@ -165,3 +165,5 @@ not by differences in reference-implementation results ([00 §5](00-concept.md))
 - [属性公開ポリシーの比較入力](54-attribute-policy-fixtures.md)
 
 - [固定した属性公開ポリシーでの比較観測](55-fixed-attribute-policy-observations.md)
+
+- [属性公開ポリシー比較の正式判定接続](56-attribute-policy-acceptance.md)

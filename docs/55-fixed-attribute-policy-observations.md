@@ -1,5 +1,7 @@
 # 固定した属性公開ポリシーでの比較観測
 
+この文書は実装と観測の経緯を残す。後続の正式ケース接続、まとめた検証、判定採用は[56](56-attribute-policy-acceptance.md)を参照。
+
 Shibbolethで、属性resolver・公開filter・メタデータprovider設定を最初に適用し、比較中はそれらを変更せずにメタデータ入力と要求の索引を変える実行器を追加した。Runは`run_K737VNKMS7Y66MSGPCZ0F0PZSQ`。試験用SPのentityIDに限定し、独立した属性名を使用するため、既存の通常公開属性との混同を避ける。
 
 ポリシーは製品の[EntityAttributeExactMatch](https://shibboleth.atlassian.net/wiki/spaces/IDP5/pages/3199502013/EntityAttributeExactMatchConfiguration)と[AttributeInMetadata](https://shibboleth.atlassian.net/wiki/spaces/IDP5/pages/3199501959/AttributeInMetadataConfiguration)を使う。後者では`onlyIfRequired`が異なる独立した属性を用意し、RequestedAttributeの存在と必須指定の効果を区別する。

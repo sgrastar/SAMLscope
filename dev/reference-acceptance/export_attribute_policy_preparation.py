@@ -77,7 +77,7 @@ def export(folder, output):
             responseReference=response, policyFingerprint=prepared['policy']['policy_sha256'],
             loginInputFingerprint=prepared['login_input_binding'], stableInputFingerprint=stable))
     receipt = dict(schema='samlscope-native-attribute-policy-receipt-v1', runId=audited['run'],
-        targetEntityId=result['target']['entity_id'],
+        targetEntityId=ET.fromstring((folder / 'target-metadata.xml').read_bytes()).get('entityID'),
         targetMetadataSha256=result['target']['metadata_digest'].removeprefix('sha256:'),
         preparation=dict(runId=audited['run'], experimentId='native-policy-' + audited['run'], exchanges=exchanges),
         rawEvidence=[dict(reference=m['id'], sha256=m['sha256']) for m in load('decoded-manifest.json')])
