@@ -97,6 +97,21 @@ def verify(folder):
     assert len(indexed_hashes) == 1 and response_order == sorted(response_order)
     assert len(set(response_order)) == len(response_order)
     assert all(o['metadata_write_skipped'] for o in observations[-2:])
+    preparation_recorded = (folder / 'preparation.json').exists()
+    if preparation_recorded:
+        preparation = load('preparation.json')
+        assert preparation['run'] == run
+        assert preparation['login_provenance'] == 'fixed-in-memory-driver-input'
+        assert not preparation['authenticated_principal_verified']
+        binding = preparation['login_input_binding']
+        assert len(binding) == 64 and all(c in '0123456789abcdef' for c in binding)
+        policy = preparation['policy']
+        assert policy['schema'] == 'samlscope-native-attribute-policy-v1'
+        encoded = json.dumps(policy['nodes'], sort_keys=True, separators=(',', ':'), ensure_ascii=False).encode()
+        assert hashlib.sha256(encoded).hexdigest() == policy['policy_sha256']
+        for observation in observations:
+            assert observation['login_input_binding'] == binding
+            assert observation['policy_before'] == observation['policy_after'] == policy
     production_observed = (folder / 'production-observation.json').exists()
     if production_observed:
         production = load('production-observation.json')
@@ -115,7 +130,8 @@ def verify(folder):
             assert [e['reference'] for e in protocol['evidence']][-2:] == flow['positive_exchange']['transcript_ids']
     return dict(run=run, recorded_conditions=len(EXPECTED),
                 candidate_cases=['IIP-IDP03-a-idp-01', 'IIP-IDP04-a-idp-01', 'IIP-IDP04-b-idp-01'],
-                production_collector_observed=production_observed, verdict_adopted=False, restored=True)
+                production_collector_observed=production_observed, native_preparation_recorded=preparation_recorded,
+                verdict_adopted=False, restored=True)
 
 
 if __name__ == '__main__':

@@ -42,8 +42,12 @@ def recorded_exchange(run, variant, previous_ids):
         request_id=request_id,status_codes=sorted(s for s in statuses if isinstance(s,str)),
         transcript_ids=[request['id'],*[e['id'] for e in responses]])
 
-def flow(run, record_path, signature_control=False, suite_signature_control=False, attribute_service_index=None):
+def flow(run, record_path, signature_control=False, suite_signature_control=False, attribute_service_index=None, login_inputs=None):
     import reference_flow as pc
+    # Keep credentials in memory and use the same input for all controls in this invocation.
+    username, password = login_inputs if login_inputs is not None else (
+        os.environ.get('REFERENCE_USERNAME','samlscope-m0-user'),
+        os.environ.get('REFERENCE_PASSWORD','samlscope-m0-password'))
     state = api('/api/runs/' + run + '/metadata-lab')
     variant, index = state['selectedVariant'], state['campaignIndex']
     start_url = state['automaticStartUrl']
@@ -55,8 +59,7 @@ def flow(run, record_path, signature_control=False, suite_signature_control=Fals
     if suite_signature_control:
         before_ids={e['id'] for e in api('/api/runs/'+run+'/transcript')}
         receipt=pc.Client().flow(start_url+'&signatureControl=invalid',None,
-            os.environ.get('REFERENCE_USERNAME','samlscope-m0-user'),
-            os.environ.get('REFERENCE_PASSWORD','samlscope-m0-password'))
+            username, password)
         exchange=recorded_exchange(run,variant,before_ids)
         control=dict(source='suite',receipt=receipt,exchange=exchange,correlated_success=exchange['success'])
         save(record_path,dict(run=run,variant=variant,negative_control=control,correlated_success=False))
@@ -65,8 +68,7 @@ def flow(run, record_path, signature_control=False, suite_signature_control=Fals
     elif signature_control:
         mutation = pc.SignatureMutation()
         receipt = pc.Client(signature_mutation=mutation).flow(start_url, None,
-            os.environ.get('REFERENCE_USERNAME','samlscope-m0-user'),
-            os.environ.get('REFERENCE_PASSWORD','samlscope-m0-password'))
+            username, password)
         after_negative = api('/api/runs/' + run + '/metadata-lab')
         control = dict(receipt=receipt, mutations=mutation.records,
             correlated_success=after_negative['campaignIndex'] == index + 1)
@@ -79,8 +81,7 @@ def flow(run, record_path, signature_control=False, suite_signature_control=Fals
             raise RuntimeError('Unexpected campaign advancement during negative control')
     before_ids={e['id'] for e in api('/api/runs/'+run+'/transcript')}
     receipt = pc.Client().flow(start_url, None,
-        os.environ.get('REFERENCE_USERNAME','samlscope-m0-user'),
-        os.environ.get('REFERENCE_PASSWORD','samlscope-m0-password'))
+        username, password)
     after = api('/api/runs/' + run + '/metadata-lab')
     exchange=recorded_exchange(run,variant,before_ids)
     # A correlated SAML error can also advance orchestration. Inspect the actual response.

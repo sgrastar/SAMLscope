@@ -3,14 +3,17 @@
 import argparse
 import hashlib
 import json
+import os
 from pathlib import Path
 import re
+import secrets
 import subprocess
 import sys
 import urllib.request
 import xml.etree.ElementTree as ET
 
 from attribute_name_capability import docker, XSI
+from attribute_policy_preparation import snapshot, verify_readback
 REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO / 'dev/keycloak'))
 from import_metadata_batch import api, save, flow, BASE
@@ -94,6 +97,10 @@ def main():
     out.mkdir(parents=True, exist_ok=True)
     paths = {n: '/opt/reference-idp/conf/' + n + '.xml' for n in SERVICES}
     originals = {n: docker('cat', p) for n, p in paths.items()}
+    login_inputs = (os.environ.get('REFERENCE_USERNAME', 'samlscope-m0-user'),
+                    os.environ.get('REFERENCE_PASSWORD', 'samlscope-m0-password'))
+    # Opaque correlation token, not a username/password digest or authenticated identity assertion.
+    login_input_binding = secrets.token_hex(32)
     expected = dict(originals)
     operations, observations, reloads, changed = [], [], [], []
     temporary_written = False
@@ -115,6 +122,9 @@ def main():
     if docker('sh', '-c', 'if test -e ' + temporary + '; then echo exists; fi').strip():
         raise ValueError('Temporary metadata already exists')
     configured = policies(originals, BASE + '/p/' + plan, run, temporary)
+    save(out / 'preparation.json', dict(run=run, entity_id=BASE + '/p/' + plan,
+        policy=snapshot(configured, run), login_input_binding=login_input_binding,
+        login_provenance='fixed-in-memory-driver-input', authenticated_principal_verified=False))
     save(out / 'preflight.json', api('/api/runs/' + run + '/preflight', {}))
 
     def write(path, data, label):
@@ -133,10 +143,8 @@ def main():
         record['completed'] = True
 
     def fixed_readback():
-        actual = {n: sha(docker('cat', p)) for n, p in paths.items()}
-        if actual != {n: sha(configured[n]) for n in paths}:
-            raise RuntimeError('Fixed policy changed during comparisons')
-        return actual
+        actual = {n: docker('cat', p) for n, p in paths.items()}
+        return verify_readback(configured, actual, run)
 
     indexed_hash = None
     try:
@@ -176,15 +184,19 @@ def main():
                 indexed_hash = digest
             before = fixed_readback()
             record = dict(label=label, run=run, variant=variant, selector=selector, fixture_sha256=digest,
-                          metadata_write_skipped=same_indexed_metadata, configuration_before=before, status='incomplete')
+                          metadata_write_skipped=same_indexed_metadata,
+                          configuration_before=before['configuration_sha256'], policy_before=before['policy'],
+                          login_input_binding=login_input_binding, status='incomplete')
             observations.append(record)
             try:
-                flow(run, folder / 'flow.json', attribute_service_index=selector)
+                flow(run, folder / 'flow.json', attribute_service_index=selector, login_inputs=login_inputs)
                 record['status'] = 'protocol-recorded'
                 if label == 'baseline':
                     save(out / 'tests-start.json', api('/api/runs/' + run + '/tests/start', {}))
             finally:
-                record['configuration_after'] = fixed_readback()
+                after = fixed_readback()
+                record['configuration_after'] = after['configuration_sha256']
+                record['policy_after'] = after['policy']
                 save(folder / 'observation.json', record)
                 save(out / 'observations.json', observations)
     finally:
