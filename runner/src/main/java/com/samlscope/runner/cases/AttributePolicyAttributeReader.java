@@ -30,6 +30,22 @@ final class AttributePolicyAttributeReader {
     static Observation read(String runId, Element response, String targetEntity,
                             List<X509Certificate> targetSigningKeys, Element preparedMetadata,
                             Optional<PlanCredentials> encryptionKey) {
+        return read(runId, response, targetEntity, targetSigningKeys, preparedMetadata, encryptionKey,
+                PREFIX, MARKERS, null, null);
+    }
+
+    static Observation readRelyingParty(String runId, Element response, String targetEntity,
+            List<X509Certificate> targetSigningKeys, Element preparedMetadata,
+            Optional<PlanCredentials> encryptionKey, String requestId, String recipient) {
+        require(requestId != null && !requestId.isBlank() && recipient != null && !recipient.isBlank());
+        return read(runId, response, targetEntity, targetSigningKeys, preparedMetadata, encryptionKey,
+                "urn:samlscope:test:relying-party:", Set.of("anchor", "first", "second"), requestId, recipient);
+    }
+
+    private static Observation read(String runId, Element response, String targetEntity,
+            List<X509Certificate> targetSigningKeys, Element preparedMetadata,
+            Optional<PlanCredentials> encryptionKey, String prefix, Set<String> markers,
+            String requestId, String recipient) {
         try {
             require(runId != null && !runId.isBlank());
             require(P.equals(response.getNamespaceURI()) && "Response".equals(response.getLocalName()));
@@ -68,15 +84,36 @@ final class AttributePolicyAttributeReader {
                 var verified = new VerifiedSignatureAlgorithms().read(envelope, targetEntity, targetSigningKeys);
                 require(verified.size() == 1 && "Assertion".equals(verified.getFirst().element()));
             }
+            if (requestId != null) {
+                require(requestId.equals(response.getAttribute("InResponseTo"))
+                        && recipient.equals(response.getAttribute("Destination")));
+                require(preparedMetadata != null && !preparedMetadata.getAttribute("entityID").isBlank());
+                String entity = preparedMetadata.getAttribute("entityID");
+                var conditions = children(assertion, S, "Conditions");
+                require(conditions.size() == 1);
+                var restrictions = children(conditions.getFirst(), S, "AudienceRestriction");
+                require(!restrictions.isEmpty());
+                for (var restriction : restrictions) {
+                    require(children(restriction, S, "Audience").stream().anyMatch(a -> entity.equals(a.getTextContent())));
+                }
+                var subjects = children(assertion, S, "Subject");
+                require(subjects.size() == 1);
+                var confirmations = children(subjects.getFirst(), S, "SubjectConfirmation");
+                require(confirmations.size() == 1
+                        && "urn:oasis:names:tc:SAML:2.0:cm:bearer".equals(confirmations.getFirst().getAttribute("Method")));
+                var data = children(confirmations.getFirst(), S, "SubjectConfirmationData");
+                require(data.size() == 1 && requestId.equals(data.getFirst().getAttribute("InResponseTo"))
+                        && recipient.equals(data.getFirst().getAttribute("Recipient")));
+            }
             var values = new HashMap<String, String>();
             for (var statement : children(assertion, S, "AttributeStatement")) {
                 // An encrypted attribute could hide a marker; a partial set is not an absence control.
                 require(children(statement, S, "EncryptedAttribute").isEmpty());
                 for (var attribute : children(statement, S, "Attribute")) {
                     var name = attribute.getAttribute("Name");
-                    if (!name.startsWith(PREFIX)) continue;
-                    var marker = name.substring(PREFIX.length());
-                    require(MARKERS.contains(marker) && FORMAT.equals(attribute.getAttribute("NameFormat")));
+                    if (!name.startsWith(prefix)) continue;
+                    var marker = name.substring(prefix.length());
+                    require(markers.contains(marker) && FORMAT.equals(attribute.getAttribute("NameFormat")));
                     var entries = children(attribute, S, "AttributeValue");
                     require(entries.size() == 1);
                     var value = entries.getFirst();

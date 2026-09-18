@@ -16,7 +16,7 @@
 
 `relying_party_attribute_preparation.py`は元の設定を保ち、実験専用のFilesystemMetadataProvider、AttributeDefinition、Requester単位のAttributeFilterPolicyを生成する。共通属性とSPごとの専用属性は同じuidから解決し、属性入力が別ユーザーになった差を判定へ持ち込まない。設定操作・再読込自体はこのモジュールでは実行しない。
 
-既存設定とのID衝突、同一entityID、同一メタデータファイルを拒否する。読戻しはファイル全体の一致に加え、Requester値と各属性ルールを期待するネイティブXML構造へ照合する。ハッシュが一致するだけでは正しいポリシーと扱わない。設定は各ネイティブnamespaceをdefaultとして出力し、xsi:typeの非修飾名も正しく解決できる形にする。
+既存設定とのID衝突、同一entityIDを拒否する。双方を含む同一の集約メタデータを使う場合はproviderを共有し、設定操作を重複させない。読戻しはファイル全体の一致に加え、Requester値と各属性ルールを期待するネイティブXML構造へ照合する。ハッシュが一致するだけでは正しいポリシーと扱わない。設定は各ネイティブnamespaceをdefaultとして出力し、xsi:typeの非修飾名も正しく解決できる形にする。
 
 ## 未完了の接続
 
@@ -29,3 +29,15 @@
 - ローカルの準備記録を再検証するcollector、既存CONFIGケースへの登録、正式Runの結果採用。
 
 <!--g1-literal--> Java比較処理はコンパイル成功。正常差分、未完了、同一SP、固定条件改変、混在要求などを扱う検証コードを追加したが、機能テスト群は統合バッチ待ち。Pythonは構文確認済み。今回の製品設定変更・実機試験・本人操作は0回。未検証466観測・157ケースIDを維持し、解消として数えない。
+
+## 事前取込経路での実機収集
+
+既存のpreloaded aggregateに含まれる、EntityAttributesとRequestedAttributeのない比較用SPを利用した。それぞれ異なるentityIDと対応するACSが生成される。同一Runの事前取込原本をネイティブFilesystemMetadataProviderで読み、設定を固定してfirst、second、first-repeatを実行する。新規のpeer生成や製品設定の往復切替は不要だった。
+
+`relying_party_attribute_campaign.py`はACSから次の自動試験へのリダイレクトを止める。ACSへの提出完了は輸送上の観測であり、SAML受理や判定成功とは扱わない。生の要求・応答、設定読戻し、同じメモリ内ログイン入力を使用した識別子、復元結果と操作回数を保存する。認証情報は記録しない。
+
+<!--g1-literal--> Run `run_Z43RFP9ZF0175WP18Y1FZD70P9`でA/B/Aの3往復を記録し、Suiteの受信記録では各要求に相関するSuccess応答を確認した。証拠は`build/acceptance/reference-20260918/shibboleth-relying-party-attributes/`。属性集合の正式比較はまだ採用していない。
+
+<!--g1-literal--> 操作はRun/preflight各1、事前取込原本の取得1、ネイティブ書込7（メタデータ1、設定3、復元3）、再読込8（AttributeRegistryを含む）、一時ファイル削除1、プロトコル往復3、本人操作0。設定読戻しは各往復の前後に行い、終了後の設定は元のハッシュと一致した。製品再起動・Suite再ビルドは0回。
+
+`AttributePolicyAttributeReader.readRelyingParty`を追加した。既存の署名・暗号化Assertion復号・単一Assertion確認に加え、ResponseとSubjectConfirmationDataのInResponseTo/宛先、すべてのAudienceRestrictionに対象SPが含まれることを確認する。Suite専用のanchor/first/second属性だけを取り出し、同じ属性入力のfingerprintは公開診断へ出さない。既存の属性比較APIは動作を維持する。新しい経路はコンパイル済みで、原本collectorおよびregistryへの接続は次の工程である。

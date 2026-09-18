@@ -17,16 +17,19 @@ def recipe(run, entities, metadata_files):
         raise ValueError('Exactly two relying parties required')
     if len(set(entities.values())) != 2 or any(not value.strip() for value in entities.values()):
         raise ValueError('Distinct entity IDs required')
-    if len(set(metadata_files.values())) != 2 or any(not value.startswith('/opt/reference-idp/metadata/')
+    if any(not value.startswith('/opt/reference-idp/metadata/')
             or '..' in value.split('/') for value in metadata_files.values()):
-        raise ValueError('Distinct native metadata files required')
+        raise ValueError('Native metadata files required')
     prefix = 'RelyingPartyAttributes' + run
     result = {name: [] for name in NAMESPACES}
     md, resolver, afp = (NAMESPACES[name] for name in ['metadata-providers', 'attribute-resolver', 'attribute-filter'])
+    seen_files = set()
     for side in ['first', 'second']:
         provider = ET.Element('{' + md + '}MetadataProvider', {
             'id': prefix + '-' + side, XSI: 'FilesystemMetadataProvider', 'metadataFile': metadata_files[side]})
-        result['metadata-providers'].append(provider)
+        if metadata_files[side] not in seen_files:
+            result['metadata-providers'].append(provider)
+            seen_files.add(metadata_files[side])
         policy = ET.Element('{' + afp + '}AttributeFilterPolicy', {'id': prefix + '-' + side})
         ET.SubElement(policy, '{' + afp + '}PolicyRequirementRule', {XSI: 'Requester', 'value': entities[side]})
         for marker in ['anchor', side]:
