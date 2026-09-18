@@ -585,9 +585,14 @@ public final class SamlScopeApplication {
                 ctx.redirect(location.toString(), redirectStatus);
                 return;
             }
-            var payload = labState.ingestionMode() == MetadataLabService.IngestionMode.AUTOMATIC_POLLING
-                    ? metadata.generatePolling(plan, variant, runId)
-                    : metadata.generate(plan, variant, runId);
+            var polling = labState.ingestionMode() == MetadataLabService.IngestionMode.AUTOMATIC_POLLING;
+            // Keep the indexed comparison's original bytes stable across its two requests.
+            // Consumers still compare the recorded hashes: cache eviction or a restart is not proof of stability.
+            var payload = polling && variant == MetadataService.Variant.ATTRIBUTE_POLICY_INDEXED
+                    ? preloadedMetadataCache.getOrCompute("attribute-policy-indexed:" + runId,
+                            () -> metadata.generatePolling(plan, variant, runId))
+                    : polling ? metadata.generatePolling(plan, variant, runId)
+                            : metadata.generate(plan, variant, runId);
             MetadataResponseEvidence.record(transcript, metadataFetch, payload, clock);
             ctx.contentType("application/samlmetadata+xml").result(payload);
         });
@@ -724,6 +729,8 @@ public final class SamlScopeApplication {
             var index = Integer.parseInt(ctx.pathParam("index"));
             var flow = metadataLab.requireAutomaticStartFlow(
                     run.id(), plan.id(), requiredQuery(ctx, "poll"), index);
+            var attributeIndex = AttributePolicyRequestOptions.parse(
+                    flow.variant(), ctx.queryParam("attributeConsumingServiceIndex"));
             if (signatureControl != null && flow.variant().requestFixture()
                     != com.samlscope.saml.normal.SamlSignedRequestFactory.Fixture.VALID) {
                 throw new IllegalArgumentException("Signature control requires a normal signed-request fixture");
@@ -732,7 +739,8 @@ public final class SamlScopeApplication {
                 var next = "/p/" + plan.id() + "/start/metadata-polling/" + index
                         + "?run=" + run.id() + "&poll=" + java.net.URLEncoder.encode(
                                 flow.campaignToken(), java.nio.charset.StandardCharsets.UTF_8)
-                        + (signatureControl == null ? "" : "&signatureControl=invalid");
+                        + (signatureControl == null ? "" : "&signatureControl=invalid")
+                        + (attributeIndex == null ? "" : "&attributeConsumingServiceIndex=" + attributeIndex);
                 ctx.header("Cache-Control", "no-store")
                         .header("Content-Security-Policy", "default-src 'none'; frame-ancestors 'none'; base-uri 'none'")
                         .status(202).contentType("text/html; charset=utf-8")
@@ -757,7 +765,7 @@ public final class SamlScopeApplication {
                     signatureControl == null ? flow.variant().requestFixture()
                             : com.samlscope.saml.normal.SamlSignedRequestFactory.Fixture.BAD_SIGNATURE_VALUE,
                     requestId, destination, peerEntityId(config, plan), acs,
-                    clock.instant(), metadata.credentialsForPollingVariant(plan, flow.variant()));
+                    clock.instant(), metadata.credentialsForPollingVariant(plan, flow.variant()), attributeIndex);
             var relayState = "samlscope-metadata-polling|" + run.id() + "|"
                     + flow.campaignToken() + "|" + flow.index();
             var requests = new LinkedHashMap<String, Object>();
@@ -781,7 +789,8 @@ public final class SamlScopeApplication {
                             "variant", flow.variant().id(),
                             "campaign", "metadata-polling",
                             "metadataSignatureControl", signatureControl == null ? "valid" : "invalid",
-                            "metadataSignatureGroup", flow.campaignToken() + ":" + flow.index())));
+                            "metadataSignatureGroup", flow.campaignToken() + ":" + flow.index(),
+                            "attributeConsumingServiceIndex", attributeIndex == null ? "absent" : attributeIndex.toString())));
             var nonceBytes = new byte[18];
             NONCE_RANDOM.nextBytes(nonceBytes);
             var nonce = Base64.getUrlEncoder().withoutPadding().encodeToString(nonceBytes);

@@ -21,8 +21,18 @@ EntityAttributesの有無、RequestedAttributeの有無、isRequiredの値をそ
 
 索引選択の試験では同じメタデータを維持し、AuthnRequestのAttributeConsumingServiceIndexだけを切り替える必要がある。異なるメタデータの既定サービスから別属性が返っただけでは、この試験を確定しない。
 
+## 索引付き要求の実行経路
+
+`SamlSignedRequestFactory`へ索引を受け取るoverloadを追加した。属性は署名を生成する前に設定し、既存の呼出しは属性省略を維持する。XML SchemaのunsignedShort範囲外を拒否する。AssertionConsumerServiceURLと混同せず、応答のACSは維持する。
+
+<!--g1-literal--> polling開始APIの`attributeConsumingServiceIndex`は`attribute-policy-indexed`に限り0または1を許可する。待機中の再遷移、通常要求、無効署名対照で指定を保持し、原本AuthnRequestとTranscript要約に記録する。`dev/keycloak/import_metadata_batch.py --flow-run ... --attribute-service-index ...`から指定できる共通実行経路を追加した。製品固有の取込操作や判定はこの引数だけでは実施しない。
+
+索引付きfixtureのpolling配布は、同じRunで元XMLを既存の容量制限付きキャッシュに保持する。再取得によるvalidUntil／XML署名の変化を避けるためである。ただしキャッシュの追出しや再起動があり得るので、比較する両要求に対応するMetadataPrepared原本のハッシュ一致を判定側で検査する必要は残る。
+
+通常のpollingキャンペーンは応答後に進むため、索引比較の実行器には同じRunでの次キャンペーン準備と、固定した製品設定・ユーザー・元XMLの確認が必要である。この統合実行器と、署名検証・復号後の属性差を評価するoracleは未完了。
+
 ## 検証状態
 
-生成条件の位置・存在と不存在・isRequiredの差・索引ごとの属性差を検査するテストを追加した。ユーザーのバッチ検証方針に従い、Javaテストと実機への反映は後続の実行経路・判定接続とまとめて実施する。現段階は未実行で、既存の稼働イメージを更新していない。G1の生成一致と構造検証のみ実施した。
+生成条件の位置・存在と不存在・isRequiredの差・索引ごとの属性差を検査するテストを追加した。要求についても署名検証、索引改変時の署名拒否、範囲外入力拒否、省略時の互換性、APIのfixture制限のテストを追加した。ユーザーのバッチ検証方針に従い、Javaテストと実機への反映は後続の実行経路・判定接続とまとめて実施する。現段階は未実行で、既存の稼働イメージを更新していない。G1の生成一致と構造検証のみ実施した。
 
 <!--g1-literal--> 新規の判定確定はなく、台帳は470観測・157ケースIDを維持する。製品設定書込・製品再起動・本人操作は今回いずれも0回。

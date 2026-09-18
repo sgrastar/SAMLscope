@@ -42,8 +42,25 @@ public final class SamlSignedRequestFactory {
             URI acs,
             Instant issueInstant,
             PlanCredentials credentials) {
+        return build(fixture, requestId, destination, issuer, acs, issueInstant, credentials, null);
+    }
+
+    /** The attribute service selector is part of the signed request, not a post-signature mutation. */
+    public byte[] build(
+            Fixture fixture,
+            String requestId,
+            URI destination,
+            String issuer,
+            URI acs,
+            Instant issueInstant,
+            PlanCredentials credentials,
+            Integer attributeConsumingServiceIndex) {
         java.util.Objects.requireNonNull(fixture, "fixture");
         java.util.Objects.requireNonNull(credentials, "credentials");
+        if (attributeConsumingServiceIndex != null
+                && (attributeConsumingServiceIndex < 0 || attributeConsumingServiceIndex > 65535)) {
+            throw new IllegalArgumentException("AttributeConsumingServiceIndex must be an unsigned short");
+        }
         if (requestId == null || requestId.isBlank()) throw new IllegalArgumentException("requestId is required");
         if (issuer == null || issuer.isBlank()) throw new IllegalArgumentException("issuer is required");
         var document = SecureXml.newDocument();
@@ -55,6 +72,9 @@ public final class SamlSignedRequestFactory {
         request.setAttribute("Version", "2.0");
         request.setAttribute("IssueInstant", DateTimeFormatter.ISO_INSTANT.format(issueInstant));
         request.setAttribute("Destination", destination.toString());
+        if (attributeConsumingServiceIndex != null) {
+            request.setAttribute("AttributeConsumingServiceIndex", attributeConsumingServiceIndex.toString());
+        }
         if (fixture != Fixture.DEFAULT_ACS) {
             request.setAttribute("AssertionConsumerServiceURL", acs.toString());
             request.setAttribute("ProtocolBinding", "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST");

@@ -42,14 +42,19 @@ def recorded_exchange(run, variant, previous_ids):
         request_id=request_id,status_codes=sorted(s for s in statuses if isinstance(s,str)),
         transcript_ids=[request['id'],*[e['id'] for e in responses]])
 
-def flow(run, record_path, signature_control=False, suite_signature_control=False):
+def flow(run, record_path, signature_control=False, suite_signature_control=False, attribute_service_index=None):
     import reference_flow as pc
     state = api('/api/runs/' + run + '/metadata-lab')
     variant, index = state['selectedVariant'], state['campaignIndex']
+    start_url = state['automaticStartUrl']
+    if attribute_service_index is not None:
+        if variant != 'attribute-policy-indexed' or attribute_service_index not in (0, 1):
+            raise ValueError('Attribute service selection requires indexed metadata and selector 0 or 1')
+        start_url += '&attributeConsumingServiceIndex=' + str(attribute_service_index)
     control = None
     if suite_signature_control:
         before_ids={e['id'] for e in api('/api/runs/'+run+'/transcript')}
-        receipt=pc.Client().flow(state['automaticStartUrl']+'&signatureControl=invalid',None,
+        receipt=pc.Client().flow(start_url+'&signatureControl=invalid',None,
             os.environ.get('REFERENCE_USERNAME','samlscope-m0-user'),
             os.environ.get('REFERENCE_PASSWORD','samlscope-m0-password'))
         exchange=recorded_exchange(run,variant,before_ids)
@@ -59,7 +64,7 @@ def flow(run, record_path, signature_control=False, suite_signature_control=Fals
             raise RuntimeError('Suite negative control must not advance the fixture')
     elif signature_control:
         mutation = pc.SignatureMutation()
-        receipt = pc.Client(signature_mutation=mutation).flow(state['automaticStartUrl'], None,
+        receipt = pc.Client(signature_mutation=mutation).flow(start_url, None,
             os.environ.get('REFERENCE_USERNAME','samlscope-m0-user'),
             os.environ.get('REFERENCE_PASSWORD','samlscope-m0-password'))
         after_negative = api('/api/runs/' + run + '/metadata-lab')
@@ -73,7 +78,7 @@ def flow(run, record_path, signature_control=False, suite_signature_control=Fals
         if after_negative['campaignIndex'] != index:
             raise RuntimeError('Unexpected campaign advancement during negative control')
     before_ids={e['id'] for e in api('/api/runs/'+run+'/transcript')}
-    receipt = pc.Client().flow(state['automaticStartUrl'], None,
+    receipt = pc.Client().flow(start_url, None,
         os.environ.get('REFERENCE_USERNAME','samlscope-m0-user'),
         os.environ.get('REFERENCE_PASSWORD','samlscope-m0-password'))
     after = api('/api/runs/' + run + '/metadata-lab')
@@ -82,7 +87,8 @@ def flow(run, record_path, signature_control=False, suite_signature_control=Fals
     accepted = after['campaignIndex'] == index + 1 and exchange['success']
     save(record_path, dict(run=run, variant=variant, before_index=index,
         after_index=after['campaignIndex'], receipt=receipt, correlated_success=accepted,
-        negative_control=control,positive_exchange=exchange))
+        negative_control=control,positive_exchange=exchange,
+        attribute_consuming_service_index=attribute_service_index))
     if not accepted:
         raise RuntimeError('No correlated Success; retain NOT_VERIFIED and inspect the saved evidence')
     if suite_signature_control and control['correlated_success']:
@@ -94,14 +100,18 @@ def main():
     parser.add_argument('--output',type=pathlib.Path,required=True)
     parser.add_argument('--playwright-modules',type=pathlib.Path)
     parser.add_argument('--flow-run')
+    parser.add_argument('--attribute-service-index',type=int,choices=[0,1],
+        help='Signed AttributeConsumingServiceIndex for --flow-run with attribute-policy-indexed')
     parser.add_argument('--signature-control',action='store_true',help='Exercise a corrupt signature before each normal flow')
     parser.add_argument('--suite-signature-control',action='store_true',help='Use Suite-issued and recorded invalid-signature controls')
     parser.add_argument('--run',help='Append a new fixture campaign to an existing reference Run')
     parser.add_argument('--profile',choices=['metadata_idp','browser_sso_idp'],default='metadata_idp')
     parser.add_argument('--variants',help='Comma-separated Suite fixture IDs, beginning with control')
     args=parser.parse_args()
+    if args.attribute_service_index is not None and not args.flow_run:
+        parser.error('--attribute-service-index requires --flow-run')
     if args.flow_run:
-        flow(args.flow_run,args.output,args.signature_control,args.suite_signature_control);return
+        flow(args.flow_run,args.output,args.signature_control,args.suite_signature_control,args.attribute_service_index);return
     if args.playwright_modules is None:parser.error('--playwright-modules is required for a batch')
     out=args.output.resolve()
     if out.exists() and any(out.iterdir()):
