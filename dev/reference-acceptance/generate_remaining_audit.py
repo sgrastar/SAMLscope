@@ -588,6 +588,9 @@ def render(root,definitions,output):
             from verify_producer_algorithms import verify_default_mgf_withdrawal
             row['audit_withdrawal']=verify_default_mgf_withdrawal(root.parent.parent/'reference-20260918')
             assert row.get('verdict','NOT_VERIFIED')=='NOT_VERIFIED'
+        if row['product']=='simplesamlphp' and row['profile']=='metadata_idp' and row['case']=='IIP-MD05-e8-idp-01':
+            from verify_simplesamlphp_intersection import verify as verify_ssp_intersection
+            selected=verify_ssp_intersection(root.parent.parent/'reference-20260918')
         if selected is not None:
             path, selected_cases = selected
             raw=path.read_bytes(); result=json.loads(raw); case=selected_cases[row['case']]

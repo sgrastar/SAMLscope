@@ -13,6 +13,8 @@ import sys
 import time
 import urllib.request
 
+from configuration_batch import ConfigurationBatch
+
 REPO=pathlib.Path(__file__).resolve().parents[2]
 sys.path.insert(0,str(REPO/'dev/keycloak'))
 from import_metadata_batch import api, save, flow, BASE
@@ -46,7 +48,8 @@ def main():
     variants=args.variants.split(',')
     if variants[0]!='control':raise ValueError('Start with control')
     config=REPO/'build/acceptance/reference-20260914/ssp-config/saml20-sp-remote.php'
-    original=config.read_bytes()
+    configuration=ConfigurationBatch(config)
+    original=configuration.original
     if b'?>' in original:raise ValueError('Unexpected PHP closing tag')
     created=api('/api/plans',dict(name='SimpleSAMLphp native metadata parser batch',profile=args.profile,
         targetKind='IDP',targetEntityId='http://localhost:18380/idp',metadataSourceKind='URL',
@@ -84,9 +87,10 @@ def main():
                     raise RuntimeError('Product encryption setting was not applied')
                 record['parser_output_sha256']=hashlib.sha256(parsed.stdout).hexdigest()
                 (folder/'parser-output.json').write_bytes(parsed.stdout)
-                configured=original+b'\n'+data['php'].encode()+b'\n'
-                config.write_bytes(configured);record['configuration_written']=True
-                record['configuration_read_back']=config.read_bytes()==configured
+                record['configuration_sha256']=configuration.apply(data['php'].encode())
+                record['configuration_written']=True
+                record['configuration_read_back']=True
+                record['restoration_scope']='batch-finally'
                 # The pinned reference image enables OPcache timestamp validation with a
                 # two-second revalidation interval. Let Apache observe each new PHP file.
                 time.sleep(3)
@@ -101,12 +105,10 @@ def main():
             except Exception as error:
                 record['reason']=str(error)
             finally:
-                if record.get('configuration_written'):
-                    config.write_bytes(original)
-                record['restored']=config.read_bytes()==original
+                record['restored']=False
+                record['restoration_pending']=True
                 save(folder/'import.json',record);operations.append(record);save(out/'operations.json',operations)
             print(variant,record['status'],flush=True)
-            if not record['restored']:raise RuntimeError('Restore verification failed')
             if variant=='control':
                 if record['status']!='success':raise RuntimeError('Baseline failed')
                 save(out/'tests-start.json',api('/api/runs/'+run+'/tests/start',{}))
@@ -114,9 +116,18 @@ def main():
             if pending['campaignIndex']==state['campaignIndex']:
                 with urllib.request.urlopen(urllib.request.Request(pending['automaticContinueUrl'],data=b''),timeout=30) as response:response.read()
     finally:
-        config.write_bytes(original)
-        save(out/'restoration.json',dict(restored=config.read_bytes()==original,
-            original_sha256=hashlib.sha256(original).hexdigest(),final_sha256=hashlib.sha256(config.read_bytes()).hexdigest()))
+        try:
+            restoration=configuration.restore()
+        except Exception as error:
+            restoration=dict(restored=False,reason=str(error),configuration_write_attempts=configuration.write_count)
+        save(out/'restoration.json',restoration)
+        for record in operations:
+            record['restored']=restoration['restored']
+            record['restoration_pending']=False
+            save(out/record['variant']/'import.json',record)
+        save(out/'operations.json',operations)
+        if not restoration['restored']:
+            raise RuntimeError('Restore verification failed; refusing result adoption')
         try:save(out/'evaluation.json',api('/api/runs/'+run+'/protocol-evidence/evaluate',{}))
         except Exception as error:save(out/'evaluation-error.json',dict(reason=str(error)))
         for suffix in ['result.json','transcript','protocol-evidence']:

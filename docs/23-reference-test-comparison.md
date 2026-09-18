@@ -83,7 +83,7 @@ Shibbolethの`IIP-SSO01-fk/fu/gi`は、v8では事前生成された正常系要
 
 | 理由 | Keycloak | Shibboleth IdP | SimpleSAMLphp | 解消に必要なこと |
 |---|---:|---:|---:|---|
-| `case.pending-interaction` | 94 | 80 | 93 | 設定・受信待ちに加え、判定処理未実装の経路を含む。全件台帳を参照 |
+| `case.pending-interaction` | 94 | 80 | 92 | 設定・受信待ちに加え、判定処理未実装の経路を含む。全件台帳を参照 |
 | `attestation.interaction-disallowed` | 25 | 25 | 25 | 自己申告を無効にした構成。確認せずに申告を代行しない |
 | `browser_fixture_partial` | 19 | 21 | 19 | 一部の試験だけ実行。残るvariantの証拠が不足 |
 | `idp.signed-request.inconclusive` | 7 | 1 | 7 | 当該ケースの応答・対象設定・正常系対照を追加確認 |
@@ -101,6 +101,7 @@ Shibbolethの`IIP-SSO01-fk/fu/gi`は、v8では事前生成された正常系要
 | `slo.redirect-response.not-observed` | 1 | 0 | 1 | 当該ケースの応答・対象設定・正常系対照を追加確認 |
 | `idp.error-response.inconclusive` | 1 | 0 | 0 | 当該ケースの応答・対象設定・正常系対照を追加確認 |
 | `idp.nameid-policy.inconclusive` | 1 | 0 | 0 | 当該ケースの応答・対象設定・正常系対照を追加確認 |
+| `metadata.algorithms.intersection-evidence-incomplete` | 0 | 0 | 1 | 当該ケースの応答・対象設定・正常系対照を追加確認 |
 | `saml.subject-principal.undetermined` | 0 | 0 | 1 | 当該ケースの応答・対象設定・正常系対照を追加確認 |
 | `slo.async.feedback.unrecognized` | 0 | 0 | 1 | 当該ケースの応答・対象設定・正常系対照を追加確認 |
 | `slo.encrypted-id.key-unavailable` | 1 | 0 | 0 | 当該ケースの応答・対象設定・正常系対照を追加確認 |
@@ -377,7 +378,7 @@ Chromeと承認のブロックを解除するだけでは解消しません。�
 | `IIP-MD05-e5-idp-01` | Success † | Success † | Success † |
 | `IIP-MD05-e6-idp-01` | Warning | Warning | Warning |
 | `IIP-MD05-e7-idp-01` | Not verified | Not verified | Not verified |
-| `IIP-MD05-e8-idp-01` | Not verified | Success † | Not verified |
+| `IIP-MD05-e8-idp-01` | Not verified | Success † | Not verified † |
 | `IIP-MD05-e9-idp-01` | Not verified † | Success † | Not verified † |
 | `IIP-MD05-ea-idp-01` | Not verified † | Success † | Not verified † |
 | `IIP-MD05-eb-idp-01` | **Failed (台帳採用・原因分類未確認)** † | Success † | **Failed (台帳採用・原因分類未確認)** † |
@@ -620,6 +621,7 @@ Chromeと承認のブロックを解除するだけでは解消しません。�
 | metadata_idp († listed supplemental cases only) | simplesamlphp | `run_KDFJDGNQQCVFANEG53YYWYS4A1` | `build/acceptance/reference-20260917/simplesamlphp-native-parser-3` |
 | metadata_idp († listed supplemental cases only) | simplesamlphp | `run_816C536YJ0JK4DB1KCMG2QQNH5` | `build/acceptance/reference-20260918/single-signing-key/simplesamlphp` |
 | metadata_idp († listed supplemental cases only) | simplesamlphp | `run_ZTEB6PCRWXJM0CZ6QWCZRR966T` | `build/acceptance/reference-20260918/algorithm-followup/simplesamlphp` |
+| metadata_idp († listed supplemental cases only) | simplesamlphp | `run_Z15GR24Z1AWTH8DX9ZFZYPQSEK` | `build/acceptance/reference-20260918/simplesamlphp-intersection-evaluation` |
 | metadata_idp († listed supplemental cases only) | simplesamlphp | `run_ZTEB6PCRWXJM0CZ6QWCZRR966T` | `build/acceptance/reference-20260918/algorithm-followup/simplesamlphp` |
 | metadata_idp († listed supplemental cases only) | simplesamlphp | `run_ZTEB6PCRWXJM0CZ6QWCZRR966T` | `build/acceptance/reference-20260918/algorithm-oracle-evaluation` |
 | metadata_idp († listed supplemental cases only) | simplesamlphp | `run_ZTEB6PCRWXJM0CZ6QWCZRR966T` | `build/acceptance/reference-20260918/algorithm-oracle-evaluation` |

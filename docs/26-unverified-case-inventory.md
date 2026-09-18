@@ -12,12 +12,12 @@
 |---|---:|---|
 | ブラウザ完了後の自動判定がない | 15 | Suite実装 |
 | 一部の試験条件しか実装されていない | 59 | Suite実装 |
-| 設定後の証拠確認・自己申告経路 | 167 | 設定・証拠 |
+| 設定後の証拠確認・自己申告経路 | 166 | 設定・証拠 |
 | 自己申告が無効 | 75 | 設定・証拠 |
 | メタデータの追加試験・観測不足 | 56 | 試験経路確認 |
 | ブラウザ・SLOの追加観測不足 | 29 | 試験経路確認 |
 | 古い待機結果・再開時には期限切れ | 0 | 新Runで再試験 |
-| 実行したが確定できない | 71 | 個別診断 |
+| 実行したが確定できない | 72 | 個別診断 |
 
 ### G02の確認済み条件と残条件
 
@@ -130,7 +130,7 @@ approved variant全体の入力生成と観測を実装する。追加ログイ�
 | `IIP-MD05-ad-idp-01` | Not verified（今回の再試験対象外） | Success | Success |
 | `IIP-MD05-ae-idp-01` | Warning | Warning | Warning |
 | `IIP-MD05-e5-idp-01` | Success | Success | Success |
-| `IIP-MD05-e8-idp-01` | Not verified（今回の再試験対象外） | Success | Not verified（今回の再試験対象外） |
+| `IIP-MD05-e8-idp-01` | Not verified（今回の再試験対象外） | Success | Not verified: metadata.algorithms.intersection-evidence-incomplete |
 | `IIP-MD05-e9-idp-01` | Not verified: metadata.algorithms.local-policy-unverified | Success | Not verified: metadata.algorithms.local-policy-unverified |
 | `IIP-MD05-ea-idp-01` | Not verified: metadata.algorithms.local-policy-unverified | Success | Not verified: metadata.algorithms.local-policy-unverified |
 | `IIP-MD05-eb-idp-01` | Failed (Product) | Success | Failed (Product) |
@@ -249,7 +249,7 @@ approved variant全体の入力生成と観測を実装する。追加ログイ�
 | `IIP-MD05-d1-idp-01` | metadata_idp | metadata_idp | metadata_idp | 設定後の証拠確認・自己申告経路 |
 | `IIP-MD05-e-idp-01` | metadata_idp | metadata_idp | metadata_idp | 設定後の証拠確認・自己申告経路 |
 | `IIP-MD05-e7-idp-01` | metadata_idp | metadata_idp | metadata_idp | 設定後の証拠確認・自己申告経路 |
-| `IIP-MD05-e8-idp-01` | metadata_idp | — | metadata_idp | 設定後の証拠確認・自己申告経路 |
+| `IIP-MD05-e8-idp-01` | metadata_idp | — | metadata_idp | 設定後の証拠確認・自己申告経路 / 実行したが確定できない |
 | `IIP-MD05-e9-idp-01` | metadata_idp | — | metadata_idp | 実行したが確定できない |
 | `IIP-MD05-ea-idp-01` | metadata_idp | — | metadata_idp | 実行したが確定できない |
 | `IIP-MD05-f-idp-01` | metadata_idp | metadata_idp | metadata_idp | 設定後の証拠確認・自己申告経路 |

@@ -157,3 +157,5 @@ not by differences in reference-implementation results ([00 §5](00-concept.md))
 - [暗号・署名・パラメーター共通部分の判定と実証](50-metadata-intersection-oracle.md)
 
 - [暗号方式生成能力の条件別証拠とMGF省略の監査](51-producer-algorithm-metadata-evidence.md)
+
+- [SimpleSAMLphpの共通部分選択の観測と設定復元の効率化](52-simplesamlphp-intersection-and-batch-restore.md)

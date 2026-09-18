@@ -12,6 +12,11 @@ def verify(folder, variant):
         assert imported['product'] == 'simplesamlphp'
         assert imported['fixture_sha256'] == digest
         assert imported['restored'] and imported['configuration_read_back']
+        if imported.get('restoration_scope') == 'batch-finally':
+            restoration = json.loads((folder / 'restoration.json').read_text())
+            assert restoration['restored'] and restoration['original_sha256'] == restoration['final_sha256']
+            assert not imported['restoration_pending']
+
         assert hashlib.sha256((path / 'parser-output.json').read_bytes()).hexdigest() == imported['parser_output_sha256']
     elif imported.get('import_path') == 'native-filesystem-provider':
         assert imported['product'] == 'shibboleth'
