@@ -51,7 +51,7 @@ class MetadataUiConsumerFixturesTest {
             }
             assertFalse(((Element) first.item(0)).hasAttributeNS(XMLConstants.XML_NS_URI, "lang"));
             assertEquals("en", ((Element) first.item(1)).getAttributeNS(XMLConstants.XML_NS_URI, "lang"));
-            assertEquals("fr", ((Element) second.item(1)).getAttributeNS(XMLConstants.XML_NS_URI, "lang"));
+            assertEquals("ja", ((Element) second.item(1)).getAttributeNS(XMLConstants.XML_NS_URI, "lang"));
             assertNotEquals(first.item(0).getTextContent(), first.item(1).getTextContent());
         }
     }

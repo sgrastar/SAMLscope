@@ -8,7 +8,7 @@
 | `ui-consumer-display-service` | 同上 | DisplayNameなし、ServiceNameあり |
 | `ui-consumer-display-entity` | 同上 | DisplayNameとServiceNameなし |
 | `ui-consumer-logo-localized` | `IIP-MD05-f9-idp-01` | 言語なしの既定ロゴと英語ロゴ |
-| `ui-consumer-logo-fallback` | 同上 | 同じ既定ロゴとフランス語ロゴ |
+| `ui-consumer-logo-fallback` | 同上 | 同じ既定ロゴと日本語ロゴ（初期実装のフランス語から修正。下記参照） |
 
 UIInfoはSPSSODescriptorのExtensionsに配置する。ServiceNameを含むAttributeConsumingServiceには、スキーマ必須のRequestedAttributeを入れる。ロゴ比較では画像本体を変えず、ローカライズ候補の言語だけを変える。固定したdata SVGは外部通信・スクリプトを含まない。
 
@@ -65,6 +65,18 @@ UIInfoはSPSSODescriptorのExtensionsに配置する。ServiceNameを含むAttri
 <!--g1-literal--> 新しい実測Runは`run_NHWX1F64WMGT7BMKZG5BQ7QTD2`。証拠は`build/acceptance/reference-20260918/shibboleth-ui-consumer-correlated/`。5条件で相関が成立し、各要求のAccept-Languageは`en-US`。HTMLルートのlangは記録可能な値がなくnullだった。観測された表示候補は前回と同じで、フォールバックの未解決条件も変わらない。
 
 <!--g1-literal--> この追加バッチの操作は設定書込7回・一時ファイル削除1回・Resolver再読込6回・ブラウザ起動5回・Run/preflight各1回。認証情報投入・SSO完了・本人操作・コンテナ変更は0回。設定完全復元済み。機能テストの小刻みな再実行は行わず、実証と証拠結合を実施した。判定の正式採用前に負の対照を含む統合検証が必要。
+
+### フォールバック入力の修正と切替実証
+
+稼働製品の`RelyingPartyUIContext`を同梱jarのbytecodeで確認したところ、ロゴ選択はブラウザ言語、設定済み代替言語、言語なしロゴの順で探索していた。参照製品のidp.propertiesには`idp.ui.fallbackLanguages=en,fr,de`がある。初期のフランス語fixtureは「優先・代替言語が利用できない」条件ではなく、これまでの観測から製品違反を確定できなかった原因はSuiteの入力条件にあった。
+
+fixtureの言語を代替言語リストに含まれない日本語へ変更した。製品の言語設定は変更していない。ドライバーは事前に代替言語を読み、fixtureとブラウザ優先言語との衝突を検査する。設定値が曖昧な場合や対応外の書式では開始を拒否し、終了時にも設定ファイル全体の不変を確認する。
+
+新Run `run_GNBRVD9WSNFGHMXZEFN4BAH6NR`の`shibboleth-ui-consumer-language-control/`では、英語候補あり→localized、日本語候補のみ→defaultを実画面で観測した。要求・fixtureの原本結合も成立している。`logo_comparison`は同じ画像・寸法、異なる言語条件、区別可能な候補、送信されたAccept-Language、選択結果の差を検査し、`difference-observed`を返した。過去のfr条件の原本は保持する。
+
+この診断結果は正式なCaseOutcomeではない。ローカル設定ファイルの読戻しと稼働コンテキストの設定値読出しは区別し、後者は未実施と記録する。正式判定へのアダプター接続、常に同じロゴを返す実装を排除する対照を含む統合検証が残る。表示名が両方ない場合の見出し抑止も未解決。
+
+<!--g1-literal--> 追加操作は設定書込7回・削除1回・Resolver再読込6回・ブラウザ起動5回・Run/preflight各1回。言語設定書込・製品再起動・認証情報投入・本人操作は0回。原本の完全復元を確認済み。Suiteイメージbuild1回、Suite／転送コンテナ再作成各1回。稼働中の`samlscope:reference-ui-language-v45`のdigestは`sha256:34c8e0d536e755b867973c4da15cb3f4b0c48bb8532ca669b88750e618794d13`。SAMLモジュールのみ更新し、APIの別件変更は含めない。コンパイル・G1生成整合・構造検査成功。機能テストは統合バッチ待ち、未検証467観測は維持。
 
 <!--g1-literal--> コンパイルは成功。追加した2テストの実行は次の統合バッチまで保留し、成功扱いにしていない。ユーザー指定に従い、小さな追加のたびに機能テストを再実行しない。G1生成確認と構造検査は変更ごとの必須確認として実行する。
 

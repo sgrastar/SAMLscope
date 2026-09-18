@@ -15,6 +15,50 @@ CONDITIONS = ['ui-consumer-display-all', 'ui-consumer-display-service', 'ui-cons
               'ui-consumer-logo-localized', 'ui-consumer-logo-fallback']
 
 
+def logo_comparison(folder, bound, restoration):
+    """Diagnostic comparison only; native runtime setting proof and formal controls remain separate."""
+    path = folder / 'ui-language-preparation.json'
+    if not path.exists():
+        return dict(status='not-observed', reason='native-language-preparation-missing')
+    language = json.loads(path.read_text())
+    if not restoration.get('language_settings_unchanged'):
+        return dict(status='not-observed', reason='native-language-configuration-changed')
+    preferred = language['preferred_language'].split('-')[0].lower()
+    fallback = {value.split('-')[0].lower() for value in language['fallback_languages']}
+    observed = {row['condition']: row for row in bound}
+    inputs = []
+    for condition in ['ui-consumer-logo-localized', 'ui-consumer-logo-fallback']:
+        root = ET.fromstring((folder / condition / 'fixture.xml').read_bytes())
+        info = root.findall('./{' + MD + '}SPSSODescriptor/{' + MD + '}Extensions/'
+                            '{urn:oasis:names:tc:SAML:metadata:ui}UIInfo')
+        if len(info) != 1:
+            return dict(status='not-observed', reason='ui-input-ambiguous')
+        logos = info[0].findall('{urn:oasis:names:tc:SAML:metadata:ui}Logo')
+        default = [logo for logo in logos if '{http://www.w3.org/XML/1998/namespace}lang' not in logo.attrib]
+        localized = [logo for logo in logos if '{http://www.w3.org/XML/1998/namespace}lang' in logo.attrib]
+        if len(logos) != 2 or len(default) != 1 or len(localized) != 1:
+            return dict(status='not-observed', reason='logo-candidates-ambiguous')
+        inputs.append((default[0], localized[0]))
+    for position in [0, 1]:
+        left, right = inputs[0][position], inputs[1][position]
+        attrs = lambda node: {k: v for k, v in node.attrib.items() if k != '{http://www.w3.org/XML/1998/namespace}lang'}
+        if left.text != right.text or attrs(left) != attrs(right):
+            return dict(status='not-observed', reason='logo-inputs-not-held-fixed')
+    if inputs[0][0].text == inputs[0][1].text:
+        return dict(status='not-observed', reason='logo-controls-indistinguishable')
+    languages = [pair[1].get('{http://www.w3.org/XML/1998/namespace}lang').split('-')[0].lower() for pair in inputs]
+    if languages[0] != preferred or languages[1] in fallback | {preferred}:
+        return dict(status='not-observed', reason='logo-language-condition-unmet')
+    for condition, selected in [('ui-consumer-logo-localized', 'localized'), ('ui-consumer-logo-fallback', 'default')]:
+        row = observed[condition]
+        if row['accept_language'] != language['preferred_language'] or row['status'] != 'observed':
+            return dict(status='not-observed', reason='logo-browser-observation-unavailable')
+        if row['selected_candidate'] != selected:
+            return dict(status='difference-not-observed', reason='logo-selection-difference-unconfirmed')
+    return dict(status='difference-observed', preparation_sha256=SHA(path.read_bytes()),
+        native_runtime_setting_verified=language['runtime_effective_setting_verified'], verdict_adopted=False)
+
+
 def bind(folder):
     def read(name):
         return json.loads((folder / name).read_text())
@@ -108,7 +152,8 @@ def bind(folder):
             reason=observation.get('reason'), accept_language=browser['accept_language'],
             document_language=observation.get('document_language')))
     return dict(schema='samlscope-ui-evidence-binding-v1', run=run, originals_bound=True,
-        native_readback_bound=True, native_receipt_trust='local-adapter', verdict_adopted=False, observations=bound)
+        native_readback_bound=True, native_receipt_trust='local-adapter', verdict_adopted=False, observations=bound,
+        logo_comparison=logo_comparison(folder, bound, restoration))
 
 
 if __name__ == '__main__':

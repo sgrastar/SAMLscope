@@ -29,6 +29,17 @@ def main():
     out.mkdir(parents=True, exist_ok=False)
     config_path = '/opt/reference-idp/conf/metadata-providers.xml'
     original = docker('cat', config_path)
+    properties = docker('cat', '/opt/reference-idp/conf/idp.properties')
+    fallback_lines = [line.split('=', 1)[1].strip() for line in properties.decode().splitlines()
+                      if line.strip().startswith('idp.ui.fallbackLanguages=')]
+    if len(fallback_lines) != 1:
+        raise ValueError('Fallback language configuration must be explicitly identified')
+    fallback_languages = [value.strip() for value in fallback_lines[0].split(',')]
+    if any(not re.fullmatch(r'[a-zA-Z]{2,8}(?:-[a-zA-Z0-9]{1,8})*', value) for value in fallback_languages):
+        raise ValueError('Unsupported fallback language configuration')
+    save(out / 'ui-language-preparation.json', dict(properties_sha256=SHA(properties),
+        fallback_languages=fallback_languages, preferred_language='en-US',
+        provenance='native-idp-properties-readback', runtime_effective_setting_verified=False))
     created = api('/api/plans', dict(name='Shibboleth UI consumer observation', profile='metadata_idp',
         targetKind='IDP', targetEntityId='http://localhost:18280/idp/shibboleth', metadataSourceKind='URL',
         metadataSourceLocation='http://samlscope-reference-shibboleth:8080/idp/shibboleth',
@@ -86,6 +97,12 @@ def main():
                 raw = response.read()
             fixture = folder / 'fixture.xml'
             fixture.write_bytes(raw)
+            if variant == 'ui-consumer-logo-fallback':
+                advertised = [logo.get('{http://www.w3.org/XML/1998/namespace}lang') for logo in
+                    ET.fromstring(raw).findall('.//{urn:oasis:names:tc:SAML:metadata:ui}Logo')]
+                allowed = {value.split('-')[0].lower() for value in fallback_languages + ['en-US']}
+                if any(language and language.split('-')[0].lower() in allowed for language in advertised):
+                    raise ValueError('Fallback fixture overlaps the native configured preferred languages')
             temporary_written = True
             write(temporary, raw, variant)
             if not changed:
@@ -134,9 +151,11 @@ def main():
             docker('rm', '--', temporary)
         removed = not docker('sh', '-c', 'if test -e ' + temporary + '; then echo exists; fi').strip()
         restored = not failures and removed and docker('cat', config_path) == original
+        language_settings_unchanged = docker('cat', '/opt/reference-idp/conf/idp.properties') == properties
         save(out / 'operations.json', dict(run=run, operations=operations, restored=restored, verdict_adopted=False))
         save(out / 'restoration.json', dict(restored=restored, original_sha256=SHA(original),
-            final_sha256=SHA(docker('cat', config_path)), temporary_removed=removed, failures=failures))
+            final_sha256=SHA(docker('cat', config_path)), temporary_removed=removed, failures=failures,
+            language_settings_unchanged=language_settings_unchanged))
         transcript = api('/api/runs/' + run + '/transcript')
         save(out / 'transcript.json', transcript)
         manifest = []
@@ -159,6 +178,8 @@ def main():
         save(out / 'evaluation-status.json', dict(evaluation_started=False, verdict_adopted=False))
         if not restored:
             raise RuntimeError('Restoration failed')
+        if not language_settings_unchanged:
+            raise RuntimeError('Concurrent language configuration change; evidence adoption blocked')
     print('Run', run, 'restored', restored, '; no verdict assigned')
 
 

@@ -34,7 +34,7 @@ final class MetadataUiConsumerFixtures {
                 // A no-language candidate coexists with a localized candidate in both fixtures.
                 // The browser adapter must prove its preferred language, never infer it from this label.
                 logo(doc, info, null, "DEFAULT", "#1d4ed8");
-                logo(doc, info, variant == MetadataService.Variant.UI_CONSUMER_LOGO_LOCALIZED ? "en" : "fr",
+                logo(doc, info, variant == MetadataService.Variant.UI_CONSUMER_LOGO_LOCALIZED ? "en" : "ja",
                         "LOCALIZED", "#b45309");
             }
             default -> throw new IllegalArgumentException("Unknown UI consumer fixture");
