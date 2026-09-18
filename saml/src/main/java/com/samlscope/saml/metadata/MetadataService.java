@@ -43,6 +43,11 @@ public final class MetadataService {
     public static final String SOAP = "urn:oasis:names:tc:SAML:2.0:bindings:SOAP";
     public static final String PAOS = "urn:oasis:names:tc:SAML:2.0:bindings:PAOS";
     private static final List<Variant> PRELOADED_CAMPAIGN_VARIANTS = List.of(
+            Variant.UI_CONSUMER_DISPLAY_ALL,
+            Variant.UI_CONSUMER_DISPLAY_SERVICE,
+            Variant.UI_CONSUMER_DISPLAY_ENTITY,
+            Variant.UI_CONSUMER_LOGO_LOCALIZED,
+            Variant.UI_CONSUMER_LOGO_FALLBACK,
             Variant.ATTRIBUTE_POLICY_ENTITY_PRESENT,
             Variant.ATTRIBUTE_POLICY_ENTITY_ABSENT,
             Variant.ATTRIBUTE_POLICY_REQUESTED_REQUIRED,
@@ -281,6 +286,7 @@ public final class MetadataService {
         root = MetadataExtensionAttributeFixtures.apply(document, root, variant);
         root = MetadataExtensionPlacementFixtures.apply(document, root, variant);
         root = MetadataAttributePolicyFixtures.apply(document, root, variant);
+        root = MetadataUiConsumerFixtures.apply(document, root, variant);
         root = MetadataAlgorithmFixtures.apply(document, root, variant);
         root = MetadataEncryptionAlgorithmFixtures.apply(document, root, variant);
         applyValidityFixture(root, variant);
@@ -782,6 +788,11 @@ public final class MetadataService {
         ENTITY_CACHE_DURATION("entity-cache-duration"),
         ENTITIES_CACHE_DURATION("entities-cache-duration"),
         ENTITIES_VALID_UNTIL("entities-valid-until"),
+        UI_CONSUMER_DISPLAY_ALL("ui-consumer-display-all"),
+        UI_CONSUMER_DISPLAY_SERVICE("ui-consumer-display-service"),
+        UI_CONSUMER_DISPLAY_ENTITY("ui-consumer-display-entity"),
+        UI_CONSUMER_LOGO_LOCALIZED("ui-consumer-logo-localized"),
+        UI_CONSUMER_LOGO_FALLBACK("ui-consumer-logo-fallback"),
         ATTRIBUTE_POLICY_ENTITY_PRESENT("attribute-policy-entity-present"),
         ATTRIBUTE_POLICY_ENTITY_ABSENT("attribute-policy-entity-absent"),
         ATTRIBUTE_POLICY_REQUESTED_REQUIRED("attribute-policy-requested-required"),
