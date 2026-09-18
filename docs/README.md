@@ -181,3 +181,5 @@ not by differences in reference-implementation results ([00 §5](00-concept.md))
 - [必要なSPだけの事前取込とSimpleSAMLphp属性比較](62-scoped-preloaded-campaigns.md)
 
 - [KeycloakのSP別属性解放の実証](63-keycloak-relying-party-attributes.md)
+
+- [NameID省略の証拠検査と比較処理](64-nameid-omission-evidence.md)
