@@ -14,6 +14,24 @@ import com.samlscope.saml.normal.SecureXml;
 class MetadataAttributePolicyFixturesTest {
     @TempDir java.nio.file.Path directory;
 
+    @Test void scopedAggregateContainsOnlyRequestedPeerIdentities() {
+        var service = new MetadataService(URI.create("https://suite.example"),
+                new FilePlanKeyStore(directory, Clock.systemUTC()), new XmlSigner(), Clock.systemUTC());
+        var plan = SamlTestFixtures.idpPlan();
+        var selected = java.util.List.of(MetadataService.Variant.ATTRIBUTE_POLICY_ENTITY_ABSENT,
+                MetadataService.Variant.ATTRIBUTE_POLICY_REQUESTED_ABSENT);
+        var root = SecureXml.parse(service.generatePreloadedCampaign(plan, "run_subset", selected)).getDocumentElement();
+        var entities = root.getElementsByTagNameNS(MetadataService.MD, "EntityDescriptor");
+        assertEquals(2, entities.getLength());
+        for (int index = 0; index < entities.getLength(); index++) {
+            assertEquals(service.preloadedEntityId(plan, selected.get(index)), ((Element)entities.item(index)).getAttribute("entityID"));
+        }
+        assertEquals(0, root.getElementsByTagNameNS("urn:oasis:names:tc:SAML:metadata:ui", "UIInfo").getLength());
+        assertThrows(IllegalArgumentException.class, () -> service.generatePreloadedCampaign(plan, "run_subset", java.util.List.of()));
+        assertThrows(IllegalArgumentException.class, () -> service.generatePreloadedCampaign(plan, "run_subset",
+                java.util.List.of(MetadataService.Variant.UI_URL_LOGO_JAVASCRIPT)));
+    }
+
     @Test void metadataPolicyInputsDistinguishEveryApprovedCondition() {
         var service = new MetadataService(URI.create("https://suite.example"),
                 new FilePlanKeyStore(directory, Clock.systemUTC()), new XmlSigner(), Clock.systemUTC());

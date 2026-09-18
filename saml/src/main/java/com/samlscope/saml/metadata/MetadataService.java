@@ -189,6 +189,15 @@ public final class MetadataService {
      * the reason for rejection and therefore the case's detection power.
      */
     public byte[] generatePreloadedCampaign(TestPlan plan, String runId) {
+        return generatePreloadedCampaign(plan, runId, PRELOADED_CAMPAIGN_VARIANTS);
+    }
+
+    public byte[] generatePreloadedCampaign(TestPlan plan, String runId, List<Variant> variants) {
+        if (variants == null || variants.isEmpty() || variants.stream().anyMatch(java.util.Objects::isNull)
+                || new java.util.HashSet<>(variants).size() != variants.size()
+                || !PRELOADED_CAMPAIGN_VARIANTS.containsAll(variants)) {
+            throw new IllegalArgumentException("Invalid preloaded campaign subset");
+        }
         if (runId == null || runId.isBlank()) throw new IllegalArgumentException("runId is required");
         var document = SecureXml.newDocument();
         var root = element(document, MD, "md:EntitiesDescriptor");
@@ -199,7 +208,7 @@ public final class MetadataService {
                 clock.instant().plus(Duration.ofDays(14))));
         document.appendChild(root);
 
-        for (var variant : PRELOADED_CAMPAIGN_VARIANTS) {
+        for (var variant : variants) {
             var fixture = SecureXml.parse(generate(plan, variant, runId));
             var fixtureRoot = fixture.getDocumentElement();
             removeSignatures(fixtureRoot);

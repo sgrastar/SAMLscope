@@ -71,7 +71,7 @@ public final class MetadataLabService {
                 automaticContinueUrl(run.planId(), run.id(), lab, campaignIndex, campaign.size()),
                 preloadedUrl(run.planId(), run.id(), lab), preloadedDownloadUrl(run.planId(), run.id(), lab),
                 preloadedStartUrl(run.planId(), run.id(), lab),
-                preloadedVariants(), Boolean.TRUE.equals(lab.get(CAMPAIGN_FETCHED)));
+                mode == IngestionMode.PRELOADED_AGGREGATE ? campaign : preloadedVariants(), Boolean.TRUE.equals(lab.get(CAMPAIGN_FETCHED)));
     }
 
     public State select(String runId, String variantId) {
@@ -128,8 +128,16 @@ public final class MetadataLabService {
      * separately. Negative and document-wide fixtures deliberately remain outside the aggregate.
      */
     public State startPreloadedCampaign(String runId) {
+        return startPreloadedCampaign(runId, preloadedVariants());
+    }
+
+    public State startPreloadedCampaign(String runId, List<String> variants) {
         var run = requireRun(runId);
-        var variants = preloadedVariants();
+        if (variants == null || variants.isEmpty() || variants.stream().anyMatch(java.util.Objects::isNull)
+                || new java.util.HashSet<>(variants).size() != variants.size()
+                || !preloadedVariants().containsAll(variants)) {
+            throw new IllegalArgumentException("Invalid preloaded campaign subset");
+        }
         updateLab(run, Map.of(
                 SELECTED_VARIANT, selected(run.context()).id(),
                 INGESTION_MODE, IngestionMode.PRELOADED_AGGREGATE.name(),
@@ -267,28 +275,28 @@ public final class MetadataLabService {
         lab.put(CAMPAIGN_FETCHED, true);
         lab.put("last_fetched_at", clock.instant().toString());
         updateLab(access.run(), lab);
-        return preloadedVariants();
+        return campaignVariants(lab);
     }
 
     /** Authorizes generation before any expensive preloaded-fixture work is performed. */
     public List<String> authorizePreloadedFetch(
             String runId, String planId, String campaignToken) {
-        requirePreloadedAccess(runId, planId, campaignToken);
-        return preloadedVariants();
+        var access = requirePreloadedAccess(runId, planId, campaignToken);
+        return campaignVariants(labContext(access.run().context()));
     }
 
     /** Authorizes an operator download without claiming that the Target fetched the document. */
     public List<String> authorizePreloadedDownload(
             String runId, String planId, String campaignToken) {
-        requirePreloadedAccess(runId, planId, campaignToken);
-        return preloadedVariants();
+        var access = requirePreloadedAccess(runId, planId, campaignToken);
+        return campaignVariants(labContext(access.run().context()));
     }
 
     /** Resolves one browser-flow member without trusting URL or RelayState values on their own. */
     public PreloadedFlow requirePreloadedFlow(
             String runId, String planId, String campaignToken, int index) {
         var access = requirePreloadedAccess(runId, planId, campaignToken);
-        var variants = preloadedVariants();
+        var variants = campaignVariants(labContext(access.run().context()));
         if (index < 0 || index >= variants.size()) {
             throw new IllegalArgumentException("Preloaded campaign index is out of range");
         }

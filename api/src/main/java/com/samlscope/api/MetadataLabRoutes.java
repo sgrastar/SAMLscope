@@ -46,10 +46,17 @@ public final class MetadataLabRoutes {
                     ctx.pathParam("id"), values.stream().map(String.class::cast).toList(), delay));
         });
         javalin.routes.post("/api/runs/{id}/metadata-lab/preloaded", ctx -> {
-            if (!ctx.body().isBlank() && !"{}".equals(ctx.body().trim())) {
-                throw new IllegalArgumentException("Preloaded campaign body must be empty");
+            if (ctx.body().isBlank() || "{}".equals(ctx.body().trim())) {
+                ctx.json(lab.startPreloadedCampaign(ctx.pathParam("id")));
+                return;
             }
-            ctx.json(lab.startPreloadedCampaign(ctx.pathParam("id")));
+            var body = ctx.bodyAsClass(Map.class);
+            if (body == null || !body.keySet().equals(java.util.Set.of("variants"))
+                    || !(body.get("variants") instanceof java.util.List<?> values)
+                    || values.isEmpty() || values.stream().anyMatch(value -> !(value instanceof String))) {
+                throw new IllegalArgumentException("Preloaded body requires only a non-empty string variants list");
+            }
+            ctx.json(lab.startPreloadedCampaign(ctx.pathParam("id"), values.stream().map(String.class::cast).toList()));
         });
         javalin.routes.post("/api/runs/{id}/metadata-lab/manual-refresh", ctx -> {
             if (!ctx.body().isBlank() && !"{}".equals(ctx.body().trim())) {

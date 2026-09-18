@@ -27,6 +27,26 @@ class MetadataLabServiceTest {
     private static final Instant NOW = Instant.parse("2026-08-31T00:00:00Z");
 
     @Test
+    void preloadedSubsetScopesGenerationAndFlowAndInvalidatesOldToken() {
+        var service = fixture().service();
+        var selected = List.of("attribute-policy-entity-absent", "attribute-policy-requested-absent");
+        var first = service.startPreloadedCampaign("run", selected);
+        var token = query(first.preloadedMetadataUrl(), "preload");
+        assertEquals(selected, first.preloadedVariants());
+        assertEquals(selected, service.authorizePreloadedFetch("run", "plan", token));
+        assertEquals(selected, service.authorizePreloadedDownload("run", "plan", token));
+        assertEquals(selected, service.recordPreloadedFetch("run", "plan", token));
+        assertEquals(selected.get(1), service.requirePreloadedFlow("run", "plan", token, 1).variant().id());
+        assertEquals(false, service.requirePreloadedFlow("run", "plan", token, 1).hasNext());
+        assertThrows(IllegalArgumentException.class, () -> service.requirePreloadedFlow("run", "plan", token, 2));
+        assertThrows(IllegalArgumentException.class, () -> service.startPreloadedCampaign("run", List.of()));
+        assertThrows(IllegalArgumentException.class, () -> service.startPreloadedCampaign("run", List.of(selected.getFirst(), selected.getFirst())));
+        assertThrows(IllegalArgumentException.class, () -> service.startPreloadedCampaign("run", List.of("ui-url-logo-javascript")));
+        service.startPreloadedCampaign("run", List.of(selected.getLast()));
+        assertThrows(IllegalArgumentException.class, () -> service.authorizePreloadedFetch("run", "plan", token));
+    }
+
+    @Test
     void automaticPollingAdvancesOnlyAfterTheSelectedFixtureWasFetched() {
         var fixture = fixture();
         var service = fixture.service();

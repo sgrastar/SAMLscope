@@ -602,9 +602,9 @@ public final class SamlScopeApplication {
             var runId = requiredQuery(ctx, "run");
             var run = requireRun(runs, runId);
             var preload = requiredQuery(ctx, "preload");
-            metadataLab.authorizePreloadedFetch(run.id(), plan.id(), preload);
+            var scope = metadataLab.authorizePreloadedFetch(run.id(), plan.id(), preload);
             var payload = preloadedMetadataCache.getOrCompute(
-                    preloadedCacheKey(plan.id(), run.id()),
+                    preloadedCacheKey(plan.id(), run.id()) + ":" + preload,
                     () -> {
                         if (config.mode() == AppConfig.Mode.HOSTED) {
                             hostedRateLimiter.requireAllowedTogether(
@@ -619,7 +619,7 @@ public final class SamlScopeApplication {
                                             "preloaded-generation-global", "service", 60,
                                             Duration.ofHours(1)));
                         }
-                        return metadata.generatePreloadedCampaign(plan, run.id());
+                        return metadata.generatePreloadedCampaign(plan, run.id(), scope.stream().map(MetadataService.Variant::parse).toList());
                     });
             var variants = metadataLab.recordPreloadedFetch(
                     run.id(), plan.id(), preload);
@@ -644,7 +644,7 @@ public final class SamlScopeApplication {
             var variants = metadataLab.authorizePreloadedDownload(
                     run.id(), plan.id(), preload);
             var payload = preloadedMetadataCache.getOrCompute(
-                    preloadedCacheKey(plan.id(), run.id()),
+                    preloadedCacheKey(plan.id(), run.id()) + ":" + preload,
                     () -> {
                         if (config.mode() == AppConfig.Mode.HOSTED) {
                             hostedRateLimiter.requireAllowedTogether(
@@ -659,7 +659,7 @@ public final class SamlScopeApplication {
                                             "preloaded-generation-global", "service", 60,
                                             Duration.ofHours(1)));
                         }
-                        return metadata.generatePreloadedCampaign(plan, run.id());
+                        return metadata.generatePreloadedCampaign(plan, run.id(), variants.stream().map(MetadataService.Variant::parse).toList());
                     });
             var metadataFetch = transcript.record(new com.samlscope.core.transcript.TranscriptInput(
                     run.id(), com.samlscope.core.transcript.Direction.INBOUND, clock.instant(),

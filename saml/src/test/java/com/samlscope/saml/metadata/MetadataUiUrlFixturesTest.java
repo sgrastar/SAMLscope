@@ -21,7 +21,8 @@ class MetadataUiUrlFixturesTest {
         assertEquals(15, variants.size());
         var names = Map.of("logo", "Logo", "information", "InformationURL", "privacy", "PrivacyStatementURL");
         for (boolean polling : new boolean[]{false, true}) for (var variant : variants) {
-            assertTrue(MetadataService.preloadedCampaignVariants().contains(variant));
+            assertEquals(!variant.id().endsWith("-javascript") && !variant.id().endsWith("-file"),
+                    MetadataService.preloadedCampaignVariants().contains(variant));
             var plan = SamlTestFixtures.idpPlan();
             var raw = polling ? service.generatePolling(plan, variant, "run_ui_url") : service.generate(plan, variant, "run_ui_url");
             var root = SecureXml.parse(raw).getDocumentElement();
