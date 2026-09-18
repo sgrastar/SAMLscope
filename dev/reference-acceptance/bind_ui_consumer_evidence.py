@@ -59,6 +59,31 @@ def logo_comparison(folder, bound, restoration):
         native_runtime_setting_verified=language['runtime_effective_setting_verified'], verdict_adopted=False)
 
 
+
+def url_comparison(bound):
+    """Diagnostic matrix; DOM assignment is neither rendering nor product-wide nonuse."""
+    by_condition = {row['condition']: row for row in bound}
+    elements = []
+    for element in ['logo', 'information', 'privacy']:
+        observations = []
+        for scheme in ['http', 'https', 'data', 'javascript', 'file']:
+            row = by_condition['ui-url-' + element + '-' + scheme]
+            assignment = row.get('url_assignment') or {}
+            observations.append(dict(scheme=scheme, rendering=row['status'],
+                assignment=assignment.get('status', 'not-recorded'),
+                selector_scope=row.get('url_selector_scope', 'not-recorded'),
+                observation_sha256=row['observation_sha256']))
+        allowed = observations[:3]
+        forbidden = observations[3:]
+        positive = all(row['rendering'] == 'observed' and row['assignment'] == 'candidate-assigned' for row in allowed)
+        elements.append(dict(element=element, allowed_rendering_control_observed=positive,
+            forbidden_candidate_assigned=any(row['assignment'] == 'candidate-assigned' for row in forbidden),
+            forbidden_nodes_absent_at_sample=all(row['assignment'] == 'absent-at-sample' for row in forbidden),
+            reason='formal-consumer-oracle-unavailable' if positive else 'usable-positive-control-unavailable',
+            observations=observations))
+    return dict(status='diagnostic-only', reason='url-element-consumption-scope-unproven',
+                absence_is_nonuse_proof=False, verdict_adopted=False, elements=elements)
+
 def bind(folder, url_schemes=False):
     def read(name):
         return json.loads((folder / name).read_text())
@@ -111,6 +136,20 @@ def bind(folder, url_schemes=False):
                 raise ValueError('URL observation kind mismatch')
             if observation.get('page_anchor', {}).get('selected_candidate') != 'control' or observation['page_anchor']['status'] != 'observed':
                 raise ValueError('Target login page anchor unavailable')
+            assignment = observation.get('url_assignment')
+            if assignment is not None:
+                if assignment.get('nonuse_proven') is not False:
+                    raise ValueError('DOM assignment cannot prove nonuse')
+                if assignment['status'] not in {'unavailable', 'absent-at-sample', 'ambiguous', 'candidate-assigned', 'unrecognized-assignment'}:
+                    raise ValueError('Unknown URL assignment status')
+                if assignment['status'] == 'candidate-assigned' and assignment.get('selected_candidate') != 'probe':
+                    raise ValueError('Unexpected assigned candidate')
+                if assignment['status'] != 'unavailable':
+                    if datetime.fromisoformat(assignment['sampled_at']) < datetime.fromisoformat(observation['observed_at']):
+                        raise ValueError('URL assignment chronology mismatch')
+                expected_scope = 'native-logo-slot' if element == 'Logo' else 'candidate-matching-anchor'
+                if observation.get('url_selector_scope') != expected_scope:
+                    raise ValueError('Unknown native URL selector scope')
             if observation.get('url_absence_is_nonuse_proof') is not False:
                 raise ValueError('URL absence must remain diagnostic')
         if observation['run_id'] != run or observation['condition'] != condition or receipt['run'] != run:
@@ -169,11 +208,12 @@ def bind(folder, url_schemes=False):
             observation_sha256=SHA((folder / condition / 'browser-observation.json').read_bytes()),
             status=observation['status'], selected_candidate=observation.get('selected_candidate'),
             reason=observation.get('reason'), accept_language=browser['accept_language'],
-            document_language=observation.get('document_language')))
+            document_language=observation.get('document_language'),
+            **({'url_assignment': observation.get('url_assignment'),
+                'url_selector_scope': observation.get('url_selector_scope')} if url_schemes else {})))
     return dict(schema='samlscope-ui-evidence-binding-v1', run=run, originals_bound=True,
         native_readback_bound=True, native_receipt_trust='local-adapter', verdict_adopted=False, observations=bound,
-        **({'url_comparison': dict(status='diagnostic-only',
-            reason='url-element-consumption-scope-unproven', absence_is_nonuse_proof=False)} if url_schemes
+        **({'url_comparison': url_comparison(bound)} if url_schemes
            else {'logo_comparison': logo_comparison(folder, bound, restoration)}))
 
 

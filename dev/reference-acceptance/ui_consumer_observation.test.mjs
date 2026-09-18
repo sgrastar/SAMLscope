@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { chromium } from 'playwright';
-import { observeUiConsumer, saveUiConsumerObservation } from './ui_consumer_observation.mjs';
+import { observeUiConsumer, observeUiUrlConsumer, saveUiConsumerObservation } from './ui_consumer_observation.mjs';
 
 test('only a visible candidate on the bound product page is recorded', async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'samlscope-ui-observation-'));
@@ -67,6 +67,24 @@ test('only a visible candidate on the bound product page is recorded', async () 
     await page.setContent('<a id="link" href="javascript:void(0)" onclick="window.linkWasClicked=true">Fixture link</a>');
     assert.equal((await observeUiConsumer(page, linkOptions)).selected_candidate, 'probe');
     assert.equal(await page.evaluate(() => Boolean(window.linkWasClicked)), false);
+    const urlOptions = { ...logoOptions, candidates: { probe: 'javascript:void(0)' } };
+    await page.setContent('<img id="logo" src="javascript:void(0)"/>');
+    const assignedUnloaded = await observeUiUrlConsumer(page, urlOptions);
+    assert.equal(assignedUnloaded.status, 'not-observed');
+    assert.equal(assignedUnloaded.url_assignment.status, 'candidate-assigned');
+    assert.equal(assignedUnloaded.url_assignment.nonuse_proven, false);
+    await page.setContent('<img id="logo" hidden src="javascript:void(0)"/>');
+    assert.equal((await observeUiUrlConsumer(page, urlOptions)).url_assignment.status, 'candidate-assigned');
+    await page.setContent('<main/>');
+    assert.equal((await observeUiUrlConsumer(page, urlOptions)).url_assignment.status, 'absent-at-sample');
+    await page.setContent('<img id="logo"/><img id="logo"/>');
+    assert.equal((await observeUiUrlConsumer(page, urlOptions)).url_assignment.status, 'ambiguous');
+    await page.setContent('<img id="logo" src="credential-sentinel"/>');
+    const unknownUrl = await observeUiUrlConsumer(page, urlOptions);
+    assert.equal(unknownUrl.url_assignment.status, 'unrecognized-assignment');
+    assert.equal(JSON.stringify(unknownUrl).includes('credential-sentinel'), false);
+    await page.goto('http://product.test/admin');
+    assert.equal((await observeUiUrlConsumer(page, urlOptions)).url_assignment.status, 'unavailable');
     const recordPath = path.join(dir, 'observation.json');
     saveUiConsumerObservation(recordPath, good);
     assert.throws(() => saveUiConsumerObservation(recordPath, good), { code: 'EEXIST' });

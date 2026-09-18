@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import crypto from 'node:crypto';
 import { inflateRawSync } from 'node:zlib';
 import { createRequire } from 'node:module';
-import { observeUiConsumer, saveUiConsumerObservation } from '../reference-acceptance/ui_consumer_observation.mjs';
+import { observeUiConsumer, observeUiUrlConsumer, saveUiConsumerObservation } from '../reference-acceptance/ui_consumer_observation.mjs';
 
 const require = createRequire(import.meta.url);
 const { chromium } = require(process.env.SAMLSCOPE_PLAYWRIGHT_MODULE || 'playwright');
@@ -60,7 +60,8 @@ try {
       return !image || image.complete;
     }, null, { timeout: 15000 }).catch(() => {});
   }
-  const record = await observeUiConsumer(page, {
+  const observer = input.observation.condition.startsWith('ui-url-') ? observeUiUrlConsumer : observeUiConsumer;
+  const record = await observer(page, {
     ...input.observation, expectedOrigin: 'http://localhost:18280',
     expectedPath: loginPath, preferredLanguage: 'en-US',
     elementSelector: input.observation.kind === 'logo' ? 'img.service-logo'
@@ -75,6 +76,7 @@ try {
     });
     record.page_anchor = { status: anchor.status, reason: anchor.reason ?? null, selected_candidate: anchor.selected_candidate ?? null };
     record.url_absence_is_nonuse_proof = false;
+    record.url_selector_scope = input.observation.kind === 'logo' ? 'native-logo-slot' : 'candidate-matching-anchor';
   }
   const samples = await Promise.all(requestSamples);
   record.browser_request = samples.length === 1 ? samples[0] : { status: 'ambiguous-or-missing-request', count: samples.length };

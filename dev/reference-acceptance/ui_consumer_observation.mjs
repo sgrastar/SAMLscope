@@ -111,3 +111,43 @@ export function saveUiConsumerObservation(path, record) {
   // Never replace previously captured evidence with a newer observation.
   fs.writeFileSync(path, JSON.stringify(record, null, 2) + '\n', { flag: 'wx', mode: 0o600 });
 }
+
+/**
+ * Retain a bounded URL-assignment diagnostic independently of successful rendering.
+ * An unloaded or hidden image can still contain the supplied URL. Conversely, the
+ * absence of a matching node is not proof of product-wide nonuse or rejection.
+ * This does not navigate, click, execute a URL, or return arbitrary DOM attributes.
+ */
+export async function observeUiUrlConsumer(page, options) {
+  if (!['logo', 'link'].includes(options.kind)) throw new Error('URL observation requires image or link');
+  const record = await observeUiConsumer(page, options);
+  const assignment = { status: 'unavailable', nonuse_proven: false };
+  const expectedPage = () => {
+    const actual = new URL(page.url());
+    return actual.origin === options.expectedOrigin && actual.pathname === options.expectedPath;
+  };
+  try {
+    if (!expectedPage()) return { ...record, url_assignment: { ...assignment, reason: 'unexpected-product-page' } };
+    const locator = page.locator(options.elementSelector);
+    const count = await locator.count();
+    let sample;
+    if (count === 0) sample = { status: 'absent-at-sample', matched_nodes: 0 };
+    else if (count !== 1) sample = { status: 'ambiguous', matched_nodes: count };
+    else sample = await locator.evaluate((element, args) => {
+      const isImage = args.kind === 'logo';
+      if (!(isImage ? element instanceof HTMLImageElement : element instanceof HTMLAnchorElement)) {
+        return { status: 'unavailable', reason: 'unexpected-element-type' };
+      }
+      // Attribute assignment is deliberately separate from load/visibility/currentSrc.
+      const value = element.getAttribute(isImage ? 'src' : 'href');
+      const matches = args.entries.filter(([, candidate]) => candidate === value);
+      return matches.length === 1
+        ? { status: 'candidate-assigned', selected_candidate: matches[0][0], matched_nodes: 1 }
+        : { status: 'unrecognized-assignment', matched_nodes: 1 };
+    }, { kind: options.kind, entries: Object.entries(options.candidates) });
+    if (!expectedPage()) return { ...record, url_assignment: { ...assignment, reason: 'page-changed-during-observation' } };
+    return { ...record, url_assignment: { ...assignment, ...sample, sampled_at: new Date().toISOString() } };
+  } catch {
+    return { ...record, url_assignment: { ...assignment, reason: 'browser-observation-unavailable' } };
+  }
+}
