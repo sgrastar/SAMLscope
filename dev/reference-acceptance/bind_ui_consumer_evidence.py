@@ -59,7 +59,7 @@ def logo_comparison(folder, bound, restoration):
         native_runtime_setting_verified=language['runtime_effective_setting_verified'], verdict_adopted=False)
 
 
-def bind(folder):
+def bind(folder, url_schemes=False):
     def read(name):
         return json.loads((folder / name).read_text())
 
@@ -89,11 +89,30 @@ def bind(folder):
         originals[row['id']] = raw
     bound = []
     used_requests = set()
-    for condition in CONDITIONS:
+    conditions = (['ui-url-' + element + '-' + scheme
+        for element in ['logo', 'information', 'privacy']
+        for scheme in ['http', 'https', 'data', 'javascript', 'file']] if url_schemes else CONDITIONS)
+    for condition in conditions:
         observation = read(condition + '/browser-observation.json')
         receipt_raw = (folder / condition / 'native-import.json').read_bytes()
         receipt = json.loads(receipt_raw)
         fixture = (folder / condition / 'fixture.xml').read_bytes()
+        if url_schemes:
+            element = {'logo': 'Logo', 'information': 'InformationURL', 'privacy': 'PrivacyStatementURL'}[condition.split('-')[2]]
+            nodes = ET.fromstring(fixture).findall('./{' + MD + '}SPSSODescriptor/{' + MD + '}Extensions/'
+                '{urn:oasis:names:tc:SAML:metadata:ui}UIInfo/{urn:oasis:names:tc:SAML:metadata:ui}' + element)
+            supplied = read(condition + '/browser-input.json')['observation']
+            if len(nodes) != 1 or supplied['candidates'] != {'probe': nodes[0].text}:
+                raise ValueError('URL candidate differs from original fixture')
+            if not nodes[0].text.startswith(condition.split('-')[-1] + ':'):
+                raise ValueError('URL scheme differs from condition')
+            expected_kind = 'logo' if element == 'Logo' else 'link'
+            if observation['kind'] != expected_kind or supplied['kind'] != expected_kind:
+                raise ValueError('URL observation kind mismatch')
+            if observation.get('page_anchor', {}).get('selected_candidate') != 'control' or observation['page_anchor']['status'] != 'observed':
+                raise ValueError('Target login page anchor unavailable')
+            if observation.get('url_absence_is_nonuse_proof') is not False:
+                raise ValueError('URL absence must remain diagnostic')
         if observation['run_id'] != run or observation['condition'] != condition or receipt['run'] != run:
             raise ValueError('Observation Run/condition mismatch')
         if observation['fixture_sha256'] != SHA(fixture) or receipt['fixture_sha256'] != SHA(fixture):
@@ -153,14 +172,17 @@ def bind(folder):
             document_language=observation.get('document_language')))
     return dict(schema='samlscope-ui-evidence-binding-v1', run=run, originals_bound=True,
         native_readback_bound=True, native_receipt_trust='local-adapter', verdict_adopted=False, observations=bound,
-        logo_comparison=logo_comparison(folder, bound, restoration))
+        **({'url_comparison': dict(status='diagnostic-only',
+            reason='url-element-consumption-scope-unproven', absence_is_nonuse_proof=False)} if url_schemes
+           else {'logo_comparison': logo_comparison(folder, bound, restoration)}))
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--evidence', type=Path, required=True)
+    parser.add_argument('--url-schemes', action='store_true')
     args = parser.parse_args()
-    result = bind(args.evidence.resolve())
+    result = bind(args.evidence.resolve(), args.url_schemes)
     with (args.evidence / 'ui-evidence-binding.json').open('x') as output:
         json.dump(result, output, indent=2)
         output.write('\n')

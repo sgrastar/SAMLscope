@@ -24,6 +24,7 @@ SHA = lambda raw: hashlib.sha256(raw).hexdigest()
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output', type=Path, required=True)
+    parser.add_argument('--url-schemes', action='store_true', help='Observe each URL-bearing UI element and scheme')
     args = parser.parse_args()
     out = args.output.resolve()
     out.mkdir(parents=True, exist_ok=False)
@@ -84,7 +85,9 @@ def main():
         record['completed'] = True
 
     try:
-        for variant in VARIANTS:
+        variants = (['ui-url-' + element + '-' + scheme for element in ['logo', 'information', 'privacy']
+                     for scheme in ['http', 'https', 'data', 'javascript', 'file']] if args.url_schemes else VARIANTS)
+        for variant in variants:
             folder = out / variant
             folder.mkdir()
             state = api('/api/runs/' + run + '/metadata-lab/automatic-polling', dict(variants=[variant], pollingDelaySeconds=0))
@@ -117,7 +120,13 @@ def main():
                 product_consumption_verified=False))
             tree = ET.fromstring(raw)
             kind = 'logo' if '-logo-' in variant else 'display-name'
-            if kind == 'logo':
+            if args.url_schemes:
+                element = {'logo': 'Logo', 'information': 'InformationURL', 'privacy': 'PrivacyStatementURL'}[variant.split('-')[2]]
+                urls = tree.findall('.//{urn:oasis:names:tc:SAML:metadata:ui}' + element)
+                if len(urls) != 1: raise ValueError('Ambiguous UI URL fixture')
+                kind = 'logo' if element == 'Logo' else 'link'
+                candidates = {'probe': urls[0].text}
+            elif kind == 'logo':
                 logos = tree.findall('.//{urn:oasis:names:tc:SAML:metadata:ui}Logo')
                 candidates = {('localized' if logo.get('{http://www.w3.org/XML/1998/namespace}lang') else 'default'): logo.text for logo in logos}
             else:

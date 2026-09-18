@@ -53,11 +53,29 @@ try {
   if (!['/idp/profile/SAML2/Redirect/SSO', '/idp/profile/SAML2/POST/SSO'].includes(loginPath)) {
     throw new Error('Unexpected native SSO endpoint');
   }
+  if (input.observation.kind === 'logo') {
+    // Operational wait only. Timeout remains unobserved, never a product violation.
+    await page.waitForFunction(() => {
+      const image = document.querySelector('img.service-logo');
+      return !image || image.complete;
+    }, null, { timeout: 15000 }).catch(() => {});
+  }
   const record = await observeUiConsumer(page, {
     ...input.observation, expectedOrigin: 'http://localhost:18280',
     expectedPath: loginPath, preferredLanguage: 'en-US',
-    elementSelector: input.observation.kind === 'logo' ? 'img.service-logo' : 'header h1',
+    elementSelector: input.observation.kind === 'logo' ? 'img.service-logo'
+      : input.observation.kind === 'link' ? `a[href=${JSON.stringify(input.observation.candidates.probe)}]` : 'header h1',
   });
+  if (input.observation.condition.startsWith('ui-url-')) {
+    // An absent URL element is only a diagnostic. First establish that the correct SP login UI rendered.
+    const anchor = await observeUiConsumer(page, {
+      ...input.observation, expectedOrigin: 'http://localhost:18280', expectedPath: loginPath,
+      preferredLanguage: 'en-US', elementSelector: 'header h1', kind: 'display-name',
+      candidates: { control: 'Login to SAMLscope URL policy control' },
+    });
+    record.page_anchor = { status: anchor.status, reason: anchor.reason ?? null, selected_candidate: anchor.selected_candidate ?? null };
+    record.url_absence_is_nonuse_proof = false;
+  }
   const samples = await Promise.all(requestSamples);
   record.browser_request = samples.length === 1 ? samples[0] : { status: 'ambiguous-or-missing-request', count: samples.length };
   record.fixture_certificate_pin = assetSpki ?? null;
