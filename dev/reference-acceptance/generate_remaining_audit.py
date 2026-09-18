@@ -597,6 +597,9 @@ def render(root,definitions,output):
         if row['product']=='shibboleth' and row['profile']=='browser_sso_idp' and row['case'] in {'IIP-IDP03-a-idp-01','IIP-IDP04-a-idp-01','IIP-IDP04-b-idp-01'}:
             from verify_attribute_policy_acceptance import verify as verify_attribute_policy
             selected=verify_attribute_policy(root.parent.parent/'reference-20260918')
+        if row['product']=='shibboleth' and row['profile']=='metadata_idp' and row['case']=='IIP-MD05-f9-idp-01':
+            from verify_ui_logo_acceptance import verify as verify_ui_logo
+            selected=verify_ui_logo(root.parent.parent/'reference-20260918')
         if selected is not None:
             path, selected_cases = selected
             raw=path.read_bytes(); result=json.loads(raw); case=selected_cases[row['case']]

@@ -4,13 +4,13 @@
 
 | 再試験前 | 確定（Success / Failed / Warning） | 現在の未検証 | 未検証の異なるケースID |
 |---:|---:|---:|---:|
-| 594 | 127 | 467 | 157 |
+| 594 | 128 | 466 | 157 |
 
 ## 内訳
 
 | 原因・現在の経路 | 件数 | 次に扱う範囲 |
 |---|---:|---|
-| ブラウザ完了後の自動判定がない | 15 | Suite実装 |
+| ブラウザ完了後の自動判定がない | 14 | Suite実装 |
 | 一部の試験条件しか実装されていない | 59 | Suite実装 |
 | 設定後の証拠確認・自己申告経路 | 161 | 設定・証拠 |
 | 自己申告が無効 | 75 | 設定・証拠 |
@@ -140,6 +140,7 @@ approved variant全体の入力生成と観測を実装する。追加ログイ�
 | `IIP-MD05-eb-idp-01` | Failed (Product) | Success | Failed (Product) |
 | `IIP-MD05-f7-idp-01` | Warning | Warning | Warning |
 | `IIP-MD05-f8-idp-01` | Warning | Warning | Warning |
+| `IIP-MD05-f9-idp-01` | Not verified（今回の再試験対象外） | Success | Not verified（今回の再試験対象外） |
 | `IIP-MD05-fa-idp-01` | Warning | Warning | Warning |
 | `IIP-MD05-fi-idp-01` | Warning | Warning | Warning |
 | `IIP-MD05-g-idp-01` | Success | Not verified（今回の再試験対象外） | Success |
@@ -258,7 +259,7 @@ approved variant全体の入力生成と観測を実装する。追加ログイ�
 | `IIP-MD05-ea-idp-01` | metadata_idp | — | metadata_idp | 実行したが確定できない |
 | `IIP-MD05-f-idp-01` | metadata_idp | metadata_idp | metadata_idp | 設定後の証拠確認・自己申告経路 |
 | `IIP-MD05-f5-idp-01` | metadata_idp | metadata_idp | metadata_idp | 一部の試験条件しか実装されていない |
-| `IIP-MD05-f9-idp-01` | metadata_idp | metadata_idp | metadata_idp | ブラウザ完了後の自動判定がない |
+| `IIP-MD05-f9-idp-01` | metadata_idp | — | metadata_idp | ブラウザ完了後の自動判定がない |
 | `IIP-MD05-fb-idp-01` | metadata_idp | metadata_idp | metadata_idp | ブラウザ完了後の自動判定がない |
 | `IIP-MD05-ff-idp-01` | metadata_idp | metadata_idp | metadata_idp | 設定後の証拠確認・自己申告経路 |
 | `IIP-MD05-fg-idp-01` | metadata_idp | metadata_idp | metadata_idp | 一部の試験条件しか実装されていない |
@@ -331,7 +332,7 @@ Verdictは変更せず、未検証の理由だけを分類します。feature-ab
 | `operator-attestation-available` | 77 | 自己申告または運用者証言で確認可能 | 運用者証言（ケースごとに1回答）で確認可能。現在のPlanは自己申告無効 |
 | `evidence-form-mismatch` | 46 | 承認済み判定条件が要求する証拠形式と製品応答が不一致 | 証拠形式が承認済み条件と一致しないためNot verified（要件解釈の再確認が必要） |
 | `role-inapplicable` | 24 | ロール上、対象が消費しない成果物を要求するvariant | IdPロールでは消費されないvariantのため実行対象外（対象外であることは判定済み） |
-| `feature-absent` | 12 | 製品が機能として公開していない（公開メタデータ等から確認済み） | この製品は機能として提供していないため、この試験は実行できません（skipped相当） |
+| `feature-absent` | 11 | 製品が機能として公開していない（公開メタデータ等から確認済み） | この製品は機能として提供していないため、この試験は実行できません（skipped相当） |
 
 ### feature-absent
 

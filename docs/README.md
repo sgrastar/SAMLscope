@@ -171,3 +171,5 @@ not by differences in reference-implementation results ([00 §5](00-concept.md))
 - [SimpleSAMLphpの属性公開経路の事前診断](57-simplesamlphp-attribute-policy-probe.md)
 
 - [UIメタデータ消費の比較入力と残る観測経路](58-ui-consumer-fixtures.md)
+
+- [UIロゴ言語選択の正式判定](59-ui-logo-acceptance.md)
