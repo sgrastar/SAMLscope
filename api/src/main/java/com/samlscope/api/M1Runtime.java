@@ -370,6 +370,11 @@ final class M1Runtime {
                         .map(plan -> pollingMetadata.credentialsForVariant(plan,
                                 com.samlscope.saml.metadata.MetadataService.Variant.parse(variant))),
                 config.dataDirectory().resolve("relying-party-attribute-preparations"));
+        m1Config = ApprovedConfigCaseRegistry.withNameIdOmissionPreparation(m1Config, transcriptContent, runMetadata,
+                (runId, variant) -> runs.find(runId).flatMap(run -> plans.find(run.planId()))
+                        .map(plan -> pollingMetadata.credentialsForVariant(plan,
+                                com.samlscope.saml.metadata.MetadataService.Variant.parse(variant))),
+                config.dataDirectory().resolve("nameid-omission-preparations"));
         m1Browser = ApprovedBrowserCaseRegistry.withMetadataEncryption(m1Browser,transcriptContent,runMetadata,
                 (runId, variant) -> runs.find(runId).flatMap(run -> plans.find(run.planId()))
                         .map(plan -> pollingMetadata.credentialsForPollingVariant(plan,
