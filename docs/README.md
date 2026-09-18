@@ -159,3 +159,5 @@ not by differences in reference-implementation results ([00 §5](00-concept.md))
 - [暗号方式生成能力の条件別証拠とMGF省略の監査](51-producer-algorithm-metadata-evidence.md)
 
 - [SimpleSAMLphpの共通部分選択の観測と設定復元の効率化](52-simplesamlphp-intersection-and-batch-restore.md)
+
+- [属性名・NameFormat生成能力の実証](53-attribute-name-capability.md)

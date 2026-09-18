@@ -117,7 +117,7 @@ final class MetadataAlgorithmEvidence {
         return new MetadataAlgorithmSelection.Methods(ext.isEmpty()?List.of():children(ext.getFirst(),ALG,"DigestMethod").stream().map(e->e.getAttribute("Algorithm")).toList(),
                 ext.isEmpty()?List.of():children(ext.getFirst(),ALG,"SigningMethod").stream().map(e->e.getAttribute("Algorithm")).toList());
     }
-    private static List<X509Certificate> signingKeys(Element target) throws Exception {
+    static List<X509Certificate> signingKeys(Element target) throws Exception {
         var result=new ArrayList<X509Certificate>();var factory=CertificateFactory.getInstance("X.509");
         for(var role:children(target,MD,"IDPSSODescriptor")) {
             if(!Arrays.asList(role.getAttribute("protocolSupportEnumeration").split("\\s+")).contains(P))continue;

@@ -100,6 +100,9 @@ public final class ApprovedConfigCaseRegistry {
                 configurationPrompt(definition),
                 CONFIG_TTL,
                 definition.configurationFailureSemantics());
+        if (targetMetadata != null && transcriptContent != null && decryptionKeys != null && AttributeNameConfigurationTestCase.ID.equals(definition.id())) {
+            return new AttributeNameConfigurationTestCase(fallback,transcriptContent,targetMetadata,decryptionKeys);
+        }
         if (targetMetadata != null && transcriptContent != null && MetadataAlgorithmConfigurationTestCase.supports(definition.id())) {
             return new MetadataAlgorithmConfigurationTestCase(fallback, transcriptContent, targetMetadata, metadataKeys);
         }

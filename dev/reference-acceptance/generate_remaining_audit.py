@@ -591,6 +591,9 @@ def render(root,definitions,output):
         if row['product']=='simplesamlphp' and row['profile']=='metadata_idp' and row['case']=='IIP-MD05-e8-idp-01':
             from verify_simplesamlphp_intersection import verify as verify_ssp_intersection
             selected=verify_ssp_intersection(root.parent.parent/'reference-20260918')
+        if row['product'] in {'simplesamlphp','shibboleth'} and row['profile']=='browser_sso_idp' and row['case']=='IIP-IDP01-a-idp-01':
+            from verify_attribute_name_capability import verify as verify_attribute_names
+            selected=verify_attribute_names(root.parent.parent/'reference-20260918',row['product'])
         if selected is not None:
             path, selected_cases = selected
             raw=path.read_bytes(); result=json.loads(raw); case=selected_cases[row['case']]
