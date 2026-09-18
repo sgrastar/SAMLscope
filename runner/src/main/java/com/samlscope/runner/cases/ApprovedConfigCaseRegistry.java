@@ -22,6 +22,16 @@ public final class ApprovedConfigCaseRegistry {
 
     private ApprovedConfigCaseRegistry() {}
 
+    public static TestCaseRegistry withAttributePolicyPreparation(TestCaseRegistry registry,
+            TranscriptContentReader content, Function<String, byte[]> metadata,
+            java.util.function.BiFunction<String,String,java.util.Optional<com.samlscope.saml.crypto.PlanCredentials>> keys,
+            java.nio.file.Path directory) {
+        return new TestCaseRegistry(registry.all().stream().map(testCase ->
+                AttributePolicyConfigurationTestCase.supports(testCase.id())
+                        ? (TestCase)new AttributePolicyConfigurationTestCase(testCase, content, metadata, keys, directory)
+                        : testCase).toList());
+    }
+
     public static TestCaseRegistry withMultipleDecryptionKeys(TestCaseRegistry registry,
             Function<String,com.samlscope.runner.SupplementalDecryptionKeyService.KeySet> keys,
             java.util.function.BiFunction<String,String,java.util.Optional<com.samlscope.core.caseexec.CaseExecution>> executions) {

@@ -360,6 +360,11 @@ final class M1Runtime {
                 null, null, null, null, null, runMetadata);
         var pollingMetadata = new com.samlscope.saml.metadata.MetadataService(config.peerBaseUrl(), keys,
                 new com.samlscope.saml.crypto.XmlSigner(), clock);
+        m1Config = ApprovedConfigCaseRegistry.withAttributePolicyPreparation(m1Config, transcriptContent, runMetadata,
+                (runId, variant) -> runs.find(runId).flatMap(run -> plans.find(run.planId()))
+                        .map(plan -> pollingMetadata.credentialsForPollingVariant(plan,
+                                com.samlscope.saml.metadata.MetadataService.Variant.parse(variant))),
+                config.dataDirectory().resolve("attribute-policy-preparations"));
         m1Browser = ApprovedBrowserCaseRegistry.withMetadataEncryption(m1Browser,transcriptContent,runMetadata,
                 (runId, variant) -> runs.find(runId).flatMap(run -> plans.find(run.planId()))
                         .map(plan -> pollingMetadata.credentialsForPollingVariant(plan,
