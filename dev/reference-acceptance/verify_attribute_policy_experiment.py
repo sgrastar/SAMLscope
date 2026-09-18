@@ -97,9 +97,25 @@ def verify(folder):
     assert len(indexed_hashes) == 1 and response_order == sorted(response_order)
     assert len(set(response_order)) == len(response_order)
     assert all(o['metadata_write_skipped'] for o in observations[-2:])
+    production_observed = (folder / 'production-observation.json').exists()
+    if production_observed:
+        production = load('production-observation.json')
+        assert production['run'] == run and not production['issues']
+        assert production['result_sha256'] == digest(folder / 'result.json')
+        assert production['transcript_sha256'] == digest(folder / 'transcript.json')
+        assert production['same_attribute_input']
+        assert not production['authenticated_principal_verified'] and not production['verdict_adopted']
+        assert len(production['observations']) == len(EXPECTED)
+        for observed, protocol in zip(observations, production['observations']):
+            assert protocol['variant'] == observed['variant']
+            assert protocol['selector'] == ('' if observed['selector'] is None else str(observed['selector']))
+            assert protocol['metadata_sha256'] == observed['fixture_sha256']
+            assert set(protocol['markers']) == EXPECTED[observed['label']]
+            flow = load(observed['label'] + '/flow.json')
+            assert [e['reference'] for e in protocol['evidence']][-2:] == flow['positive_exchange']['transcript_ids']
     return dict(run=run, recorded_conditions=len(EXPECTED),
                 candidate_cases=['IIP-IDP03-a-idp-01', 'IIP-IDP04-a-idp-01', 'IIP-IDP04-b-idp-01'],
-                verdict_adopted=False, restored=True)
+                production_collector_observed=production_observed, verdict_adopted=False, restored=True)
 
 
 if __name__ == '__main__':
