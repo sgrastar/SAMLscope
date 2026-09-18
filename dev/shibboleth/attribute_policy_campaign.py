@@ -13,7 +13,7 @@ import urllib.request
 import xml.etree.ElementTree as ET
 
 from attribute_name_capability import docker, XSI
-from attribute_policy_preparation import snapshot, verify_readback
+from attribute_policy_preparation import snapshot, verify_readback, verify_policy_semantics
 REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO / 'dev/keycloak'))
 from import_metadata_batch import api, save, flow, BASE
@@ -122,6 +122,7 @@ def main():
     if docker('sh', '-c', 'if test -e ' + temporary + '; then echo exists; fi').strip():
         raise ValueError('Temporary metadata already exists')
     configured = policies(originals, BASE + '/p/' + plan, run, temporary)
+    verify_policy_semantics(snapshot(configured, run), run, BASE + '/p/' + plan, temporary)
     save(out / 'preparation.json', dict(run=run, entity_id=BASE + '/p/' + plan,
         policy=snapshot(configured, run), login_input_binding=login_input_binding,
         login_provenance='fixed-in-memory-driver-input', authenticated_principal_verified=False))
@@ -144,7 +145,9 @@ def main():
 
     def fixed_readback():
         actual = {n: docker('cat', p) for n, p in paths.items()}
-        return verify_readback(configured, actual, run)
+        readback = verify_readback(configured, actual, run)
+        verify_policy_semantics(readback['policy'], run, BASE + '/p/' + plan, temporary)
+        return readback
 
     indexed_hash = None
     try:

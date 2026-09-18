@@ -99,13 +99,19 @@ def verify(folder):
     assert all(o['metadata_write_skipped'] for o in observations[-2:])
     preparation_recorded = (folder / 'preparation.json').exists()
     if preparation_recorded:
+        sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'shibboleth'))
+        from attribute_policy_preparation import verify_policy_semantics
         preparation = load('preparation.json')
         assert preparation['run'] == run
+        plan_id = load('plan.json')['plan']['plan']['id']
+        entity = 'http://localhost:18080/p/' + plan_id
+        assert preparation['entity_id'] == entity
         assert preparation['login_provenance'] == 'fixed-in-memory-driver-input'
         assert not preparation['authenticated_principal_verified']
         binding = preparation['login_input_binding']
         assert len(binding) == 64 and all(c in '0123456789abcdef' for c in binding)
         policy = preparation['policy']
+        verify_policy_semantics(policy, run, entity, '/opt/reference-idp/metadata/attribute-policy-' + run + '.xml')
         assert policy['schema'] == 'samlscope-native-attribute-policy-v1'
         encoded = json.dumps(policy['nodes'], sort_keys=True, separators=(',', ':'), ensure_ascii=False).encode()
         assert hashlib.sha256(encoded).hexdigest() == policy['policy_sha256']

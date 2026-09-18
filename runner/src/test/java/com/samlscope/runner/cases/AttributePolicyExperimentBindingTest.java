@@ -49,7 +49,7 @@ class AttributePolicyExperimentBindingTest {
             exchanges.set(1, new ExchangePreparation(mutation.equals("condition") ? Condition.ENTITY_ABSENT : e.condition(),
                     mutation.equals("request") ? "missing" : mutation.equals("duplicate") ? "request-0" : e.requestReference(),
                     mutation.equals("response") ? "response-2" : mutation.equals("duplicate") ? "response-0" : e.responseReference(),
-                    e.policyFingerprint(), e.principalFingerprint(), e.stableInputFingerprint()));
+                    e.policyFingerprint(), e.loginInputFingerprint(), e.stableInputFingerprint()));
             assertEquals(Outcome.NOT_VERIFIED, AttributePolicyExperimentBinding.evaluate(ID, protocol(),
                     Optional.of(new Preparation(p.runId(), p.experimentId(), exchanges))).outcome(), mutation);
         }

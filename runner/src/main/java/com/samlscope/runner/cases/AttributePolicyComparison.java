@@ -15,10 +15,11 @@ final class AttributePolicyComparison {
     /**
      * Fingerprints must come from verified preparation and signed originals, never UI assertions.
      * stableInputFingerprint excludes only the deliberate input under comparison; it retains other inputs.
-     * principalFingerprint is ephemeral and must not be copied to CaseOutcome details.
+     * loginInputFingerprint is ephemeral and must not be copied to CaseOutcome details.
+     * It binds fixed driver login inputs, not independently authenticated principal identity.
      */
     record Sample(String experiment, Condition condition, String policyFingerprint,
-                  String principalFingerprint, String entityId, String metadataFingerprint,
+                  String loginInputFingerprint, String entityId, String metadataFingerprint,
                   String stableInputFingerprint, Instant issued, Instant received,
                   Set<String> markers, List<EvidenceRef> evidence) {
         Sample {
@@ -60,7 +61,7 @@ final class AttributePolicyComparison {
             if (byCondition.put(sample.condition(), sample) != null) issues.add("duplicate_condition:" + sample.condition());
             if (sample.experiment() == null || sample.experiment().isBlank()
                     || sample.entityId() == null || sample.entityId().isBlank()) issues.add("experiment_binding_unavailable");
-            if (!fingerprint(sample.policyFingerprint()) || !fingerprint(sample.principalFingerprint())
+            if (!fingerprint(sample.policyFingerprint()) || !fingerprint(sample.loginInputFingerprint())
                     || !fingerprint(sample.metadataFingerprint()) || !fingerprint(sample.stableInputFingerprint())) {
                 issues.add("preparation_or_input_fingerprint_unavailable");
             }
@@ -76,7 +77,7 @@ final class AttributePolicyComparison {
             for (var sample : samples) {
                 if (!Objects.equals(first.experiment(), sample.experiment())) issues.add("mixed_experiments");
                 if (!Objects.equals(first.policyFingerprint(), sample.policyFingerprint())) issues.add("policy_changed");
-                if (!Objects.equals(first.principalFingerprint(), sample.principalFingerprint())) issues.add("principal_changed");
+                if (!Objects.equals(first.loginInputFingerprint(), sample.loginInputFingerprint())) issues.add("login_input_changed");
                 if (!Objects.equals(first.entityId(), sample.entityId())) issues.add("relying_party_changed");
             }
         }

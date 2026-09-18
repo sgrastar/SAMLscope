@@ -8,11 +8,11 @@ import com.samlscope.runner.cases.AttributePolicyComparison.Condition;
 final class AttributePolicyExperimentBinding {
     /**
      * Internal adapter output, not a public submission DTO. An adapter must verify preparation,
-     * account/session provenance and controlled-input equivalence before constructing this value.
+     * fixed login-input provenance and controlled-input equivalence before constructing this value.
      * A UI confirmation, caller-supplied hash, or the anchor attribute alone does not qualify.
      */
     record ExchangePreparation(Condition condition, String requestReference, String responseReference,
-                               String policyFingerprint, String principalFingerprint, String stableInputFingerprint) {}
+                               String policyFingerprint, String loginInputFingerprint, String stableInputFingerprint) {}
     record Preparation(String runId, String experimentId, List<ExchangePreparation> exchanges) {
         Preparation { exchanges = List.copyOf(exchanges); }
     }
@@ -63,7 +63,7 @@ final class AttributePolicyExperimentBinding {
             inputFingerprints.add(observation.attributes().attributeInputFingerprint());
             provenance.addAll(observation.evidence());
             samples.add(new AttributePolicyComparison.Sample(prepared.experimentId(), binding.condition(),
-                    binding.policyFingerprint(), binding.principalFingerprint(), observation.entityId(),
+                    binding.policyFingerprint(), binding.loginInputFingerprint(), observation.entityId(),
                     observation.metadataFingerprint(), binding.stableInputFingerprint(), observation.issued(),
                     observation.received(), observation.attributes().markers(), observation.evidence().subList(2, 4)));
         }

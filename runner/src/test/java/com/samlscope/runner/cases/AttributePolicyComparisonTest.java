@@ -35,7 +35,7 @@ class AttributePolicyComparisonTest {
             var samples = complete(id);
             var result = AttributePolicyComparison.evaluate(id, samples, List.of());
             assertEquals(Outcome.SATISFIED, result.outcome());
-            assertFalse(result.details().toString().contains(HASH), "Do not persist a principal fingerprint");
+            assertFalse(result.details().toString().contains(HASH), "Do not persist a login-input fingerprint");
             for (int index = 0; index < samples.size(); index++) {
                 var missing = new ArrayList<>(samples); missing.remove(index);
                 assertEquals(Outcome.NOT_VERIFIED, AttributePolicyComparison.evaluate(id, missing, List.of()).outcome());
@@ -48,7 +48,7 @@ class AttributePolicyComparisonTest {
 
     @Test void doesNotCombineUnrelatedOrUncontrolledObservations() {
         var id = AttributePolicyComparison.INDEX;
-        for (String mutation : List.of("experiment", "policy", "principal", "entity", "metadata", "input", "order", "evidence", "empty-fingerprint")) {
+        for (String mutation : List.of("experiment", "policy", "login", "entity", "metadata", "input", "order", "evidence", "empty-fingerprint")) {
             var samples = complete(id);
             samples.set(2, change(samples.get(2), mutation));
             assertEquals(Outcome.NOT_VERIFIED, AttributePolicyComparison.evaluate(id, samples, List.of()).outcome(), mutation);
@@ -65,7 +65,7 @@ class AttributePolicyComparisonTest {
     private Sample change(Sample s, String field) {
         return new Sample(field.equals("experiment") ? "another-experiment" : s.experiment(), s.condition(),
                 field.equals("policy") ? OTHER : field.equals("empty-fingerprint") ? "" : s.policyFingerprint(),
-                field.equals("principal") ? OTHER : s.principalFingerprint(),
+                field.equals("login") ? OTHER : s.loginInputFingerprint(),
                 field.equals("entity") ? "https://other.example" : s.entityId(),
                 field.equals("metadata") ? OTHER : s.metadataFingerprint(),
                 field.equals("input") ? OTHER : s.stableInputFingerprint(),
