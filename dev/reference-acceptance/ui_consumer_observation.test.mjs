@@ -63,6 +63,10 @@ test('only a visible candidate on the bound product page is recorded', async () 
     const brokenImage = await observeUiConsumer(page, logoOptions);
     assert.equal(brokenImage.status, 'not-observed');
     assert.equal('selected_candidate' in brokenImage, false);
+    const linkOptions = { ...options, kind: 'link', elementSelector: '#link', candidates: { probe: 'javascript:void(0)' } };
+    await page.setContent('<a id="link" href="javascript:void(0)" onclick="window.linkWasClicked=true">Fixture link</a>');
+    assert.equal((await observeUiConsumer(page, linkOptions)).selected_candidate, 'probe');
+    assert.equal(await page.evaluate(() => Boolean(window.linkWasClicked)), false);
     const recordPath = path.join(dir, 'observation.json');
     saveUiConsumerObservation(recordPath, good);
     assert.throws(() => saveUiConsumerObservation(recordPath, good), { code: 'EEXIST' });

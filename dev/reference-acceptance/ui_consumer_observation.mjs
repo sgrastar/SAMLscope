@@ -16,7 +16,7 @@ export async function observeUiConsumer(page, {
 }) {
   if (!/^run_[0-9A-HJKMNP-TV-Z]{26}$/.test(runId)
       || !/^[a-z][a-z0-9-]{0,79}$/.test(condition)
-      || !['display-name', 'logo'].includes(kind)
+      || !['display-name', 'logo', 'link'].includes(kind)
       || !preferredLanguage || !elementSelector
       || !expectedPath?.startsWith('/') || expectedPath.includes('?') || expectedPath.includes('#')) {
     throw new Error('Invalid UI observation identity');
@@ -83,6 +83,10 @@ export async function observeUiConsumer(page, {
           return { reason: 'image-not-loaded' };
         }
         value = element.currentSrc;
+      } else if (kind === 'link') {
+        if (!(element instanceof HTMLAnchorElement)) return { reason: 'not-a-link' };
+        // Observe the rendered destination without following it or executing a scheme handler.
+        value = element.href;
       } else {
         if (!(element instanceof HTMLElement)) return { reason: 'not-a-text-element' };
         value = element.innerText.trim().replace(/\s+/gu, ' ');

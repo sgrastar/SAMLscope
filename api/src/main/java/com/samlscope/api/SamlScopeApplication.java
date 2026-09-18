@@ -426,6 +426,7 @@ public final class SamlScopeApplication {
         javalin.routes.get("/manage/{run}", SamlScopeApplication::serveIndex);
         javalin.routes.get("/browser/{run}/{caseId}", SamlScopeApplication::serveIndex);
         javalin.routes.get("/assets/{file}", SamlScopeApplication::serveAsset);
+        MetadataUiAssetRoutes.register(javalin);
         javalin.routes.get("/api/health", ctx -> ctx.json(Map.of(
                 "status", "ok", "version", "0.1.0", "mode", config.mode().name().toLowerCase(),
                 "oidcEnabled", config.oidc().enabled())));

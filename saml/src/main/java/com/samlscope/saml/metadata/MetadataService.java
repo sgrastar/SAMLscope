@@ -43,6 +43,12 @@ public final class MetadataService {
     public static final String SOAP = "urn:oasis:names:tc:SAML:2.0:bindings:SOAP";
     public static final String PAOS = "urn:oasis:names:tc:SAML:2.0:bindings:PAOS";
     private static final List<Variant> PRELOADED_CAMPAIGN_VARIANTS = List.of(
+            Variant.UI_URL_LOGO_HTTP, Variant.UI_URL_LOGO_HTTPS, Variant.UI_URL_LOGO_DATA,
+            Variant.UI_URL_LOGO_JAVASCRIPT, Variant.UI_URL_LOGO_FILE,
+            Variant.UI_URL_INFORMATION_HTTP, Variant.UI_URL_INFORMATION_HTTPS, Variant.UI_URL_INFORMATION_DATA,
+            Variant.UI_URL_INFORMATION_JAVASCRIPT, Variant.UI_URL_INFORMATION_FILE,
+            Variant.UI_URL_PRIVACY_HTTP, Variant.UI_URL_PRIVACY_HTTPS, Variant.UI_URL_PRIVACY_DATA,
+            Variant.UI_URL_PRIVACY_JAVASCRIPT, Variant.UI_URL_PRIVACY_FILE,
             Variant.UI_CONSUMER_DISPLAY_ALL,
             Variant.UI_CONSUMER_DISPLAY_SERVICE,
             Variant.UI_CONSUMER_DISPLAY_ENTITY,
@@ -287,6 +293,7 @@ public final class MetadataService {
         root = MetadataExtensionPlacementFixtures.apply(document, root, variant);
         root = MetadataAttributePolicyFixtures.apply(document, root, variant);
         root = MetadataUiConsumerFixtures.apply(document, root, variant);
+        root = MetadataUiUrlFixtures.apply(document, root, variant, peerBase);
         root = MetadataAlgorithmFixtures.apply(document, root, variant);
         root = MetadataEncryptionAlgorithmFixtures.apply(document, root, variant);
         applyValidityFixture(root, variant);
@@ -788,6 +795,12 @@ public final class MetadataService {
         ENTITY_CACHE_DURATION("entity-cache-duration"),
         ENTITIES_CACHE_DURATION("entities-cache-duration"),
         ENTITIES_VALID_UNTIL("entities-valid-until"),
+        UI_URL_LOGO_HTTP("ui-url-logo-http"), UI_URL_LOGO_HTTPS("ui-url-logo-https"),
+        UI_URL_LOGO_DATA("ui-url-logo-data"), UI_URL_LOGO_JAVASCRIPT("ui-url-logo-javascript"), UI_URL_LOGO_FILE("ui-url-logo-file"),
+        UI_URL_INFORMATION_HTTP("ui-url-information-http"), UI_URL_INFORMATION_HTTPS("ui-url-information-https"),
+        UI_URL_INFORMATION_DATA("ui-url-information-data"), UI_URL_INFORMATION_JAVASCRIPT("ui-url-information-javascript"), UI_URL_INFORMATION_FILE("ui-url-information-file"),
+        UI_URL_PRIVACY_HTTP("ui-url-privacy-http"), UI_URL_PRIVACY_HTTPS("ui-url-privacy-https"),
+        UI_URL_PRIVACY_DATA("ui-url-privacy-data"), UI_URL_PRIVACY_JAVASCRIPT("ui-url-privacy-javascript"), UI_URL_PRIVACY_FILE("ui-url-privacy-file"),
         UI_CONSUMER_DISPLAY_ALL("ui-consumer-display-all"),
         UI_CONSUMER_DISPLAY_SERVICE("ui-consumer-display-service"),
         UI_CONSUMER_DISPLAY_ENTITY("ui-consumer-display-entity"),
