@@ -43,6 +43,12 @@ public final class MetadataService {
     public static final String SOAP = "urn:oasis:names:tc:SAML:2.0:bindings:SOAP";
     public static final String PAOS = "urn:oasis:names:tc:SAML:2.0:bindings:PAOS";
     private static final List<Variant> PRELOADED_CAMPAIGN_VARIANTS = List.of(
+            Variant.ATTRIBUTE_POLICY_ENTITY_PRESENT,
+            Variant.ATTRIBUTE_POLICY_ENTITY_ABSENT,
+            Variant.ATTRIBUTE_POLICY_REQUESTED_REQUIRED,
+            Variant.ATTRIBUTE_POLICY_REQUESTED_OPTIONAL,
+            Variant.ATTRIBUTE_POLICY_REQUESTED_ABSENT,
+            Variant.ATTRIBUTE_POLICY_INDEXED,
             Variant.ALGORITHM_ENTITY_SHA256,
             Variant.ALGORITHM_ENTITY_SHA384,
             Variant.ALGORITHM_ENTITY_ORDER_256_384,
@@ -274,6 +280,7 @@ public final class MetadataService {
         root = applyStructureFixture(document, root, plan, variant, runId);
         root = MetadataExtensionAttributeFixtures.apply(document, root, variant);
         root = MetadataExtensionPlacementFixtures.apply(document, root, variant);
+        root = MetadataAttributePolicyFixtures.apply(document, root, variant);
         root = MetadataAlgorithmFixtures.apply(document, root, variant);
         root = MetadataEncryptionAlgorithmFixtures.apply(document, root, variant);
         applyValidityFixture(root, variant);
@@ -775,6 +782,12 @@ public final class MetadataService {
         ENTITY_CACHE_DURATION("entity-cache-duration"),
         ENTITIES_CACHE_DURATION("entities-cache-duration"),
         ENTITIES_VALID_UNTIL("entities-valid-until"),
+        ATTRIBUTE_POLICY_ENTITY_PRESENT("attribute-policy-entity-present"),
+        ATTRIBUTE_POLICY_ENTITY_ABSENT("attribute-policy-entity-absent"),
+        ATTRIBUTE_POLICY_REQUESTED_REQUIRED("attribute-policy-requested-required"),
+        ATTRIBUTE_POLICY_REQUESTED_OPTIONAL("attribute-policy-requested-optional"),
+        ATTRIBUTE_POLICY_REQUESTED_ABSENT("attribute-policy-requested-absent"),
+        ATTRIBUTE_POLICY_INDEXED("attribute-policy-indexed"),
         ALGORITHM_ENTITY_SHA256("algorithm-entity-sha256"),
         ALGORITHM_ENTITY_SHA384("algorithm-entity-sha384"),
         ALGORITHM_ENTITY_ORDER_256_384("algorithm-entity-order-256-384"),

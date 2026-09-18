@@ -161,3 +161,5 @@ not by differences in reference-implementation results ([00 §5](00-concept.md))
 - [SimpleSAMLphpの共通部分選択の観測と設定復元の効率化](52-simplesamlphp-intersection-and-batch-restore.md)
 
 - [属性名・NameFormat生成能力の実証](53-attribute-name-capability.md)
+
+- [属性公開ポリシーの比較入力](54-attribute-policy-fixtures.md)
