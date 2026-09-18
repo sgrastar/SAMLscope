@@ -11,7 +11,7 @@ from verify_relying_party_attribute_experiment import verify
 def export(folder, output):
     audited = verify(folder)
     prepared = json.loads((folder / 'preparation.json').read_text())
-    native = prepared['native']
+    native = audited['native_binding']
     # The validated native Requester rules inspect the RP identity and common uid-derived markers.
     # Hold the complete native configuration and driver login input fixed across the RP change.
     stable = hashlib.sha256(json.dumps(dict(policy=native['policy_sha256'],

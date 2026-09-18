@@ -8,10 +8,11 @@ from export_relying_party_attribute_preparation import export
 CASE = 'IIP-IDP02-a-idp-01'
 
 
-def verify(root):
+def verify(root, product="shibboleth"):
     root = Path(root)
-    evidence = root / 'shibboleth-relying-party-attributes'
-    evaluation = root / 'shibboleth-relying-party-attribute-evaluation'
+    if product not in {'shibboleth', 'simplesamlphp'}: raise ValueError('Unsupported reference product')
+    evidence = root / (product + '-relying-party-attributes' + ('-scoped' if product == 'simplesamlphp' else ''))
+    evaluation = root / (product + '-relying-party-attribute-evaluation')
     audited = verify_experiment(evidence)
     def read(folder, name): return json.loads((folder / name).read_text())
     receipt_path = evidence / 'preparation-receipts' / (audited['run'] + '.json')
@@ -26,7 +27,10 @@ def verify(root):
         'missing', 'duplicate', 'wrong-response', 'mixed-policy', 'mixed-login', 'mixed-input'}
     baseline = read(evaluation / 'baseline', 'operations.json')
     assert baseline['restored'] and baseline['run'] == audited['run']
-    assert not baseline['failures'] and baseline['temporary_removed']
+    if product == 'shibboleth':
+        assert not baseline['failures'] and baseline['temporary_removed']
+    else:
+        assert baseline['configuration_write_attempts'] == 2 and baseline['restoration_write_attempts'] == 1
     assert baseline['original_sha256'] == baseline['final_sha256']
     assert read(evaluation / 'baseline', 'flow.json') == 'recorded'
     result = read(evaluation, 'result.json')
@@ -48,5 +52,5 @@ def verify(root):
 
 if __name__ == '__main__':
     import sys
-    path, cases = verify(sys.argv[1])
+    path, cases = verify(sys.argv[1], sys.argv[2] if len(sys.argv) > 2 else 'shibboleth')
     print(CASE, cases[CASE]['verdict'])

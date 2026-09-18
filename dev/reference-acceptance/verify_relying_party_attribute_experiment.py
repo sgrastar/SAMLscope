@@ -3,6 +3,7 @@
 import argparse
 import hashlib
 import json
+import re
 from pathlib import Path
 import sys
 import xml.etree.ElementTree as ET
@@ -15,22 +16,59 @@ def digest(raw):
     return hashlib.sha256(raw).hexdigest()
 
 
+def verify_ssp_preparation(folder, prepared, run):
+    if prepared['run'] != run or set(prepared['entity_ids']) != {'first', 'second'}:
+        raise ValueError('Invalid native SSP preparation scope')
+    if len(set(prepared['entity_ids'].values())) != 2:
+        raise ValueError('Distinct native SSP requesters required')
+    expected = {side: dict(authproc={'50': {'class': 'core:AttributeCopy', 'uid': [
+        'urn:samlscope:test:relying-party:anchor', 'urn:samlscope:test:relying-party:' + side]}},
+        name_format='urn:oasis:names:tc:SAML:2.0:attrname-format:uri', encryption=True,
+        validate_authnrequest=True) for side in ['first', 'second']}
+    if prepared['native']['policies'] != expected:
+        raise ValueError('Native SSP attribute recipe differs')
+    parser_raw = (folder / 'parser-output.json').read_bytes()
+    parser = json.loads(parser_raw)
+    if set(parser) != {'first', 'second'} or prepared['parser_sha256'] != digest(parser_raw):
+        raise ValueError('Native parser output changed')
+    for side in expected:
+        if parser[side]['policy'] != expected[side] or parser[side]['entity_id'] != prepared['entity_ids'][side]:
+            raise ValueError('Native parser requester association differs')
+    overlay = '\n'.join(parser[side]['php'] for side in ['first', 'second']).encode()
+    if overlay != (folder / 'overlay.php').read_bytes() or prepared['overlay_sha256'] != digest(overlay):
+        raise ValueError('Native overlay changed')
+    if prepared['fixture_sha256'] != digest((folder / 'fixture.xml').read_bytes()):
+        raise ValueError('Native imported original changed')
+    configuration = prepared['native']['configuration_sha256']
+    if not isinstance(configuration, str) or not re.fullmatch(r'[0-9a-f]{64}', configuration):
+        raise ValueError('Native read-back fingerprint unavailable')
+    return dict(run=run, entity_ids=prepared['entity_ids'],
+        policy_sha256=digest(json.dumps(expected,sort_keys=True,separators=(',',':')).encode()),
+        configuration_sha256={'saml20-sp-remote': configuration})
+
+
 def verify(folder):
     def read(name): return json.loads((folder / name).read_text())
     run = read('created.json')['run']['id']
     restoration = read('restoration.json')
-    if not restoration['restored'] or restoration['failures'] or not restoration['temporary_removed'] \
-            or restoration['original_sha256'] != restoration['final_sha256']:
-        raise ValueError('Native restoration unproven')
     prepared = read('preparation.json')
-    native = prepared['native']
-    if native['run'] != run or prepared['login_provenance'] != 'fixed-in-memory-driver-input':
-        raise ValueError('Preparation scope unproven')
-    files = {side: native['nodes']['metadata-providers'][0]['attributes']['metadataFile'] for side in ['first', 'second']}
-    expected = {name: [canonical(node) for node in nodes] for name, nodes in recipe(run, native['entity_ids'], files).items()}
-    if native['nodes'] != expected or native['policy_sha256'] != digest(json.dumps(expected,
-            sort_keys=True, separators=(',', ':'), ensure_ascii=False).encode()):
-        raise ValueError('Native policy meaning differs from recipe')
+    if not restoration['restored'] or restoration['original_sha256'] != restoration['final_sha256']:
+        raise ValueError('Native restoration unproven')
+    if prepared['login_provenance'] != 'fixed-in-memory-driver-input':
+        raise ValueError('Login preparation scope unproven')
+    if prepared.get('source') == 'native-parser-cli-and-core-AttributeCopy':
+        native = verify_ssp_preparation(folder, prepared, run)
+    else:
+        if restoration['failures'] or not restoration['temporary_removed']:
+            raise ValueError('Native restoration incomplete')
+        native = prepared['native']
+        if native['run'] != run:
+            raise ValueError('Preparation scope unproven')
+        files = {side: native['nodes']['metadata-providers'][0]['attributes']['metadataFile'] for side in ['first', 'second']}
+        expected = {name: [canonical(node) for node in nodes] for name, nodes in recipe(run, native['entity_ids'], files).items()}
+        if native['nodes'] != expected or native['policy_sha256'] != digest(json.dumps(expected,
+                sort_keys=True, separators=(',', ':'), ensure_ascii=False).encode()):
+            raise ValueError('Native policy meaning differs from recipe')
     protocol = read('production-observation.json')
     if protocol['run'] != run or protocol['issues'] or not protocol['same_attribute_input']:
         raise ValueError('Verified attribute exchanges unavailable')
@@ -56,7 +94,7 @@ def verify(folder):
     used = set()
     bindings = []
     for observation, verified in zip(observations, protocol['observations']):
-        if observation['before'] != native or observation['after'] != native \
+        if observation['before'] != prepared['native'] or observation['after'] != prepared['native'] \
                 or observation['login_input_binding'] != prepared['login_input_binding']:
             raise ValueError('Native preparation or driver input changed')
         if verified['variant'] != observation['variant'] or verified['entity_id'] != observation['entity_id']:
@@ -76,6 +114,7 @@ def verify(folder):
         bindings.append(dict(condition=observation['condition'], entity_id=observation['entity_id'],
             request_reference=refs[2], response_reference=refs[3], markers=verified['markers']))
     return dict(run=run, native_preparation_bound=True, exchanges=bindings,
+                native_binding={key: native[key] for key in ['policy_sha256', 'configuration_sha256']},
                 same_attribute_input=True, verdict_adopted=False,
                 reason='formal-case-registration-and-receipt-verification-pending')
 

@@ -21,3 +21,21 @@ javascript/fileのURL負の対照は正の事前取込候補から除外した�
 SimpleSAMLphpのドライバーは、属性比較に必要な既存の異なるSPだけを選択するよう変更済み。まだ新APIを稼働版へ反映していないため、この修正を使った再試験は次の工程である。
 
 <!--g1-literal--> API/生成器/Run管理と検証コードのコンパイルは成功。範囲内のSPだけが含まれること、対象外の負の対照・重複・空リストの拒否、旧トークンの失効を検証するコードを追加した。機能テスト群は一括実行待ち。未検証465観測を維持する。
+
+## 範囲指定の稼働反映と正式採用
+
+署名済み`418e9603`から隔離ビルドし、`samlscope:reference-scoped-preload-v50`へ反映した。digestは`sha256:3bcdb93e2ed9e86d928b43b6323058ea4bd2f2d8036232f4bfa07adbc7876e3d`。この版は別件の未コミットSOAP変更を含まない。
+
+<!--g1-literal--> SimpleSAMLphpの新Run `run_WNMZ106QK6JKRN8P6JFZQ0KNWG`では対象SPを2つに限定した集約をネイティブ解析へ渡し、取込が成功した。設定を固定してA/B/Aの3往復を収集し、設定を元のバイト列へ復元した。SP Bは集約の最後のメンバーなので、ACSの完了画面を汎用ドライバーが「unhandled」と記録したが、原本の相関・署名・復号が成立したため、その表示文言を判定根拠に使わなかった。
+
+共通collectorによって、Aはanchor/first、Bはanchor/second、Aの再確認はanchor/firstを返すことを確認した。入力属性のfingerprintも同一だった。SimpleSAMLphp用の準備監査は、標準AttributeCopyのマッピング、SPとの対応、NameFormat、暗号化・要求署名検証設定、元fixture、native parser出力、実際に適用したoverlay、前後の設定読戻しを照合する。PHPコードの変換をSuiteのXML解釈に置き換えない。
+
+`verify_relying_party_attribute_experiment.py`と準備記録exporterへネイティブ設定方式の違いを追加し、Javaの判定・原本collector・CONFIGケースは共通のまま使う。既存Shibboleth準備記録の再生成結果が変わらず、採用検証も通ることを確認した。
+
+<!--g1-literal--> 保存原本の正式比較はSATISFIEDで、6種類の証拠混入・不足の負の対照を拒否した。その後、通常ログイン前提を満たし、Run専用準備記録を配置して読み戻した。正式Runの`IIP-IDP02-a-idp-01`はSATISFIED/PASS、attested=false。採用検証を通した比較表と台帳を再生成し、未検証465→464（−1）、ケースID数は157を維持した。
+
+証拠は`build/acceptance/reference-20260918/simplesamlphp-relying-party-attributes-scoped/`、正式評価は`simplesamlphp-relying-party-attribute-evaluation/`。最初の失敗した広い集約のRunも削除せず、前節の記録へ残している。
+
+<!--g1-literal--> 今回はイメージbuild 1、Suite/転送コンテナ再作成各1、新Run/preflight各1、取込parser 2（SP別比較の集約と通常ログインのメタデータ）、コンテナ内ポリシー読戻し7、製品設定書込4（比較の適用/復元2、通常ログインの適用/復元2）、プロトコル往復4、準備記録配置1、tests/start 1、準備確認1。製品再起動・サービス再読込・本人操作は0。標準OPcacheのため適用後に運用上の待機を行った。前節の失敗試行分は別に記録しており、この値へ隠していない。
+
+通常ログインの取込・復元も`dev/simplesamlphp/complete_run_baseline.py`へまとめ、次の実証で同じ手順を再利用できるようにした。今回も広範囲の機能テスト群は実行せず、必要な原本検証と採用境界の検証を実施した。G2-30の既存署名差分は未解消。
