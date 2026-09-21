@@ -79,7 +79,7 @@ Shibbolethの`IIP-SSO01-fk/fu/gi`は、v8では事前生成された正常系要
 
 ## Not verifiedの内訳
 
-以下は表に採用したケース結果の延べ399件。†のケースは新Runの追加証拠を採用し、それ以外の既存証拠は保持しています。単一Runの集計や全試験の再完走を意味しません。比較表で設定不足として扱い直した旧FAILは、このNOT_VERIFIED集計には含めません。
+以下は表に採用したケース結果の延べ397件。†のケースは新Runの追加証拠を採用し、それ以外の既存証拠は保持しています。単一Runの集計や全試験の再完走を意味しません。比較表で設定不足として扱い直した旧FAILは、このNOT_VERIFIED集計には含めません。
 
 | 理由 | Keycloak | Shibboleth IdP | SimpleSAMLphp | 解消に必要なこと |
 |---|---:|---:|---:|---|
@@ -110,8 +110,6 @@ Shibbolethの`IIP-SSO01-fk/fu/gi`は、v8では事前生成された正常系要
 | `slo.encrypted-id.multiple-keys.configuration-unavailable` | 0 | 0 | 1 | 当該ケースの応答・対象設定・正常系対照を追加確認 |
 | `slo.encrypted-id.multiple-keys.key-unavailable` | 1 | 0 | 0 | 当該ケースの応答・対象設定・正常系対照を追加確認 |
 | `slo.encrypted-id.negative-control-failed` | 0 | 0 | 1 | 当該ケースの応答・対象設定・正常系対照を追加確認 |
-| `slo.identifier.strong-match-unobservable` | 0 | 1 | 0 | 当該ケースの応答・対象設定・正常系対照を追加確認 |
-| `slo.not-on-or-after.correlation-unavailable` | 0 | 1 | 0 | 当該ケースの応答・対象設定・正常系対照を追加確認 |
 | `slo.partial-logout.unobserved` | 0 | 1 | 0 | 当該ケースの応答・対象設定・正常系対照を追加確認 |
 | `slo.propagation.failure-induction-unavailable` | 0 | 1 | 0 | 当該ケースの応答・対象設定・正常系対照を追加確認 |
 | `slo.redirect-response.unavailable` | 0 | 1 | 0 | 当該ケースの応答・対象設定・正常系対照を追加確認 |
@@ -496,11 +494,11 @@ Chromeと承認のブロックを解除するだけでは解消しません。�
 | `IIP-IDP17-k-idp-01` | Success | Success † | Success |
 | `IIP-IDP17-l-idp-01` | Success | Success † | Success |
 | `IIP-IDP17-m-idp-01` | Success | Success † | **Failed (Product)** |
-| `IIP-IDP17-n-idp-01` | Not verified | Not verified † | Success |
+| `IIP-IDP17-n-idp-01` | Not verified | Success † | Success |
 | `IIP-IDP17-r-idp-01` | Not verified † | Not verified † | Not verified † |
 | `IIP-IDP17-s-idp-01` | Not verified † | Not verified † | Not verified † |
 | `IIP-IDP17-t-idp-01` | **Failed (Product)** | **Failed (Product)** † | Success |
-| `IIP-IDP17-u-idp-01` | Not verified | Not verified † | Success |
+| `IIP-IDP17-u-idp-01` | Not verified | Warning † | Success |
 | `IIP-IDP17-v-idp-01` | Success | Success | Success |
 | `IIP-IDP17-x-idp-01` | Success † | Success † | **Failed (台帳採用・原因分類未確認)** † |
 | `IIP-IDP17-y-idp-01` | **Failed (台帳採用・原因分類未確認)** † | Warning † | Warning † |
@@ -782,10 +780,10 @@ Chromeと承認のブロックを解除するだけでは解消しません。�
 | single_logout_idp († listed supplemental cases only) | shibboleth | `run_9KV70EB8T30AXEBZKCAK1C1WWE` | `build/acceptance/reference-20260915/slo-oracle/shibboleth/slo_probe_browser` |
 | single_logout_idp († listed supplemental cases only) | shibboleth | `run_9KV70EB8T30AXEBZKCAK1C1WWE` | `build/acceptance/reference-20260915/slo-oracle/shibboleth/slo_probe_browser` |
 | single_logout_idp († listed supplemental cases only) | shibboleth | `run_Z0PMNCN36CNTYCJX36VDYFZYHP` | `build/acceptance/reference-20260915/peer-intent/shibboleth/slo_audit` |
-| single_logout_idp († listed supplemental cases only) | shibboleth | `run_PXFNTJDBJJR8GE88XWPKK0T0HC` | `build/acceptance/reference-20260915/peer-intent/shibboleth/slo_target_logout` |
+| single_logout_idp († listed supplemental cases only) | shibboleth | `run_S9G7V5DDY23C9RPE3PWYNYKWD2` | `build/acceptance/reference-20260918/shibboleth-slo-webflow-v101` |
 | single_logout_idp († listed supplemental cases only) | shibboleth | `run_Z0PMNCN36CNTYCJX36VDYFZYHP` | `build/acceptance/reference-20260915/peer-intent/shibboleth/slo_audit` |
 | single_logout_idp († listed supplemental cases only) | shibboleth | `run_Z0PMNCN36CNTYCJX36VDYFZYHP` | `build/acceptance/reference-20260915/peer-intent/shibboleth/slo_audit` |
-| single_logout_idp († listed supplemental cases only) | shibboleth | `run_PXFNTJDBJJR8GE88XWPKK0T0HC` | `build/acceptance/reference-20260915/peer-intent/shibboleth/slo_target_logout` |
+| single_logout_idp († listed supplemental cases only) | shibboleth | `run_S9G7V5DDY23C9RPE3PWYNYKWD2` | `build/acceptance/reference-20260918/shibboleth-slo-webflow-v101` |
 | single_logout_idp († listed supplemental cases only) | shibboleth | `run_9KV70EB8T30AXEBZKCAK1C1WWE` | `build/acceptance/reference-20260915/slo-oracle/shibboleth/slo_probe_browser` |
 | single_logout_idp († listed supplemental cases only) | shibboleth | `run_9KV70EB8T30AXEBZKCAK1C1WWE` | `build/acceptance/reference-20260915/slo-oracle/shibboleth/slo_probe_browser` |
 | single_logout_idp († listed supplemental cases only) | shibboleth | `run_9KV70EB8T30AXEBZKCAK1C1WWE` | `build/acceptance/reference-20260915/slo-oracle/shibboleth/slo_probe_browser` |
