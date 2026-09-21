@@ -764,10 +764,13 @@ def render(root,definitions,output):
             row['next_action']=('EncryptionAlgorithmBrowserEvidenceTestCaseは相関SSO応答中の'
                 'EncryptedAssertionをSuite鍵で復号して生成アルゴリズムを判定する（decrypted-target-assertion必須）。'
                 'Suite SPメタデータのvariantでEncryptionMethodを広告できる（MetadataEncryptionAlgorithmFixtures）'
-                'ようにし、SSP producer campaignに --metadata-variant を追加した。しかし '
-                'algorithm-encryption-aes128-gcm を指定すると m0-roundtrip 後にRunがCOMPLETEDにならず'
-                'WAITING_BROWSERとなり /tests/start が400（variant無しでは成功）。GCM広告時のSSO完了/復号経路を'
-                '調査する必要がある。ALG06-b/c(oaep11/digest)も同様にSP側広告が必要。')
+                'ようにし、SSP producer campaignに --metadata-variant を追加した。しかし根本原因を特定: '
+                'MetadataService.endpoint(plan, path, variant, runId) は variant!=BASELINE のとき ACS/SSO の '
+                'Location に mdv=<variant> を付けるため、variant付きでSuite SPメタデータを配ると m0-roundtrip の '
+                '応答ACS URLが mdv付きになり SP peer がそれを metadata-probe 応答（metadataProbeAccepted=false）'
+                'として扱い RunがCOMPLETEDにならない（/tests/start 400。variant無しでは成功）。'
+                '暗号化アルゴリズムを広告しつつ baseline のエンドポイント（mdv無し）を保つSuite側の経路'
+                '（暗号化fixtureのみ適用するvariant、またはendpoint mdvを付けない配布経路）が必要。')
             row['observation_gap']='sp-encryption-algorithm-control-missing'
         if row.get('profile')=='single_logout_idp' and row.get('category')=='inconclusive' \
                 and row['case'].startswith(('IIP-IDP17','IIP-IDP18','IIP-IDP19')):
