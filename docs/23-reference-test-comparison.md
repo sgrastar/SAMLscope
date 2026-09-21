@@ -79,7 +79,7 @@ Shibbolethの`IIP-SSO01-fk/fu/gi`は、v8では事前生成された正常系要
 
 ## Not verifiedの内訳
 
-以下は表に採用したケース結果の延べ397件。†のケースは新Runの追加証拠を採用し、それ以外の既存証拠は保持しています。単一Runの集計や全試験の再完走を意味しません。比較表で設定不足として扱い直した旧FAILは、このNOT_VERIFIED集計には含めません。
+以下は表に採用したケース結果の延べ396件。†のケースは新Runの追加証拠を採用し、それ以外の既存証拠は保持しています。単一Runの集計や全試験の再完走を意味しません。比較表で設定不足として扱い直した旧FAILは、このNOT_VERIFIED集計には含めません。
 
 | 理由 | Keycloak | Shibboleth IdP | SimpleSAMLphp | 解消に必要なこと |
 |---|---:|---:|---:|---|
@@ -111,7 +111,6 @@ Shibbolethの`IIP-SSO01-fk/fu/gi`は、v8では事前生成された正常系要
 | `slo.encrypted-id.multiple-keys.key-unavailable` | 1 | 0 | 0 | 当該ケースの応答・対象設定・正常系対照を追加確認 |
 | `slo.encrypted-id.negative-control-failed` | 0 | 0 | 1 | 当該ケースの応答・対象設定・正常系対照を追加確認 |
 | `slo.partial-logout.unobserved` | 0 | 1 | 0 | 当該ケースの応答・対象設定・正常系対照を追加確認 |
-| `slo.propagation.failure-induction-unavailable` | 0 | 1 | 0 | 当該ケースの応答・対象設定・正常系対照を追加確認 |
 | `slo.redirect-response.unavailable` | 0 | 1 | 0 | 当該ケースの応答・対象設定・正常系対照を追加確認 |
 
 Chromeと承認のブロックを解除するだけでは解消しません。自動判定やfixtureの未実装にはSuiteの実装が必要です。設定・自己申告の経路は証拠の裏付けが必要です。[全件台帳](26-unverified-case-inventory.md)にケースごとの原因と再試験を記録しています。
@@ -495,7 +494,7 @@ Chromeと承認のブロックを解除するだけでは解消しません。�
 | `IIP-IDP17-l-idp-01` | Success | Success † | Success |
 | `IIP-IDP17-m-idp-01` | Success | Success † | **Failed (Product)** |
 | `IIP-IDP17-n-idp-01` | Not verified | Success † | Success |
-| `IIP-IDP17-r-idp-01` | Not verified † | Not verified † | Not verified † |
+| `IIP-IDP17-r-idp-01` | Not verified † | Success † | Not verified † |
 | `IIP-IDP17-s-idp-01` | Not verified † | Not verified † | Not verified † |
 | `IIP-IDP17-t-idp-01` | **Failed (Product)** | **Failed (Product)** † | Success |
 | `IIP-IDP17-u-idp-01` | Not verified | Warning † | Success |
@@ -781,7 +780,7 @@ Chromeと承認のブロックを解除するだけでは解消しません。�
 | single_logout_idp († listed supplemental cases only) | shibboleth | `run_9KV70EB8T30AXEBZKCAK1C1WWE` | `build/acceptance/reference-20260915/slo-oracle/shibboleth/slo_probe_browser` |
 | single_logout_idp († listed supplemental cases only) | shibboleth | `run_Z0PMNCN36CNTYCJX36VDYFZYHP` | `build/acceptance/reference-20260915/peer-intent/shibboleth/slo_audit` |
 | single_logout_idp († listed supplemental cases only) | shibboleth | `run_S9G7V5DDY23C9RPE3PWYNYKWD2` | `build/acceptance/reference-20260918/shibboleth-slo-webflow-v101` |
-| single_logout_idp († listed supplemental cases only) | shibboleth | `run_Z0PMNCN36CNTYCJX36VDYFZYHP` | `build/acceptance/reference-20260915/peer-intent/shibboleth/slo_audit` |
+| single_logout_idp († listed supplemental cases only) | shibboleth | `run_J2PRTP26P0S65P9RA2Q6NAXN7G` | `build/acceptance/reference-20260918/shibboleth-slo-target-initiated` |
 | single_logout_idp († listed supplemental cases only) | shibboleth | `run_Z0PMNCN36CNTYCJX36VDYFZYHP` | `build/acceptance/reference-20260915/peer-intent/shibboleth/slo_audit` |
 | single_logout_idp († listed supplemental cases only) | shibboleth | `run_S9G7V5DDY23C9RPE3PWYNYKWD2` | `build/acceptance/reference-20260918/shibboleth-slo-webflow-v101` |
 | single_logout_idp († listed supplemental cases only) | shibboleth | `run_9KV70EB8T30AXEBZKCAK1C1WWE` | `build/acceptance/reference-20260915/slo-oracle/shibboleth/slo_probe_browser` |

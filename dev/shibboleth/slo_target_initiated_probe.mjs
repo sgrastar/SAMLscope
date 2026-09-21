@@ -50,7 +50,7 @@ try {
   const run = created.run.id;
   record.run = run;
   await api(`/api/runs/${run}/preflight`, true);
-  execFileSync('python3', [path.join(repoRoot, 'build/acceptance/reference-20260915/slo-oracle/setup_rs_participants.py'), run], { cwd: repoRoot, stdio: 'pipe' });
+  execFileSync('python3', [path.join(repoRoot, 'dev/shibboleth/setup_slo_participants.py'), run], { cwd: repoRoot, stdio: 'pipe' });
 
   browser = await chromium.launch({ channel: 'chrome', headless: true });
   const context = await browser.newContext();

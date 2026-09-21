@@ -4,7 +4,7 @@
 
 | 再試験前 | 確定（Success / Failed / Warning） | 現在の未検証 | 未検証の異なるケースID |
 |---:|---:|---:|---:|
-| 594 | 197 | 397 | 144 |
+| 594 | 198 | 396 | 144 |
 
 ## 内訳
 
@@ -17,7 +17,7 @@
 | メタデータの追加試験・観測不足 | 32 | 試験経路確認 |
 | ブラウザ・SLOの追加観測不足 | 25 | 試験経路確認 |
 | 古い待機結果・再開時には期限切れ | 0 | 新Runで再試験 |
-| 実行したが確定できない | 56 | 個別診断 |
+| 実行したが確定できない | 55 | 個別診断 |
 
 ### G02の確認済み条件と残条件
 
@@ -225,7 +225,7 @@ approved variant全体の入力生成と観測を実装する。追加ログイ�
 | `IIP-IDP17-b2-idp-01` | — | — | single_logout_idp | 実行したが確定できない |
 | `IIP-IDP17-c-idp-01` | single_logout_idp | — | single_logout_idp | 実行したが確定できない |
 | `IIP-IDP17-n-idp-01` | single_logout_idp | — | — | ブラウザ・SLOの追加観測不足 |
-| `IIP-IDP17-r-idp-01` | single_logout_idp | single_logout_idp | single_logout_idp | 実行したが確定できない |
+| `IIP-IDP17-r-idp-01` | single_logout_idp | — | single_logout_idp | 実行したが確定できない |
 | `IIP-IDP17-s-idp-01` | single_logout_idp | single_logout_idp | single_logout_idp | 実行したが確定できない |
 | `IIP-IDP17-u-idp-01` | single_logout_idp | — | — | ブラウザ・SLOの追加観測不足 |
 | `IIP-IDP18-c-idp-01` | single_logout_idp | — | single_logout_idp | 実行したが確定できない |
@@ -342,7 +342,7 @@ Verdictは変更せず、未検証の理由だけを分類します。feature-ab
 
 | 診断 | 件数 | 意味 | 表示案 |
 |---|---:|---|---|
-| `suite-observation-gap` | 258 | Suite側の観測・実行経路が未接続 | Suite側の実装で解消可能なNot verified |
+| `suite-observation-gap` | 257 | Suite側の観測・実行経路が未接続 | Suite側の実装で解消可能なNot verified |
 | `operator-attestation-available` | 77 | 自己申告または運用者証言で確認可能 | 運用者証言（ケースごとに1回答）で確認可能。現在のPlanは自己申告無効 |
 | `evidence-form-mismatch` | 27 | 承認済み判定条件が要求する証拠形式と製品応答が不一致 | 証拠形式が承認済み条件と一致しないためNot verified（要件解釈の再確認が必要） |
 | `role-inapplicable` | 24 | ロール上、対象が消費しない成果物を要求するvariant | IdPロールでは消費されないvariantのため実行対象外（対象外であることは判定済み） |

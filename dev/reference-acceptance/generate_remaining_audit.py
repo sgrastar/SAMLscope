@@ -565,6 +565,21 @@ def render(root,definitions,output):
                        interaction=None,verdict=case['verdict'],evidence=case['evidence'],
                        diagnostics=case.get('diagnostics',{}))
             transitions.append(dict(row))
+        # A target-initiated-only logout run (no Suite-initiated LogoutRequest) lets the
+        # propagation rule observe the target continuing to the remaining participant after an
+        # induced participant failure.
+        from verify_slo_target_initiated_propagation import ADOPTED as SLO_PROPAGATION_ADOPTED, verify as verify_slo_propagation
+        if row['profile']=='single_logout_idp' and row['product']=='shibboleth' \
+                and row['case'] in SLO_PROPAGATION_ADOPTED and row.get('verdict','NOT_VERIFIED')=='NOT_VERIFIED':
+            path, verified_cases = verify_slo_propagation(root.parent.parent/'reference-20260918')
+            raw=path.read_bytes(); result=json.loads(raw); case=verified_cases[row['case']]
+            row['baseline']={k:row.get(k) for k in ('run','reason_code','result_sha256','evidence_folder','interaction')}
+            row.update(run=result['run']['id'],reason_code=case['reason_code'],
+                       result_sha256=hashlib.sha256(raw).hexdigest(),
+                       evidence_folder=str(path.parent.relative_to(root.parents[3])),
+                       interaction=None,verdict=case['verdict'],evidence=case['evidence'],
+                       diagnostics=case.get('diagnostics',{}))
+            transitions.append(dict(row))
         # Do not adopt the older slo_target_logout_18cd/rs result for IIP-IDP18-d: its
         # 'SATISFIED slo.redirect-response.consumed' outcome predates the current
         # LogoutTranscriptProfileCase.TARGET_REDIRECT_RESPONSE_CONSUMED oracle, which has no
