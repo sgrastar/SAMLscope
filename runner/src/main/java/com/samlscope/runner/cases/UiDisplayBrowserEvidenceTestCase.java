@@ -33,7 +33,7 @@ public final class UiDisplayBrowserEvidenceTestCase implements TestCase, Protoco
     }
     @Override public boolean supportsRecordedEvidenceReevaluation(CaseOutcome previous) {
         return previous != null && previous.outcome() == Outcome.NOT_VERIFIED
-                && "native_browser_evidence_unproven".equals(previous.reasonCode());
+                && "browser.ui-display.evidence-incomplete".equals(previous.reasonCode());
     }
     @Override public Optional<CaseOutcome> reevaluateRecordedEvidence(CaseContext context, CaseOutcome previous) {
         if (!supportsRecordedEvidenceReevaluation(previous) || !context.transcriptComplete()) return Optional.empty();

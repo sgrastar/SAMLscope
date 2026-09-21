@@ -152,6 +152,16 @@ def main():
             record['exit_code'] = result.returncode
             # Do not persist raw process output: it could include protocol-bearing exception URLs.
             print(variant, 'browser exit', result.returncode, flush=True)
+            # This single-fixture polling campaign has no verdict flow; advance it after the
+            # navigation so the Run reaches COMPLETED (releasing the browser wait) and the browser
+            # cases can start. Advancing before the navigation would invalidate the start URL.
+            advanced = api('/api/runs/' + run + '/metadata-lab')
+            if advanced.get('automaticContinueUrl'):
+                with urllib.request.urlopen(
+                        urllib.request.Request(advanced['automaticContinueUrl'], data=b''), timeout=30) as response:
+                    response.read()
+                if variant == variants[0]:
+                    save(out / 'tests-start.json', api('/api/runs/' + run + '/tests/start', {}))
     finally:
         failures = []
         if changed:

@@ -267,7 +267,8 @@ public final class MetadataLabService {
         var run = access.run();
         updateLab(run, updated);
         if (nextIndex >= variants.size()
-                && run.status() == com.samlscope.core.run.RunStatus.WAITING_BROWSER) {
+                && (run.status() == com.samlscope.core.run.RunStatus.WAITING_BROWSER
+                        || run.status() == com.samlscope.core.run.RunStatus.RUNNING)) {
             // The last campaign member released the wait; no further fixture will be dispatched, so
             // no browser wait remains. Orchestration only: no verdict is created or inferred.
             var refreshed = requireRun(run.id());
