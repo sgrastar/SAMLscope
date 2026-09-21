@@ -930,7 +930,10 @@ public final class LogoutTranscriptProfileCase {
                     issues.add("redirect_message_mismatch"); continue;
                 }
                 var document = SecureXml.parse(xml);
-                if (decryptionKey != null) decryptAssertions(document);
+                if (decryptionKey != null) {
+                    decryptAssertions(document);
+                    decryptIdentifiers(document);
+                }
                 Element logout = null;
                 var root = document.getDocumentElement();
                 if (is(root, "LogoutRequest") || is(root, "LogoutResponse")) {
@@ -971,6 +974,29 @@ public final class LogoutTranscriptProfileCase {
     /** In-memory view only: identifiers inside an encrypted login Assertion must be readable. */
     private void decryptAssertions(org.w3c.dom.Document document) {
         var wrappers = document.getElementsByTagNameNS(ASSERTION, "EncryptedAssertion");
+        var pending = new ArrayList<Element>();
+        for (var index = 0; index < wrappers.getLength(); index++) {
+            pending.add((Element) wrappers.item(index));
+        }
+        for (var wrapper : pending) {
+            try {
+                var plaintext = new com.samlscope.saml.crypto.SamlXmlDecrypter()
+                        .decrypt(wrapper, decryptionKey);
+                wrapper.getParentNode().replaceChild(document.importNode(plaintext, true), wrapper);
+            } catch (RuntimeException undecryptable) {
+                // Leave the wrapper in place; the rule reports the identifiers as unavailable.
+            }
+        }
+    }
+
+    /**
+     * In-memory view only: a target-emitted LogoutRequest may carry the principal as an
+     * EncryptedID addressed to the Suite participant. The Suite holds that key, so decrypt it
+     * here; the identifier-strong-match rule must judge the plaintext NameID, not treat the
+     * encrypted choice as inherently unobservable.
+     */
+    private void decryptIdentifiers(org.w3c.dom.Document document) {
+        var wrappers = document.getElementsByTagNameNS(ASSERTION, "EncryptedID");
         var pending = new ArrayList<Element>();
         for (var index = 0; index < wrappers.getLength(); index++) {
             pending.add((Element) wrappers.item(index));
