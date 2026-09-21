@@ -693,6 +693,15 @@ public final class MetadataService {
                 root.removeAttribute("validUntil");
                 root.setAttribute("cacheDuration", "PT1H");
             }
+            // MD04.c boundary fixtures: the Run's test threshold is T=20 days and delta=1 day, so a
+            // near root (T-delta) must be accepted and a far root (T+delta) rejected by a product
+            // whose configured validUntil upper limit is T. The Run result records T and delta.
+            case VALID_UNTIL_NEAR -> root.setAttribute(
+                    "validUntil", DateTimeFormatter.ISO_INSTANT.format(
+                            clock.instant().plus(Duration.ofDays(19))));
+            case VALID_UNTIL_FAR -> root.setAttribute(
+                    "validUntil", DateTimeFormatter.ISO_INSTANT.format(
+                            clock.instant().plus(Duration.ofDays(21))));
             default -> { }
         }
     }
@@ -854,6 +863,8 @@ public final class MetadataService {
         ENTITY_CACHE_DURATION("entity-cache-duration"),
         ENTITIES_CACHE_DURATION("entities-cache-duration"),
         ENTITIES_VALID_UNTIL("entities-valid-until"),
+        VALID_UNTIL_NEAR("valid-until-near"),
+        VALID_UNTIL_FAR("valid-until-far"),
         UI_URL_LOGO_HTTP("ui-url-logo-http"), UI_URL_LOGO_HTTPS("ui-url-logo-https"),
         UI_URL_LOGO_DATA("ui-url-logo-data"), UI_URL_LOGO_JAVASCRIPT("ui-url-logo-javascript"), UI_URL_LOGO_FILE("ui-url-logo-file"),
         UI_URL_INFORMATION_HTTP("ui-url-information-http"), UI_URL_INFORMATION_HTTPS("ui-url-information-https"),

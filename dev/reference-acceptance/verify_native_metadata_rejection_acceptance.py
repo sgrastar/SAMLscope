@@ -35,6 +35,13 @@ CASES = {
             log_path='/opt/reference-idp/logs/idp-warn.log',
             marker='Metadata did not include a validUntil attribute',
             expected=('SATISFIED', 'PASS', 'metadata.fixture-probe.satisfied')),
+        # MD04.c: the Run's tested threshold is T=20 days (RequiredValidUntil maxValidityInterval),
+        # so now+T-delta is accepted and now+T+delta is refused.
+        'IIP-MD04-c-idp-01': dict(
+            folder='shibboleth-md04c-boundary-v84', variant='valid-until-far',
+            adapter='shibboleth-resolver', proof='verified-metadata-rejection-v84.json', level='ERROR',
+            log_path='/opt/reference-idp/logs/idp-warn.log', marker='is larger than is allowed',
+            expected=('SATISFIED', 'PASS', 'metadata.fixture-probe.satisfied')),
         'IIP-MD03-a-idp-01': dict(
             folder='shibboleth-md03-signature-v78', variants=['unsigned', 'bad-signature', 'signed-other-key'],
             adapter='shibboleth-resolver', proof='verified-metadata-rejection-v78.json',

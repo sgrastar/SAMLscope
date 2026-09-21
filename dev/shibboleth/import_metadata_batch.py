@@ -62,6 +62,8 @@ def main():
                         help='Trust each variant polling key so its signature transform and KeyInfo are verified')
     parser.add_argument('--required-valid-until', action='store_true',
                         help='Require a validUntil attribute on the metadata root (rejects a document that omits it)')
+    parser.add_argument('--max-validity-interval', default='P30D',
+                        help='ISO8601 upper bound for RequiredValidUntil (MD04.c sets the tested threshold T)')
     args = parser.parse_args()
     out = args.output.resolve()
     if out.exists() and any(out.iterdir()):
@@ -103,7 +105,8 @@ def main():
     provider = ET.Element('{' + ns + '}MetadataProvider', provider_attributes)
     if args.required_valid_until:
         ET.SubElement(provider, '{' + ns + '}MetadataFilter',
-            {'{' + xsi + '}type': 'RequiredValidUntil', 'maxValidityInterval': 'P30D'})
+            {'{' + xsi + '}type': 'RequiredValidUntil',
+             'maxValidityInterval': args.max_validity_interval})
     providers.insert(0, provider)
     configured = ET.tostring(providers)
     (out / 'configured-providers.xml').write_bytes(configured)

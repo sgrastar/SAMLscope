@@ -17,7 +17,7 @@ public final class MetadataRejectionConfigurationTestCase implements TestCase, C
         ProtocolEvidenceCase, com.samlscope.runner.EvidenceCampaignCase,
         com.samlscope.runner.RecordedEvidenceReevaluation {
     private static final Set<String> CASES = Set.of(
-            "IIP-MD03-a-idp-01", "IIP-MD04-a-idp-01", "IIP-MD04-b-idp-01",
+            "IIP-MD03-a-idp-01", "IIP-MD04-a-idp-01", "IIP-MD04-b-idp-01", "IIP-MD04-c-idp-01",
             // MUST_NOT: a document the target refuses to load cannot have its endpoints or keys used.
             "IIP-MD05-as-idp-01");
     private final TestCase fallback;

@@ -37,6 +37,9 @@ final class MetadataConfigCaseFactory {
                     reject("no-valid-until", "reject a root without validUntil in the enabled policy state"))),
             Map.entry("IIP-MD04.b", List.of(
                     reject("expired", "reject a root whose validUntil is in the past"))),
+            Map.entry("IIP-MD04.c", List.of(
+                    accept("valid-until-near", "accept a root whose validUntil is within the configured limit"),
+                    reject("valid-until-far", "reject a root whose validUntil exceeds the configured limit"))),
             Map.entry("IIP-MD05.a1", List.of(
                     accept("distinct-entity-ids", "consume distinct entityIDs in one deployment"),
                     reject("duplicate-entity-ids", "reject or surface a duplicate entityID conflict"))),

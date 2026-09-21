@@ -4,7 +4,7 @@
 
 | 再試験前 | 確定（Success / Failed / Warning） | 現在の未検証 | 未検証の異なるケースID |
 |---:|---:|---:|---:|
-| 594 | 188 | 406 | 145 |
+| 594 | 189 | 405 | 145 |
 
 ## 内訳
 
@@ -12,7 +12,7 @@
 |---|---:|---|
 | ブラウザ完了後の自動判定がない | 14 | Suite実装 |
 | 一部の試験条件しか実装されていない | 56 | Suite実装 |
-| 設定後の証拠確認・自己申告経路 | 145 | 設定・証拠 |
+| 設定後の証拠確認・自己申告経路 | 144 | 設定・証拠 |
 | 自己申告が無効 | 75 | 設定・証拠 |
 | メタデータの追加試験・観測不足 | 33 | 試験経路確認 |
 | ブラウザ・SLOの追加観測不足 | 25 | 試験経路確認 |
@@ -136,6 +136,7 @@ approved variant全体の入力生成と観測を実装する。追加ログイ�
 | `IIP-MD03-b-idp-01` | Not verified（今回の再試験対象外） | Success | Not verified（今回の再試験対象外） |
 | `IIP-MD04-a-idp-01` | Not verified（今回の再試験対象外） | Success | Not verified（今回の再試験対象外） |
 | `IIP-MD04-b-idp-01` | Not verified（今回の再試験対象外） | Success | Not verified（今回の再試験対象外） |
+| `IIP-MD04-c-idp-01` | Not verified（今回の再試験対象外） | Success | Not verified（今回の再試験対象外） |
 | `IIP-MD05-a3-idp-01` | Not verified（今回の再試験対象外） | Not verified（今回の再試験対象外） | Not verified: case.pending-interaction |
 | `IIP-MD05-a4-idp-01` | Success | Not verified（今回の再試験対象外） | Success |
 | `IIP-MD05-a5-idp-01` | Success | Not verified（今回の再試験対象外） | Success |
@@ -240,7 +241,7 @@ approved variant全体の入力生成と観測を実装する。追加ログイ�
 | `IIP-MD03-d-idp-01` | metadata_idp | metadata_idp | metadata_idp | 設定後の証拠確認・自己申告経路 |
 | `IIP-MD04-a-idp-01` | metadata_idp | — | metadata_idp | メタデータの追加試験・観測不足 |
 | `IIP-MD04-b-idp-01` | metadata_idp | — | metadata_idp | メタデータの追加試験・観測不足 |
-| `IIP-MD04-c-idp-01` | metadata_idp | metadata_idp | metadata_idp | 設定後の証拠確認・自己申告経路 |
+| `IIP-MD04-c-idp-01` | metadata_idp | — | metadata_idp | 設定後の証拠確認・自己申告経路 |
 | `IIP-MD05-a-idp-01` | metadata_idp | metadata_idp | metadata_idp | 設定後の証拠確認・自己申告経路 |
 | `IIP-MD05-a1-idp-01` | metadata_idp | metadata_idp | metadata_idp | メタデータの追加試験・観測不足 |
 | `IIP-MD05-a2-idp-01` | metadata_idp | metadata_idp | metadata_idp | メタデータの追加試験・観測不足 |
@@ -338,7 +339,7 @@ Verdictは変更せず、未検証の理由だけを分類します。feature-ab
 
 | 診断 | 件数 | 意味 | 表示案 |
 |---|---:|---|---|
-| `suite-observation-gap` | 267 | Suite側の観測・実行経路が未接続 | Suite側の実装で解消可能なNot verified |
+| `suite-observation-gap` | 266 | Suite側の観測・実行経路が未接続 | Suite側の実装で解消可能なNot verified |
 | `operator-attestation-available` | 77 | 自己申告または運用者証言で確認可能 | 運用者証言（ケースごとに1回答）で確認可能。現在のPlanは自己申告無効 |
 | `evidence-form-mismatch` | 27 | 承認済み判定条件が要求する証拠形式と製品応答が不一致 | 証拠形式が承認済み条件と一致しないためNot verified（要件解釈の再確認が必要） |
 | `role-inapplicable` | 24 | ロール上、対象が消費しない成果物を要求するvariant | IdPロールでは消費されないvariantのため実行対象外（対象外であることは判定済み） |
