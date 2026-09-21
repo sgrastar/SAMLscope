@@ -758,6 +758,22 @@ def render(root,definitions,output):
                 '「reject or surface」のため、ログsurfaceが代替を満たすかは解釈依存。承認済みobserverは非使用のみを'
                 'rejectとして扱うためVIOLATEDとなるが、G2解釈レビューまでNOT_VERIFIEDを維持する。')
             row['observation_gap']='surface-semantics-undecided'
+        if row.get('profile')=='metadata_idp' and row['case']=='IIP-MD05-aw-idp-01':
+            row['next_action']=('variant「TLS with use=signing」はIdPのTLS経路の観測を要し、参照Shibbolethは'
+                'TLS経路を公開しない。制約に従い安全なTLS経路を構成できない場合はNOT_VERIFIED。'
+                'XML署名・暗号鍵ラップの2用途は観測可能だが、all_ofのため単独では確定しない。')
+            row['observation_gap']='tls-usage-path-unimplemented'
+        if row.get('profile')=='metadata_idp' and row['case']=='IIP-MD05-d-idp-01':
+            row['next_action']=('mdattr:EntityAttributes の4variant（直接Attribute/署名Assertion/Conditions/複数Attribute）を'
+                '対象とする。現Suiteはattribute-policy用のEntityAttributes fixtureを1形態のみ生成し、署名Assertionや'
+                'Conditions形態がないため全variantを充足できない。専用fixtureの追加が必要。')
+            row['observation_gap']='mdattr-assertion-fixtures-unimplemented'
+        if row.get('profile')=='metadata_idp' and row['case']=='IIP-MD05-b-idp-01':
+            row['next_action']=('SAML V2.0 Metadata Schema全体（13variant: ロール記述子・KeyDescriptor・'
+                'AttributeConsumingService・Organization/ContactPerson・EndpointType・AuthnAuthority/PDP/'
+                'AttributeAuthority 等）の受理を要求する集約ケース。専用fixture群が未実装で、既存ケースとは'
+                '別IDの網羅が必要。個別variantの対応可否を棚卸ししてから部分実装する。')
+            row['observation_gap']='metadata-schema-fixture-matrix-unimplemented'
         if row.get('profile')=='metadata_idp' and row['case']=='IIP-MD05-c-idp-01':
             row['next_action']=('MD05.cはMDIOP表現の「受理」を評価し、キー解釈はMD06.aに委譲される。'
                 'KeyValue-only表現のfixtureを使うとfixture observerが署名判別（SAMLエラー応答必須）を要求し、'
