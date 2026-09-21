@@ -768,9 +768,15 @@ def render(root,definitions,output):
                 'MetadataService.endpoint(plan, path, variant, runId) は variant!=BASELINE のとき ACS/SSO の '
                 'Location に mdv=<variant> を付けるため、variant付きでSuite SPメタデータを配ると m0-roundtrip の '
                 '応答ACS URLが mdv付きになり SP peer がそれを metadata-probe 応答（metadataProbeAccepted=false）'
-                'として扱い RunがCOMPLETEDにならない（/tests/start 400。variant無しでは成功）。'
-                '暗号化アルゴリズムを広告しつつ baseline のエンドポイント（mdv無し）を保つSuite側の経路'
-                '（暗号化fixtureのみ適用するvariant、またはendpoint mdvを付けない配布経路）が必要。')
+                'として扱い RunがCOMPLETEDにならない。対処として MetadataService.generateSuiteMetadata '
+                '（属性variantを適用しつつendpointはbaseline）を非保護ファイルに追加し、配布経路 '
+                '/p/{plan}/metadata?baselineEndpoints=true を試作したが、同ルートはG2保護ファイル'
+                '(SamlScopeApplication.java)のため撤回（G2-30維持）。capabilityは非保護側に残置。'
+                'さらに、baselineEndpoints を有効にしてSSPでGCMを広告しても、SSPはSPメタデータの '
+                'EncryptionMethodを無視し既定(rsa-oaep-mgf1p/aes128-cbc)で暗号化することを実測'
+                '(Run run_9SMXBQY2MGZS4VFF0PC0C354H6: observed_content_algorithms=[aes128-cbc])。'
+                'よってALG04-a/bのGCMはSPメタデータ広告では観測できず、SSP側の暗号化アルゴリズム設定'
+                '（対応可否を含む）を確認する必要がある。ルート配線には G2 再承認が必要。')
             row['observation_gap']='sp-encryption-algorithm-control-missing'
         if row.get('profile')=='single_logout_idp' and row.get('category')=='inconclusive' \
                 and row['case'].startswith(('IIP-IDP17','IIP-IDP18','IIP-IDP19')):
