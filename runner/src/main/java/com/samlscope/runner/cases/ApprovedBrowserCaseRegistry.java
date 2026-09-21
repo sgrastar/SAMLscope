@@ -22,11 +22,51 @@ public final class ApprovedBrowserCaseRegistry {
 
     private ApprovedBrowserCaseRegistry() {}
 
+    public static TestCaseRegistry withNativeEcSignature(TestCaseRegistry registry, TranscriptContentReader content,
+            java.util.function.Function<String, byte[]> metadata, java.nio.file.Path directory) {
+        var nativeEvidence=new NativeEcSignatureEvidence(directory,content,metadata);
+        return new TestCaseRegistry(registry.all().stream().map(testCase ->
+                EcSignatureSupportTestCase.ID.equals(testCase.id())
+                        ? (com.samlscope.core.caseexec.TestCase)new EcSignatureSupportTestCase(nativeEvidence)
+                        : testCase).toList());
+    }
+
+    public static TestCaseRegistry withNativeSignedRequests(TestCaseRegistry registry,TranscriptContentReader content,
+            java.util.function.Function<String,byte[]> metadata,java.nio.file.Path directory) {
+        return new TestCaseRegistry(registry.all().stream().map(testCase ->
+            testCase instanceof IdpSignedRequestScenarioTestCase scenario && NativeSignedRequestEvidence.supports(testCase.id())
+                ? (com.samlscope.core.caseexec.TestCase)scenario.withNativeEvidence(directory,content,metadata) : testCase).toList());
+    }
+
     public static TestCaseRegistry withNativeUiLogo(TestCaseRegistry registry, TranscriptContentReader content,
             java.util.function.Function<String, byte[]> metadata, java.nio.file.Path directory) {
         return new TestCaseRegistry(registry.all().stream().map(testCase ->
                 UiLogoComparison.CASE_ID.equals(testCase.id())
                         ? (com.samlscope.core.caseexec.TestCase)new UiLogoBrowserEvidenceTestCase(content, metadata, directory)
+                        : testCase).toList());
+    }
+
+    public static TestCaseRegistry withSignatureModes(TestCaseRegistry registry, TranscriptContentReader content,
+            java.util.function.Function<String,byte[]> metadata, SamlDecryptionKeyProvider keys) {
+        return new TestCaseRegistry(registry.all().stream().map(testCase ->
+                SignatureModesObservation.ID.equals(testCase.id())
+                        ? (com.samlscope.core.caseexec.TestCase)new SignatureModesBrowserTestCase(testCase, content, metadata, keys)
+                        : testCase).toList());
+    }
+
+    public static TestCaseRegistry withNativeUiDisplay(TestCaseRegistry registry, TranscriptContentReader content,
+            java.util.function.Function<String, byte[]> metadata, java.nio.file.Path directory) {
+        return new TestCaseRegistry(registry.all().stream().map(testCase ->
+                UiDisplayComparison.CASE_ID.equals(testCase.id())
+                        ? (com.samlscope.core.caseexec.TestCase)new UiDisplayBrowserEvidenceTestCase(content, metadata, directory)
+                        : testCase).toList());
+    }
+
+    public static TestCaseRegistry withNativeUiUrls(TestCaseRegistry registry, TranscriptContentReader content,
+            java.util.function.Function<String, byte[]> metadata, java.nio.file.Path directory) {
+        return new TestCaseRegistry(registry.all().stream().map(testCase ->
+                UiUrlComparison.CASE_ID.equals(testCase.id())
+                        ? (com.samlscope.core.caseexec.TestCase)new UiUrlBrowserEvidenceTestCase(content, metadata, directory)
                         : testCase).toList());
     }
 
@@ -270,7 +310,7 @@ public final class ApprovedBrowserCaseRegistry {
         }
         if (idpScenarioConfigurations != null
                 && IdpAuthnContextScenarioTestCase.CASE_ID.equals(definition.id())) {
-            return new IdpAuthnContextScenarioTestCase(idpScenarioConfigurations);
+            return new IdpAuthnContextScenarioTestCase(idpScenarioConfigurations, decryptionKeys);
         }
         if (idpScenarioConfigurations != null
                 && IdpDestinationScenarioTestCase.CASE_ID.equals(definition.id())) {
@@ -278,7 +318,7 @@ public final class ApprovedBrowserCaseRegistry {
         }
         if (idpScenarioConfigurations != null
                 && IdpForceAuthnScenarioTestCase.CASE_ID.equals(definition.id())) {
-            return new IdpForceAuthnScenarioTestCase(idpScenarioConfigurations);
+            return new IdpForceAuthnScenarioTestCase(idpScenarioConfigurations, decryptionKeys);
         }
         if (idpScenarioConfigurations != null && suiteCredentials != null && List.of(
                 IdpSignedRequestScenarioTestCase.VERIFY_CASE,

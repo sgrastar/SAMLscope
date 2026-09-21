@@ -35,6 +35,8 @@ CONFIRMED_FAILURES = {
 }
 
 def render(root, output):
+    from audit_algorithm_verification_evidence import withdrawals as algorithm_withdrawals
+    withdrawn={(r['product'],r['profile'],r['case']):r for r in algorithm_withdrawals(root)}
     # The audited ledger owns the final per-case selection, including withdrawn conclusions.
     # Older feature-specific selections above must not resurrect a result rejected by that audit.
     ledger_selection = {}
@@ -271,6 +273,21 @@ def render(root, output):
                                  "run": row["run"], "cases": [case_id],
                                  "result_sha256": row["result_sha256"],
                                  "suite_image": selected["suite"]["image_digest"], "selection": "audited-ledger"})
+            for case_id in list(cases):
+                qualification=withdrawn.get((product,profile,case_id))
+                if qualification is None: continue
+                original=cases[case_id]
+                if original['reason_code']=='algorithm.native-verification-observed':
+                    from verify_native_signed_acceptance import verify as verify_native_signed
+                    _,verified=verify_native_signed(root.parent/'reference-20260918',profile,product)
+                    assert product in {'shibboleth','simplesamlphp','keycloak'} and original==verified[case_id]
+                    continue
+                assert original['verdict']=='PASS' and original['reason_code']=='idp.signed-request.satisfied'
+                cases[case_id]=dict(original,outcome='NOT_VERIFIED',verdict='NOT_VERIFIED',
+                    reason_code=qualification['reason_code'],reason=qualification['reason_code'])
+                manifest.append(dict(profile=profile,product=product,folder=qualification['evidence_folder'],
+                    run=qualification['run'],cases=[case_id],result_sha256=qualification['result_sha256'],
+                    suite_image='review-qualification',audit_withdrawal=qualification['audit_withdrawal']))
             columns.append(cases)
             unresolved[product].update(c["reason_code"] for c in cases.values() if c["verdict"] == "NOT_VERIFIED")
             manifest.append({"profile": profile, "product": product, "folder": folder,
@@ -298,7 +315,22 @@ def render(root, output):
                            "NOT_VERIFIED": "Not verified", "NOT_APPLICABLE": "N/A",
                            "NOT_OBSERVABLE": "Not observable", "INDETERMINATE": "Indeterminate",
                            "INCONSISTENT": "Inconsistent", "ERROR": "Error (Suite)"}.get(verdict, verdict)
-                if verdict == "FAIL" and case_id not in CONFIRMED_FAILURES:
+                native_authn_failure = (product, profile, case_id) == ("shibboleth", "browser_sso_idp", "IIP-SSO01-gc-idp-01") and (product, profile, case_id) in ledger_selection
+                native_certificate_failure = (product == "keycloak" and profile == "metadata_idp"
+                    and case_id in {"IIP-MD12-b-idp-01", "IIP-MD12-d-idp-01", "IIP-MD06-a9-idp-01"}
+                    and case["reason_code"] == "metadata.certificate.native-valid-request-rejected"
+                    and (product, profile, case_id) in ledger_selection)
+                if native_certificate_failure:
+                    from verify_native_certificate_acceptance import verify as verify_native_certificates
+                    _, verified = verify_native_certificates(root.parent / 'reference-20260918', runtime=case_id == "IIP-MD06-a9-idp-01")
+                    assert case == verified[case_id]
+                native_key_failure = ((product,profile,case_id)==("keycloak","metadata_idp","IIP-MD07-a-idp-01")
+                    and case["reason_code"]=="metadata.keys.selection-violated" and (product,profile,case_id) in ledger_selection)
+                if native_key_failure:
+                    from verify_metadata_key_acceptance import verify as verify_metadata_keys
+                    _,verified=verify_metadata_keys(root.parent/'reference-20260918')
+                    assert case==verified[case_id]
+                if verdict == "FAIL" and case_id not in CONFIRMED_FAILURES and not native_authn_failure and not native_certificate_failure and not native_key_failure:
                     display = "**Failed (台帳採用・原因分類未確認)**"
                 if product == 'simplesamlphp' and profile == 'browser_sso_idp' and case_id == 'IIP-IDP06-b-idp-01':
                     display += " (prior run; latest precision not verified)"

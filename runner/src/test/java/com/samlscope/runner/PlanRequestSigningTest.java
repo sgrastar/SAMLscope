@@ -131,6 +131,31 @@ class PlanRequestSigningTest {
         plans.save(optional);
     }
 
+    @Test void malformedRequestWithoutIdIsPersistedUnsignedForTheInvalidRequestScenario() {
+        var clock = Clock.fixed(NOW, ZoneOffset.UTC);
+        var db = new SqliteDatabase(directory); var json = new JsonCodec();
+        var plans = new SqlitePlanRepository(db, json); var runs = new SqliteRunRepository(db, json);
+        var plan = plan(TestPlan.RequestSigningMode.REQUIRED); plans.save(plan);
+        runs.save(new TestRun(RUN, plan.id(), RunStatus.RUNNING, Reachability.UNKNOWN, Map.of(), NOW, NOW));
+        var keys = new FilePlanKeyStore(directory, clock);
+        var signing = new PlanRequestSigning(plans, runs, keys);
+        var factory = new SamlInvalidRequestFactory();
+        var target = URI.create("https://idp.example/sso");
+        var withoutId = factory.build(SamlInvalidRequestFactory.Fixture.MISSING_ID, "_request", target,
+                "https://suite.example/sp", URI.create("https://suite.example/acs"), NOW);
+        var unchanged = signing.apply(RUN, new OutboundAction("action", OutboundKind.AUTHN_REQUEST, withoutId, target, false));
+        assertArrayEquals(withoutId, unchanged.payload());
+        assertTrue(SecureXml.parse(unchanged.payload()).getDocumentElement().getAttribute("ID").isBlank(),
+                "a request without @ID cannot carry a reference signature");
+        assertFalse(new XmlSignatureVerifier().hasValidEnvelopedSignature(
+                SecureXml.parse(unchanged.payload()).getDocumentElement(), keys.getOrCreate(plan.id()).certificate()));
+        var baseline = factory.build(SamlInvalidRequestFactory.Fixture.BASELINE, "_request", target,
+                "https://suite.example/sp", URI.create("https://suite.example/acs"), NOW);
+        var signed = signing.apply(RUN, new OutboundAction("action", OutboundKind.AUTHN_REQUEST, baseline, target, false));
+        assertTrue(new XmlSignatureVerifier().hasValidEnvelopedSignature(
+                SecureXml.parse(signed.payload()).getDocumentElement(), keys.getOrCreate(plan.id()).certificate()));
+    }
+
     @Test void signedLogoutFixturesPersistWithoutRepairOrUnsafeRetryPermission() {
         var clock = Clock.fixed(NOW, ZoneOffset.UTC);
         var db = new SqliteDatabase(directory); var json = new JsonCodec();

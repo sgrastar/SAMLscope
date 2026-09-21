@@ -94,6 +94,21 @@ class Client:
     continue
    if 'SAML Response recorded' in page or 'SAML check recorded' in page or 'M0 SSO round trip completed' in page:
     return 'recorded'
+   confirm=next((f for f in forms if 'freshSessionConfirmed' in f.fields),None)
+   if confirm:
+    # The Suite's browser-assisted probe page requires the private-session confirmation
+    # before it dispatches the one-time fixture. A browser does this with a click; the
+    # reference driver resubmits the same form without inventing a verdict.
+    fields=dict(confirm.fields);fields['freshSessionConfirmed']='true'
+    url=p.urljoin(url,confirm.action);continue
+   if 'name="freshSessionConfirmed"' in page:
+    # Unchecked checkboxes are not successful controls, so the parser omits them. The
+    # probe page's form posts to itself; confirm the private-session boundary explicitly.
+    fields={'freshSessionConfirmed':'true'};continue
+   if 'Continue with this request' in page:
+    # The probe page's submit button carries no field. Submitting an empty form dispatches
+    # the one-time fixture exactly as the browser's button does.
+    fields={};continue
    login=next((f for f in forms if 'password' in f.fields or 'j_password' in f.fields),None)
    if login:
     if passive:return 'passive-interaction-required'

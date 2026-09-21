@@ -355,6 +355,11 @@ final class M1Runtime {
                     var run = runs.find(runId).orElseThrow(() -> new IllegalArgumentException("Unknown Run"));
                     return java.util.Optional.of(keys.getOrCreate(run.planId()));
                 });
+        m1Browser = ApprovedBrowserCaseRegistry.withSignatureModes(m1Browser, transcriptContent, runMetadata, runDecryptionKeys);
+        m1Browser = ApprovedBrowserCaseRegistry.withNativeEcSignature(m1Browser, transcriptContent, runMetadata,
+                config.dataDirectory().resolve("ec-signature-preparations"));
+        m1Browser = ApprovedBrowserCaseRegistry.withNativeSignedRequests(m1Browser,transcriptContent,runMetadata,
+                config.dataDirectory().resolve("signed-request-preparations"));
         var m2Attested = ApprovedAttestedCaseRegistry.create(
                 definitions, com.samlscope.core.casedef.CaseDefinitionCatalog.Milestone.M2,
                 null, null, null, null, null, runMetadata);
@@ -370,6 +375,11 @@ final class M1Runtime {
                         .map(plan -> pollingMetadata.credentialsForVariant(plan,
                                 com.samlscope.saml.metadata.MetadataService.Variant.parse(variant))),
                 config.dataDirectory().resolve("relying-party-attribute-preparations"));
+        m1Config = ApprovedConfigCaseRegistry.withAuthnContextPreparation(m1Config, transcriptContent, runMetadata,
+                (runId, variant) -> runs.find(runId).flatMap(run -> plans.find(run.planId()))
+                        .map(plan -> pollingMetadata.credentialsForVariant(plan,
+                                com.samlscope.saml.metadata.MetadataService.Variant.parse(variant))),
+                config.dataDirectory().resolve("authn-context-preparations"));
         m1Config = ApprovedConfigCaseRegistry.withNameIdOmissionPreparation(m1Config, transcriptContent, runMetadata,
                 (runId, variant) -> runs.find(runId).flatMap(run -> plans.find(run.planId()))
                         .map(plan -> pollingMetadata.credentialsForVariant(plan,
@@ -385,6 +395,12 @@ final class M1Runtime {
                 (runId, variant) -> runs.find(runId).flatMap(run -> plans.find(run.planId()))
                         .map(plan -> pollingMetadata.credentialsForPollingVariant(plan,
                                 com.samlscope.saml.metadata.MetadataService.Variant.parse(variant))));
+        m2Config = ApprovedConfigCaseRegistry.withMetadataKeySelection(m2Config, transcriptContent, runMetadata,
+                config.dataDirectory().resolve("metadata-key-evidence"));
+        m2Config = ApprovedConfigCaseRegistry.withMetadataRejection(m2Config, transcriptContent, runMetadata,
+                config.dataDirectory().resolve("metadata-rejection-evidence"));
+        m2Config = ApprovedConfigCaseRegistry.withNativeCertificates(m2Config, transcriptContent, runMetadata,
+                config.dataDirectory().resolve("certificate-evidence"));
         var m2Browser = ApprovedBrowserCaseRegistry.create(
                 definitions, config.publicBaseUrl(),
                 com.samlscope.core.casedef.CaseDefinitionCatalog.Milestone.M2,
@@ -407,13 +423,17 @@ final class M1Runtime {
                         .map(plan -> plan.target().entityId()));
         m2Browser = ApprovedBrowserCaseRegistry.withNativeUiLogo(m2Browser, transcriptContent, runMetadata,
                 config.dataDirectory().resolve("ui-logo-evidence"));
+        m2Browser = ApprovedBrowserCaseRegistry.withNativeUiDisplay(m2Browser, transcriptContent, runMetadata,
+                config.dataDirectory().resolve("ui-display-evidence"));
+        m2Browser = ApprovedBrowserCaseRegistry.withNativeUiUrls(m2Browser, transcriptContent, runMetadata,
+                config.dataDirectory().resolve("ui-url-evidence"));
         var m2Automated = M2AutomatedCaseRegistry.create(runId -> {
             try {
                 return runMetadata.apply(runId);
             } catch (com.samlscope.store.StoreException unavailable) {
                 return null;
             }
-        });
+        }, transcriptContent, runMetadata, config.dataDirectory().resolve("metadata-rejection-evidence"));
         var m3Attested = ApprovedAttestedCaseRegistry.create(
                 definitions, com.samlscope.core.casedef.CaseDefinitionCatalog.Milestone.M3,
                 config.publicBaseUrl(), null, transcriptContent,

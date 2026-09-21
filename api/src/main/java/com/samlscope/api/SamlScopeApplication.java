@@ -839,10 +839,18 @@ public final class SamlScopeApplication {
             var requestId = "_" + Identifiers.newId("metadata");
             var acs = config.peerBaseUrl().resolve(
                     "/p/" + plan.id() + "/sp/acs/0?mdv=" + flow.variant().id() + "&run=" + run.id());
-            var requestXml = new com.samlscope.saml.normal.SamlSignedRequestFactory().build(
-                    flow.variant().requestFixture(),
-                    requestId, destination, metadata.preloadedEntityId(plan, flow.variant()), acs,
-                    clock.instant(), metadata.credentialsForVariant(plan, flow.variant()));
+            var authnInput = ctx.queryParam("authn") == null ? null : AuthnContextCampaignInputs.read(
+                    config.dataDirectory().resolve("authn-context-inputs"), run.id(),
+                    metadataCache.getRunSnapshot(run.id(), plan.id()), ctx.queryParam("authn"));
+            var requestXml = authnInput == null
+                    ? new com.samlscope.saml.normal.SamlSignedRequestFactory().build(
+                        flow.variant().requestFixture(), requestId, destination,
+                        metadata.preloadedEntityId(plan, flow.variant()), acs,
+                        clock.instant(), metadata.credentialsForVariant(plan, flow.variant()))
+                    : new com.samlscope.saml.normal.SamlRequestedAuthnContextRequestFactory().buildSignedContext(
+                        authnInput.request(), requestId, destination,
+                        metadata.preloadedEntityId(plan, flow.variant()), acs,
+                        clock.instant(), metadata.credentialsForVariant(plan, flow.variant()));
             var relayState = "samlscope-metadata-preloaded|" + run.id() + "|"
                     + flow.campaignToken() + "|" + flow.index();
             var requests = new LinkedHashMap<String, Object>();
@@ -856,14 +864,20 @@ public final class SamlScopeApplication {
             context.put("metadata_preloaded_requests", Map.copyOf(requests));
             context.put("active_metadata_request_id", requestId);
             runService.update(run, RunStatus.WAITING_BROWSER, run.targetToSuiteReachability(), context);
+            var requestSummary = new LinkedHashMap<String, Object>();
+            requestSummary.put("type", "AuthnRequest");
+            requestSummary.put("id", requestId);
+            requestSummary.put("variant", flow.variant().id());
+            requestSummary.put("campaign", "metadata-preloaded");
+            if (authnInput != null) {
+                requestSummary.put("authn_context_case", authnInput.caseId());
+                requestSummary.put("authn_context_condition", authnInput.condition());
+                requestSummary.put("authn_context_inputs_sha256", authnInput.sha256());
+            }
             transcript.record(new com.samlscope.core.transcript.TranscriptInput(
                     run.id(), com.samlscope.core.transcript.Direction.OUTBOUND, clock.instant(),
                     requestId, "POST", destination.toString(), null, Map.of(), new byte[0], null,
-                    null, requestXml, Map.of(
-                            "type", "AuthnRequest",
-                            "id", requestId,
-                            "variant", flow.variant().id(),
-                            "campaign", "metadata-preloaded")));
+                    null, requestXml, Map.copyOf(requestSummary)));
             var nonceBytes = new byte[18];
             NONCE_RANDOM.nextBytes(nonceBytes);
             var nonce = Base64.getUrlEncoder().withoutPadding().encodeToString(nonceBytes);
@@ -921,6 +935,16 @@ public final class SamlScopeApplication {
         });
         javalin.routes.post("/p/{plan}/sp/slo-fail", ctx -> {
             recordSloFailParticipant(ctx, transcript, clock, saml);
+            // A SOAP participant failure must be a SOAP Fault, not an I/O-level error, or the
+            // propagation loop cannot distinguish a failed participant from a broken transport.
+            if (String.valueOf(ctx.contentType()).toLowerCase(java.util.Locale.ROOT).contains("xml")) {
+                ctx.status(HttpStatus.INTERNAL_SERVER_ERROR).contentType("text/xml").result(
+                        "<S:Envelope xmlns:S=\"http://schemas.xmlsoap.org/soap/envelope/\"><S:Body>"
+                        + "<S:Fault><faultcode>S:Server</faultcode>"
+                        + "<faultstring>slo failure fixture</faultstring></S:Fault>"
+                        + "</S:Body></S:Envelope>");
+                return;
+            }
             ctx.status(HttpStatus.INTERNAL_SERVER_ERROR).contentType("text/plain").result("slo failure fixture");
         });
         for (var role : List.of("sp", "idp")) {

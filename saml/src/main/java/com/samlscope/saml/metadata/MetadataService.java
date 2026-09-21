@@ -103,6 +103,9 @@ public final class MetadataService {
             Variant.ENTITY_ROOT,
             Variant.MULTIPLE_SIGNING_KEYS_FIRST,
             Variant.MULTIPLE_SIGNING_KEYS,
+            Variant.MULTIPLE_SIGNING_KEYS_UNADVERTISED,
+            Variant.CERT_RUNTIME_SAME_KEY,
+            Variant.CERT_RUNTIME_OTHER_KEY,
             Variant.THREE_SIGNING_KEYS_FIRST,
             Variant.THREE_SIGNING_KEYS_SECOND,
             Variant.THREE_SIGNING_KEYS,
@@ -245,6 +248,9 @@ public final class MetadataService {
      * campaign without any vendor administration API.
      */
     public byte[] generatePolling(TestPlan plan, Variant variant, String runId) {
+        if (variant == Variant.SIGNATURE_MODES_OPTIONAL) {
+            throw new IllegalArgumentException("Signature mode metadata uses the ordinary SSO campaign");
+        }
         return generate(plan, variant, runId, pollingBaseCredentials(plan, variant));
     }
 
@@ -276,7 +282,7 @@ public final class MetadataService {
         sp.setAttribute("protocolSupportEnumeration", "urn:oasis:names:tc:SAML:2.0:protocol");
         sp.setAttribute("AuthnRequestsSigned", Boolean.toString(
                 plan.parameters().requestSigningMode() == TestPlan.RequestSigningMode.REQUIRED));
-        sp.setAttribute("WantAssertionsSigned", "true");
+        sp.setAttribute("WantAssertionsSigned", Boolean.toString(variant != Variant.SIGNATURE_MODES_OPTIONAL));
         roleKeyDescriptors(document, sp, plan, roleCredentials, variant);
         service(document, sp, "SingleLogoutService", REDIRECT, endpoint(plan, "/sp/slo", variant, runId), null, false);
         service(document, sp, "SingleLogoutService", POST, endpoint(plan, "/sp/slo", variant, runId), null, false);
@@ -330,7 +336,21 @@ public final class MetadataService {
     private PlanCredentials pollingBaseCredentials(TestPlan plan, Variant variant) {
         try {
             // The negative request changes the signature, not the target's trusted EC key.
-            var keyVariant = variant == Variant.ECDSA_SHA256_INVALID_SIGNATURE ? Variant.ECDSA_SHA256 : variant;
+            var keyVariant = switch (variant) {
+                case ECDSA_SHA256_INVALID_SIGNATURE -> Variant.ECDSA_SHA256;
+                case KEYVALUE_ONLY, CERT_RUNTIME_SAME_KEY, CERT_RUNTIME_OTHER_KEY -> Variant.ENTITY_ROOT;
+                // Compare signer selection against one unchanged advertised key set.
+                case MULTIPLE_SIGNING_KEYS, MULTIPLE_SIGNING_KEYS_UNADVERTISED -> Variant.MULTIPLE_SIGNING_KEYS_FIRST;
+                case MULTIPLE_OMITTED_KEYS_SECOND -> Variant.MULTIPLE_OMITTED_KEYS_FIRST;
+                case THREE_SIGNING_KEYS_SECOND, THREE_SIGNING_KEYS -> Variant.THREE_SIGNING_KEYS_FIRST;
+                // Display precedence changes only the advertised name candidates. Rotating the
+                // trusted key between those conditions confounds the native UI comparison.
+                case UI_CONSUMER_DISPLAY_SERVICE, UI_CONSUMER_DISPLAY_ENTITY -> Variant.UI_CONSUMER_DISPLAY_ALL;
+                default -> variant;
+            };
+            // URL consumption comparisons vary the UI URL, not the trust anchor. Their
+            // native adapters explicitly reload metadata; key rotation is not their trigger.
+            if (variant.id().startsWith("ui-url-")) keyVariant = Variant.UI_URL_LOGO_HTTP;
             var digest = MessageDigest.getInstance("SHA-256")
                     .digest(keyVariant.id().getBytes(StandardCharsets.UTF_8));
             var alias = "poll-" + java.util.HexFormat.of().formatHex(digest, 0, 8);
@@ -345,12 +365,32 @@ public final class MetadataService {
     // original certificate at runtime: only the public key must agree with metadata.
     private PlanCredentials probeCredentials(TestPlan plan, PlanCredentials primary, Variant variant) {
         return switch (variant) {
+            case CERT_RUNTIME_SAME_KEY -> runtimeCertificate(primary, primary);
+            case CERT_RUNTIME_OTHER_KEY -> runtimeCertificate(primary, rolloverCredentials(plan, primary, 2));
             case ECDSA_SHA256, ECDSA_SHA256_INVALID_SIGNATURE -> ecCredentials(plan, primary);
             case MULTIPLE_SIGNING_KEYS, MULTIPLE_OMITTED_KEYS_SECOND, THREE_SIGNING_KEYS_SECOND ->
                     rolloverCredentials(plan, primary, 2);
-            case THREE_SIGNING_KEYS -> rolloverCredentials(plan, primary, 3);
+            case THREE_SIGNING_KEYS, MULTIPLE_SIGNING_KEYS_UNADVERTISED -> rolloverCredentials(plan, primary, 3);
             default -> primary;
         };
+    }
+
+    /** Keep certificate names fixed while independently varying the runtime public key. */
+    private PlanCredentials runtimeCertificate(PlanCredentials metadata, PlanCredentials signer) {
+        try {
+            var original=metadata.certificate();
+            var builder=new JcaX509v3CertificateBuilder(
+                    X500Name.getInstance(original.getIssuerX500Principal().getEncoded()),
+                    original.getSerialNumber().add(BigInteger.ONE), original.getNotBefore(), original.getNotAfter(),
+                    X500Name.getInstance(original.getSubjectX500Principal().getEncoded()), signer.certificate().getPublicKey());
+            builder.addExtension(Extension.basicConstraints,true,new BasicConstraints(false));
+            builder.addExtension(Extension.keyUsage,true,new KeyUsage(KeyUsage.digitalSignature | KeyUsage.keyEncipherment));
+            var certificate=new JcaX509CertificateConverter().getCertificate(builder.build(
+                    new JcaContentSignerBuilder("SHA256withRSA").build(signer.privateKey())));
+            return new PlanCredentials(signer.privateKey(),certificate);
+        } catch(Exception invalid) {
+            throw new IllegalStateException("Cannot create runtime certificate comparison fixture",invalid);
+        }
     }
 
     private PlanCredentials ecCredentials(TestPlan plan, PlanCredentials primary) {
@@ -501,7 +541,8 @@ public final class MetadataService {
                 || variant == Variant.MULTIPLE_OMITTED_KEYS_SECOND ? null : "signing";
         keyDescriptor(document, role, credentials.certificate(), signingUse);
         keyDescriptor(document, role, credentials.certificate(), "encryption");
-        if (variant == Variant.MULTIPLE_SIGNING_KEYS || variant == Variant.THREE_SIGNING_KEYS
+        if (variant == Variant.MULTIPLE_SIGNING_KEYS || variant == Variant.MULTIPLE_SIGNING_KEYS_UNADVERTISED
+                || variant == Variant.THREE_SIGNING_KEYS
                 || variant == Variant.THREE_SIGNING_KEYS_FIRST || variant == Variant.THREE_SIGNING_KEYS_SECOND
                 || variant == Variant.MULTIPLE_SIGNING_KEYS_FIRST
                 || variant == Variant.MULTIPLE_OMITTED_KEYS_FIRST
@@ -765,7 +806,7 @@ public final class MetadataService {
 
     private String endpoint(TestPlan plan, String suffix, Variant variant, String runId) {
         var base = endpoint(plan, suffix);
-        if (variant == Variant.BASELINE) return base;
+        if (variant == Variant.BASELINE || variant == Variant.SIGNATURE_MODES_OPTIONAL) return base;
         if (runId == null || runId.isBlank()) throw new IllegalArgumentException("runId is required for metadata variants");
         return base + "?mdv=" + variant.id() + "&run=" + runId;
     }
@@ -774,6 +815,7 @@ public final class MetadataService {
         ECDSA_SHA256("ecdsa-sha256"),
         ECDSA_SHA256_INVALID_SIGNATURE("ecdsa-sha256-invalid-signature"),
         BASELINE("baseline"),
+        SIGNATURE_MODES_OPTIONAL("signature-modes-optional"),
         FOREIGN_ATTRIBUTE_ENTITY("foreign-attribute-entity"),
         FOREIGN_ATTRIBUTE_ORGANIZATION("foreign-attribute-organization"),
         FOREIGN_ATTRIBUTE_CONTACT("foreign-attribute-contact"),
@@ -879,6 +921,9 @@ public final class MetadataService {
         KEYVALUE_ONLY("keyvalue-only"),
         MULTIPLE_SIGNING_KEYS_FIRST("multiple-signing-keys-first"),
         MULTIPLE_SIGNING_KEYS("multiple-signing-keys"),
+        MULTIPLE_SIGNING_KEYS_UNADVERTISED("multiple-signing-keys-unadvertised"),
+        CERT_RUNTIME_SAME_KEY("certificate-runtime-same-key"),
+        CERT_RUNTIME_OTHER_KEY("certificate-runtime-other-key"),
         MULTIPLE_OMITTED_KEYS_FIRST("multiple-omitted-keys-first"),
         MULTIPLE_OMITTED_KEYS_SECOND("multiple-omitted-keys-second"),
         THREE_SIGNING_KEYS_FIRST("three-signing-keys-first"),

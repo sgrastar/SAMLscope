@@ -117,6 +117,14 @@ _KEYCLOAK_METADATA_FEATURE_ABSENT = {
     'IIP-MD06-a3-idp-01', 'IIP-MD06-a6-idp-01', 'IIP-MD06-a7-idp-01', 'IIP-MD06-a9-idp-01',
     'IIP-MD06-ab-idp-01', 'IIP-MD06-b-idp-01', 'IIP-MD07-a-idp-01',
 }
+# Cases whose sound observation needs the target to verify the metadata document signature. The
+# reference Shibboleth metadata-providers.xml configures bare FilesystemMetadataProviders with no
+# SignatureValidation filter, so the signed XPath transform is never applied and acceptance of a
+# reject fixture does not by itself prove a target violation.
+_SHIBBOLETH_SIGNATURE_DEPENDENT = {
+    'IIP-MD03-a-idp-01', 'IIP-MD03-b-idp-01', 'IIP-MD04-a-idp-01',
+    'IIP-MD05-am-idp-01', 'IIP-MD05-an-idp-01', 'IIP-MD05-ao-idp-01',
+}
 # The Suite can drive an admin import and then judge the product behavior, once the oracle exists.
 _KEYCLOAK_METADATA_IMPORT_GAP = {
     'IIP-MD05-a4-idp-01', 'IIP-MD05-av-idp-01', 'IIP-MD05-aw-idp-01', 'IIP-MD05-c1-idp-01',
@@ -536,9 +544,29 @@ def render(root,definitions,output):
             selected = verify_ssp_import(root.parent.parent/'reference-20260918',
                 folder='simplesamlphp-aggregate-import', adopted={
                     'IIP-MD02-d-idp-01': ['entities-root-one','entities-root-two','entities-root-fifty']})
+        if row['product']=='simplesamlphp' and row['profile']=='metadata_idp' and row['case']=='IIP-MD06-a1-idp-01':
+            selected = verify_ssp_import(root.parent.parent/'reference-20260918',
+                folder='simplesamlphp-metadata-fixture-v67', adopted={
+                    'IIP-MD06-a1-idp-01': ['entity-root','entities-root-one','nested-entities']})
         if row['product']=='simplesamlphp' and row['profile']=='browser_sso_idp' and row['case']=='IIP-IDP12-c-idp-01':
             from verify_default_acs_batch import verify as verify_default_acs
             selected = verify_default_acs(root.parent.parent/'reference-20260918')
+        if row['product']=='simplesamlphp' and row['profile']=='browser_sso_idp' and row['case'] in {
+                'IIP-SSO01-an-idp-01','IIP-SSO01-gi-idp-01'}:
+            from verify_invalid_request_acceptance import verify as verify_invalid_request
+            selected = verify_invalid_request(root.parent.parent/'reference-20260918','simplesamlphp')
+        if row['product']=='keycloak' and row['profile']=='browser_sso_idp' and row['case'] in {
+                'IIP-SSO01-an-idp-01','IIP-SSO01-gi-idp-01'}:
+            from verify_invalid_request_acceptance import verify as verify_invalid_request
+            selected = verify_invalid_request(root.parent.parent/'reference-20260918','keycloak')
+        if row['product'] in {'shibboleth','keycloak'} and row['profile']=='browser_sso_idp' \
+                and row['case']=='IIP-IDP06-a-idp-01':
+            from verify_force_authn_acceptance import verify as verify_force_authn
+            selected = verify_force_authn(root.parent.parent/'reference-20260918', row['product'])
+        if row['product']=='keycloak' and row['profile']=='browser_sso_idp' \
+                and row['case']=='IIP-IDP08-a-idp-01':
+            from verify_authn_context_exact_acceptance import verify as verify_authn_context_exact
+            selected = verify_authn_context_exact(root.parent.parent/'reference-20260918')
         if row['product']=='simplesamlphp' and row['profile']=='metadata_idp' and row['case']=='IIP-MD05-a3-idp-01':
             path=root.parent.parent/'reference-20260918/simplesamlphp-extension-points-corrected/result.json'
             result=json.loads(path.read_text())
@@ -580,10 +608,46 @@ def render(root,definitions,output):
         if row['product']=='shibboleth' and row['profile']=='metadata_idp' and row['case']=='IIP-MD05-e8-idp-01':
             from verify_metadata_intersection import verify as verify_intersection
             selected=verify_intersection(root.parent.parent/'reference-20260918')
-        if row['product']=='shibboleth' and row['profile']=='browser_sso_idp' and row['case'] in {
+        if row['product']=='shibboleth' and row['profile'] in {'browser_sso_idp','ecp_idp'} and row['case'] in {
                 'IIP-ALG04-b-idp-01','IIP-ALG06-b-idp-01','IIP-ALG06-c-idp-01'}:
             from verify_producer_algorithms import verify as verify_producer
-            selected=verify_producer(root.parent.parent/'reference-20260918')
+            selected=verify_producer(root.parent.parent/'reference-20260918',row['profile'])
+        if row['product']=='keycloak' and row['profile']=='metadata_idp' and row['case'] in {
+                'IIP-MD12-b-idp-01','IIP-MD12-d-idp-01'}:
+            from verify_native_certificate_acceptance import verify as verify_native_certificates
+            selected=verify_native_certificates(root.parent.parent/'reference-20260918')
+        if row['product']=='keycloak' and row['profile']=='metadata_idp' and row['case'] in {
+                'IIP-MD06-a8-idp-01','IIP-MD07-a-idp-01'}:
+            from verify_metadata_key_acceptance import verify as verify_metadata_keys
+            selected=verify_metadata_keys(root.parent.parent/'reference-20260918')
+        if row['product']=='simplesamlphp' and row['profile']=='metadata_idp' and row['case'] in {
+                'IIP-MD06-a8-idp-01','IIP-MD07-b-idp-01'}:
+            from verify_metadata_key_acceptance import verify as verify_metadata_keys
+            selected=verify_metadata_keys(root.parent.parent/'reference-20260918','simplesamlphp')
+        if row['product']=='shibboleth' and row['profile']=='metadata_idp' and row['case'] in {
+                'IIP-MD06-a8-idp-01','IIP-MD07-b-idp-01'}:
+            from verify_metadata_key_acceptance import verify as verify_metadata_keys
+            selected=verify_metadata_keys(root.parent.parent/'reference-20260918','shibboleth')
+        if row['product']=='shibboleth' and row['profile']=='metadata_idp' and row['case'] in {
+                'IIP-MD03-a-idp-01','IIP-MD04-b-idp-01','IIP-MD05-as-idp-01','IIP-MD05-an-idp-01',
+                'IIP-MD05-am-idp-01'}:
+            from verify_native_metadata_rejection_acceptance import verify as verify_native_rejection
+            selected=verify_native_rejection(root.parent.parent/'reference-20260918','shibboleth',row['case'])
+        if row['product']=='shibboleth' and row['profile']=='metadata_idp' and row['case']=='IIP-MD03-b-idp-01':
+            from verify_native_signature_key_acceptance import verify as verify_native_signature_key
+            selected=verify_native_signature_key(root.parent.parent/'reference-20260918','shibboleth')
+        if row['product']=='shibboleth' and row['profile']=='metadata_idp' and row['case']=='IIP-MD05-ao-idp-01':
+            from verify_native_keyinfo_omission_acceptance import verify as verify_keyinfo_omission
+            selected=verify_keyinfo_omission(root.parent.parent/'reference-20260918','shibboleth')
+        if row['product']=='keycloak' and row['profile']=='metadata_idp' and row['case']=='IIP-MD06-a9-idp-01':
+            from verify_native_certificate_acceptance import verify as verify_native_certificates
+            selected=verify_native_certificates(root.parent.parent/'reference-20260918',runtime=True)
+        if row['product'] in {'keycloak','shibboleth','simplesamlphp'} and row['profile']=='browser_sso_idp' and row['case']=='IIP-SSO04-a-idp-01':
+            from verify_signature_modes_acceptance import verify as verify_signature_modes
+            selected=verify_signature_modes(root.parent.parent/'reference-20260918',row['product'])
+        if row['product']=='keycloak' and row['profile']=='ecp_idp' and row['case']=='IIP-ALG06-c-idp-01':
+            from verify_native_producer_acceptance import verify as verify_native_producer
+            selected=verify_native_producer(root.parent.parent/'reference-20260918')
         if row['product']=='keycloak' and row['profile']=='browser_sso_idp' and row['case']=='IIP-ALG06-d-idp-01':
             from verify_producer_algorithms import verify_default_mgf_withdrawal
             row['audit_withdrawal']=verify_default_mgf_withdrawal(root.parent.parent/'reference-20260918')
@@ -606,6 +670,16 @@ def render(root,definitions,output):
         if row['product']=='shibboleth' and row['profile']=='browser_sso_idp' and row['case']=='IIP-IDP11-a-idp-01':
             from verify_nameid_omission_acceptance import verify as verify_nameid_omission
             selected=verify_nameid_omission(root.parent.parent/'reference-20260918')
+        if row['product']=='shibboleth' and row['profile']=='browser_sso_idp' and row['case'] in {
+                'IIP-SSO01-ga-idp-01','IIP-SSO01-gb-idp-01','IIP-SSO01-gc-idp-01','IIP-SSO01-gj-idp-01'}:
+            from verify_authn_context_acceptance import verify as verify_authn_context
+            selected=verify_authn_context(root.parent.parent/'reference-20260918')
+        if row['product'] in {'shibboleth','keycloak','simplesamlphp'} and row['profile'] in {'browser_sso_idp','metadata_idp','ecp_idp','single_logout_idp'} and row['case']=='IIP-ALG03-a-idp-01':
+            from verify_native_ec_acceptance import verify as verify_native_ec
+            selected=verify_native_ec(root.parent.parent/'reference-20260918',row['profile'],row['product'])
+        if row['product'] in {'simplesamlphp','keycloak'} and row['case'] in {'IIP-ALG01-a-idp-01','IIP-ALG02-a-idp-01'}:
+            from verify_native_signed_acceptance import verify as verify_native_signed
+            selected=verify_native_signed(root.parent.parent/'reference-20260918',row['profile'],row['product'])
         if row['product']=='keycloak' and row['profile']=='browser_sso_idp' and row['case']=='IIP-IDP01-a-idp-01':
             from verify_keycloak_attribute_name_diagnosis import verify as verify_keycloak_attribute_names
             selected=verify_keycloak_attribute_names(root.parent.parent/'reference-20260918')
@@ -620,6 +694,26 @@ def render(root,definitions,output):
                        diagnostics=case.get('diagnostics',{}))
             transitions.append(dict(row))
         if row.get('verdict','NOT_VERIFIED')=='NOT_VERIFIED':refreshed.append(row)
+    from audit_algorithm_verification_evidence import withdrawals as algorithm_withdrawals
+    withdrawn=algorithm_withdrawals(root.parent)
+    keys={(r['product'],r['profile'],r['case']) for r in withdrawn}
+    refreshed=[r for r in refreshed if (r['product'],r['profile'],r['case']) not in keys]
+    transitions=[r for r in transitions if (r['product'],r['profile'],r['case']) not in keys]
+    for row in withdrawn:
+        if row['product'] in {'shibboleth','simplesamlphp','keycloak'}:
+            from verify_native_signed_acceptance import verify as verify_native_signed
+            path,cases=verify_native_signed(root.parent.parent/'reference-20260918',row['profile'],row['product'])
+            raw=path.read_bytes();result=json.loads(raw);case=cases[row['case']]
+            row=dict(row)
+            row['previous_audit_withdrawal']=row.pop('audit_withdrawal')
+            row['baseline']={k:row.get(k) for k in ('run','reason_code','result_sha256','evidence_folder','interaction')}
+            row.update(run=result['run']['id'],reason_code=case['reason_code'],verdict=case['verdict'],
+                result_sha256=hashlib.sha256(raw).hexdigest(),evidence_folder=str(path.parent.relative_to(root.parents[3])),
+                interaction=None,evidence=case['evidence'],diagnostics=case.get('diagnostics',{}))
+            transitions.append(row)
+        else:
+            refreshed.append(row)
+    (root/'algorithm-verification-withdrawals.json').write_text(json.dumps(withdrawn,ensure_ascii=False,indent=2)+'\n')
     rows=refreshed
     (root/'retest-delta.json').write_text(json.dumps(transitions,ensure_ascii=False,indent=2)+'\n')
     counts=Counter(); indexed=defaultdict(list)
@@ -644,6 +738,15 @@ def render(root,definitions,output):
                     '証明書受理）を観測する。SuiteのXML→属性変換はメタデータ解釈の証拠にしない。')
             elif row.get('capability_diagnosis')=='operator-attestation-available':
                 row['next_action']='公開・運用の証拠（鍵ロールオーバー履歴、失効扱い、Trust設定の要否）を運用者証言で確認する。'
+        if row.get('product')=='shibboleth' and row.get('profile')=='metadata_idp' \
+                and row['case'] in _SHIBBOLETH_SIGNATURE_DEPENDENT:
+            row['next_action']=('参照Shibbolethはメタデータ文書署名を検証するFilterを構成していない'
+                '（metadata-providers.xmlは素のFilesystemMetadataProvider）。署名・XPath transform依存の判定には'
+                'poll-<sha256(variant)[:16]>鍵を信頼するSignatureValidationフィルタ（xsi:type=SignatureValidation、'
+                'requireSignedRoot=true、certificateFile）と、拒否fixtureでの初期化失敗を避ける'
+                'failFastInitialization=false 相当の構成が必要。構成できるまでNOT_VERIFIEDを維持し、'
+                '受理をVIOLATEDへ変換しない。観測は reference-20260918/shibboleth-md05-consumer-v76/finding.json に記録済み。')
+            row['observation_gap']='metadata-signature-validation-not-configured'
         if row['case']=='IIP-G02-a-idp-01' and row.get('diagnostics',{}).get('remaining_conditions'):
             row['next_action']='残条件の入力・正常系対照・応答観測を実装する: '+', '.join(row['diagnostics']['remaining_conditions'])
         if row['case'] in implementations:

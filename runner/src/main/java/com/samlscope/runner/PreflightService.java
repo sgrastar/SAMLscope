@@ -83,6 +83,7 @@ public final class PreflightService {
         } else if (plan.target().metadataSource().kind() == MetadataSourceKind.URL) {
             try {
                 var response = fetch(URI.create(plan.target().metadataSource().location()), 0);
+                observations.put("metadataTransport", TlsSessionObservation.observe(response));
                 targetMetadata = response.body();
                 var parsed = metadataParser.parse(targetMetadata, plan.target().entityId());
                 metadataCache.put(plan.id(), targetMetadata);

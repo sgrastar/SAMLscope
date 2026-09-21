@@ -61,6 +61,22 @@ public final class CaseExecutionService {
                 && QUEUED_FRONT_CHANNEL.equals(execution.state().phase());
     }
 
+    /** Complete only an explicitly opted-in, never-dispatched case; do not materialize an outbox action. */
+    public CaseExecution completeQueuedFromRecordedEvidence(String runId, TestCase testCase, CaseContext context) {
+        requireMatchingRun(runId, testCase, context);
+        var current = repository.find(runId, testCase.id()).orElseThrow();
+        if (!isQueuedFrontChannel(current) || !context.transcriptComplete()
+                || !(testCase instanceof com.samlscope.runner.cases.QueuedProtocolEvidenceCase observer)
+                || repository.listOutbox(runId).stream().anyMatch(entry -> testCase.id().equals(entry.caseId()))) return current;
+        if (!observer.evidenceStatus(context).ready()) return current;
+        var outcome = observer.queuedEvidenceOutcome(context);
+        if (outcome == null || !java.util.Set.of(com.samlscope.core.evaluation.Outcome.SATISFIED,
+                com.samlscope.core.evaluation.Outcome.SATISFIED_WITH_NOTE,
+                com.samlscope.core.evaluation.Outcome.VIOLATED).contains(outcome.outcome())) return current;
+        return apply(runId, testCase.id(), current.revision(), current.state(), new CaseStep.Finish(outcome),
+                context.clock().instant(), context.interaction(), context.parameters().requestSigningMode());
+    }
+
     /** Materialize only a selected, never-started case. Existing outbox payloads remain immutable. */
     public CaseExecution activateFrontChannel(String runId, TestCase testCase, CaseContext context) {
         requireMatchingRun(runId, testCase, context);

@@ -22,6 +22,34 @@ class MetadataServiceTest {
     @TempDir java.nio.file.Path directory;
 
     @Test
+    void signatureModeMetadataKeepsOrdinaryKeysAndEndpointsWithoutRequiringAssertionSignatures() {
+        var clock = Clock.fixed(Instant.parse("2026-08-29T00:00:00Z"), ZoneOffset.UTC);
+        var store = new FilePlanKeyStore(directory, clock);
+        var plan = SamlTestFixtures.idpPlan();
+        var service = new MetadataService(URI.create("https://peer.example"), store, new XmlSigner(), clock);
+        var baseline = SecureXml.parse(service.generate(plan));
+        var optional = SecureXml.parse(service.generate(plan, MetadataService.Variant.SIGNATURE_MODES_OPTIONAL, "run_probe"));
+        var baseRole = (org.w3c.dom.Element) baseline.getElementsByTagNameNS(MetadataService.MD,"SPSSODescriptor").item(0);
+        var modeRole = (org.w3c.dom.Element) optional.getElementsByTagNameNS(MetadataService.MD,"SPSSODescriptor").item(0);
+        assertEquals("true", baseRole.getAttribute("WantAssertionsSigned"));
+        assertEquals("false", modeRole.getAttribute("WantAssertionsSigned"));
+        assertEquals(baseRole.getElementsByTagNameNS(MetadataService.DS,"X509Certificate").item(0).getTextContent(),
+                modeRole.getElementsByTagNameNS(MetadataService.DS,"X509Certificate").item(0).getTextContent());
+        for (String endpoint : java.util.List.of("AssertionConsumerService","SingleLogoutService")) {
+            var original = baseRole.getElementsByTagNameNS(MetadataService.MD,endpoint);
+            var actual = modeRole.getElementsByTagNameNS(MetadataService.MD,endpoint);
+            assertEquals(original.getLength(),actual.getLength());
+            for (int index=0; index<actual.getLength(); index++)
+                assertEquals(((org.w3c.dom.Element)original.item(index)).getAttribute("Location"),
+                        ((org.w3c.dom.Element)actual.item(index)).getAttribute("Location"));
+        }
+        assertTrue(new com.samlscope.saml.crypto.XmlSignatureVerifier().hasValidEnvelopedSignature(
+                optional.getDocumentElement(),store.getOrCreate(plan.id()).certificate()));
+        org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class,
+                () -> service.generatePolling(plan,MetadataService.Variant.SIGNATURE_MODES_OPTIONAL,"run_probe"));
+    }
+
+    @Test
     void multiKeyProbesActuallyExerciseEveryAdvertisedKeyInBothIngestionModes() throws Exception {
         var clock = Clock.fixed(Instant.parse("2026-08-29T00:00:00Z"), ZoneOffset.UTC);
         var store = new FilePlanKeyStore(directory, clock);
@@ -70,6 +98,89 @@ class MetadataServiceTest {
                             variant.id() + " polling=" + polling + " key=" + i);
                 }
             }
+        }
+    }
+
+    @Test
+    void keySelectionFamiliesKeepTrustFixedAndUnadvertisedControlHasAValidSignature() throws Exception {
+        var clock = Clock.fixed(Instant.parse("2026-08-29T00:00:00Z"), ZoneOffset.UTC);
+        var store = new FilePlanKeyStore(directory, clock);
+        var plan = SamlTestFixtures.idpPlan();
+        var service = new MetadataService(URI.create("https://peer.example"), store, new XmlSigner(), clock);
+        var families = java.util.List.of(
+                java.util.List.of(MetadataService.Variant.MULTIPLE_SIGNING_KEYS_FIRST,
+                        MetadataService.Variant.MULTIPLE_SIGNING_KEYS,
+                        MetadataService.Variant.MULTIPLE_SIGNING_KEYS_UNADVERTISED),
+                java.util.List.of(MetadataService.Variant.MULTIPLE_OMITTED_KEYS_FIRST,
+                        MetadataService.Variant.MULTIPLE_OMITTED_KEYS_SECOND),
+                java.util.List.of(MetadataService.Variant.THREE_SIGNING_KEYS_FIRST,
+                        MetadataService.Variant.THREE_SIGNING_KEYS_SECOND, MetadataService.Variant.THREE_SIGNING_KEYS));
+        for (boolean polling : new boolean[] {false, true}) {
+            for (var family : families) {
+                java.util.List<String> baseline = null;
+                for (var variant : family) {
+                    var document = SecureXml.parse(polling ? service.generatePolling(plan, variant, "run_probe")
+                            : service.generate(plan, variant, "run_probe"));
+                    var role = (org.w3c.dom.Element) document.getElementsByTagNameNS(MetadataService.MD, "SPSSODescriptor").item(0);
+                    var nodes = role.getElementsByTagNameNS(MetadataService.DS, "X509Certificate");
+                    var certificates = new java.util.ArrayList<java.security.cert.X509Certificate>();
+                    var encoded = new java.util.ArrayList<String>();
+                    for (int i = 0; i < nodes.getLength(); i++) {
+                        var bytes = java.util.Base64.getMimeDecoder().decode(nodes.item(i).getTextContent());
+                        encoded.add(java.util.Base64.getEncoder().encodeToString(bytes));
+                        certificates.add((java.security.cert.X509Certificate) java.security.cert.CertificateFactory
+                                .getInstance("X.509").generateCertificate(new java.io.ByteArrayInputStream(bytes)));
+                    }
+                    if (baseline == null) baseline = encoded;
+                    else assertEquals(baseline, encoded, variant.id() + " polling=" + polling);
+                    assertTrue(new com.samlscope.saml.crypto.XmlSignatureVerifier().hasValidEnvelopedSignature(
+                            document.getDocumentElement(), certificates.getFirst()));
+                    if (variant != MetadataService.Variant.MULTIPLE_SIGNING_KEYS_UNADVERTISED) continue;
+                    assertEquals(3, certificates.size()); // A signing, A encryption, B signing; C absent.
+                    var credentials = polling ? service.credentialsForPollingVariant(plan, variant)
+                            : service.credentialsForVariant(plan, variant);
+                    var request = SecureXml.parse(new com.samlscope.saml.normal.SamlSignedRequestFactory().build(
+                            com.samlscope.saml.normal.SamlSignedRequestFactory.Fixture.VALID,
+                            "_unadvertised", URI.create("https://idp.example/sso"), "https://peer.example",
+                            URI.create("https://peer.example/acs"), clock.instant(), credentials));
+                    var verifier = new com.samlscope.saml.crypto.XmlSignatureVerifier();
+                    assertTrue(verifier.hasValidEnvelopedSignature(request.getDocumentElement(), credentials.certificate()));
+                    for (var certificate : certificates) {
+                        assertFalse(verifier.hasValidEnvelopedSignature(request.getDocumentElement(), certificate));
+                        assertFalse(java.util.Arrays.equals(certificate.getPublicKey().getEncoded(),
+                                credentials.certificate().getPublicKey().getEncoded()));
+                    }
+                }
+            }
+        }
+    }
+
+    @Test
+    void certificateNamesCannotSubstituteForThePublicKey() throws Exception {
+        var clock=Clock.fixed(Instant.parse("2026-08-29T00:00:00Z"),ZoneOffset.UTC);
+        var store=new FilePlanKeyStore(directory,clock);var plan=SamlTestFixtures.idpPlan();
+        var service=new MetadataService(URI.create("https://peer.example"),store,new XmlSigner(),clock);
+        for(boolean polling:new boolean[]{false,true})for(var variant:java.util.List.of(
+                MetadataService.Variant.CERT_RUNTIME_SAME_KEY,MetadataService.Variant.CERT_RUNTIME_OTHER_KEY)) {
+            var metadata=SecureXml.parse(polling?service.generatePolling(plan,variant,"run_probe"):
+                    service.generate(plan,variant,"run_probe"));
+            var role=(org.w3c.dom.Element)metadata.getElementsByTagNameNS(MetadataService.MD,"SPSSODescriptor").item(0);
+            var encoded=role.getElementsByTagNameNS(MetadataService.DS,"X509Certificate").item(0).getTextContent();
+            var published=(java.security.cert.X509Certificate)java.security.cert.CertificateFactory.getInstance("X.509")
+                    .generateCertificate(new java.io.ByteArrayInputStream(java.util.Base64.getMimeDecoder().decode(encoded)));
+            var runtime=polling?service.credentialsForPollingVariant(plan,variant):service.credentialsForVariant(plan,variant);
+            boolean same=variant==MetadataService.Variant.CERT_RUNTIME_SAME_KEY;
+            assertEquals(published.getSubjectX500Principal(),runtime.certificate().getSubjectX500Principal());
+            assertEquals(published.getIssuerX500Principal(),runtime.certificate().getIssuerX500Principal());
+            assertFalse(java.util.Arrays.equals(published.getEncoded(),runtime.certificate().getEncoded()));
+            assertEquals(same,java.util.Arrays.equals(published.getPublicKey().getEncoded(),runtime.certificate().getPublicKey().getEncoded()));
+            var request=SecureXml.parse(new com.samlscope.saml.normal.SamlSignedRequestFactory().build(
+                    com.samlscope.saml.normal.SamlSignedRequestFactory.Fixture.VALID,"_certificate_compare",
+                    URI.create("https://idp.example/sso"),"https://peer.example",URI.create("https://peer.example/acs"),clock.instant(),runtime));
+            var verifier=new com.samlscope.saml.crypto.XmlSignatureVerifier();
+            assertTrue(verifier.hasValidEnvelopedSignature(metadata.getDocumentElement(),published));
+            assertTrue(verifier.hasValidEnvelopedSignature(request.getDocumentElement(),runtime.certificate()));
+            assertEquals(same,verifier.hasValidEnvelopedSignature(request.getDocumentElement(),published));
         }
     }
 
@@ -190,8 +301,12 @@ class MetadataServiceTest {
                             variant.name());
                 }
             }
-            assertTrue(new String(xml, java.nio.charset.StandardCharsets.UTF_8)
-                    .contains("mdv=" + variant.id() + "&amp;run=" + runId), variant.name());
+            var serialized=new String(xml, java.nio.charset.StandardCharsets.UTF_8);
+            if(variant==MetadataService.Variant.SIGNATURE_MODES_OPTIONAL) {
+                // Signature-mode observation uses the normal ACS, not metadata-lab dispatch.
+                assertFalse(serialized.contains("mdv="),variant.name());
+                // Exact normal ACS/SLO equality is covered by the dedicated signature-mode metadata test.
+            } else assertTrue(serialized.contains("mdv="+variant.id()+"&amp;run="+runId),variant.name());
         }
     }
 
@@ -224,6 +339,35 @@ class MetadataServiceTest {
                 .item(0).getTextContent().replaceAll("\\s+", "");
         assertEquals(java.util.Base64.getEncoder().encodeToString(control.certificate().getEncoded()),
                 certificateText);
+    }
+
+    @Test
+    void displayPrecedenceConditionsKeepOneTrustedKeyWithoutSharingUnrelatedProbeKeys() throws Exception {
+        var clock = Clock.fixed(Instant.parse("2026-08-29T00:00:00Z"), ZoneOffset.UTC);
+        var store = new FilePlanKeyStore(directory, clock);
+        var plan = SamlTestFixtures.idpPlan();
+        var service = new MetadataService(URI.create("https://peer.example"), store, new XmlSigner(), clock);
+        var baseline = service.credentialsForPollingVariant(plan, MetadataService.Variant.UI_CONSUMER_DISPLAY_ALL);
+        for (var variant : java.util.List.of(MetadataService.Variant.UI_CONSUMER_DISPLAY_ALL,
+                MetadataService.Variant.UI_CONSUMER_DISPLAY_SERVICE, MetadataService.Variant.UI_CONSUMER_DISPLAY_ENTITY)) {
+            var document = SecureXml.parse(service.generatePolling(plan, variant, "run_display_control"));
+            document.getDocumentElement().setIdAttribute("ID", true);
+            var signature = new XMLSignature((org.w3c.dom.Element) document.getElementsByTagNameNS(
+                    MetadataService.DS, "Signature").item(0), "");
+            assertTrue(signature.checkSignatureValue(baseline.certificate()), variant.id());
+            var runtime = service.credentialsForPollingVariant(plan, variant);
+            org.junit.jupiter.api.Assertions.assertArrayEquals(baseline.certificate().getEncoded(),
+                    runtime.certificate().getEncoded(), variant.id());
+            var role = (org.w3c.dom.Element) document.getElementsByTagNameNS(MetadataService.MD, "SPSSODescriptor").item(0);
+            var advertised = role.getElementsByTagNameNS(MetadataService.DS, "X509Certificate");
+            for (int i = 0; i < advertised.getLength(); i++) {
+                org.junit.jupiter.api.Assertions.assertArrayEquals(baseline.certificate().getEncoded(),
+                        java.util.Base64.getMimeDecoder().decode(advertised.item(i).getTextContent()), variant.id());
+            }
+        }
+        assertNotEquals(java.util.Base64.getEncoder().encodeToString(baseline.certificate().getEncoded()),
+                java.util.Base64.getEncoder().encodeToString(service.credentialsForPollingVariant(
+                        plan, MetadataService.Variant.CONTROL).certificate().getEncoded()));
     }
 
     @Test

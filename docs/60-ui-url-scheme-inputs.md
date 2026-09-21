@@ -1,5 +1,37 @@
 # UI URLスキームの比較入力
 
+## ネイティブgetterの個別診断
+
+`dev/shibboleth/NativeUiUrlProbe.java`と`probe_ui_url_getters.py`を追加した。元fixtureを実機のOpenSAMLで読み、実機と同じ`RelyingPartyUIContext`へ渡して標準getterを呼ぶ。Suiteでスキーム選択処理を代作しない。実行クラスを含むJARと入力XMLのハッシュを記録する。公開fixtureと診断コードだけを一時領域へ置き、終了時に削除する。製品設定やテンプレートは変更しない。
+
+| URL要素 | http / https | data | javascript / file |
+|---|---|---|---|
+| Logo | 候補を返す | 候補を返す | null |
+| InformationURL | 候補を返す | null | null |
+| PrivacyStatementURL | 候補を返す | null | null |
+
+この結果はgetter単独の実行であり、認証要求に結び付くブラウザ実行や不使用イベントの証明ではない。出力に`browser_execution_verified=false`、`request_bound_nonuse_verified=false`、`verdict_adopted=false`を明記した。現在のネイティブログインテンプレートはLogoとDescriptionを表示する一方、InformationURL／PrivacyStatementURLの表示箇所がないことも読み取りで確認した。これらの診断を、画面上の不在だけによる合格判定へ転用しない。
+
+dataがリンクのgetterで除外されたことも、それだけで違反とはしない。承認済み定義はdataの一律拒否を要求せず、URLを使わない場合の扱いを別途定めている。次の実行経路で必要なのは、同じ要求に結び付く製品側判断と実際の表示箇所の証拠である。
+
+<!--g1-literal--> 15条件の診断が完了した。初回コンパイルは実機Javaで`List.getFirst()`を利用できず失敗し、`get(0)`へ変更して再実行した。コンパイル試行2、getter診断プロセス1、一時領域作成・削除各2。製品設定書込、再読込、再起動、プロトコル送信、本人操作はいずれも0。失敗を含む証拠は`shibboleth-native-ui-getter-diagnosis/`と`shibboleth-native-ui-getter-diagnosis-v2/`に保持する。未検証429観測は据え置き。
+
+## 次の統合バッチ: 消費判定と固定入力
+
+`UiUrlComparison`を追加した。ロゴ・InformationURL・PrivacyStatementURLについて、元fixture、要求、ブラウザ観測が一意に結び付いた比較入力を扱う。http・https・dataの利用は許可し、javascript・fileの実利用は`violated`とする。対象ケースのSHOULD_NOTからWARNINGへの変換はEvaluatorの責務であり、比較処理はVerdictを返さない。
+
+URLの未観測、要素の不在、画像読込失敗、ブラウザによるスキーム遮断は不使用の証明にしない。不使用を確定するには、ブラウザ観測に加え、同じ要求に結び付く製品側ポリシーの証拠を必要とする。許可スキームについて不使用を証明できた場合は、承認済み解釈に従って`satisfied_with_note`を返す。禁止スキームの不使用と許可スキームの利用が揃った通常の適合比較は`satisfied`とする。条件不足、異なるRunやSP、設定変化、証拠の重複、前後関係の不整合は未検証に残す。
+
+任意のブラウザJSONから不使用を申告できるAPIは追加していない。後続で`UiUrlEvidenceFile`と`UiUrlBrowserEvidenceTestCase`を実装し、M2のRunnerレジストリーへ接続した。入力はローカルの`ui-url-evidence/<run>.json`だけで、`export_ui_url_receipt.py`が原本・ネイティブ取込・設定復元を照合して生成する。メタデータとAuthnRequestの署名、Runと対象、ブラウザの送信要求、観測時刻、候補URLを再照合する。条件間の固定入力指紋には信頼鍵とポリシーを残し、変化させたURL要素と正確なキャンペーン識別子だけを正規化する。
+
+現行の採取方式で実利用を識別できるのはネイティブロゴ要素への可視・読込済み候補の表示である。候補URLだけで検索したリンクは意味上の表示位置が未確定なので未観測に残す。製品側の不使用イベントを採るアダプターは未実装であり、入力に`use`・`nativeNonuse`・`outcome`を追加しても確定できない。既存の画面上の不在を`VERIFIED_NONUSE`へ変換しない。比較診断はこれらの不足条件を列挙する。保存済み証拠による再評価と、未送信で待機しているケースからの純粋な証拠評価にも対応するが、完了操作自体は判定根拠にならない。
+
+この接続は証明書・属性処理とまとめて`reference-config-ui-v64`へ反映した。比較・入力境界とfixtureのチェックは成功したが、URLケースの実機での確定は未完了である。テンプレート不変の記録がない古いキャンペーンへ、現在の設定を遡って埋めることも禁止する。既存の証拠結合診断では、比較処理の不在という総称から、ネイティブ消費／不使用証拠の不足へ理由を具体化した。
+
+polling fixtureのUI URL比較で条件ごとに信頼鍵が変わっていたため、URL比較の範囲では同じ鍵を使用するよう修正した。この比較のネイティブアダプターはメタデータを明示的に再読込しており、未知鍵による更新を前提にしない。他のpolling試験の鍵選択は維持する。既存実測へ新しい固定入力条件を遡って適用しない。
+
+<!--g1-literal--> 比較の負の対照として、禁止スキームの各要素での利用、15条件それぞれの欠落・未観測、不使用の根拠欠落、Run・SP・設定・時刻・原本・参照の混在をテストコードへ追加した。fixture検査にも15条件の鍵一致とその鍵によるメタデータ署名検証を追加した。これらはv64の統合バッチで成功した。receipt入力境界のチェックは欠落・自己申告・symlinkの拒否を確認したもので、ネイティブ不使用イベントの採取成功を意味しない。
+
 `IIP-MD05-fh-idp-01`の承認済み条件に対応する入力を追加した。Logo、InformationURL、PrivacyStatementURLを個別に変え、各要素へhttp、https、data、javascript、fileを指定する。他のURL要素を同時に変更せず、どの要素が製品で使われたかを区別できる構成にする。
 
 <!--g1-literal--> 共通入力は3要素×5スキームの15種類。`ui-url-{logo|information|privacy}-{http|https|data|javascript|file}`で通常・polling双方のメタデータ生成から利用できる。UIInfoはSPロールのExtensionsへ配置し、固定DisplayNameを画面の対象SP識別用に添える。fixtureを生成・取り込めたことだけではケースを解消しない。

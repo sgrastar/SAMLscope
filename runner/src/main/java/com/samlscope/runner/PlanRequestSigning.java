@@ -40,6 +40,11 @@ public final class PlanRequestSigning implements BiFunction<String, OutboundActi
         if (root.getElementsByTagNameNS("http://www.w3.org/2000/09/xmldsig#", "Signature").getLength() > 0) {
             return action;
         }
+        // An AuthnRequest without @ID cannot carry a same-document reference signature. The
+        // approved invalid-request scenario deliberately sends such a malformed request; the
+        // case oracle, not the Plan transport precondition, decides whether a response is
+        // conformant, so the request is persisted unchanged.
+        if (root.getAttribute("ID").isBlank()) return action;
         Element before = null;
         for (var node = root.getFirstChild(); node != null; node = node.getNextSibling()) {
             if (node instanceof Element element

@@ -187,3 +187,26 @@ not by differences in reference-implementation results ([00 §5](00-concept.md))
 - [Keycloakの属性名・NameFormat生成の実測](65-keycloak-attribute-name-diagnosis.md)
 
 - [認証コンテキストの強度比較・優先順の共通実装](66-authn-context-comparison-inputs.md)
+
+- [認証コンテキスト比較の実機接続と正式判定](67-authn-context-native-acceptance.md)
+
+- [EC署名の製品監査記録と正式評価](68-native-ec-signature-acceptance.md)
+
+- [共通署名アルゴリズム判定の証拠監査](69-algorithm-verification-evidence-audit.md)
+
+- [共通署名試験の製品監査接続](70-native-signed-request-acceptance.md)
+
+- [SimpleSAMLphp の共通署名試験](71-simplesamlphp-signature-acceptance.md)
+
+- [Keycloak の署名検証イベント観測](72-keycloak-signature-observation.md)
+
+- [Keycloak・SimpleSAMLphp の EC 署名観測](73-native-ec-product-observations.md)
+
+- [表示名の優先順位と観測条件の診断](74-display-precedence-observation.md)
+
+- [TLS接続の補助観測と記録境界](75-transport-observation.md)
+
+- [証明書条件と製品側署名拒否の相関診断](76-native-certificate-diagnosis.md)
+- [Native signature-mode capability](77-signature-mode-capability.md) — independent Response/Assertion signing observation and native configuration campaigns.
+- [SimpleSAMLphpの暗号化応答の実測](78-simplesamlphp-native-encryption.md)
+- [メタデータ鍵選択と未掲載鍵の対照](79-metadata-key-selection.md)

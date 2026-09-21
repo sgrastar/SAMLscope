@@ -61,10 +61,17 @@ def audit(root, catalog_path):
             cases = [c for req in result['requirements'] for c in req['cases'] if c['id'] == row['case']]
             if len(cases) != 1:
                 raise ValueError('case missing or duplicated in selected result')
-            if cases[0]['verdict'] != 'NOT_VERIFIED':
-                raise ValueError('resolved result remains in unresolved inventory')
-            if cases[0]['reason_code'] != row['reason_code']:
-                raise ValueError('diagnostic differs from selected result')
+            if row.get('reason_code') == 'audit.algorithm-verification-controls-unproven':
+                from audit_algorithm_verification_evidence import withdrawals
+                qualified = [r for r in withdrawals(root)
+                             if (r['product'], r['profile'], r['case']) == tuple(identity)]
+                if len(qualified) != 1 or any(row.get(k) != v for k, v in qualified[0].items()):
+                    raise ValueError('algorithm audit qualification differs from verified source')
+            else:
+                if cases[0]['verdict'] != 'NOT_VERIFIED':
+                    raise ValueError('resolved result remains in unresolved inventory')
+                if cases[0]['reason_code'] != row['reason_code']:
+                    raise ValueError('diagnostic differs from selected result')
         except (OSError, KeyError, ValueError) as error:
             errors.append({'observation': identity, 'error': str(error), 'result': str(path)})
         groups[row['case']].append({k: row[k] for k in ('product', 'profile', 'run', 'category', 'reason_code', 'result_sha256', 'evidence_folder')})

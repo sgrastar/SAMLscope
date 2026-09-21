@@ -53,6 +53,16 @@ public final class SamlRequestedAuthnContextRequestFactory {
         return buildInternal(requested, requestId, destination, issuer, acs, issueInstant);
     }
 
+    /** Sign after Issuer, before RequestedAuthnContext, preserving the SAML schema order. */
+    public byte[] buildSignedContext(ContextRequest requested, String requestId, URI destination,
+            String issuer, URI acs, Instant issueInstant, com.samlscope.saml.crypto.PlanCredentials credentials) {
+        var document = SecureXml.parse(buildConfiguredContext(requested, requestId, destination, issuer, acs, issueInstant));
+        var root = document.getDocumentElement();
+        var context = (Element) root.getElementsByTagNameNS(PROTOCOL, "RequestedAuthnContext").item(0);
+        new com.samlscope.saml.crypto.XmlSigner().sign(root, java.util.Objects.requireNonNull(credentials), context);
+        return SecureXml.serialize(document);
+    }
+
     private byte[] buildInternal(ContextRequest context, String requestId, URI destination,
             String issuer, URI acs, Instant issueInstant) {
         requireText(requestId, "requestId");

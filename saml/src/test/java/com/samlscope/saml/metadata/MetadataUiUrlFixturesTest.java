@@ -21,11 +21,18 @@ class MetadataUiUrlFixturesTest {
         assertEquals(15, variants.size());
         var names = Map.of("logo", "Logo", "information", "InformationURL", "privacy", "PrivacyStatementURL");
         for (boolean polling : new boolean[]{false, true}) for (var variant : variants) {
-            assertEquals(!variant.id().endsWith("-javascript") && !variant.id().endsWith("-file"),
-                    MetadataService.preloadedCampaignVariants().contains(variant));
+            // Both allowed and excluded schemes are inputs. Advertising a negative-control
+            // URL in metadata does not execute it or authorize a browser to follow it.
+            assertTrue(MetadataService.preloadedCampaignVariants().contains(variant), variant.id());
             var plan = SamlTestFixtures.idpPlan();
             var raw = polling ? service.generatePolling(plan, variant, "run_ui_url") : service.generate(plan, variant, "run_ui_url");
             var root = SecureXml.parse(raw).getDocumentElement();
+            if (polling) {
+                var fixed = service.credentialsForPollingVariant(plan, MetadataService.Variant.UI_URL_LOGO_HTTP);
+                assertArrayEquals(fixed.certificate().getPublicKey().getEncoded(),
+                        service.credentialsForPollingVariant(plan, variant).certificate().getPublicKey().getEncoded());
+                assertTrue(new com.samlscope.saml.crypto.XmlSignatureVerifier().hasValidEnvelopedSignature(root, fixed.certificate()));
+            }
             var tokens = variant.id().split("-");
             for (var name : names.values()) {
                 var urls = root.getElementsByTagNameNS(MetadataUiConsumerFixtures.UI, name);

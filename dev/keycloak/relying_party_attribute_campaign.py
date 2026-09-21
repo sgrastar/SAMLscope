@@ -48,6 +48,11 @@ def client_recipe(entity, side):
 
 
 def projection(client, expected):
+    # These native API fields are sets. Their serialization order can change after creation.
+    client=dict(client);expected=dict(expected)
+    for field in ['redirectUris','defaultClientScopes','optionalClientScopes']:
+        if field in client:client[field]=sorted(client[field])
+        if field in expected:expected[field]=sorted(expected[field])
     value={key:client.get(key) for key in ['id','clientId','protocol','enabled','redirectUris','fullScopeAllowed','defaultClientScopes','optionalClientScopes']}
     value['attributes']={key:client.get('attributes',{}).get(key) for key in expected['attributes']}
     # Retain only mapper semantics, never tokens or unrelated client credentials.

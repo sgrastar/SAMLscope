@@ -33,15 +33,18 @@ public final class ProtocolEvidenceAutomationService {
         for (var execution : executions.list(runId)) {
             if (execution.status() != CaseExecutionStatus.WAITING_CONFIG
                     && execution.status() != CaseExecutionStatus.WAITING_BROWSER
-                    && execution.status() != CaseExecutionStatus.FINISHED) continue;
-            var testCase = execution.status() == CaseExecutionStatus.FINISHED
+                    && execution.status() != CaseExecutionStatus.FINISHED
+                    && !CaseExecutionService.isQueuedFrontChannel(execution)) continue;
+            var testCase = execution.status() == CaseExecutionStatus.FINISHED || CaseExecutionService.isQueuedFrontChannel(execution)
                     ? registry.find(execution.caseId()).orElse(null) : registry.require(execution.caseId());
             if (testCase == null) continue;
+            boolean queued = CaseExecutionService.isQueuedFrontChannel(execution)
+                    && testCase instanceof com.samlscope.runner.cases.QueuedProtocolEvidenceCase;
             boolean reconsider = execution.status() == CaseExecutionStatus.FINISHED
                     && testCase instanceof RecordedEvidenceReevaluation observer
                     && observer.supportsRecordedEvidenceReevaluation(execution.outcome());
             if (execution.status() != CaseExecutionStatus.WAITING_CONFIG
-                    && execution.status() != CaseExecutionStatus.WAITING_BROWSER && !reconsider) continue;
+                    && execution.status() != CaseExecutionStatus.WAITING_BROWSER && !reconsider && !queued) continue;
             if (!(testCase instanceof ProtocolEvidenceCase evidenceCase)) continue;
             var evidence = evidenceCase.evidenceStatus(context);
             boolean ready = evidence.ready() && (!reconsider
@@ -76,6 +79,14 @@ public final class ProtocolEvidenceAutomationService {
             if (!candidate.ready() && !attemptsConfirmed) continue;
             var testCase = registry.require(candidate.caseId());
             var beforeExecution = executions.find(runId, candidate.caseId()).orElseThrow();
+            if (CaseExecutionService.isQueuedFrontChannel(beforeExecution)) {
+                if (!candidate.ready()) continue; // Attempt confirmation cannot bypass evidence readiness.
+                var revised = transitions.completeQueuedFromRecordedEvidence(runId, testCase, context);
+                if (revised.status() == CaseExecutionStatus.FINISHED && revised.revision() > beforeExecution.revision()) {
+                    completed.add(new CompletedCase(revised.caseId(), revised.outcome().outcome()));
+                }
+                continue;
+            }
             if (beforeExecution.status() == CaseExecutionStatus.FINISHED) {
                 var revised = transitions.reevaluateRecordedEvidence(runId, testCase, context);
                 if (revised.revision() > beforeExecution.revision()) {

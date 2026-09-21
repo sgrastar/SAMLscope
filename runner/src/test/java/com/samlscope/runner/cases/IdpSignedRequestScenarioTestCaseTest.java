@@ -66,6 +66,24 @@ class IdpSignedRequestScenarioTestCaseTest {
     }
 
     @Test
+    void missingCallbacksCannotProveAlgorithmVerification() {
+        for (var id : java.util.List.of(
+                IdpSignedRequestScenarioTestCase.SHA256_DIGEST_CASE,
+                IdpSignedRequestScenarioTestCase.RSA_SHA256_CASE)) {
+            var testCase = testCase(id);
+            var valid = assertInstanceOf(CaseStep.AwaitInbound.class, testCase.start(context()));
+            CaseStep step = next(testCase, valid, response(valid.next(), true, true));
+            while (step instanceof CaseStep.AwaitInbound current) {
+                step = testCase.resume(context(), current.next(),
+                        new CaseEvent.InboundUnavailable("operator-reported-no-saml-response"));
+            }
+            var finish = assertInstanceOf(CaseStep.Finish.class, step);
+            assertEquals(Outcome.NOT_VERIFIED, finish.outcome().outcome(), id);
+            assertEquals("idp.signed-request.inconclusive", finish.outcome().reasonCode(), id);
+        }
+    }
+
+    @Test
     void algorithmSupportRemainsNotVerifiedWhenTheDeploymentDoesNotEnforceRequestSignatures() {
         for (var id : java.util.List.of(
                 IdpSignedRequestScenarioTestCase.SHA256_DIGEST_CASE,
@@ -96,8 +114,7 @@ class IdpSignedRequestScenarioTestCaseTest {
     }
 
     @Test
-    void rejectsExcludedSignatureContentAndSignedObjectFixtures() {
-        for (var id : java.util.List.of(
+    void rejectsExcludedSignatureContentAndSignedObjectFixtures() {        for (var id : java.util.List.of(
                 IdpSignedRequestScenarioTestCase.EXCLUDED_CONTENT_CASE,
                 IdpSignedRequestScenarioTestCase.SIGNED_OBJECT_CASE)) {
             var testCase = testCase(id);

@@ -37,6 +37,9 @@ export async function observeUiConsumer(page, {
   const record = {
     schema: 'samlscope-ui-consumer-observation-v1', run_id: runId, condition, kind,
     fixture_sha256: sha256(fixture), import_receipt_sha256: sha256(receipt),
+    candidate_mapping_sha256: sha256(Buffer.from(JSON.stringify(Object.fromEntries(
+      entries.map(([token], index) => [token, values[index]]).sort(([a], [b]) => a.localeCompare(b)),
+    )), 'utf8')),
     // A hash reference is not a claim that the native import receipt has been validated.
     import_binding_verified: false, verdict_adopted: false,
     expected_origin: expectedOrigin, expected_path: expectedPath,

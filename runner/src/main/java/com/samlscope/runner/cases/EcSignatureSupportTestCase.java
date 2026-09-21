@@ -20,6 +20,11 @@ public final class EcSignatureSupportTestCase implements TestCase, Configuration
     private static final Set<String> ERRORS = Set.of("urn:oasis:names:tc:SAML:2.0:status:Requester",
             "urn:oasis:names:tc:SAML:2.0:status:Responder", "urn:oasis:names:tc:SAML:2.0:status:VersionMismatch");
     private static final List<String> VARIANTS = List.of(CONTROL, VALID, INVALID);
+    private final java.util.function.Function<CaseContext,Optional<CaseOutcome>> nativeEvidence;
+    public EcSignatureSupportTestCase() { this(ignored -> Optional.empty()); }
+    public EcSignatureSupportTestCase(java.util.function.Function<CaseContext,Optional<CaseOutcome>> nativeEvidence) {
+        this.nativeEvidence=Objects.requireNonNull(nativeEvidence);
+    }
     @Override public String id() { return ID; }
     @Override public TargetRole role() { return TargetRole.IDP; }
     @Override public String evidenceCampaignId() { return "metadata-fixture-refresh"; }
@@ -30,7 +35,8 @@ public final class EcSignatureSupportTestCase implements TestCase, Configuration
         return "Use the Run metadata campaign to fetch control, ecdsa-sha256, and ecdsa-sha256-invalid-signature "
                 + "and attempt each correlated signed request. Keep the same signature-verification policy enabled. "
                 + "The Suite requires a working RSA control, successful EC request, and an explicit SAML error "
-                + "for the corrupted EC signature. An HTTP error or silence cannot confirm rejection or lack of support.";
+                + "for the corrupted EC signature, or a verified native audit event bound to that exact request. "
+                + "An HTTP error or silence cannot confirm rejection or lack of support.";
     }
     @Override public CaseStep start(CaseContext context) {
         return new CaseStep.AwaitConfig(new CaseState(PHASE, Map.of()), List.of(), "ec-signature-support", Duration.ofDays(7));
@@ -48,6 +54,11 @@ public final class EcSignatureSupportTestCase implements TestCase, Configuration
     }
     @Override public EvidenceStatus evidenceStatus(CaseContext context) {
         var observation = observe(context);
+        if (Set.of("ec-signature.native-support-observed","ec-signature.native-valid-request-rejected").contains(observation.reasonCode())) {
+            var nativeObservations = List.of("verified-rsa-control", "verified-ec-request",
+                    "same-ec-key-negative-control", "request-bound-native-authentication-error");
+            return new EvidenceStatus(true, nativeObservations, nativeObservations, observation.details());
+        }
         var complete = observation.details().get("completed_observations") instanceof List<?> list
                 ? list.stream().map(String::valueOf).toList() : List.<String>of();
         return new EvidenceStatus(observation.outcome() == Outcome.SATISFIED,
@@ -56,13 +67,16 @@ public final class EcSignatureSupportTestCase implements TestCase, Configuration
     }
     @Override public boolean supportsRecordedEvidenceReevaluation(CaseOutcome previous) {
         return previous != null && previous.outcome() == Outcome.NOT_VERIFIED
-                && "ec-signature.incomplete".equals(previous.reasonCode());
+                && Set.of("ec-signature.incomplete","ec-signature.native-valid-request-rejected").contains(previous.reasonCode());
     }
     @Override public Optional<CaseOutcome> reevaluateRecordedEvidence(CaseContext context, CaseOutcome previous) {
         if (!supportsRecordedEvidenceReevaluation(previous)) return Optional.empty();
         return RecordedEvidenceReevaluation.conclusiveUpdate(previous, observe(context));
     }
     private CaseOutcome observe(CaseContext context) {
+        var nativeOutcome=nativeEvidence.apply(context);
+        if(nativeOutcome.isPresent() && (nativeOutcome.orElseThrow().outcome()==Outcome.SATISFIED
+                || "ec-signature.native-valid-request-rejected".equals(nativeOutcome.orElseThrow().reasonCode())))return nativeOutcome.orElseThrow();
         var fetched = new LinkedHashSet<String>();
         var success = new LinkedHashSet<String>();
         var errors = new LinkedHashSet<String>();

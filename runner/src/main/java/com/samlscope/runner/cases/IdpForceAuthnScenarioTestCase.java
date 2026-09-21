@@ -40,29 +40,52 @@ public final class IdpForceAuthnScenarioTestCase
             new Stage("true-with-session", Probe.FORCE_AUTHN_TRUE));
     private final java.util.function.Function<String, IdpErrorProbeConfiguration> configurations;
     private final SamlErrorProbeRequestFactory requests;
+    private final SamlDecryptionKeyProvider decryptionKeys;
     private final String id;
 
     public IdpForceAuthnScenarioTestCase(
             java.util.function.Function<String, IdpErrorProbeConfiguration> configurations) {
-        this(CASE_ID, configurations, new SamlErrorProbeRequestFactory());
+        this(CASE_ID, configurations, ignored -> java.util.Optional.empty());
+    }
+
+    public IdpForceAuthnScenarioTestCase(
+            java.util.function.Function<String, IdpErrorProbeConfiguration> configurations,
+            SamlDecryptionKeyProvider decryptionKeys) {
+        this(CASE_ID, configurations, decryptionKeys);
     }
 
     public IdpForceAuthnScenarioTestCase(
             String id,
             java.util.function.Function<String, IdpErrorProbeConfiguration> configurations) {
-        this(id, configurations, new SamlErrorProbeRequestFactory());
+        this(id, configurations, ignored -> java.util.Optional.empty());
+    }
+
+    public IdpForceAuthnScenarioTestCase(
+            String id,
+            java.util.function.Function<String, IdpErrorProbeConfiguration> configurations,
+            SamlDecryptionKeyProvider decryptionKeys) {
+        this(id, configurations, new SamlErrorProbeRequestFactory(), decryptionKeys);
     }
 
     IdpForceAuthnScenarioTestCase(
             String id,
             java.util.function.Function<String, IdpErrorProbeConfiguration> configurations,
             SamlErrorProbeRequestFactory requests) {
+        this(id, configurations, requests, ignored -> java.util.Optional.empty());
+    }
+
+    IdpForceAuthnScenarioTestCase(
+            String id,
+            java.util.function.Function<String, IdpErrorProbeConfiguration> configurations,
+            SamlErrorProbeRequestFactory requests,
+            SamlDecryptionKeyProvider decryptionKeys) {
         if (!List.of(CASE_ID, MECHANISM_ACCESS_CASE).contains(id)) {
             throw new IllegalArgumentException("Unsupported ForceAuthn case: " + id);
         }
         this.id = id;
         this.configurations = java.util.Objects.requireNonNull(configurations, "configurations");
         this.requests = java.util.Objects.requireNonNull(requests, "requests");
+        this.decryptionKeys = java.util.Objects.requireNonNull(decryptionKeys, "decryptionKeys");
     }
 
     @Override public String id() { return id; }
@@ -108,7 +131,8 @@ public final class IdpForceAuthnScenarioTestCase
             throw new IllegalArgumentException("ForceAuthn scenario requires Transcript inbound evidence");
         }
         var observation = observe(
-                inbound.decodedSaml(), text(state, "expected_response_correlation"));
+                inbound.decodedSaml(), text(state, "expected_response_correlation"),
+                decryptionKeys.keyFor(context.runId()).orElse(null));
         var evidence = strings(state, "evidence");
         evidence.add(inbound.evidence().reference());
         if (observation == null || !observation.success()) {
@@ -177,7 +201,7 @@ public final class IdpForceAuthnScenarioTestCase
                 configuration.responseTimeout());
     }
 
-    private Observation observe(byte[] responseXml, String requestId) {
+    private Observation observe(byte[] responseXml, String requestId, java.security.PrivateKey decryptionKey) {
         try {
             var root = SecureXml.parse(responseXml).getDocumentElement();
             if (!PROTOCOL.equals(root.getNamespaceURI()) || !"Response".equals(root.getLocalName())
@@ -187,17 +211,35 @@ public final class IdpForceAuthnScenarioTestCase
                     || !SUCCESS.equals(((Element) codes.item(0)).getAttribute("Value"))) {
                 return new Observation(false, null, 0);
             }
-            var statements = root.getElementsByTagNameNS(ASSERTION, "AuthnStatement");
-            if (statements.getLength() == 0) return null;
-            var value = ((Element) statements.item(0)).getAttribute("AuthnInstant");
-            var dot = value.indexOf('.');
-            var digits = 0;
-            if (dot >= 0) {
-                for (var i = dot + 1; i < value.length() && Character.isDigit(value.charAt(i)); i++) digits++;
+            // The target may encrypt the assertion to the Run key; decrypt before reading the
+            // AuthnStatement, otherwise an encrypted success would look like a missing control.
+            var assertions = new java.util.ArrayList<Element>();
+            for (var node = root.getFirstChild(); node != null; node = node.getNextSibling()) {
+                if (!(node instanceof Element element) || !ASSERTION.equals(element.getNamespaceURI())) continue;
+                if ("Assertion".equals(element.getLocalName())) {
+                    assertions.add(element);
+                } else if ("EncryptedAssertion".equals(element.getLocalName()) && decryptionKey != null) {
+                    try {
+                        assertions.add(new com.samlscope.saml.crypto.SamlXmlDecrypter().decrypt(element, decryptionKey));
+                    } catch (RuntimeException unreadable) {
+                        // Leave the encrypted form; another assertion may still be readable.
+                    }
+                }
             }
-            long precisionNanos = 1;
-            for (var i = Math.min(digits, 9); i < 9; i++) precisionNanos *= 10;
-            return new Observation(true, Instant.parse(value), precisionNanos);
+            for (var assertion : assertions) {
+                var statements = assertion.getElementsByTagNameNS(ASSERTION, "AuthnStatement");
+                if (statements.getLength() == 0) continue;
+                var value = ((Element) statements.item(0)).getAttribute("AuthnInstant");
+                var dot = value.indexOf('.');
+                var digits = 0;
+                if (dot >= 0) {
+                    for (var i = dot + 1; i < value.length() && Character.isDigit(value.charAt(i)); i++) digits++;
+                }
+                long precisionNanos = 1;
+                for (var i = Math.min(digits, 9); i < 9; i++) precisionNanos *= 10;
+                return new Observation(true, Instant.parse(value), precisionNanos);
+            }
+            return null;
         } catch (SamlException | DateTimeParseException invalid) {
             return null;
         }

@@ -42,8 +42,9 @@ def recorded_exchange(run, variant, previous_ids):
         request_id=request_id,status_codes=sorted(s for s in statuses if isinstance(s,str)),
         transcript_ids=[request['id'],*[e['id'] for e in responses]])
 
-def flow(run, record_path, signature_control=False, suite_signature_control=False, attribute_service_index=None, login_inputs=None):
+def flow(run, record_path, signature_control=False, suite_signature_control=False, attribute_service_index=None, login_inputs=None, client_factory=None):
     import reference_flow as pc
+    make_client=client_factory or pc.Client
     # Keep credentials in memory and use the same input for all controls in this invocation.
     username, password = login_inputs if login_inputs is not None else (
         os.environ.get('REFERENCE_USERNAME','samlscope-m0-user'),
@@ -58,7 +59,7 @@ def flow(run, record_path, signature_control=False, suite_signature_control=Fals
     control = None
     if suite_signature_control:
         before_ids={e['id'] for e in api('/api/runs/'+run+'/transcript')}
-        receipt=pc.Client().flow(start_url+'&signatureControl=invalid',None,
+        receipt=make_client().flow(start_url+'&signatureControl=invalid',None,
             username, password)
         exchange=recorded_exchange(run,variant,before_ids)
         control=dict(source='suite',receipt=receipt,exchange=exchange,correlated_success=exchange['success'])
@@ -67,7 +68,7 @@ def flow(run, record_path, signature_control=False, suite_signature_control=Fals
             raise RuntimeError('Suite negative control must not advance the fixture')
     elif signature_control:
         mutation = pc.SignatureMutation()
-        receipt = pc.Client(signature_mutation=mutation).flow(start_url, None,
+        receipt = make_client(signature_mutation=mutation).flow(start_url, None,
             username, password)
         after_negative = api('/api/runs/' + run + '/metadata-lab')
         control = dict(receipt=receipt, mutations=mutation.records,
@@ -80,7 +81,7 @@ def flow(run, record_path, signature_control=False, suite_signature_control=Fals
         if after_negative['campaignIndex'] != index:
             raise RuntimeError('Unexpected campaign advancement during negative control')
     before_ids={e['id'] for e in api('/api/runs/'+run+'/transcript')}
-    receipt = pc.Client().flow(start_url, None,
+    receipt = make_client().flow(start_url, None,
         username, password)
     after = api('/api/runs/' + run + '/metadata-lab')
     exchange=recorded_exchange(run,variant,before_ids)
@@ -105,14 +106,25 @@ def main():
         help='Signed AttributeConsumingServiceIndex for --flow-run with attribute-policy-indexed')
     parser.add_argument('--signature-control',action='store_true',help='Exercise a corrupt signature before each normal flow')
     parser.add_argument('--suite-signature-control',action='store_true',help='Use Suite-issued and recorded invalid-signature controls')
+    parser.add_argument('--native-signature-observations',action='store_true',help='Record exact outgoing request hashes and direct HTTP response facts')
     parser.add_argument('--run',help='Append a new fixture campaign to an existing reference Run')
-    parser.add_argument('--profile',choices=['metadata_idp','browser_sso_idp'],default='metadata_idp')
+    parser.add_argument('--profile',choices=['metadata_idp','browser_sso_idp','ecp_idp','single_logout_idp'],default='metadata_idp')
     parser.add_argument('--variants',help='Comma-separated Suite fixture IDs, beginning with control')
     args=parser.parse_args()
     if args.attribute_service_index is not None and not args.flow_run:
         parser.error('--attribute-service-index requires --flow-run')
     if args.flow_run:
-        flow(args.flow_run,args.output,args.signature_control,args.suite_signature_control,args.attribute_service_index);return
+        records=[];factory=None
+        if args.native_signature_observations:
+            from signed_request_observation import ObservedClient
+            factory=lambda **kwargs:ObservedClient(records,None)
+            if args.signature_control:parser.error('Native observation requires Suite-issued controls')
+        try:
+            flow(args.flow_run,args.output,args.signature_control,args.suite_signature_control,args.attribute_service_index,client_factory=factory)
+        finally:
+            if args.native_signature_observations:
+                save(args.output.with_name('native-http-observations.json'),dict(run=args.flow_run,records=records,product_verdict_assigned=False))
+        return
     if args.playwright_modules is None:parser.error('--playwright-modules is required for a batch')
     out=args.output.resolve()
     if out.exists() and any(out.iterdir()):
@@ -154,8 +166,9 @@ def main():
             (folder/'fixture.xml').write_bytes(fixture)
             follow=shlex.join([sys.executable,str(pathlib.Path(__file__).resolve()),'--flow-run',run,'--output',str(folder/'flow.json')]
                 + (['--signature-control'] if args.signature_control else []))
-            if args.suite_signature_control and not variant.startswith('default-acs-'):
+            if args.suite_signature_control and not variant.startswith('default-acs-') and variant!='ecdsa-sha256-invalid-signature':
                 follow += ' --suite-signature-control'
+            if args.native_signature_observations:follow += ' --native-signature-observations'
             command=['node',str(stage/'console_import.mjs'),'--fixture',str(folder/'fixture.xml'),
                 '--record',str(folder/'import.json'),'--entity-id',BASE+'/p/'+plan_id,'--verify-command',follow,'--delete']
             result=subprocess.run(command,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,text=True,timeout=420)

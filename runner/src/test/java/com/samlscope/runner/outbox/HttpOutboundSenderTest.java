@@ -48,6 +48,7 @@ class HttpOutboundSenderTest {
             var response = "<S:Envelope xmlns:S=\"http://schemas.xmlsoap.org/soap/envelope/\"><S:Body/></S:Envelope>"
                     .getBytes(StandardCharsets.UTF_8);
             exchange.getResponseHeaders().set("Content-Type", "text/xml");
+            exchange.getResponseHeaders().set("Set-Cookie", "session=credential-sentinel");
             exchange.sendResponseHeaders(200, response.length);
             exchange.getResponseBody().write(response);
             exchange.close();
@@ -55,8 +56,17 @@ class HttpOutboundSenderTest {
         server.start();
         try {
             var recorder = recorder();
+            var submitted = new java.util.ArrayList<com.samlscope.core.transcript.TranscriptInput>();
+            var boundary = new com.samlscope.core.transcript.TranscriptRecorder() {
+                public com.samlscope.core.transcript.TranscriptEntry record(com.samlscope.core.transcript.TranscriptInput input) {
+                    submitted.add(input); return recorder.record(input);
+                }
+                public java.util.List<com.samlscope.core.transcript.TranscriptEntry> list(String run) { return recorder.list(run); }
+                public com.samlscope.core.transcript.TranscriptEntry updateSamlAnalysis(String id, String correlation,
+                        Map<String, Object> summary) { return recorder.updateSamlAnalysis(id, correlation, summary); }
+            };
             var sender = new HttpOutboundSender(
-                    HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NEVER).build(), recorder,
+                    HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NEVER).build(), boundary,
                     Clock.fixed(NOW, ZoneOffset.UTC));
             var request = "<S:Envelope xmlns:S=\"http://schemas.xmlsoap.org/soap/envelope/\"><S:Body/></S:Envelope>"
                     .getBytes(StandardCharsets.UTF_8);
@@ -73,7 +83,17 @@ class HttpOutboundSenderTest {
                     == com.samlscope.core.transcript.Direction.OUTBOUND).findFirst().orElseThrow();
             var inbound = entries.stream().filter(value -> value.direction()
                     == com.samlscope.core.transcript.Direction.INBOUND).findFirst().orElseThrow();
-            assertTrue(outbound.headers().get("Authorization").getFirst().contains("redacted: Basic"));
+            assertFalse(outbound.headers().containsKey("Authorization"));
+            assertEquals(2, submitted.size());
+            for (var input : submitted) {
+                assertTrue(input.headers().keySet().stream().noneMatch(name ->
+                        java.util.Set.of("authorization", "cookie", "set-cookie").contains(name.toLowerCase(java.util.Locale.ROOT))));
+                assertFalse(input.headers().toString().contains("credential-sentinel"));
+            }
+            var tls = (Map<?, ?>) result.details().get("tls_observation");
+            assertEquals("plaintext-http-observed", tls.get("status"));
+            assertEquals(false, tls.get("affects_verdict"));
+            assertEquals(tls, inbound.samlSummary().get("tls_observation"));
             assertFalse(outbound.headers().toString().contains("YWxpY2U6c2VjcmV0"));
             assertEquals(result.transcriptEntryId(), inbound.id());
         } finally {

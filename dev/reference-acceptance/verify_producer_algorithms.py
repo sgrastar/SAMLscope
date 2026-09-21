@@ -17,12 +17,21 @@ def load(folder, name):
     return json.loads((folder / name).read_text())
 
 
-def verify(root):
-    source = Path(root) / 'shibboleth-producer-algorithms'
-    folder = Path(root) / 'shibboleth-producer-evaluation'
+def verify(root, profile='browser_sso_idp'):
+    assert profile in {'browser_sso_idp', 'ecp_idp'}
+    suffix = '-ecp' if profile == 'ecp_idp' else ''
+    source = Path(root) / ('shibboleth-producer-algorithms' + suffix)
+    folder = Path(root) / ('shibboleth-producer-evaluation' + suffix)
     result = load(folder, 'result.json')
     assert result['run']['id'] == load(source, 'result.json')['run']['id']
-    assert load(source, 'plan.json')['plan']['plan']['profile'] == 'browser_sso_idp'
+    assert load(source, 'plan.json')['plan']['plan']['profile'] == profile
+    assert result['profile']['id'] == profile.replace('_','-')
+    if profile == 'ecp_idp':
+        baseline = load(source / 'baseline', 'operations.json')
+        assert baseline['run'] == result['run']['id'] and not baseline['failures']
+        assert baseline['restored'] and baseline['temporary_removed']
+        assert baseline['original_sha256'] == baseline['final_sha256']
+        assert load(source / 'baseline', 'flow.json') == 'recorded'
     assert result['target']['metadata_digest'] == 'sha256:' + hashlib.sha256((source / 'target-metadata.xml').read_bytes()).hexdigest()
     prepared = {o['variant']: o for o in load(source, 'prepared-metadata-verification.json')['receipts']}
     signed = {o['variant']: o for o in load(source, 'verified-algorithm-signatures.json')['observations']}
@@ -30,6 +39,14 @@ def verify(root):
     decrypted = {o['variant']: o for o in decryption['observations']}
     assert decryption['signed_evidence_sha256'] == hashlib.sha256((source / 'verified-algorithm-signatures.json').read_bytes()).hexdigest()
     manifest = {o['id']: o for o in load(source, 'decoded-manifest.json')}
+    assert len(prepared) == len(load(source, 'prepared-metadata-verification.json')['receipts'])
+    assert len(signed) == len(load(source, 'verified-algorithm-signatures.json')['observations'])
+    assert len(decrypted) == len(decryption['observations'])
+    assert len(manifest) == len(load(source, 'decoded-manifest.json'))
+    expected = {'control','algorithm-encryption-aes128-gcm','algorithm-encryption-aes256-gcm',
+                'algorithm-oaep-10-sha1','algorithm-oaep-10-sha256','algorithm-oaep-11-sha1',
+                'algorithm-oaep-11-sha256','algorithm-oaep-11-default-mgf'}
+    assert set(prepared) == set(signed) == set(decrypted) == expected
     cases = {c['id']: c for req in result['requirements'] for c in req['cases']}
     combinations = set()
     observed = {}

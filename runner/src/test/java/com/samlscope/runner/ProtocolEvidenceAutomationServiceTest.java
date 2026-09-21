@@ -131,6 +131,74 @@ class ProtocolEvidenceAutomationServiceTest {
                 repository.find(RUN, testCase.id()).orElseThrow().status());
     }
 
+    @Test
+    void completesOptedInQueuedCaseWithoutStartingOrDispatchingIt() {
+        var repository = new MemoryExecutions();
+        var transitions = new CaseExecutionService(repository);
+        var testCase = new ReadyQueuedCase(true, Outcome.SATISFIED);
+        var context = context(List.of(), TargetRole.IDP);
+        transitions.enqueueFrontChannel(RUN,testCase,context);
+        var service = new ProtocolEvidenceAutomationService(repository,new TestCaseRegistry(List.of(testCase)),transitions,ignored -> context);
+        assertEquals(1,service.status(RUN).readyCases());
+        assertEquals(1,service.evaluateReady(RUN).completed().size());
+        assertEquals(CaseExecutionStatus.FINISHED,repository.find(RUN,testCase.id()).orElseThrow().status());
+        assertEquals(0,repository.outboundActions);
+        assertEquals(List.of(),service.evaluateReady(RUN).completed());
+    }
+
+    @Test
+    void attemptedConfirmationCannotCompleteQueuedCaseWithoutConclusiveEvidence() {
+        for (var testCase : List.of(new ReadyQueuedCase(false,Outcome.SATISFIED),new ReadyQueuedCase(true,Outcome.NOT_VERIFIED))) {
+            var repository = new MemoryExecutions(); var transitions = new CaseExecutionService(repository);
+            var context = context(List.of(),TargetRole.IDP);
+            transitions.enqueueFrontChannel(RUN,testCase,context);
+            var service = new ProtocolEvidenceAutomationService(repository,new TestCaseRegistry(List.of(testCase)),transitions,ignored -> context);
+            assertEquals(List.of(),service.evaluateAttempted(RUN).completed());
+            assertEquals(true,CaseExecutionService.isQueuedFrontChannel(repository.find(RUN,testCase.id()).orElseThrow()));
+            assertEquals(0,repository.outboundActions);
+        }
+    }
+
+    @Test
+    void unrelatedQueuedCasesOutsideTheEvidenceRegistryAreIgnored() {
+        var repository = new MemoryExecutions(); var transitions = new CaseExecutionService(repository);
+        var context = context(List.of(),TargetRole.IDP);
+        var testCase = new ReadyQueuedCase(true,Outcome.SATISFIED);
+        transitions.enqueueFrontChannel(RUN,testCase,context);
+        var service = new ProtocolEvidenceAutomationService(repository,new TestCaseRegistry(List.of()),transitions,ignored -> context);
+        assertEquals(0,service.status(RUN).eligibleCases());
+        assertEquals(List.of(),service.evaluateReady(RUN).completed());
+        assertEquals(true,CaseExecutionService.isQueuedFrontChannel(repository.find(RUN,testCase.id()).orElseThrow()));
+    }
+
+    @Test
+    void incompleteRunCannotCompleteEvenWhenObserverClaimsReadiness() {
+        var repository = new MemoryExecutions(); var transitions = new CaseExecutionService(repository);
+        var testCase = new ReadyQueuedCase(true,Outcome.SATISFIED);
+        var context = new DefaultCaseContext(RUN,TargetRole.IDP,Clock.fixed(NOW,ZoneOffset.UTC),TestPlan.Parameters.defaults(),
+                TestPlan.Interaction.defaults(),Reachability.CONFIRMED,new MemoryTranscript(List.of()),false);
+        transitions.enqueueFrontChannel(RUN,testCase,context);
+        var service = new ProtocolEvidenceAutomationService(repository,new TestCaseRegistry(List.of(testCase)),transitions,ignored -> context);
+        assertEquals(List.of(),service.evaluateReady(RUN).completed());
+        assertEquals(true,CaseExecutionService.isQueuedFrontChannel(repository.find(RUN,testCase.id()).orElseThrow()));
+    }
+
+    private record ReadyQueuedCase(boolean ready, Outcome outcome) implements com.samlscope.core.caseexec.TestCase,
+            BrowserFrontChannelScenario, com.samlscope.runner.cases.QueuedProtocolEvidenceCase {
+        @Override public String id() { return "IIP-SSO04-a-idp-01"; }
+        @Override public TargetRole role() { return TargetRole.IDP; }
+        @Override public String instructionsEn(com.samlscope.core.caseexec.CaseState state) { return "Observe originals"; }
+        @Override public com.samlscope.core.caseexec.CaseStep start(CaseContext context) { throw new AssertionError("Queued observation must not start a probe"); }
+        @Override public com.samlscope.core.caseexec.CaseStep resume(CaseContext context,com.samlscope.core.caseexec.CaseState state,
+                com.samlscope.core.caseexec.CaseEvent event) { throw new AssertionError("Queued observation must not resume a probe"); }
+        @Override public EvidenceStatus evidenceStatus(CaseContext context) { return new EvidenceStatus(ready,List.of("originals"),List.of(),Map.of()); }
+        @Override public com.samlscope.core.evaluation.CaseOutcome queuedEvidenceOutcome(CaseContext context) {
+            return outcome == Outcome.NOT_VERIFIED
+                    ? com.samlscope.core.evaluation.CaseOutcome.notVerified("unproven","test.unproven")
+                    : com.samlscope.core.evaluation.CaseOutcome.of(outcome,"test.observed",List.of());
+        }
+    }
+
     private static CaseContext context(List<TranscriptEntry> entries) {
         return context(entries, TargetRole.SP);
     }
@@ -170,6 +238,7 @@ class ProtocolEvidenceAutomationServiceTest {
 
     private static final class MemoryExecutions implements CaseExecutionRepository {
         private final Map<String, CaseExecution> values = new LinkedHashMap<>();
+        private int outboundActions;
 
         @Override public Optional<CaseExecution> find(String runId, String caseId) {
             return Optional.ofNullable(values.get(runId + "|" + caseId));
@@ -183,6 +252,7 @@ class ProtocolEvidenceAutomationServiceTest {
             var current = values.get(key);
             if ((current == null ? -1 : current.revision()) != expectedRevision) return false;
             values.put(key, execution);
+            outboundActions += actions.size();
             return true;
         }
         @Override public List<OutboxEntry> listOutbox(String runId) { return List.of(); }

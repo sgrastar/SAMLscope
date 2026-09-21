@@ -54,8 +54,7 @@ public final class HttpOutboundSender implements OutboundSender {
         var authorization = "Basic " + Base64.getEncoder().encodeToString(ephemeralCredential);
         var requestHeaders = Map.of(
                 "Content-Type", List.of(contentType),
-                "Accept", List.of("text/xml, application/soap+xml"),
-                "Authorization", List.of(authorization));
+                "Accept", List.of("text/xml, application/soap+xml"));
         var outbound = transcript.record(new TranscriptInput(
                 runId, Direction.OUTBOUND, clock.instant(), action.actionId(), "POST",
                 action.target().toString(), null, requestHeaders, action.payload(), contentType,
@@ -77,15 +76,20 @@ public final class HttpOutboundSender implements OutboundSender {
             throw new java.io.IOException("ECP response exceeds 1 MiB");
         }
         var responseHeaders = new LinkedHashMap<String, List<String>>();
-        response.headers().map().forEach((name, values) -> responseHeaders.put(name, List.copyOf(values)));
+        response.headers().map().forEach((name, values) -> {
+            if (!credentialHeader(name)) responseHeaders.put(name, List.copyOf(values));
+        });
         var responseContentType = response.headers().firstValue("content-type").orElse(null);
+        var tlsObservation = com.samlscope.runner.TlsSessionObservation.observe(response);
         var inbound = transcript.record(new TranscriptInput(
                 runId, Direction.INBOUND, clock.instant(), action.actionId(), "POST",
                 action.target().toString(), response.statusCode(), responseHeaders, responseBody,
                 responseContentType, null, responseBody,
-                Map.of("type", "EcpSoapResponse", "request_transcript", outbound.id())));
+                Map.of("type", "EcpSoapResponse", "request_transcript", outbound.id(),
+                        "tls_observation", tlsObservation)));
         return new SendResult(false,
-                Map.of("http_status", response.statusCode(), "response_bytes", responseBody.length), inbound.id());
+                Map.of("http_status", response.statusCode(), "response_bytes", responseBody.length,
+                        "tls_observation", tlsObservation), inbound.id());
     }
 
     /**
@@ -121,10 +125,13 @@ public final class HttpOutboundSender implements OutboundSender {
             throw new java.io.IOException("Logout probe response exceeds 1 MiB");
         }
         var responseHeaders = new LinkedHashMap<String, List<String>>();
-        response.headers().map().forEach((name, values) -> responseHeaders.put(name, List.copyOf(values)));
+        response.headers().map().forEach((name, values) -> {
+            if (!credentialHeader(name)) responseHeaders.put(name, List.copyOf(values));
+        });
         var responseContentType = response.headers().firstValue("content-type").orElse(null);
         var location = responseHeaders.getOrDefault("location", List.of()).stream().findFirst().orElse(null);
-        var summary = probeSummary(responseBody, responseContentType, location);
+        var summary = new LinkedHashMap<String, Object>(probeSummary(responseBody, responseContentType, location));
+        summary.put("tls_observation", com.samlscope.runner.TlsSessionObservation.observe(response));
         var inbound = transcript.record(new TranscriptInput(
                 runId, Direction.INBOUND, clock.instant(), action.actionId(), "POST",
                 action.target().toString(), response.statusCode(), responseHeaders, responseBody,
@@ -133,8 +140,16 @@ public final class HttpOutboundSender implements OutboundSender {
         details.put("http_status", response.statusCode());
         details.put("response_bytes", responseBody.length);
         details.put("request_transcript", outbound.id());
+        details.put("tls_observation", summary.get("tls_observation"));
         details.put("saml_message", summary.getOrDefault("saml_message", ""));
         return new SendResult(false, Map.copyOf(details), inbound.id());
+    }
+
+    private static boolean credentialHeader(String name) {
+        return switch (name.toLowerCase(java.util.Locale.ROOT)) {
+            case "authorization", "proxy-authorization", "cookie", "set-cookie", "set-cookie2" -> true;
+            default -> false;
+        };
     }
 
     private static Map<String, Object> probeSummary(byte[] body, String contentType, String location) {

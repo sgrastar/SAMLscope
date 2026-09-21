@@ -6,6 +6,7 @@ import hashlib
 import json
 from pathlib import Path
 import xml.etree.ElementTree as ET
+from ui_display_comparison import compare as display_comparison
 
 SHA = lambda raw: hashlib.sha256(raw).hexdigest()
 MD = 'urn:oasis:names:tc:SAML:2.0:metadata'
@@ -79,12 +80,17 @@ def url_comparison(bound):
         elements.append(dict(element=element, allowed_rendering_control_observed=positive,
             forbidden_candidate_assigned=any(row['assignment'] == 'candidate-assigned' for row in forbidden),
             forbidden_nodes_absent_at_sample=all(row['assignment'] == 'absent-at-sample' for row in forbidden),
-            reason='formal-consumer-oracle-unavailable' if positive else 'usable-positive-control-unavailable',
+            # Neither this binder nor the DOM collector supplies request-bound native nonuse
+            # decisions. Keep that missing adapter boundary explicit after adding the comparator.
+            reason='native-consumption-or-nonuse-evidence-unavailable' if positive else 'usable-positive-control-unavailable',
+            missing_native_nonuse_schemes=[row['scheme'] for row in observations if row['rendering'] != 'observed'],
             observations=observations))
     return dict(status='diagnostic-only', reason='url-element-consumption-scope-unproven',
                 absence_is_nonuse_proof=False, verdict_adopted=False, elements=elements)
 
-def bind(folder, url_schemes=False):
+def bind(folder, url_schemes=False, display_names_only=False):
+    if url_schemes and display_names_only:
+        raise ValueError("Choose one UI evidence family")
     def read(name):
         return json.loads((folder / name).read_text())
 
@@ -116,7 +122,7 @@ def bind(folder, url_schemes=False):
     used_requests = set()
     conditions = (['ui-url-' + element + '-' + scheme
         for element in ['logo', 'information', 'privacy']
-        for scheme in ['http', 'https', 'data', 'javascript', 'file']] if url_schemes else CONDITIONS)
+        for scheme in ['http', 'https', 'data', 'javascript', 'file']] if url_schemes else CONDITIONS[:3] if display_names_only else CONDITIONS)
     for condition in conditions:
         observation = read(condition + '/browser-observation.json')
         receipt_raw = (folder / condition / 'native-import.json').read_bytes()
@@ -205,6 +211,7 @@ def bind(folder, url_schemes=False):
             raise ValueError('Evidence chronology mismatch')
         bound.append(dict(condition=condition, fixture_sha256=SHA(fixture), request_reference=request['id'],
             metadata_reference=prepared['id'], fetch_reference=fetched['id'],
+            request_timestamp=request['timestamp'],
             observation_sha256=SHA((folder / condition / 'browser-observation.json').read_bytes()),
             status=observation['status'], selected_candidate=observation.get('selected_candidate'),
             reason=observation.get('reason'), accept_language=browser['accept_language'],
@@ -214,15 +221,18 @@ def bind(folder, url_schemes=False):
     return dict(schema='samlscope-ui-evidence-binding-v1', run=run, originals_bound=True,
         native_readback_bound=True, native_receipt_trust='local-adapter', verdict_adopted=False, observations=bound,
         **({'url_comparison': url_comparison(bound)} if url_schemes
-           else {'logo_comparison': logo_comparison(folder, bound, restoration)}))
+           else {'display_comparison': display_comparison(folder, bound)} if display_names_only
+           else {'logo_comparison': logo_comparison(folder, bound, restoration),
+                 'display_comparison': display_comparison(folder, bound)}))
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--evidence', type=Path, required=True)
     parser.add_argument('--url-schemes', action='store_true')
+    parser.add_argument('--display-names-only', action='store_true')
     args = parser.parse_args()
-    result = bind(args.evidence.resolve(), args.url_schemes)
+    result = bind(args.evidence.resolve(), args.url_schemes, args.display_names_only)
     with (args.evidence / 'ui-evidence-binding.json').open('x') as output:
         json.dump(result, output, indent=2)
         output.write('\n')

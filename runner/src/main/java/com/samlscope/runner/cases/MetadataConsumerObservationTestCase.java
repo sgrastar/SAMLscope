@@ -16,10 +16,13 @@ import com.samlscope.core.evaluation.EvidenceRef;
 import com.samlscope.core.evaluation.Outcome;
 import com.samlscope.core.plan.TargetRole;
 import com.samlscope.core.transcript.Direction;
+import com.samlscope.core.transcript.TranscriptContentReader;
 
 /**
  * Observes a target consuming controlled metadata variants. Configuration is a setup step; the
- * verdict is derived from Suite-recorded fetches and variant-correlated inbound SAML only.
+ * verdict is derived from Suite-recorded fetches and variant-correlated inbound SAML only. For the
+ * excluded-content rule a Run-scoped native rejection receipt can prove that the target refused a
+ * document whose signed content is excluded, which is the other way to ensure non-use.
  */
 public final class MetadataConsumerObservationTestCase
         implements TestCase, ConfigurationPrompt, ProtocolEvidenceCase, com.samlscope.runner.EvidenceCampaignCase,
@@ -33,8 +36,17 @@ public final class MetadataConsumerObservationTestCase
     private final Rule rule;
     private final List<String> variants;
     private final String instructionEn;
+    private final TranscriptContentReader content;
+    private final java.util.function.Function<String, byte[]> metadata;
+    private final MetadataRejectionEvidenceFile rejectionEvidence;
 
     public MetadataConsumerObservationTestCase(String id, TargetRole role, Rule rule) {
+        this(id, role, rule, null, null, null);
+    }
+
+    public MetadataConsumerObservationTestCase(String id, TargetRole role, Rule rule,
+            TranscriptContentReader content, java.util.function.Function<String, byte[]> metadata,
+            java.nio.file.Path rejectionDirectory) {
         this.id = required(id, "id");
         this.role = java.util.Objects.requireNonNull(role, "role");
         this.rule = java.util.Objects.requireNonNull(rule, "rule");
@@ -47,6 +59,9 @@ public final class MetadataConsumerObservationTestCase
             case OMITTED_KEY_INFO -> List.of("no-key-info");
         };
         this.instructionEn = instruction(rule, variants);
+        this.content = content;
+        this.metadata = metadata;
+        this.rejectionEvidence = rejectionDirectory == null ? null : new MetadataRejectionEvidenceFile(rejectionDirectory);
     }
 
     @Override public boolean supportsRecordedEvidenceReevaluation(CaseOutcome previous) {
@@ -56,7 +71,51 @@ public final class MetadataConsumerObservationTestCase
 
     @Override public java.util.Optional<CaseOutcome> reevaluateRecordedEvidence(CaseContext context, CaseOutcome previous) {
         if (!supportsRecordedEvidenceReevaluation(previous) || !context.transcriptComplete()) return java.util.Optional.empty();
+        var fromReceipt = concludeFromReceipt(context, previous);
+        if (fromReceipt.isPresent()) return fromReceipt;
         return com.samlscope.runner.RecordedEvidenceReevaluation.conclusiveUpdate(previous, evaluate(context, false));
+    }
+
+    /** A native refusal of every probed document proves the recorded choice without a probe flow. */
+    private java.util.Optional<CaseOutcome> concludeFromReceipt(CaseContext context, CaseOutcome previous) {
+        if ((rule != Rule.EXCLUDED_CONTENT && rule != Rule.PERMITTED_IDENTITY_TRANSFORM)
+                || rejectionEvidence == null || content == null || metadata == null) {
+            return java.util.Optional.empty();
+        }
+        if (previous.outcome() != Outcome.NOT_VERIFIED
+                || !"metadata.consumer-probe.incomplete".equals(previous.reasonCode())
+                || !rejectionEvidence.exists(context.runId())) {
+            return java.util.Optional.empty();
+        }
+        try {
+            var proven = rejectionEvidence.rejectedVariants(context, metadata.apply(context.runId()), content);
+            var details = previous.details();
+            if (!stringList(details.get("missing_fetches")).isEmpty() || !proven.keySet().containsAll(variants)) {
+                return java.util.Optional.empty();
+            }
+            var verified = new java.util.LinkedHashMap<String, Object>(details);
+            verified.put("native_rejections", new java.util.LinkedHashMap<>(proven));
+            verified.put("evidence_source", "local-native-adapter");
+            var refs = new ArrayList<EvidenceRef>(previous.evidence());
+            for (var entry : context.transcript().list(context.runId())) {
+                if ("MetadataPrepared".equals(entry.samlSummary().get("type"))
+                        && proven.containsKey(String.valueOf(entry.samlSummary().get("variant")))) {
+                    var ref = new EvidenceRef("transcript", "transcript:" + entry.id());
+                    if (!refs.contains(ref)) refs.add(ref);
+                }
+            }
+            var outcome = rule == Rule.EXCLUDED_CONTENT ? Outcome.SATISFIED : Outcome.SATISFIED_WITH_NOTE;
+            var code = rule == Rule.EXCLUDED_CONTENT
+                    ? "metadata.excluded-content.rejected" : "metadata.unauthorized-transform.rejected";
+            return java.util.Optional.of(new CaseOutcome(outcome, null, code, code, List.copyOf(refs), verified));
+        } catch (Exception unproven) {
+            return java.util.Optional.empty();
+        }
+    }
+
+    private static List<String> stringList(Object value) {
+        return value instanceof List<?> values && values.stream().allMatch(String.class::isInstance)
+                ? values.stream().map(String.class::cast).toList() : List.of();
     }
 
     @Override public String id() { return id; }
@@ -80,7 +139,11 @@ public final class MetadataConsumerObservationTestCase
         if (!CONFIGURATION_PHASE.equals(state.phase())) {
             throw new IllegalArgumentException("Metadata consumer case is not waiting for its probe");
         }
-        if (event instanceof CaseEvent.ConfigConfirmed) return new CaseStep.Finish(evaluate(context, true));
+        if (event instanceof CaseEvent.ConfigConfirmed) {
+            var outcome = evaluate(context, true);
+            return concludeFromReceipt(context, outcome)
+                    .<CaseStep>map(CaseStep.Finish::new).orElseGet(() -> new CaseStep.Finish(outcome));
+        }
         if (event instanceof CaseEvent.ConfigUnavailable unavailable) {
             return new CaseStep.Finish(unavailable(unavailable));
         }
@@ -141,6 +204,8 @@ public final class MetadataConsumerObservationTestCase
     @Override
     public EvidenceStatus evidenceStatus(CaseContext context) {
         var observation = observe(context);
+        var fromReceipt = rejectionStatus(context, observation);
+        if (fromReceipt != null) return fromReceipt;
         var required = new ArrayList<String>();
         required.add("fetched:" + CONTROL);
         required.add("used:" + CONTROL);
@@ -161,6 +226,35 @@ public final class MetadataConsumerObservationTestCase
         return new EvidenceStatus(
                 observation.ready(), required,
                 completed, observation.details());
+    }
+
+    /** When a rejection receipt covers every excluding document, non-use of excluded content is proven. */
+    private EvidenceStatus rejectionStatus(CaseContext context, Observation observation) {
+        if ((rule != Rule.EXCLUDED_CONTENT && rule != Rule.PERMITTED_IDENTITY_TRANSFORM)
+                || rejectionEvidence == null || content == null || metadata == null
+                || !context.transcriptComplete() || !rejectionEvidence.exists(context.runId())) {
+            return null;
+        }
+        Map<String, String> proven;
+        try {
+            proven = rejectionEvidence.rejectedVariants(context, metadata.apply(context.runId()), content);
+        } catch (Exception unproven) {
+            return null;
+        }
+        var required = new ArrayList<String>();
+        required.add("fetched:" + CONTROL);
+        required.add("used:" + CONTROL);
+        variants.forEach(variant -> required.add("fetched:" + variant));
+        variants.forEach(variant -> required.add("conclusive-rejection:" + variant));
+        var completed = new ArrayList<String>();
+        if (observation.fetched().contains(CONTROL)) completed.add("fetched:" + CONTROL);
+        if (observation.used().contains(CONTROL)) completed.add("used:" + CONTROL);
+        variants.stream().filter(observation.fetched()::contains).forEach(variant -> completed.add("fetched:" + variant));
+        variants.stream().filter(proven::containsKey).forEach(variant -> completed.add("conclusive-rejection:" + variant));
+        var details = new java.util.LinkedHashMap<String, Object>(observation.details());
+        details.put("native_rejections", new java.util.LinkedHashMap<>(proven));
+        return new EvidenceStatus(required.stream().allMatch(completed::contains),
+                required, completed, details);
     }
 
     private Observation observe(CaseContext context) {

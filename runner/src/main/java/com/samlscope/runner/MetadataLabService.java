@@ -264,7 +264,16 @@ public final class MetadataLabService {
         }
         updated.put("last_completed_variant", variants.get(index));
         updated.put("last_completed_at", clock.instant().toString());
-        updateLab(access.run(), updated);
+        var run = access.run();
+        updateLab(run, updated);
+        if (nextIndex >= variants.size()
+                && run.status() == com.samlscope.core.run.RunStatus.WAITING_BROWSER) {
+            // The last campaign member released the wait; no further fixture will be dispatched, so
+            // no browser wait remains. Orchestration only: no verdict is created or inferred.
+            var refreshed = requireRun(run.id());
+            runService.update(refreshed, com.samlscope.core.run.RunStatus.COMPLETED,
+                    refreshed.targetToSuiteReachability(), refreshed.context());
+        }
         return flow;
     }
 

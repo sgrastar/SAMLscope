@@ -22,6 +22,31 @@ public final class ApprovedConfigCaseRegistry {
 
     private ApprovedConfigCaseRegistry() {}
 
+    public static TestCaseRegistry withMetadataKeySelection(TestCaseRegistry registry,
+            TranscriptContentReader content, Function<String, byte[]> metadata, java.nio.file.Path directory) {
+        return new TestCaseRegistry(registry.all().stream().map(testCase ->
+                MetadataKeySelectionConfigurationTestCase.supports(testCase.id())
+                        ? (TestCase)new MetadataKeySelectionConfigurationTestCase(testCase, content, metadata, directory)
+                        : testCase).toList());
+    }
+
+    public static TestCaseRegistry withMetadataRejection(TestCaseRegistry registry,
+            TranscriptContentReader content, Function<String, byte[]> metadata, java.nio.file.Path directory) {
+        return new TestCaseRegistry(registry.all().stream().map(testCase ->
+                MetadataRejectionConfigurationTestCase.supports(testCase.id())
+                        && testCase instanceof MetadataFixtureObservationTestCase
+                        ? (TestCase)new MetadataRejectionConfigurationTestCase(testCase, content, metadata, directory)
+                        : testCase).toList());
+    }
+
+    public static TestCaseRegistry withNativeCertificates(TestCaseRegistry registry,
+            TranscriptContentReader content, Function<String, byte[]> metadata, java.nio.file.Path directory) {
+        return new TestCaseRegistry(registry.all().stream().map(testCase ->
+                NativeCertificateConfigurationTestCase.supports(testCase.id())
+                        ? (TestCase)new NativeCertificateConfigurationTestCase(testCase, content, metadata, directory)
+                        : testCase).toList());
+    }
+
     public static TestCaseRegistry withAttributePolicyPreparation(TestCaseRegistry registry,
             TranscriptContentReader content, Function<String, byte[]> metadata,
             java.util.function.BiFunction<String,String,java.util.Optional<com.samlscope.saml.crypto.PlanCredentials>> keys,
@@ -29,6 +54,16 @@ public final class ApprovedConfigCaseRegistry {
         return new TestCaseRegistry(registry.all().stream().map(testCase ->
                 AttributePolicyConfigurationTestCase.supports(testCase.id())
                         ? (TestCase)new AttributePolicyConfigurationTestCase(testCase, content, metadata, keys, directory)
+                        : testCase).toList());
+    }
+
+    public static TestCaseRegistry withAuthnContextPreparation(TestCaseRegistry registry,
+            TranscriptContentReader content, Function<String, byte[]> metadata,
+            java.util.function.BiFunction<String,String,java.util.Optional<com.samlscope.saml.crypto.PlanCredentials>> keys,
+            java.nio.file.Path directory) {
+        return new TestCaseRegistry(registry.all().stream().map(testCase ->
+                AuthnContextConfigurationTestCase.supports(testCase.id())
+                        ? (TestCase)new AuthnContextConfigurationTestCase(testCase, content, metadata, keys, directory)
                         : testCase).toList());
     }
 

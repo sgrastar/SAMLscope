@@ -15,6 +15,8 @@ from attribute_name_capability import docker, XSI
 REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO / 'dev/keycloak'))
 from import_metadata_batch import api, save, BASE
+sys.path.insert(0, str(REPO / 'dev/reference-acceptance'))
+from ui_display_comparison import candidates as display_candidates
 
 VARIANTS = ['ui-consumer-display-all', 'ui-consumer-display-service', 'ui-consumer-display-entity',
             'ui-consumer-logo-localized', 'ui-consumer-logo-fallback']
@@ -25,11 +27,19 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--url-schemes', action='store_true', help='Observe each URL-bearing UI element and scheme')
+    parser.add_argument('--display-names-only', action='store_true')
     args = parser.parse_args()
+    if args.url_schemes and args.display_names_only:
+        parser.error('Choose one UI campaign')
     out = args.output.resolve()
     out.mkdir(parents=True, exist_ok=False)
     config_path = '/opt/reference-idp/conf/metadata-providers.xml'
     original = docker('cat', config_path)
+    template = docker('cat', '/opt/reference-idp/views/login.vm')
+    suppression = b'#if ($serviceName && !$rpContext.getRelyingPartyId().contains($serviceName))'
+    save(out / 'native-ui-template.json', dict(path='/opt/reference-idp/views/login.vm',
+        sha256=SHA(template), entity_name_suppression_guard_present=suppression in template,
+        provenance='native-template-readback', runtime_branch_execution_verified=False))
     properties = docker('cat', '/opt/reference-idp/conf/idp.properties')
     fallback_lines = [line.split('=', 1)[1].strip() for line in properties.decode().splitlines()
                       if line.strip().startswith('idp.ui.fallbackLanguages=')]
@@ -86,7 +96,7 @@ def main():
 
     try:
         variants = (['ui-url-' + element + '-' + scheme for element in ['logo', 'information', 'privacy']
-                     for scheme in ['http', 'https', 'data', 'javascript', 'file']] if args.url_schemes else VARIANTS)
+                     for scheme in ['http', 'https', 'data', 'javascript', 'file']] if args.url_schemes else VARIANTS[:3] if args.display_names_only else VARIANTS)
         for variant in variants:
             folder = out / variant
             folder.mkdir()
@@ -130,10 +140,7 @@ def main():
                 logos = tree.findall('.//{urn:oasis:names:tc:SAML:metadata:ui}Logo')
                 candidates = {('localized' if logo.get('{http://www.w3.org/XML/1998/namespace}lang') else 'default'): logo.text for logo in logos}
             else:
-                # The native template supplies this fixed English prefix; it is not metadata text.
-                candidates = {'display': 'Login to SAMLscope UI display candidate',
-                    'service': 'Login to SAMLscope service candidate', 'entity': 'Login to ' + tree.attrib['entityID'],
-                    'hostname': 'Login to localhost'}
+                candidates = display_candidates(raw, variant)
             inputs = dict(startUrl=state['automaticStartUrl'], output=str(folder / 'browser-observation.json'),
                 observation=dict(runId=run, condition=variant, fixturePath=str(fixture),
                     importReceiptPath=str(receipt), kind=kind, candidates=candidates))
@@ -160,11 +167,12 @@ def main():
             docker('rm', '--', temporary)
         removed = not docker('sh', '-c', 'if test -e ' + temporary + '; then echo exists; fi').strip()
         restored = not failures and removed and docker('cat', config_path) == original
+        template_unchanged = docker('cat', '/opt/reference-idp/views/login.vm') == template
         language_settings_unchanged = docker('cat', '/opt/reference-idp/conf/idp.properties') == properties
         save(out / 'operations.json', dict(run=run, operations=operations, restored=restored, verdict_adopted=False))
         save(out / 'restoration.json', dict(restored=restored, original_sha256=SHA(original),
             final_sha256=SHA(docker('cat', config_path)), temporary_removed=removed, failures=failures,
-            language_settings_unchanged=language_settings_unchanged))
+            language_settings_unchanged=language_settings_unchanged, template_unchanged=template_unchanged))
         transcript = api('/api/runs/' + run + '/transcript')
         save(out / 'transcript.json', transcript)
         manifest = []
@@ -187,7 +195,7 @@ def main():
         save(out / 'evaluation-status.json', dict(evaluation_started=False, verdict_adopted=False))
         if not restored:
             raise RuntimeError('Restoration failed')
-        if not language_settings_unchanged:
+        if not language_settings_unchanged or not template_unchanged:
             raise RuntimeError('Concurrent language configuration change; evidence adoption blocked')
     print('Run', run, 'restored', restored, '; no verdict assigned')
 

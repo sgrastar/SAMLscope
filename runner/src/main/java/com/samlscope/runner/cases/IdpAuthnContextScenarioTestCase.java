@@ -30,28 +30,44 @@ public final class IdpAuthnContextScenarioTestCase
     private static final String RESPONDER = "urn:oasis:names:tc:SAML:2.0:status:Responder";
     private final java.util.function.Function<String, IdpErrorProbeConfiguration> configurations;
     private final SamlRequestedAuthnContextRequestFactory requests;
+    private final SamlDecryptionKeyProvider decryptionKeys;
 
     public IdpAuthnContextScenarioTestCase(
             java.util.function.Function<String, IdpErrorProbeConfiguration> configurations) {
-        this(configurations, new SamlRequestedAuthnContextRequestFactory());
+        this(configurations, new SamlRequestedAuthnContextRequestFactory(), ignored -> java.util.Optional.empty());
+    }
+
+    public IdpAuthnContextScenarioTestCase(
+            java.util.function.Function<String, IdpErrorProbeConfiguration> configurations,
+            SamlDecryptionKeyProvider decryptionKeys) {
+        this(configurations, new SamlRequestedAuthnContextRequestFactory(), decryptionKeys);
     }
 
     IdpAuthnContextScenarioTestCase(
             java.util.function.Function<String, IdpErrorProbeConfiguration> configurations,
             SamlRequestedAuthnContextRequestFactory requests) {
+        this(configurations, requests, ignored -> java.util.Optional.empty());
+    }
+
+    IdpAuthnContextScenarioTestCase(
+            java.util.function.Function<String, IdpErrorProbeConfiguration> configurations,
+            SamlRequestedAuthnContextRequestFactory requests,
+            SamlDecryptionKeyProvider decryptionKeys) {
         this.configurations = java.util.Objects.requireNonNull(configurations, "configurations");
         this.requests = java.util.Objects.requireNonNull(requests, "requests");
+        this.decryptionKeys = java.util.Objects.requireNonNull(decryptionKeys, "decryptionKeys");
     }
 
     private FixtureScenarioTestCase scenario(String runId) {
         var configuration = java.util.Objects.requireNonNull(configurations.apply(runId));
+        var decryptionKey = decryptionKeys.keyFor(runId).orElse(null);
         return new FixtureScenarioTestCase(
                 CASE_ID, TargetRole.IDP,
                 List.of(
-                        fixture(Fixture.BASELINE, configuration),
-                        fixture(Fixture.SATISFIABLE_CLASS, configuration),
-                        fixture(Fixture.SATISFIABLE_DECLARATION, configuration),
-                        fixture(Fixture.UNSATISFIABLE_CLASS, configuration)),
+                        fixture(Fixture.BASELINE, configuration, decryptionKey),
+                        fixture(Fixture.SATISFIABLE_CLASS, configuration, decryptionKey),
+                        fixture(Fixture.SATISFIABLE_DECLARATION, configuration, decryptionKey),
+                        fixture(Fixture.UNSATISFIABLE_CLASS, configuration, decryptionKey)),
                 ignored -> configuration.preconditionsSatisfied(),
                 new FixtureScenarioTestCase.Vocabulary(
                         "authn_context_preconditions_unmet", "idp.authn-context.preconditions-unmet",
@@ -76,14 +92,16 @@ public final class IdpAuthnContextScenarioTestCase
     }
     @Override public String instructionsEn(CaseState state) { return browserInstructionsEn(); }
 
-    private ScenarioFixture fixture(Fixture fixture, IdpErrorProbeConfiguration configuration) {
-        return new AuthnContextFixture(fixture, configuration, requests);
+    private ScenarioFixture fixture(Fixture fixture, IdpErrorProbeConfiguration configuration,
+            java.security.PrivateKey decryptionKey) {
+        return new AuthnContextFixture(fixture, configuration, requests, decryptionKey);
     }
 
     private record AuthnContextFixture(
             Fixture fixture,
             IdpErrorProbeConfiguration configuration,
-            SamlRequestedAuthnContextRequestFactory requests) implements ScenarioFixture {
+            SamlRequestedAuthnContextRequestFactory requests,
+            java.security.PrivateKey decryptionKey) implements ScenarioFixture {
         @Override public String id() {
             return fixture.name().toLowerCase(java.util.Locale.ROOT).replace('_', '-');
         }
@@ -115,27 +133,28 @@ public final class IdpAuthnContextScenarioTestCase
                     return success && assertions > 0
                             ? FixtureObservation.SATISFIED : FixtureObservation.CONTROL_FAILED;
                 }
-                // This observer has only the wire XML. An encrypted successful
-                // assertion does not establish that its context is absent or wrong,
-                // including for the supposedly unavailable class fixture.
-                if (success && root.getElementsByTagNameNS(ASSERTION, "EncryptedAssertion").getLength() > 0) {
-                    return FixtureObservation.NOT_VERIFIED;
-                }
+                // The target may encrypt the assertion to the Run key. Decrypt before judging the
+                // context, otherwise an encrypted success would be reported as inconclusive.
                 if (fixture == Fixture.UNSATISFIABLE_CLASS) {
-                    return RESPONDER.equals(top)
-                            ? FixtureObservation.SATISFIED : FixtureObservation.VIOLATED;
+                    if (!success) return RESPONDER.equals(top)
+                            ? FixtureObservation.SATISFIED
+                            : top.isBlank() ? FixtureObservation.NOT_VERIFIED : FixtureObservation.VIOLATED;
+                    var assertion = findAssertion(root);
+                    return assertion == null ? FixtureObservation.NOT_VERIFIED : FixtureObservation.VIOLATED;
                 }
                 if (!success) {
                     // The target may not have the advertised fixture context configured. This is
                     // a test-precondition gap, not proof that exact comparison is implemented wrong.
                     return FixtureObservation.NOT_VERIFIED;
                 }
+                var assertion = findAssertion(root);
+                if (assertion == null) return FixtureObservation.NOT_VERIFIED;
                 var expected = fixture == Fixture.SATISFIABLE_CLASS
                         ? SamlRequestedAuthnContextRequestFactory.PASSWORD_PROTECTED_TRANSPORT
                         : SamlRequestedAuthnContextRequestFactory.FIXTURE_DECLARATION;
                 var localName = fixture == Fixture.SATISFIABLE_CLASS
                         ? "AuthnContextClassRef" : "AuthnContextDeclRef";
-                var references = root.getElementsByTagNameNS(ASSERTION, localName);
+                var references = assertion.getElementsByTagNameNS(ASSERTION, localName);
                 if (references.getLength() == 0) return FixtureObservation.VIOLATED;
                 for (var index = 0; index < references.getLength(); index++) {
                     if (expected.equals(references.item(index).getTextContent())) {
@@ -146,6 +165,23 @@ public final class IdpAuthnContextScenarioTestCase
             } catch (SamlException malformed) {
                 return FixtureObservation.NOT_VERIFIED;
             }
+        }
+
+        /** Returns a readable Assertion (decrypting an EncryptedAssertion with the Run key) or null. */
+        private Element findAssertion(Element root) {
+            for (var node = root.getFirstChild(); node != null; node = node.getNextSibling()) {
+                if (!(node instanceof Element element) || !ASSERTION.equals(element.getNamespaceURI())) continue;
+                if ("Assertion".equals(element.getLocalName())) return element;
+                if ("EncryptedAssertion".equals(element.getLocalName())) {
+                    if (decryptionKey == null) return null;
+                    try {
+                        return new com.samlscope.saml.crypto.SamlXmlDecrypter().decrypt(element, decryptionKey);
+                    } catch (RuntimeException unreadable) {
+                        return null;
+                    }
+                }
+            }
+            return null;
         }
 
         @Override public Duration timeout() { return configuration.responseTimeout(); }

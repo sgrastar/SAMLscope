@@ -79,27 +79,28 @@ Shibbolethの`IIP-SSO01-fk/fu/gi`は、v8では事前生成された正常系要
 
 ## Not verifiedの内訳
 
-以下は表に採用したケース結果の延べ462件。†のケースは新Runの追加証拠を採用し、それ以外の既存証拠は保持しています。単一Runの集計や全試験の再完走を意味しません。比較表で設定不足として扱い直した旧FAILは、このNOT_VERIFIED集計には含めません。
+以下は表に採用したケース結果の延べ407件。†のケースは新Runの追加証拠を採用し、それ以外の既存証拠は保持しています。単一Runの集計や全試験の再完走を意味しません。比較表で設定不足として扱い直した旧FAILは、このNOT_VERIFIED集計には含めません。
 
 | 理由 | Keycloak | Shibboleth IdP | SimpleSAMLphp | 解消に必要なこと |
 |---|---:|---:|---:|---|
-| `case.pending-interaction` | 92 | 73 | 90 | 設定・受信待ちに加え、判定処理未実装の経路を含む。全件台帳を参照 |
+| `case.pending-interaction` | 82 | 53 | 83 | 設定・受信待ちに加え、判定処理未実装の経路を含む。全件台帳を参照 |
 | `attestation.interaction-disallowed` | 25 | 25 | 25 | 自己申告を無効にした構成。確認せずに申告を代行しない |
-| `browser_fixture_partial` | 19 | 21 | 19 | 一部の試験だけ実行。残るvariantの証拠が不足 |
-| `idp.signed-request.inconclusive` | 7 | 1 | 7 | 当該ケースの応答・対象設定・正常系対照を追加確認 |
+| `browser_fixture_partial` | 18 | 20 | 18 | 一部の試験だけ実行。残るvariantの証拠が不足 |
 | `idp.acs-probe.inconclusive` | 3 | 3 | 1 | 当該ケースの応答・対象設定・正常系対照を追加確認 |
-| `request.signing.unavailable` | 3 | 0 | 3 | 署名必須構成でSuiteが当該要求を署名できない |
-| `control_failed` | 2 | 2 | 0 | 正常系対照が成立せず異常系を判定できない |
+| `ec-signature.native-valid-request-rejected` | 0 | 0 | 4 | 当該ケースの応答・対象設定・正常系対照を追加確認 |
 | `idp.error-assertion.inconclusive` | 2 | 0 | 2 | 当該ケースの応答・対象設定・正常系対照を追加確認 |
 | `metadata.algorithms.local-policy-unverified` | 2 | 0 | 2 | 当該ケースの応答・対象設定・正常系対照を追加確認 |
 | `slo.propagation.not-observed` | 2 | 0 | 2 | 当該ケースの応答・対象設定・正常系対照を追加確認 |
+| `idp.signed-request.inconclusive` | 1 | 1 | 1 | 当該ケースの応答・対象設定・正常系対照を追加確認 |
 | `idp.version.inconclusive` | 1 | 1 | 1 | 当該ケースの応答・対象設定・正常系対照を追加確認 |
 | `metadata.rsa-sha1.unobserved` | 1 | 1 | 1 | 当該ケースの応答・対象設定・正常系対照を追加確認 |
-| `idp.authn-context.inconclusive` | 1 | 1 | 0 | 当該ケースの応答・対象設定・正常系対照を追加確認 |
+| `control_failed` | 1 | 1 | 0 | 正常系対照が成立せず異常系を判定できない |
+| `request.signing.unavailable` | 1 | 0 | 1 | 署名必須構成でSuiteが当該要求を署名できない |
 | `slo.partial-logout.not-observed` | 1 | 0 | 1 | 当該ケースの応答・対象設定・正常系対照を追加確認 |
 | `slo.redirect-request.not-observed` | 1 | 0 | 1 | 当該ケースの応答・対象設定・正常系対照を追加確認 |
 | `slo.redirect-response.not-observed` | 1 | 0 | 1 | 当該ケースの応答・対象設定・正常系対照を追加確認 |
 | `configuration.attribute-name.evidence-incomplete` | 1 | 0 | 0 | 当該ケースの応答・対象設定・正常系対照を追加確認 |
+| `idp.authn-context.inconclusive` | 0 | 1 | 0 | 当該ケースの応答・対象設定・正常系対照を追加確認 |
 | `idp.error-response.inconclusive` | 1 | 0 | 0 | 当該ケースの応答・対象設定・正常系対照を追加確認 |
 | `idp.nameid-policy.inconclusive` | 1 | 0 | 0 | 当該ケースの応答・対象設定・正常系対照を追加確認 |
 | `metadata.algorithms.intersection-evidence-incomplete` | 0 | 0 | 1 | 当該ケースの応答・対象設定・正常系対照を追加確認 |
@@ -123,9 +124,9 @@ Chromeと承認のブロックを解除するだけでは解消しません。�
 
 | Test | Keycloak 26.7.2 | Shibboleth IdP 5.2.3 | SimpleSAMLphp 2.5.0 |
 |---|---|---|---|
-| `IIP-ALG01-a-idp-01` | Success | Success | Success |
-| `IIP-ALG02-a-idp-01` | Success | Success | Success |
-| `IIP-ALG03-a-idp-01` | Not verified | Not verified | Not verified |
+| `IIP-ALG01-a-idp-01` | Success † | Success † | Success † |
+| `IIP-ALG02-a-idp-01` | Success † | Success † | Success † |
+| `IIP-ALG03-a-idp-01` | Success † | Success † | Not verified † |
 | `IIP-ALG04-a-idp-01` | Success † | Success † | Success † |
 | `IIP-ALG04-b-idp-01` | Success † | Success † | Success † |
 | `IIP-ALG05-a-idp-01` | Warning | Warning | Warning |
@@ -153,11 +154,11 @@ Chromeと承認のブロックを解除するだけでは解消しません。�
 | `IIP-IDP04-a-idp-01` | Not verified | Success † | Not verified |
 | `IIP-IDP04-b-idp-01` | Not verified | Success † | Not verified |
 | `IIP-IDP05-a-idp-01` | Not verified | Success | **Failed (Product)** |
-| `IIP-IDP06-a-idp-01` | Not verified | Not verified | Success † |
+| `IIP-IDP06-a-idp-01` | Success † | Success † | Success † |
 | `IIP-IDP06-b-idp-01` | Not verified | Not verified | Success (prior run; latest precision not verified) † |
 | `IIP-IDP06-c-idp-01` | Success | Success | Success |
 | `IIP-IDP07-a-idp-01` | Success | Success | Success |
-| `IIP-IDP08-a-idp-01` | Not verified | Not verified | **Failed (Product)** |
+| `IIP-IDP08-a-idp-01` | **Failed (Product)** † | Not verified | **Failed (Product)** |
 | `IIP-IDP09-a-idp-01` | Success † | Success † | Success † |
 | `IIP-IDP09-b-idp-01` | Warning | Warning | Warning |
 | `IIP-IDP10-a-idp-01` | Success | Success | Success |
@@ -179,7 +180,7 @@ Chromeと承認のブロックを解除するだけでは解消しません。�
 | `IIP-SSO01-aj-idp-01` | Success | Success | Success |
 | `IIP-SSO01-ak-idp-01` | Not verified | Not verified | Not verified |
 | `IIP-SSO01-al-idp-01` | Not verified | Not verified | Not verified |
-| `IIP-SSO01-an-idp-01` | Not verified | Success | Not verified |
+| `IIP-SSO01-an-idp-01` | Success † | Success | Success † |
 | `IIP-SSO01-ao-idp-01` | Success | Success | Success |
 | `IIP-SSO01-ap-idp-01` | Success | Success | Success |
 | `IIP-SSO01-au-idp-01` | Warning | Warning | Warning |
@@ -250,12 +251,12 @@ Chromeと承認のブロックを解除するだけでは解消しません。�
 | `IIP-SSO01-fu-idp-01` | Warning | Success † | Warning |
 | `IIP-SSO01-fv-idp-01` | Warning | Warning | Warning |
 | `IIP-SSO01-g-idp-01` | Success † | Success † | Not verified |
-| `IIP-SSO01-ga-idp-01` | Not verified | Not verified | Not verified |
-| `IIP-SSO01-gb-idp-01` | Not verified | Not verified | Not verified |
-| `IIP-SSO01-gc-idp-01` | Not verified | Not verified | Not verified |
+| `IIP-SSO01-ga-idp-01` | Not verified | Success † | Not verified |
+| `IIP-SSO01-gb-idp-01` | Not verified | Success † | Not verified |
+| `IIP-SSO01-gc-idp-01` | Not verified | **Failed (Product)** † | Not verified |
 | `IIP-SSO01-gd-idp-01` | Not verified | Not verified | Not verified |
-| `IIP-SSO01-gi-idp-01` | Not verified | Success † | Not verified |
-| `IIP-SSO01-gj-idp-01` | Not verified | Not verified | Not verified |
+| `IIP-SSO01-gi-idp-01` | Success † | Success † | Success † |
+| `IIP-SSO01-gj-idp-01` | Not verified | Success † | Not verified |
 | `IIP-SSO01-h-idp-01` | Success | Success | Success |
 | `IIP-SSO01-h1-idp-01` | Success | Success | Success |
 | `IIP-SSO01-i-idp-01` | Success | Success | Success |
@@ -273,7 +274,7 @@ Chromeと承認のブロックを解除するだけでは解消しません。�
 | `IIP-SSO02-a-idp-01` | Success | Success | Success |
 | `IIP-SSO03-a-idp-01` | Success | Success | Success |
 | `IIP-SSO03-b-idp-01` | Not verified | Success | Not verified |
-| `IIP-SSO04-a-idp-01` | Not verified | Not verified | Not verified |
+| `IIP-SSO04-a-idp-01` | Success † | Success † | Success † |
 | `IIP-SSO05-a-idp-01` | Success | Not verified | **Failed (Product)** |
 | `IIP-SSO05-a1-idp-01` | Not verified | Not verified | Not verified |
 | `IIP-SSO05-a2-idp-01` | Success | Not verified | Not verified |
@@ -289,9 +290,9 @@ Chromeと承認のブロックを解除するだけでは解消しません。�
 
 | Test | Keycloak 26.7.2 | Shibboleth IdP 5.2.3 | SimpleSAMLphp 2.5.0 |
 |---|---|---|---|
-| `IIP-ALG01-a-idp-01` | Not verified | Success | Not verified |
-| `IIP-ALG02-a-idp-01` | Not verified | Success | Not verified |
-| `IIP-ALG03-a-idp-01` | Not verified | Not verified | Not verified |
+| `IIP-ALG01-a-idp-01` | Success † | Success † | Success † |
+| `IIP-ALG02-a-idp-01` | Success † | Success † | Success † |
+| `IIP-ALG03-a-idp-01` | Success † | Success † | Not verified † |
 | `IIP-ALG07-a-idp-01` | Not verified | Not verified | Not verified |
 | `IIP-EXT01-a-idp-01` | Success | Success | Success |
 | `IIP-EXT01-b-idp-01` | Not verified | Not verified | Not verified |
@@ -305,13 +306,13 @@ Chromeと承認のブロックを解除するだけでは解消しません。�
 | `IIP-MD02-b-idp-01` | Not verified | Success | Not verified |
 | `IIP-MD02-c-idp-01` | Success † | Success | Success † |
 | `IIP-MD02-d-idp-01` | Not verified | Success | Success † |
-| `IIP-MD03-a-idp-01` | Not verified | Not verified | Not verified |
-| `IIP-MD03-b-idp-01` | Not verified | Not verified | Not verified |
+| `IIP-MD03-a-idp-01` | Not verified | Success † | Not verified |
+| `IIP-MD03-b-idp-01` | Not verified | Success † | Not verified |
 | `IIP-MD03-c-idp-01` | Not verified | Success | Not verified |
 | `IIP-MD03-d-idp-01` | Not verified | Not verified | Not verified |
 | `IIP-MD03-e-idp-01` | Warning | Warning | Warning |
 | `IIP-MD04-a-idp-01` | Not verified | Not verified | Not verified |
-| `IIP-MD04-b-idp-01` | Not verified | Not verified | Not verified |
+| `IIP-MD04-b-idp-01` | Not verified | Success † | Not verified |
 | `IIP-MD04-c-idp-01` | Not verified | Not verified | Not verified |
 | `IIP-MD05-a-idp-01` | Not verified | Not verified | Not verified |
 | `IIP-MD05-a1-idp-01` | Not verified | Not verified | Not verified |
@@ -334,13 +335,13 @@ Chromeと承認のブロックを解除するだけでは解消しません。�
 | `IIP-MD05-aj-idp-01` | Warning | Warning | Warning |
 | `IIP-MD05-ak-idp-01` | Warning | Warning | Warning |
 | `IIP-MD05-al-idp-01` | Warning | Warning | Warning |
-| `IIP-MD05-am-idp-01` | Not verified | Not verified | Not verified |
-| `IIP-MD05-an-idp-01` | Not verified | Not verified | Not verified |
-| `IIP-MD05-ao-idp-01` | Not verified | Not verified | Not verified |
+| `IIP-MD05-am-idp-01` | Not verified | Warning † | Not verified |
+| `IIP-MD05-an-idp-01` | Not verified | Success † | Not verified |
+| `IIP-MD05-ao-idp-01` | Not verified | Success † | Not verified |
 | `IIP-MD05-ap-idp-01` | Not verified | Not verified | Not verified |
 | `IIP-MD05-aq-idp-01` | Not verified | Not verified | Not verified |
 | `IIP-MD05-ar-idp-01` | Not verified | Not verified | Not verified |
-| `IIP-MD05-as-idp-01` | Not verified | Not verified | Not verified |
+| `IIP-MD05-as-idp-01` | Not verified | Success † | Not verified |
 | `IIP-MD05-at-idp-01` | Warning | Warning | Warning |
 | `IIP-MD05-au-idp-01` | Warning | Warning | Warning |
 | `IIP-MD05-av-idp-01` | Not verified | Not verified | Not verified |
@@ -407,42 +408,42 @@ Chromeと承認のブロックを解除するだけでは解消しません。�
 | `IIP-MD05-fk-idp-01` | Warning | Warning | Warning |
 | `IIP-MD05-g-idp-01` | Success † | Success | Success † |
 | `IIP-MD06-a-idp-01` | Not verified | Not verified | Not verified |
-| `IIP-MD06-a1-idp-01` | Not verified | Success | Not verified |
+| `IIP-MD06-a1-idp-01` | Not verified | Success | Success † |
 | `IIP-MD06-a2-idp-01` | Not verified | Not verified | Not verified |
 | `IIP-MD06-a3-idp-01` | Not verified | Not verified | Not verified |
 | `IIP-MD06-a4-idp-01` | Warning | Warning | Warning |
 | `IIP-MD06-a5-idp-01` | Not verified | Success † | Not verified |
 | `IIP-MD06-a6-idp-01` | Not verified | Not verified | Not verified |
 | `IIP-MD06-a7-idp-01` | Not verified | Success † | Not verified |
-| `IIP-MD06-a8-idp-01` | Not verified | Not verified | Not verified |
-| `IIP-MD06-a9-idp-01` | Not verified | Success † | Success † |
+| `IIP-MD06-a8-idp-01` | Success † | Success † | Success † |
+| `IIP-MD06-a9-idp-01` | **Failed (Product)** † | Success † | Success † |
 | `IIP-MD06-aa-idp-01` | Warning | Warning | Warning |
 | `IIP-MD06-ab-idp-01` | Not verified | Not verified | Not verified |
 | `IIP-MD06-b-idp-01` | Not verified | Not verified | Not verified |
 | `IIP-MD06-c-idp-01` | Not verified | Not verified | Not verified |
-| `IIP-MD07-a-idp-01` | Not verified | Success † | Success † |
-| `IIP-MD07-b-idp-01` | Not verified | Not verified | Not verified |
+| `IIP-MD07-a-idp-01` | **Failed (Product)** † | Success † | Success † |
+| `IIP-MD07-b-idp-01` | Not verified | Success † | Success † |
 | `IIP-MD09-a-idp-01` | Not verified | Not verified | Not verified |
 | `IIP-MD09-b-idp-01` | Not verified | Not verified | Not verified |
 | `IIP-MD11-a-idp-01` | Not verified | Not verified | Not verified |
 | `IIP-MD12-a-idp-01` | Success † | Success | Success † |
-| `IIP-MD12-b-idp-01` | Not verified | Success | Success † |
+| `IIP-MD12-b-idp-01` | **Failed (Product)** † | Success | Success † |
 | `IIP-MD12-c-idp-01` | Success † | Success | Success † |
-| `IIP-MD12-d-idp-01` | Not verified | Success | Success † |
+| `IIP-MD12-d-idp-01` | **Failed (Product)** † | Success | Success † |
 
 ### ecp_idp
 
 | Test | Keycloak 26.7.2 | Shibboleth IdP 5.2.3 | SimpleSAMLphp 2.5.0 |
 |---|---|---|---|
-| `IIP-ALG01-a-idp-01` | Not verified | Success | Not verified |
-| `IIP-ALG02-a-idp-01` | Not verified | Success | Not verified |
-| `IIP-ALG03-a-idp-01` | Not verified | Not verified | Not verified |
+| `IIP-ALG01-a-idp-01` | Success † | Success † | Success † |
+| `IIP-ALG02-a-idp-01` | Success † | Success † | Success † |
+| `IIP-ALG03-a-idp-01` | Success † | Success † | Not verified † |
 | `IIP-ALG04-a-idp-01` | Success † | Success † | Not verified |
-| `IIP-ALG04-b-idp-01` | Success † | Not verified † | Not verified |
+| `IIP-ALG04-b-idp-01` | Success † | Success † | Not verified |
 | `IIP-ALG05-a-idp-01` | Warning | Warning | Warning |
 | `IIP-ALG06-a-idp-01` | Success † | Success † | Success † |
-| `IIP-ALG06-b-idp-01` | Success † | Not verified † | Not verified |
-| `IIP-ALG06-c-idp-01` | Not verified † | Not verified † | Not verified |
+| `IIP-ALG06-b-idp-01` | Success † | Success † | Not verified |
+| `IIP-ALG06-c-idp-01` | Success † | Success † | Not verified |
 | `IIP-ALG06-d-idp-01` | Not verified † | Not verified † | Not verified |
 | `IIP-ALG07-a-idp-01` | Not verified | Not verified | Not verified |
 | `IIP-ALG08-a-idp-01` | Not verified | Not verified | Not verified |
@@ -464,9 +465,9 @@ Chromeと承認のブロックを解除するだけでは解消しません。�
 
 | Test | Keycloak 26.7.2 | Shibboleth IdP 5.2.3 | SimpleSAMLphp 2.5.0 |
 |---|---|---|---|
-| `IIP-ALG01-a-idp-01` | Not verified † | Success † | Not verified † |
-| `IIP-ALG02-a-idp-01` | Not verified † | Success † | Not verified † |
-| `IIP-ALG03-a-idp-01` | Not verified | Not verified | Not verified |
+| `IIP-ALG01-a-idp-01` | Success † | Success † | Success † |
+| `IIP-ALG02-a-idp-01` | Success † | Success † | Success † |
+| `IIP-ALG03-a-idp-01` | Success † | Success † | Not verified † |
 | `IIP-ALG07-a-idp-01` | Not verified | Not verified | Not verified |
 | `IIP-EXT01-a-idp-01` | Success † | Success † | Success † |
 | `IIP-EXT01-b-idp-01` | Not verified † | Not verified † | Not verified † |
@@ -527,7 +528,11 @@ Chromeと承認のブロックを解除するだけでは解消しません。�
 | browser_sso_idp († listed supplemental cases only) | keycloak | `run_QKZYJCWA259NPF6KPASGVMJATM` | `build/acceptance/reference-20260914/additional-implementation/keycloak/browser_sso_idp` |
 | browser_sso_idp († listed supplemental cases only) | keycloak | `run_6AD6T3VS8H87WQQBB1T2DEB3MX` | `build/acceptance/reference-20260915/algorithm-observation-batch/keycloak/browser_alg_combo` |
 | browser_sso_idp († listed supplemental cases only) | keycloak | `run_6AD6T3VS8H87WQQBB1T2DEB3MX` | `build/acceptance/reference-20260915/algorithm-observation-batch/keycloak/browser_alg_combo` |
+| browser_sso_idp († listed supplemental cases only) | keycloak | `run_FZY4Z3QD3NFN0CZSGFY73Y38ZD` | `build/acceptance/reference-20260918/keycloak-browser-chain-v71` |
+| browser_sso_idp († listed supplemental cases only) | keycloak | `run_FZY4Z3QD3NFN0CZSGFY73Y38ZD` | `build/acceptance/reference-20260918/keycloak-browser-chain-v71` |
+| browser_sso_idp († listed supplemental cases only) | keycloak | `run_9XH0Y4Z7P4JFHJTYQ3ZJKE633N` | `build/acceptance/reference-20260918/keycloak-signature-modes-v61/adoption` |
 | browser_sso_idp († listed supplemental cases only) | keycloak | `run_AT0T8032SAJ8FETMM2JTMQGB7H` | `build/acceptance/reference-20260914/crypto-integrated-implementation/keycloak/browser_sso_idp` |
+| browser_sso_idp († listed supplemental cases only) | keycloak | `run_QXEKAXFXVK2Y48CH9HJD7A5DW7` | `build/acceptance/reference-20260918/keycloak-native-ec-signature-v2/observations/browser_sso_idp/evaluation` |
 | browser_sso_idp († listed supplemental cases only) | keycloak | `run_6AD6T3VS8H87WQQBB1T2DEB3MX` | `build/acceptance/reference-20260915/algorithm-observation-batch/keycloak/browser_alg_combo` |
 | browser_sso_idp († listed supplemental cases only) | keycloak | `run_5X1B1RGKPNK7C7J3C1KT4B3EFM` | `build/acceptance/reference-20260915/algorithm-observation-batch/keycloak/browser_sso_idp` |
 | browser_sso_idp († listed supplemental cases only) | keycloak | `run_6AD6T3VS8H87WQQBB1T2DEB3MX` | `build/acceptance/reference-20260915/algorithm-observation-batch/keycloak/browser_alg_combo` |
@@ -536,7 +541,11 @@ Chromeと承認のブロックを解除するだけでは解消しません。�
 | browser_sso_idp († listed supplemental cases only) | keycloak | `run_5X1B1RGKPNK7C7J3C1KT4B3EFM` | `build/acceptance/reference-20260915/algorithm-observation-batch/keycloak/browser_sso_idp` |
 | browser_sso_idp († listed supplemental cases only) | keycloak | `run_8EC5HRA77MZWGCHCXR1DKB9ADE` | `build/acceptance/reference-20260918/keycloak-attribute-name-capability` |
 | browser_sso_idp († listed supplemental cases only) | keycloak | `run_EEAG5F4CFPVHYP90GGDZXB8VN4` | `build/acceptance/reference-20260918/keycloak-relying-party-attribute-evaluation` |
+| browser_sso_idp († listed supplemental cases only) | keycloak | `run_F9VD5CSM4XV01J1Q2X1BPJ6DG2` | `build/acceptance/reference-20260918/keycloak-browser-chain-v73` |
+| browser_sso_idp († listed supplemental cases only) | keycloak | `run_JQTKB2M3V6887FKT0DF49G38QZ` | `build/acceptance/reference-20260918/keycloak-browser-chain-v75` |
 | browser_sso_idp († listed supplemental cases only) | keycloak | `run_ZZQH3B5136N955F9W1NAMJ4GSG` | `build/acceptance/reference-20260918/keycloak-default-acs` |
+| browser_sso_idp († listed supplemental cases only) | keycloak | `run_R6M9V3HBVEX0C8TX0FRT0JJTVG` | `build/acceptance/reference-20260918/keycloak-native-signature-audit/browser_sso_idp/evaluation` |
+| browser_sso_idp († listed supplemental cases only) | keycloak | `run_R6M9V3HBVEX0C8TX0FRT0JJTVG` | `build/acceptance/reference-20260918/keycloak-native-signature-audit/browser_sso_idp/evaluation` |
 | browser_sso_idp | keycloak | `run_0WQJR9TGK0MC4TFTVT1AFKWDKP` | `interaction-followup/after/keycloak/browser_sso_idp` |
 | browser_sso_idp († listed supplemental cases only) | shibboleth | `run_DMGDE6GB0DGZ8HTYRJPY3QY7QG` | `additional-implementation/shibboleth/browser_sso_idp` |
 | browser_sso_idp († listed supplemental cases only) | shibboleth | `run_BD24PBN5E7QBPNGZH12KH08X39` | `crypto-integrated-implementation/shibboleth/browser_sso_idp` |
@@ -550,7 +559,13 @@ Chromeと承認のブロックを解除するだけでは解消しません。�
 | browser_sso_idp († listed supplemental cases only) | shibboleth | `run_7ZBVHFJ7RNAT5EDQ16NKM2H5K6` | `build/acceptance/reference-20260915/algorithm-observation-batch/shibboleth/browser_sso_idp` |
 | browser_sso_idp († listed supplemental cases only) | shibboleth | `run_7ZBVHFJ7RNAT5EDQ16NKM2H5K6` | `build/acceptance/reference-20260915/algorithm-observation-batch/shibboleth/browser_sso_idp` |
 | browser_sso_idp († listed supplemental cases only) | shibboleth | `run_7ZBVHFJ7RNAT5EDQ16NKM2H5K6` | `build/acceptance/reference-20260915/algorithm-observation-batch/shibboleth/browser_sso_idp` |
+| browser_sso_idp († listed supplemental cases only) | shibboleth | `run_FWMYG7PY9SWNNNMYQA39DS4B8D` | `build/acceptance/reference-20260918/shibboleth-authn-context-evaluation` |
+| browser_sso_idp († listed supplemental cases only) | shibboleth | `run_FWMYG7PY9SWNNNMYQA39DS4B8D` | `build/acceptance/reference-20260918/shibboleth-authn-context-evaluation` |
+| browser_sso_idp († listed supplemental cases only) | shibboleth | `run_FWMYG7PY9SWNNNMYQA39DS4B8D` | `build/acceptance/reference-20260918/shibboleth-authn-context-evaluation` |
+| browser_sso_idp († listed supplemental cases only) | shibboleth | `run_FWMYG7PY9SWNNNMYQA39DS4B8D` | `build/acceptance/reference-20260918/shibboleth-authn-context-evaluation` |
+| browser_sso_idp († listed supplemental cases only) | shibboleth | `run_VQ1J5M9J2XCT0GS0PXBBV3XZMY` | `build/acceptance/reference-20260918/shibboleth-signature-modes-v61/adoption` |
 | browser_sso_idp († listed supplemental cases only) | shibboleth | `run_BD24PBN5E7QBPNGZH12KH08X39` | `build/acceptance/reference-20260914/crypto-integrated-implementation/shibboleth/browser_sso_idp` |
+| browser_sso_idp († listed supplemental cases only) | shibboleth | `run_ZZKWFCJAMM46A877423CM5XP9E` | `build/acceptance/reference-20260918/shibboleth-ecdsa-native-audit/browser_sso_idp/evaluation` |
 | browser_sso_idp († listed supplemental cases only) | shibboleth | `run_7ZBVHFJ7RNAT5EDQ16NKM2H5K6` | `build/acceptance/reference-20260915/algorithm-observation-batch/shibboleth/browser_sso_idp` |
 | browser_sso_idp († listed supplemental cases only) | shibboleth | `run_0TMTHFWK5HEM14WFNJ10RD5D1X` | `build/acceptance/reference-20260918/shibboleth-producer-evaluation` |
 | browser_sso_idp († listed supplemental cases only) | shibboleth | `run_7ZBVHFJ7RNAT5EDQ16NKM2H5K6` | `build/acceptance/reference-20260915/algorithm-observation-batch/shibboleth/browser_sso_idp` |
@@ -562,8 +577,11 @@ Chromeと承認のブロックを解除するだけでは解消しません。�
 | browser_sso_idp († listed supplemental cases only) | shibboleth | `run_C97YCPR7F5KNWRMCMHWNPQ11N9` | `build/acceptance/reference-20260918/shibboleth-attribute-policy-evaluation` |
 | browser_sso_idp († listed supplemental cases only) | shibboleth | `run_C97YCPR7F5KNWRMCMHWNPQ11N9` | `build/acceptance/reference-20260918/shibboleth-attribute-policy-evaluation` |
 | browser_sso_idp († listed supplemental cases only) | shibboleth | `run_C97YCPR7F5KNWRMCMHWNPQ11N9` | `build/acceptance/reference-20260918/shibboleth-attribute-policy-evaluation` |
+| browser_sso_idp († listed supplemental cases only) | shibboleth | `run_MC6DQMEQKWPQ66PPBEY45M5R36` | `build/acceptance/reference-20260918/shibboleth-browser-chain-v73` |
 | browser_sso_idp († listed supplemental cases only) | shibboleth | `run_J7YRDB4T4J8FXKSRXG4K7ZNJ3Q` | `build/acceptance/reference-20260918/shibboleth-nameid-omission-evaluation` |
 | browser_sso_idp († listed supplemental cases only) | shibboleth | `run_YVEJ7H1J1K1161V8GY4WM3NSXF` | `build/acceptance/reference-20260914/integrated-implementation/shibboleth/polling-bssso` |
+| browser_sso_idp († listed supplemental cases only) | shibboleth | `run_C51HJ7F92AH6C2HG33JKBHWHCG` | `build/acceptance/reference-20260918/shibboleth-native-signed-request-v2/browser_sso_idp/evaluation` |
+| browser_sso_idp († listed supplemental cases only) | shibboleth | `run_C51HJ7F92AH6C2HG33JKBHWHCG` | `build/acceptance/reference-20260918/shibboleth-native-signed-request-v2/browser_sso_idp/evaluation` |
 | browser_sso_idp | shibboleth | `run_JGADJKCN6GBGKJ68D1WP0G3GMX` | `interaction-followup/after/shibboleth/browser_sso_idp` |
 | browser_sso_idp († listed supplemental cases only) | simplesamlphp | `run_TS5JTACXSDMGB9PE8Z9ZS2MP5K` | `additional-implementation/simplesamlphp/browser_sso_idp` |
 | browser_sso_idp († listed supplemental cases only) | simplesamlphp | `run_XA01CQ82M03JJQ5JNECA47XFFQ` | `crypto-integrated-implementation/simplesamlphp/browser_sso_idp` |
@@ -573,8 +591,12 @@ Chromeと承認のブロックを解除するだけでは解消しません。�
 | browser_sso_idp († listed supplemental cases only) | simplesamlphp | `run_VRW5T0M31JGT71ZG6MR1JF92PJ` | `build/acceptance/reference-20260915/peer-intent/simplesamlphp/browser_alg_enc` |
 | browser_sso_idp († listed supplemental cases only) | simplesamlphp | `run_KXN09QNRGAKBGY31S8AHJZKHNA` | `build/acceptance/reference-20260914/literal-integrated-implementation/simplesamlphp/browser_sso_idp` |
 | browser_sso_idp († listed supplemental cases only) | simplesamlphp | `run_TS5JTACXSDMGB9PE8Z9ZS2MP5K` | `build/acceptance/reference-20260914/additional-implementation/simplesamlphp/browser_sso_idp` |
+| browser_sso_idp († listed supplemental cases only) | simplesamlphp | `run_A8PH28JMJZYRD6KMJDJS5FG22B` | `build/acceptance/reference-20260918/simplesamlphp-browser-chain-v68` |
 | browser_sso_idp († listed supplemental cases only) | simplesamlphp | `run_NXTAXWN71DEJF02ZNAQXS4AZA8` | `build/acceptance/reference-20260918/simplesamlphp-opaque-principal-control` |
+| browser_sso_idp († listed supplemental cases only) | simplesamlphp | `run_A8PH28JMJZYRD6KMJDJS5FG22B` | `build/acceptance/reference-20260918/simplesamlphp-browser-chain-v68` |
+| browser_sso_idp († listed supplemental cases only) | simplesamlphp | `run_W9WFP7QB19V0Y15T0QVE7D8RHW` | `build/acceptance/reference-20260918/simplesamlphp-signature-modes-v61/adoption` |
 | browser_sso_idp († listed supplemental cases only) | simplesamlphp | `run_XA01CQ82M03JJQ5JNECA47XFFQ` | `build/acceptance/reference-20260914/crypto-integrated-implementation/simplesamlphp/browser_sso_idp` |
+| browser_sso_idp († listed supplemental cases only) | simplesamlphp | `run_3Q5C1SMZNZRN1PRDXP511Y9D69` | `build/acceptance/reference-20260918/simplesamlphp-native-ec-signature/browser_sso_idp/evaluation` |
 | browser_sso_idp († listed supplemental cases only) | simplesamlphp | `run_00MKHH590BSDDG411ST76J02AD` | `build/acceptance/reference-20260918/simplesamlphp-shared-gcm128` |
 | browser_sso_idp († listed supplemental cases only) | simplesamlphp | `run_30QS0MMCHGS3Q02VGHJ5VYEP9J` | `build/acceptance/reference-20260918/simplesamlphp-shared-gcm256` |
 | browser_sso_idp († listed supplemental cases only) | simplesamlphp | `run_VRW5T0M31JGT71ZG6MR1JF92PJ` | `build/acceptance/reference-20260915/peer-intent/simplesamlphp/browser_alg_enc` |
@@ -587,6 +609,8 @@ Chromeと承認のブロックを解除するだけでは解消しません。�
 | browser_sso_idp († listed supplemental cases only) | simplesamlphp | `run_J7Z6YANJCXYTHVJXX820D4NNPY` | `build/acceptance/reference-20260914/queue-integrated-implementation/simplesamlphp/browser_sso_idp` |
 | browser_sso_idp († listed supplemental cases only) | simplesamlphp | `run_VRW5T0M31JGT71ZG6MR1JF92PJ` | `build/acceptance/reference-20260915/peer-intent/simplesamlphp/browser_alg_enc` |
 | browser_sso_idp († listed supplemental cases only) | simplesamlphp | `run_XKNHNHTS27D8V15RGGVWPPNWX4` | `build/acceptance/reference-20260918/simplesamlphp-default-acs` |
+| browser_sso_idp († listed supplemental cases only) | simplesamlphp | `run_BAYBZ159BPMKKVXCQWESKDGFAQ` | `build/acceptance/reference-20260918/simplesamlphp-native-signature-observation-v2/browser_sso_idp/evaluation` |
+| browser_sso_idp († listed supplemental cases only) | simplesamlphp | `run_BAYBZ159BPMKKVXCQWESKDGFAQ` | `build/acceptance/reference-20260918/simplesamlphp-native-signature-observation-v2/browser_sso_idp/evaluation` |
 | browser_sso_idp | simplesamlphp | `run_SJWWBQT1S24VSJGRZMSQ8TJYM4` | `interaction-followup/after/simplesamlphp/browser_sso_idp` |
 | metadata_idp († listed supplemental cases only) | keycloak | `run_HRAC88P0KKA5WQX8MF75WD198X` | `additional-implementation/keycloak/metadata_idp` |
 | metadata_idp († listed supplemental cases only) | keycloak | `run_J7HCGRMNJHC614BA103CNGMVZ5` | `build/acceptance/reference-20260917/keycloak-signature-control-3` |
@@ -602,13 +626,28 @@ Chromeと承認のブロックを解除するだけでは解消しません。�
 | metadata_idp († listed supplemental cases only) | keycloak | `run_J107HRR1BXY7GHBHTDDMY87308` | `build/acceptance/reference-20260918/publisher-ui-scoped/keycloak` |
 | metadata_idp († listed supplemental cases only) | keycloak | `run_HRAC88P0KKA5WQX8MF75WD198X` | `build/acceptance/reference-20260914/additional-implementation/keycloak/metadata_idp` |
 | metadata_idp († listed supplemental cases only) | keycloak | `run_J7HCGRMNJHC614BA103CNGMVZ5` | `build/acceptance/reference-20260917/keycloak-signature-control-3` |
+| metadata_idp († listed supplemental cases only) | keycloak | `run_DVZK14WN1W3E0SZ393MHQD42SJ` | `build/acceptance/reference-20260918/keycloak-native-key-selection-v65/observations/metadata_idp/evaluation` |
+| metadata_idp († listed supplemental cases only) | keycloak | `run_AX3ZB21BWSJM8S2HMPXRD8N7K6` | `build/acceptance/reference-20260918/keycloak-native-certificate-signature/observations/metadata_idp/evaluation-v64` |
+| metadata_idp († listed supplemental cases only) | keycloak | `run_DVZK14WN1W3E0SZ393MHQD42SJ` | `build/acceptance/reference-20260918/keycloak-native-key-selection-v65/observations/metadata_idp/evaluation` |
 | metadata_idp († listed supplemental cases only) | keycloak | `run_J7HCGRMNJHC614BA103CNGMVZ5` | `build/acceptance/reference-20260917/keycloak-signature-control-3` |
+| metadata_idp († listed supplemental cases only) | keycloak | `run_AX3ZB21BWSJM8S2HMPXRD8N7K6` | `build/acceptance/reference-20260918/keycloak-native-certificate-signature/observations/metadata_idp/evaluation` |
 | metadata_idp († listed supplemental cases only) | keycloak | `run_J7HCGRMNJHC614BA103CNGMVZ5` | `build/acceptance/reference-20260917/keycloak-signature-control-3` |
+| metadata_idp († listed supplemental cases only) | keycloak | `run_AX3ZB21BWSJM8S2HMPXRD8N7K6` | `build/acceptance/reference-20260918/keycloak-native-certificate-signature/observations/metadata_idp/evaluation` |
+| metadata_idp († listed supplemental cases only) | keycloak | `run_YN5FBG6NPMGQZ5VYKEEHFSF6ZR` | `build/acceptance/reference-20260918/keycloak-native-signature-audit/metadata_idp/evaluation` |
+| metadata_idp († listed supplemental cases only) | keycloak | `run_YN5FBG6NPMGQZ5VYKEEHFSF6ZR` | `build/acceptance/reference-20260918/keycloak-native-signature-audit/metadata_idp/evaluation` |
+| metadata_idp († listed supplemental cases only) | keycloak | `run_ASRA03EB5GQ074VCME7HESPZ6G` | `build/acceptance/reference-20260918/keycloak-native-ec-signature-v3/observations/metadata_idp/evaluation` |
 | metadata_idp | keycloak | `run_HEGZFSAG1WFGFCXX1XE6N1C52B` | `keycloak/metadata_idp/run2` |
 | metadata_idp († listed supplemental cases only) | shibboleth | `run_WPY618QSZEMJKGGQ6W1ZZ5YWZ6` | `additional-implementation/shibboleth/metadata_idp` |
 | metadata_idp († listed supplemental cases only) | shibboleth | `run_296ZHGM9XYDBAXHE3CP2XC3MC7` | `integrated-implementation/shibboleth/polling` |
+| metadata_idp († listed supplemental cases only) | shibboleth | `run_N7X58HSBHWGGP8FRZFVYKNKN2F` | `build/acceptance/reference-20260918/shibboleth-md03-signature-v78/evaluation` |
+| metadata_idp († listed supplemental cases only) | shibboleth | `run_29FRDNMD9ET5C0F9Z336Q6SFEH` | `build/acceptance/reference-20260918/shibboleth-md03b-signature-v78b` |
+| metadata_idp († listed supplemental cases only) | shibboleth | `run_7CZRNH7GGYQ137ZEDB23X3T16R` | `build/acceptance/reference-20260918/shibboleth-md05as-rejection-v77/evaluation` |
 | metadata_idp († listed supplemental cases only) | shibboleth | `run_296ZHGM9XYDBAXHE3CP2XC3MC7` | `build/acceptance/reference-20260914/integrated-implementation/shibboleth/polling` |
 | metadata_idp († listed supplemental cases only) | shibboleth | `run_2893MAJ9X84M3TVFWRNY5CAPK4` | `build/acceptance/reference-20260918/single-signing-key/shibboleth` |
+| metadata_idp († listed supplemental cases only) | shibboleth | `run_YXKGGJFH0SY9HR7Q519HT4RB4X` | `build/acceptance/reference-20260918/shibboleth-md05-consumer-sig-v81/evaluation-am` |
+| metadata_idp († listed supplemental cases only) | shibboleth | `run_YXKGGJFH0SY9HR7Q519HT4RB4X` | `build/acceptance/reference-20260918/shibboleth-md05-consumer-sig-v81/evaluation` |
+| metadata_idp († listed supplemental cases only) | shibboleth | `run_ZF0TJ2HDCN7C4SRCDDZAQPG860` | `build/acceptance/reference-20260918/shibboleth-md05-consumer-sig-v79` |
+| metadata_idp († listed supplemental cases only) | shibboleth | `run_7CZRNH7GGYQ137ZEDB23X3T16R` | `build/acceptance/reference-20260918/shibboleth-md05as-rejection-v77/evaluation` |
 | metadata_idp († listed supplemental cases only) | shibboleth | `run_XZ4CY23XHSV2NPFTDW2H0EVZCS` | `build/acceptance/reference-20260918/algorithm-followup/shibboleth` |
 | metadata_idp († listed supplemental cases only) | shibboleth | `run_6E5BWBMYHJFZS31AKS9Q1WCP72` | `build/acceptance/reference-20260918/shibboleth-intersection-evaluation` |
 | metadata_idp († listed supplemental cases only) | shibboleth | `run_XZ4CY23XHSV2NPFTDW2H0EVZCS` | `build/acceptance/reference-20260918/algorithm-followup/shibboleth` |
@@ -621,8 +660,13 @@ Chromeと承認のブロックを解除するだけでは解消しません。�
 | metadata_idp († listed supplemental cases only) | shibboleth | `run_WPY618QSZEMJKGGQ6W1ZZ5YWZ6` | `build/acceptance/reference-20260914/additional-implementation/shibboleth/metadata_idp` |
 | metadata_idp († listed supplemental cases only) | shibboleth | `run_296ZHGM9XYDBAXHE3CP2XC3MC7` | `build/acceptance/reference-20260914/integrated-implementation/shibboleth/polling` |
 | metadata_idp († listed supplemental cases only) | shibboleth | `run_296ZHGM9XYDBAXHE3CP2XC3MC7` | `build/acceptance/reference-20260914/integrated-implementation/shibboleth/polling` |
+| metadata_idp († listed supplemental cases only) | shibboleth | `run_P3V3M5S01NCK0A8AX4DVR9V33M` | `build/acceptance/reference-20260918/shibboleth-native-key-selection-v67/metadata_idp/evaluation` |
 | metadata_idp († listed supplemental cases only) | shibboleth | `run_296ZHGM9XYDBAXHE3CP2XC3MC7` | `build/acceptance/reference-20260914/integrated-implementation/shibboleth/polling` |
 | metadata_idp († listed supplemental cases only) | shibboleth | `run_296ZHGM9XYDBAXHE3CP2XC3MC7` | `build/acceptance/reference-20260914/integrated-implementation/shibboleth/polling` |
+| metadata_idp († listed supplemental cases only) | shibboleth | `run_P3V3M5S01NCK0A8AX4DVR9V33M` | `build/acceptance/reference-20260918/shibboleth-native-key-selection-v67/metadata_idp/evaluation` |
+| metadata_idp († listed supplemental cases only) | shibboleth | `run_M11JND1WT0CYAZVW88NRC2KW5Q` | `build/acceptance/reference-20260918/shibboleth-ecdsa-native-audit-metadata/metadata_idp/evaluation` |
+| metadata_idp († listed supplemental cases only) | shibboleth | `run_CQ34HFCGCQ2NFE0YQKT5ZD22CQ` | `build/acceptance/reference-20260918/shibboleth-native-signed-request-v2/metadata_idp/evaluation` |
+| metadata_idp († listed supplemental cases only) | shibboleth | `run_CQ34HFCGCQ2NFE0YQKT5ZD22CQ` | `build/acceptance/reference-20260918/shibboleth-native-signed-request-v2/metadata_idp/evaluation` |
 | metadata_idp | shibboleth | `run_BMEHBBM5QAAAV41HZZX1R70QXH` | `interaction-followup/after/shibboleth/metadata_idp` |
 | metadata_idp († listed supplemental cases only) | simplesamlphp | `run_CPWMJEQVVQYFYRDSCYFQWEC755` | `additional-implementation/simplesamlphp/metadata_idp` |
 | metadata_idp († listed supplemental cases only) | simplesamlphp | `run_KDFJDGNQQCVFANEG53YYWYS4A1` | `build/acceptance/reference-20260917/simplesamlphp-native-parser-3` |
@@ -642,31 +686,46 @@ Chromeと承認のブロックを解除するだけでは解消しません。�
 | metadata_idp († listed supplemental cases only) | simplesamlphp | `run_HNDN6YMHP5NZ9AP1GHB21V3AQH` | `build/acceptance/reference-20260918/publisher-ui-scoped/simplesamlphp` |
 | metadata_idp († listed supplemental cases only) | simplesamlphp | `run_CPWMJEQVVQYFYRDSCYFQWEC755` | `build/acceptance/reference-20260914/additional-implementation/simplesamlphp/metadata_idp` |
 | metadata_idp († listed supplemental cases only) | simplesamlphp | `run_KDFJDGNQQCVFANEG53YYWYS4A1` | `build/acceptance/reference-20260917/simplesamlphp-native-parser-3` |
+| metadata_idp († listed supplemental cases only) | simplesamlphp | `run_F6BGNRP76J1E734N9MRDC3YT2X` | `build/acceptance/reference-20260918/simplesamlphp-metadata-fixture-v67` |
+| metadata_idp († listed supplemental cases only) | simplesamlphp | `run_JBGGPXXP5664SYBAP858P9FMKD` | `build/acceptance/reference-20260918/simplesamlphp-native-key-selection-v65/metadata_idp/evaluation` |
+| metadata_idp († listed supplemental cases only) | simplesamlphp | `run_KDFJDGNQQCVFANEG53YYWYS4A1` | `build/acceptance/reference-20260917/simplesamlphp-native-parser-3` |
+| metadata_idp († listed supplemental cases only) | simplesamlphp | `run_KDFJDGNQQCVFANEG53YYWYS4A1` | `build/acceptance/reference-20260917/simplesamlphp-native-parser-3` |
+| metadata_idp († listed supplemental cases only) | simplesamlphp | `run_JBGGPXXP5664SYBAP858P9FMKD` | `build/acceptance/reference-20260918/simplesamlphp-native-key-selection-v65/metadata_idp/evaluation` |
 | metadata_idp († listed supplemental cases only) | simplesamlphp | `run_KDFJDGNQQCVFANEG53YYWYS4A1` | `build/acceptance/reference-20260917/simplesamlphp-native-parser-3` |
 | metadata_idp († listed supplemental cases only) | simplesamlphp | `run_KDFJDGNQQCVFANEG53YYWYS4A1` | `build/acceptance/reference-20260917/simplesamlphp-native-parser-3` |
 | metadata_idp († listed supplemental cases only) | simplesamlphp | `run_KDFJDGNQQCVFANEG53YYWYS4A1` | `build/acceptance/reference-20260917/simplesamlphp-native-parser-3` |
 | metadata_idp († listed supplemental cases only) | simplesamlphp | `run_KDFJDGNQQCVFANEG53YYWYS4A1` | `build/acceptance/reference-20260917/simplesamlphp-native-parser-3` |
-| metadata_idp († listed supplemental cases only) | simplesamlphp | `run_KDFJDGNQQCVFANEG53YYWYS4A1` | `build/acceptance/reference-20260917/simplesamlphp-native-parser-3` |
-| metadata_idp († listed supplemental cases only) | simplesamlphp | `run_KDFJDGNQQCVFANEG53YYWYS4A1` | `build/acceptance/reference-20260917/simplesamlphp-native-parser-3` |
+| metadata_idp († listed supplemental cases only) | simplesamlphp | `run_6CDG7AA61Y087GZYRPPMANBZ1W` | `build/acceptance/reference-20260918/simplesamlphp-native-signature-observation-v2/metadata_idp/evaluation` |
+| metadata_idp († listed supplemental cases only) | simplesamlphp | `run_6CDG7AA61Y087GZYRPPMANBZ1W` | `build/acceptance/reference-20260918/simplesamlphp-native-signature-observation-v2/metadata_idp/evaluation` |
+| metadata_idp († listed supplemental cases only) | simplesamlphp | `run_GCKEAFAXQGR18R5RJ38SJ8SVP6` | `build/acceptance/reference-20260918/simplesamlphp-native-ec-signature/metadata_idp/evaluation` |
 | metadata_idp | simplesamlphp | `run_YVZ8AB57K11T5XRZNEYVHMPQ1Z` | `interaction-followup/after/simplesamlphp/metadata_idp` |
 | ecp_idp († listed supplemental cases only) | keycloak | `run_B5BVZPZHA77V8B2SV0AKJZDJYC` | `build/acceptance/reference-20260915/algorithm-observation-batch/keycloak/ecp_idp` |
 | ecp_idp († listed supplemental cases only) | keycloak | `run_B05XBA5FYGXDV933K9PKA9X441` | `build/acceptance/reference-20260915/peer-intent/keycloak/ecp_alg` |
+| ecp_idp († listed supplemental cases only) | keycloak | `run_YWWTJMD3P4MQWVNNYPNJD559CK` | `build/acceptance/reference-20260918/keycloak-native-signature-audit/ecp_idp/evaluation` |
+| ecp_idp († listed supplemental cases only) | keycloak | `run_YWWTJMD3P4MQWVNNYPNJD559CK` | `build/acceptance/reference-20260918/keycloak-native-signature-audit/ecp_idp/evaluation` |
+| ecp_idp († listed supplemental cases only) | keycloak | `run_9CQ4T26CJT03AJ9A3ZT7XDM6AW` | `build/acceptance/reference-20260918/keycloak-native-ec-signature-v3/observations/ecp_idp/evaluation` |
 | ecp_idp († listed supplemental cases only) | keycloak | `run_B05XBA5FYGXDV933K9PKA9X441` | `build/acceptance/reference-20260915/peer-intent/keycloak/ecp_alg` |
 | ecp_idp († listed supplemental cases only) | keycloak | `run_B5BVZPZHA77V8B2SV0AKJZDJYC` | `build/acceptance/reference-20260915/algorithm-observation-batch/keycloak/ecp_idp` |
 | ecp_idp († listed supplemental cases only) | keycloak | `run_B05XBA5FYGXDV933K9PKA9X441` | `build/acceptance/reference-20260915/peer-intent/keycloak/ecp_alg` |
 | ecp_idp († listed supplemental cases only) | keycloak | `run_B5BVZPZHA77V8B2SV0AKJZDJYC` | `build/acceptance/reference-20260915/algorithm-observation-batch/keycloak/ecp_idp` |
-| ecp_idp († listed supplemental cases only) | keycloak | `run_B5BVZPZHA77V8B2SV0AKJZDJYC` | `build/acceptance/reference-20260915/algorithm-observation-batch/keycloak/ecp_idp` |
+| ecp_idp († listed supplemental cases only) | keycloak | `run_BCJDFCFSWYMHVSESDMZCMBNAKA` | `build/acceptance/reference-20260918/keycloak-producer-algorithms-ecp` |
 | ecp_idp († listed supplemental cases only) | keycloak | `run_B5BVZPZHA77V8B2SV0AKJZDJYC` | `build/acceptance/reference-20260915/algorithm-observation-batch/keycloak/ecp_idp` |
 | ecp_idp | keycloak | `run_H38KM96SRSD9ESW4B0JQ0RV5JC` | `keycloak/ecp_idp/run5` |
 | ecp_idp († listed supplemental cases only) | shibboleth | `run_YNSFE9WE4CNTHHB57W2RFVVR3K` | `build/acceptance/reference-20260915/algorithm-observation-batch/shibboleth/ecp_idp` |
+| ecp_idp († listed supplemental cases only) | shibboleth | `run_HM0CRTNVGD9Q1PT31P112N28AQ` | `build/acceptance/reference-20260918/shibboleth-ecdsa-native-audit-additional/ecp_idp/evaluation` |
 | ecp_idp († listed supplemental cases only) | shibboleth | `run_YNSFE9WE4CNTHHB57W2RFVVR3K` | `build/acceptance/reference-20260915/algorithm-observation-batch/shibboleth/ecp_idp` |
+| ecp_idp († listed supplemental cases only) | shibboleth | `run_SSWFM7EX1V67WPRXPK975NW52B` | `build/acceptance/reference-20260918/shibboleth-producer-evaluation-ecp` |
 | ecp_idp († listed supplemental cases only) | shibboleth | `run_YNSFE9WE4CNTHHB57W2RFVVR3K` | `build/acceptance/reference-20260915/algorithm-observation-batch/shibboleth/ecp_idp` |
+| ecp_idp († listed supplemental cases only) | shibboleth | `run_SSWFM7EX1V67WPRXPK975NW52B` | `build/acceptance/reference-20260918/shibboleth-producer-evaluation-ecp` |
+| ecp_idp († listed supplemental cases only) | shibboleth | `run_SSWFM7EX1V67WPRXPK975NW52B` | `build/acceptance/reference-20260918/shibboleth-producer-evaluation-ecp` |
 | ecp_idp († listed supplemental cases only) | shibboleth | `run_YNSFE9WE4CNTHHB57W2RFVVR3K` | `build/acceptance/reference-20260915/algorithm-observation-batch/shibboleth/ecp_idp` |
-| ecp_idp († listed supplemental cases only) | shibboleth | `run_YNSFE9WE4CNTHHB57W2RFVVR3K` | `build/acceptance/reference-20260915/algorithm-observation-batch/shibboleth/ecp_idp` |
-| ecp_idp († listed supplemental cases only) | shibboleth | `run_YNSFE9WE4CNTHHB57W2RFVVR3K` | `build/acceptance/reference-20260915/algorithm-observation-batch/shibboleth/ecp_idp` |
-| ecp_idp († listed supplemental cases only) | shibboleth | `run_YNSFE9WE4CNTHHB57W2RFVVR3K` | `build/acceptance/reference-20260915/algorithm-observation-batch/shibboleth/ecp_idp` |
+| ecp_idp († listed supplemental cases only) | shibboleth | `run_GQ70KKEYFZFHR5PYTZS4M3YKSZ` | `build/acceptance/reference-20260918/shibboleth-native-signed-request-v2/ecp_idp/evaluation` |
+| ecp_idp († listed supplemental cases only) | shibboleth | `run_GQ70KKEYFZFHR5PYTZS4M3YKSZ` | `build/acceptance/reference-20260918/shibboleth-native-signed-request-v2/ecp_idp/evaluation` |
 | ecp_idp | shibboleth | `run_4E2YMVJR6DPW196YFMWX4V9DN3` | `shibboleth/ecp_idp/run4` |
 | ecp_idp († listed supplemental cases only) | simplesamlphp | `run_6MFJ4KXD8JGR140MMFWPVM8D84` | `build/acceptance/reference-20260915/peer-intent/simplesamlphp/ecp_alg_enc` |
+| ecp_idp († listed supplemental cases only) | simplesamlphp | `run_EQPZ1J1F02HFF25C5G0YA7D2B3` | `build/acceptance/reference-20260918/simplesamlphp-native-signature-observation-v2/ecp_idp/evaluation` |
+| ecp_idp († listed supplemental cases only) | simplesamlphp | `run_EQPZ1J1F02HFF25C5G0YA7D2B3` | `build/acceptance/reference-20260918/simplesamlphp-native-signature-observation-v2/ecp_idp/evaluation` |
+| ecp_idp († listed supplemental cases only) | simplesamlphp | `run_YBQ5KZHHAY9GV4BC84766X8M1W` | `build/acceptance/reference-20260918/simplesamlphp-native-ec-signature/ecp_idp/evaluation` |
 | ecp_idp († listed supplemental cases only) | simplesamlphp | `run_6MFJ4KXD8JGR140MMFWPVM8D84` | `build/acceptance/reference-20260915/peer-intent/simplesamlphp/ecp_alg_enc` |
 | ecp_idp | simplesamlphp | `run_KNM1G6JW0H7MYS6RT0FQX69EK5` | `simplesamlphp/ecp_idp/run6` |
 | single_logout_idp († listed supplemental cases only) | keycloak | `run_K6A6ZHJNKWDYARKT4E4ZJGHQHT` | `remaining-audit/keycloak/fresh_common` |
@@ -677,8 +736,9 @@ Chromeと承認のブロックを解除するだけでは解消しません。�
 | single_logout_idp († listed supplemental cases only) | keycloak | `run_K6A6ZHJNKWDYARKT4E4ZJGHQHT` | `build/acceptance/reference-20260914/remaining-audit/keycloak/fresh_common` |
 | single_logout_idp († listed supplemental cases only) | keycloak | `run_K6A6ZHJNKWDYARKT4E4ZJGHQHT` | `build/acceptance/reference-20260914/remaining-audit/keycloak/fresh_common` |
 | single_logout_idp († listed supplemental cases only) | keycloak | `run_K6A6ZHJNKWDYARKT4E4ZJGHQHT` | `build/acceptance/reference-20260914/remaining-audit/keycloak/fresh_common` |
-| single_logout_idp († listed supplemental cases only) | keycloak | `run_K6A6ZHJNKWDYARKT4E4ZJGHQHT` | `build/acceptance/reference-20260914/remaining-audit/keycloak/fresh_common` |
-| single_logout_idp († listed supplemental cases only) | keycloak | `run_K6A6ZHJNKWDYARKT4E4ZJGHQHT` | `build/acceptance/reference-20260914/remaining-audit/keycloak/fresh_common` |
+| single_logout_idp († listed supplemental cases only) | keycloak | `run_DVQNW0ZY3675WNFYAYCTQ81J4X` | `build/acceptance/reference-20260918/keycloak-native-signature-audit/single_logout_idp/evaluation` |
+| single_logout_idp († listed supplemental cases only) | keycloak | `run_DVQNW0ZY3675WNFYAYCTQ81J4X` | `build/acceptance/reference-20260918/keycloak-native-signature-audit/single_logout_idp/evaluation` |
+| single_logout_idp († listed supplemental cases only) | keycloak | `run_W2DFV6VZDAB4S8GN6GAYNQ45MM` | `build/acceptance/reference-20260918/keycloak-native-ec-signature-v3/observations/single_logout_idp/evaluation` |
 | single_logout_idp († listed supplemental cases only) | keycloak | `run_CERKQBAE027XYKQZ6284AGS3K5` | `build/acceptance/reference-20260914/slo-redirect-receiver-integrated/keycloak/single_logout_idp` |
 | single_logout_idp († listed supplemental cases only) | keycloak | `run_P9PEZYWNZW63V20ETYAP94H7KX` | `build/acceptance/reference-20260915/slo-oracle/keycloak/slo_probe_browser` |
 | single_logout_idp († listed supplemental cases only) | keycloak | `run_P9PEZYWNZW63V20ETYAP94H7KX` | `build/acceptance/reference-20260915/slo-oracle/keycloak/slo_probe_browser` |
@@ -708,8 +768,7 @@ Chromeと承認のブロックを解除するだけでは解消しません。�
 | single_logout_idp († listed supplemental cases only) | shibboleth | `run_SGCAQNVM44RHF91FQH3SQD0HDH` | `build/acceptance/reference-20260914/remaining-audit/shibboleth/fresh_common` |
 | single_logout_idp († listed supplemental cases only) | shibboleth | `run_SGCAQNVM44RHF91FQH3SQD0HDH` | `build/acceptance/reference-20260914/remaining-audit/shibboleth/fresh_common` |
 | single_logout_idp († listed supplemental cases only) | shibboleth | `run_SGCAQNVM44RHF91FQH3SQD0HDH` | `build/acceptance/reference-20260914/remaining-audit/shibboleth/fresh_common` |
-| single_logout_idp († listed supplemental cases only) | shibboleth | `run_SGCAQNVM44RHF91FQH3SQD0HDH` | `build/acceptance/reference-20260914/remaining-audit/shibboleth/fresh_common` |
-| single_logout_idp († listed supplemental cases only) | shibboleth | `run_SGCAQNVM44RHF91FQH3SQD0HDH` | `build/acceptance/reference-20260914/remaining-audit/shibboleth/fresh_common` |
+| single_logout_idp († listed supplemental cases only) | shibboleth | `run_RJ0XT9P3SJ4FY20NSDDZB5DRD2` | `build/acceptance/reference-20260918/shibboleth-ecdsa-native-audit-additional/single_logout_idp/evaluation` |
 | single_logout_idp († listed supplemental cases only) | shibboleth | `run_P02Y6XV9YZE7R9D3Z6V1D32WHQ` | `build/acceptance/reference-20260914/slo-redirect-receiver-integrated/shibboleth/single_logout_idp` |
 | single_logout_idp († listed supplemental cases only) | shibboleth | `run_9KV70EB8T30AXEBZKCAK1C1WWE` | `build/acceptance/reference-20260915/slo-oracle/shibboleth/slo_probe_browser` |
 | single_logout_idp († listed supplemental cases only) | shibboleth | `run_9KV70EB8T30AXEBZKCAK1C1WWE` | `build/acceptance/reference-20260915/slo-oracle/shibboleth/slo_probe_browser` |
@@ -731,6 +790,8 @@ Chromeと承認のブロックを解除するだけでは解消しません。�
 | single_logout_idp († listed supplemental cases only) | shibboleth | `run_MCZRYHMCFBJ227206Y8YC3XCST` | `build/acceptance/reference-20260914/slo-encrypted-id-integrated/shibboleth/single_logout_idp` |
 | single_logout_idp († listed supplemental cases only) | shibboleth | `run_T8A6A9QZFF5QVYTCK1AFQJZ4RZ` | `build/acceptance/reference-20260914/key-capability-integrated/shibboleth/single_logout_idp` |
 | single_logout_idp († listed supplemental cases only) | shibboleth | `run_7NEJ4R0ZV980M9YJSQEXPADWKQ` | `build/acceptance/reference-20260914/slo-multiple-keys-integrated/shibboleth/single_logout_idp` |
+| single_logout_idp († listed supplemental cases only) | shibboleth | `run_0NKMWAVB7T7DF1RFMQH2VDPD82` | `build/acceptance/reference-20260918/shibboleth-native-signed-request-v2/single_logout_idp/evaluation` |
+| single_logout_idp († listed supplemental cases only) | shibboleth | `run_0NKMWAVB7T7DF1RFMQH2VDPD82` | `build/acceptance/reference-20260918/shibboleth-native-signed-request-v2/single_logout_idp/evaluation` |
 | single_logout_idp | shibboleth | `run_23TFJH7Y8APXAWCX58004A9FGG` | `shibboleth/single_logout_idp/browser5` |
 | single_logout_idp († listed supplemental cases only) | simplesamlphp | `run_FK4C7STWMF8RWG80J1TCB57SGX` | `remaining-audit/simplesamlphp/fresh_common` |
 | single_logout_idp († listed supplemental cases only) | simplesamlphp | `run_W63NJD61TCBC56C5WHFNYFZRS4` | `slo-redirect-receiver-integrated/simplesamlphp/single_logout_idp` |
@@ -740,8 +801,9 @@ Chromeと承認のブロックを解除するだけでは解消しません。�
 | single_logout_idp († listed supplemental cases only) | simplesamlphp | `run_FK4C7STWMF8RWG80J1TCB57SGX` | `build/acceptance/reference-20260914/remaining-audit/simplesamlphp/fresh_common` |
 | single_logout_idp († listed supplemental cases only) | simplesamlphp | `run_FK4C7STWMF8RWG80J1TCB57SGX` | `build/acceptance/reference-20260914/remaining-audit/simplesamlphp/fresh_common` |
 | single_logout_idp († listed supplemental cases only) | simplesamlphp | `run_FK4C7STWMF8RWG80J1TCB57SGX` | `build/acceptance/reference-20260914/remaining-audit/simplesamlphp/fresh_common` |
-| single_logout_idp († listed supplemental cases only) | simplesamlphp | `run_FK4C7STWMF8RWG80J1TCB57SGX` | `build/acceptance/reference-20260914/remaining-audit/simplesamlphp/fresh_common` |
-| single_logout_idp († listed supplemental cases only) | simplesamlphp | `run_FK4C7STWMF8RWG80J1TCB57SGX` | `build/acceptance/reference-20260914/remaining-audit/simplesamlphp/fresh_common` |
+| single_logout_idp († listed supplemental cases only) | simplesamlphp | `run_GD556ATPJCZAXF3CSRQXE0GWYW` | `build/acceptance/reference-20260918/simplesamlphp-native-signature-observation-v2/single_logout_idp/evaluation` |
+| single_logout_idp († listed supplemental cases only) | simplesamlphp | `run_GD556ATPJCZAXF3CSRQXE0GWYW` | `build/acceptance/reference-20260918/simplesamlphp-native-signature-observation-v2/single_logout_idp/evaluation` |
+| single_logout_idp († listed supplemental cases only) | simplesamlphp | `run_678YKQGJPRK6ENEX8STV7VCMJ8` | `build/acceptance/reference-20260918/simplesamlphp-native-ec-signature/single_logout_idp/evaluation` |
 | single_logout_idp († listed supplemental cases only) | simplesamlphp | `run_W63NJD61TCBC56C5WHFNYFZRS4` | `build/acceptance/reference-20260914/slo-redirect-receiver-integrated/simplesamlphp/single_logout_idp` |
 | single_logout_idp († listed supplemental cases only) | simplesamlphp | `run_KDKRQPF0XMGD57BKQMT252SV9V` | `build/acceptance/reference-20260915/slo-oracle/simplesamlphp/slo_probe_browser` |
 | single_logout_idp († listed supplemental cases only) | simplesamlphp | `run_KDKRQPF0XMGD57BKQMT252SV9V` | `build/acceptance/reference-20260915/slo-oracle/simplesamlphp/slo_probe_browser` |
