@@ -76,6 +76,9 @@ final class MetadataConfigCaseFactory {
             Map.entry("IIP-MD05.g", List.of(
                     accept("unknown-extension", "ignore a well-formed unknown extension without failure"),
                     accept("mdrpi-registration-info", "consume a real non-mandatory metadata extension"))),
+            Map.entry("IIP-MD05.ff", List.of(
+                    accept("disco-hints-ipv6-cidr", "consume a DiscoHints IPHint that is an IPv6 CIDR"),
+                    accept("disco-hints-ipv4-cidr", "consume a DiscoHints IPHint that is an IPv4 CIDR"))),
             Map.entry("IIP-MD05.cd", List.of(
                     accept("keyvalue-only", "identify the signing key from ds:KeyValue without KeyName"),
                     accept("entity-root", "identify the signing key from ds:X509Certificate without subject hints"))),

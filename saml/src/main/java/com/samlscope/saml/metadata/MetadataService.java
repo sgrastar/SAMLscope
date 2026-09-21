@@ -38,6 +38,7 @@ public final class MetadataService {
     public static final String MD = "urn:oasis:names:tc:SAML:2.0:metadata";
     public static final String SAML = "urn:oasis:names:tc:SAML:2.0:assertion";
     public static final String DS = "http://www.w3.org/2000/09/xmldsig#";
+    public static final String UI = "urn:oasis:names:tc:SAML:metadata:ui";
     public static final String REDIRECT = "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect";
     public static final String POST = "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST";
     public static final String SOAP = "urn:oasis:names:tc:SAML:2.0:bindings:SOAP";
@@ -740,7 +741,21 @@ public final class MetadataService {
                 && variant != Variant.UNKNOWN_ROLE_EXTENSION
                 && variant != Variant.UNKNOWN_ENDPOINT_EXTENSION
                 && variant != Variant.INVALID_SAML_EXTENSION
-                && variant != Variant.MDRPI_REGISTRATION_INFO) return;
+                && variant != Variant.MDRPI_REGISTRATION_INFO
+                && variant != Variant.DISCO_HINTS_IPV6_CIDR
+                && variant != Variant.DISCO_HINTS_IPV4_CIDR) return;
+        if (variant == Variant.DISCO_HINTS_IPV6_CIDR || variant == Variant.DISCO_HINTS_IPV4_CIDR) {
+            // MD05.ff: a published DiscoHints IPHint must survive consumption as a CIDR literal.
+            var hints = element(document, UI, "mdui:DiscoHints");
+            hints.setAttributeNS(XMLConstants.XMLNS_ATTRIBUTE_NS_URI, "xmlns:mdui", UI);
+            var ipHint = element(document, UI, "mdui:IPHint");
+            ipHint.setTextContent(variant == Variant.DISCO_HINTS_IPV6_CIDR ? "2001:db8::/32" : "192.0.2.0/24");
+            hints.appendChild(ipHint);
+            var container = element(document, MD, "md:Extensions");
+            container.appendChild(hints);
+            entity.insertBefore(container, entity.getFirstChild());
+            return;
+        }
         if (variant == Variant.UNKNOWN_ROLE_EXTENSION) {
             var role = (Element) entity.getElementsByTagNameNS(MD, "SPSSODescriptor").item(0);
             var extensions = element(document, MD, "md:Extensions");
@@ -934,6 +949,8 @@ public final class MetadataService {
         INVALID_SAML_EXTENSION("invalid-saml-extension"),
         INVALID_ORGANIZATION_SAML_EXTENSION("invalid-organization-saml-extension"),
         MDRPI_REGISTRATION_INFO("mdrpi-registration-info"),
+        DISCO_HINTS_IPV6_CIDR("disco-hints-ipv6-cidr"),
+        DISCO_HINTS_IPV4_CIDR("disco-hints-ipv4-cidr"),
         XPATH_IDENTITY("xpath-identity"),
         XPATH_EXCLUDE_ROLE_DESCRIPTORS("xpath-exclude-role-descriptors"),
         XPATH_EXCLUDE_ENDPOINTS("xpath-exclude-endpoints"),
