@@ -631,8 +631,12 @@ final class M1Runtime {
             } catch (RuntimeException invalid) {
                 throw new IllegalArgumentException("Unknown target-initiated check kind");
             }
+            // An unsolicited SSO check applies to browser SSO, and to single logout where the
+            // propagation harness establishes extra Suite participants through the target's
+            // unsolicited SSO profile before the target-initiated logout.
             var supported = kind == com.samlscope.runner.TargetInitiatedIntents.Kind.UNSOLICITED_SSO
                     ? plan.profile() == com.samlscope.core.profile.FunctionalProfile.BROWSER_SSO_IDP
+                            || plan.profile() == com.samlscope.core.profile.FunctionalProfile.SINGLE_LOGOUT_IDP
                     : plan.profile() == com.samlscope.core.profile.FunctionalProfile.SINGLE_LOGOUT_IDP;
             if (!supported) throw new IllegalArgumentException(
                     "The target-initiated check does not apply to this profile");

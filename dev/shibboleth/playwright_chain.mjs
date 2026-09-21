@@ -68,6 +68,11 @@ try {
   await page.waitForLoadState('networkidle');
   record.steps.push('primary-login');
   for (const suffix of ['fail', 'remain']) {
+    // Establish the participant's IdP session through the target's unsolicited SSO profile. The
+    // Suite records such an unsolicited Response only against a prepared single-use intent, so
+    // prepare one per participant; otherwise the Suite drops the assertion before recording it
+    // and the participant session cannot be correlated with a later LogoutRequest.
+    await api(`/api/runs/${run}/target-initiated`, true, { kind: 'UNSOLICITED_SSO' });
     const provider = `http://localhost:18080/p/${plan}/sp-${suffix}`;
     await page.goto(`http://localhost:18280/idp/profile/SAML2/Unsolicited/SSO?providerId=${encodeURIComponent(provider)}`, { waitUntil: 'networkidle' });
     await page.waitForLoadState('networkidle');
