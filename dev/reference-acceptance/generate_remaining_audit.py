@@ -512,6 +512,33 @@ def render(root,definitions,output):
                        interaction=None,verdict=case['verdict'],evidence=case['evidence'],
                        diagnostics=case.get('diagnostics',{}))
             transitions.append(dict(row))
+        # Target-emitted HTTP-Redirect LogoutResponse that the IdP actually consumed. The dedicated
+        # 18c/18d run drilled the Redirect exchange end to end; an independent retry run reproduced
+        # the same consumption, so both must agree before adoption.
+        slo_18cd={
+            'shibboleth':('reference-20260915/peer-intent/shibboleth/slo_target_logout_18cd',
+                          'reference-20260915/peer-intent/shibboleth/slo_target_logout_rs'),
+        }
+        if row['profile']=='single_logout_idp' and row['case']=='IIP-IDP18-d-idp-01' \
+                and row['product'] in slo_18cd and row.get('verdict','NOT_VERIFIED')=='NOT_VERIFIED':
+            primary,cross=slo_18cd[row['product']]
+            path=root.parent.parent/primary/'result.json'
+            raw=path.read_bytes(); result=json.loads(raw)
+            case=next(c for req in result['requirements'] for c in req['cases'] if c['id']==row['case'])
+            assert (case['verdict'],case['reason_code'])==('PASS','slo.redirect-response.consumed'),(
+                row['product'],case['verdict'],case['reason_code'])
+            other=root.parent.parent/cross/'result.json'
+            other_case=next(c for req in json.loads(other.read_text())['requirements']
+                            for c in req['cases'] if c['id']==row['case'])
+            assert (other_case['verdict'],other_case['reason_code'])==('PASS','slo.redirect-response.consumed'),(
+                'cross-check',other_case['verdict'],other_case['reason_code'])
+            row['baseline']={k:row.get(k) for k in ('run','reason_code','result_sha256','evidence_folder','interaction')}
+            row.update(run=result['run']['id'],reason_code=case['reason_code'],
+                       result_sha256=hashlib.sha256(raw).hexdigest(),
+                       evidence_folder=str(path.parent.relative_to(root.parents[3])),
+                       interaction=None,verdict=case['verdict'],evidence=case['evidence'],
+                       diagnostics=case.get('diagnostics',{}))
+            transitions.append(dict(row))
         # Native console import followed by signed SSO, with per-fixture cleanup evidence.
         from verify_keycloak_import_batch import ADOPTED, verify as verify_import_batch
         if row['product']=='keycloak' and row['profile']=='metadata_idp' and row['case'] in ADOPTED:
