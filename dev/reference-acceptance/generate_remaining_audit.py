@@ -747,6 +747,12 @@ def render(root,definitions,output):
                 'failFastInitialization=false 相当の構成が必要。構成できるまでNOT_VERIFIEDを維持し、'
                 '受理をVIOLATEDへ変換しない。観測は reference-20260918/shibboleth-md05-consumer-v76/finding.json に記録済み。')
             row['observation_gap']='metadata-signature-validation-not-configured'
+        if row['case']=='IIP-MD05-ah-idp-01' and row.get('profile')=='metadata_idp':
+            row['next_action']=('approved variant「target自身がRSA-SHA1でメタデータに署名」(target-side)は'
+                '遠隔IdPの内部挙動でありSAML通信から観測できない。all_ofが揃わないため設計上partialで'
+                'NOT_VERIFIEDを維持する。検証側variant（SuiteがRSA-SHA1署名メタデータを配布）だけを'
+                '実装しても解消しない。')
+            row['observation_gap']='target-side-signing-not-observable'
         if row['case']=='IIP-G02-a-idp-01' and row.get('diagnostics',{}).get('remaining_conditions'):
             row['next_action']='残条件の入力・正常系対照・応答観測を実装する: '+', '.join(row['diagnostics']['remaining_conditions'])
         if row['case'] in implementations:
