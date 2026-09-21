@@ -766,13 +766,14 @@ def render(root,definitions,output):
                 '無応答・probe-no-responseはFAILにしない。')
             row['observation_gap']='slo-logout-action-not-driven'
         if row.get('profile')=='metadata_idp' and row['case']=='IIP-MD05-fj-idp-01':
-            row['next_action']=('receipt(samlscope-native-ui-display-receipt-v1)・replay proof・target-metadataは'
-                'reference-20260918/shibboleth-display-precedence-v60に存在し再現一致するが、UI display Runは'
-                'provider復元後に初期ログインが完了できずWAITING_BROWSERのためMD05-fjが起動していない'
-                '(case.not-executed)。campaignにprovider稼働中の初期ログインと/tests/startを追加し、'
-                'receipt設置後にcaseを起動する（またはUiDisplayBrowserEvidenceTestCaseに'
-                'RecordedEvidenceReevaluationを追加してreceipt設置後に再評価する）必要がある。')
-            row['observation_gap']='ui-display-case-not-started'
+            row['next_action']=('campaign改修（polling完了でRunをCOMPLETED解放→/tests/start）と'
+                'UiDisplayBrowserEvidenceTestCaseのreceipt再評価により、RunはCOMPLETED・case起動・receipt読込まで'
+                '到達した（reference-20260918/shibboleth-display-precedence-v94b）。残るブロッカーは'
+                'ENTITY条件（UIInfo DisplayName/ServiceName無しでentityID/hostnameを表示）の観測が'
+                'not-observed(element-missing-or-ambiguous, selector header h1)のため '
+                'evidence_issues=[selection_unobserved_entity] となりNOT_VERIFIED。entity名表示要素の'
+                '観測（selector/ページ構造）を修正すれば確定できる。')
+            row['observation_gap']='ui-display-entity-selection-unobserved'
         if row.get('profile')=='metadata_idp' and row['case']=='IIP-MD05-aw-idp-01':
             row['next_action']=('variant「TLS with use=signing」はIdPのTLS経路の観測を要し、参照Shibbolethは'
                 'TLS経路を公開しない。制約に従い安全なTLS経路を構成できない場合はNOT_VERIFIED。'
