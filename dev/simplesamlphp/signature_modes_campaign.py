@@ -35,6 +35,8 @@ def main(default_matrix="signature"):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--matrix', choices=['signature', 'encryption'], default=default_matrix)
+    parser.add_argument('--metadata-variant',
+                        help='Suite SP metadata variant, e.g. algorithm-encryption-aes128-gcm / algorithm-oaep-11-sha256')
     args = parser.parse_args()
     out = args.output.resolve(); out.mkdir(parents=True, exist_ok=False)
     configuration = ConfigurationBatch(REPO/'build/acceptance/reference-20260914/ssp-config/saml20-sp-remote.php')
@@ -54,6 +56,7 @@ def main(default_matrix="signature"):
     save(out/'preflight.json', api('/api/runs/'+run+'/preflight', {}))
     metadata_url = entity+'/metadata?run='+run
     if args.matrix == 'signature': metadata_url += '&variant=signature-modes-optional'
+    if args.metadata_variant: metadata_url += '&variant='+args.metadata_variant
     with urllib.request.urlopen(metadata_url, timeout=30) as response: fixture = response.read()
     (out/'fixture.xml').write_bytes(fixture)
     role = ET.fromstring(fixture).find('{urn:oasis:names:tc:SAML:2.0:metadata}SPSSODescriptor')
