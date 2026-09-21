@@ -260,6 +260,32 @@ def render(root,definitions,output):
                        interaction=None,verdict=case['verdict'],evidence=case['evidence'],
                        diagnostics=case.get('diagnostics',{}))
             transitions.append(dict(row))
+        from verify_simplesamlphp_import_batch import verify as verify_ssp_md05ff
+        if row['product']=='simplesamlphp' and row['profile']=='metadata_idp' \
+                and row['case']=='IIP-MD05-ff-idp-01' and row.get('verdict','NOT_VERIFIED')=='NOT_VERIFIED':
+            path, imported_cases = verify_ssp_md05ff(
+                root.parent.parent/'reference-20260918', folder='simplesamlphp-md05ff-v99',
+                adopted={'IIP-MD05-ff-idp-01': ['disco-hints-ipv6-cidr','disco-hints-ipv4-cidr']})
+            raw=path.read_bytes(); result=json.loads(raw); case=imported_cases[row['case']]
+            row['baseline']={k:row.get(k) for k in ('run','reason_code','result_sha256','evidence_folder','interaction')}
+            row.update(run=result['run']['id'],reason_code=case['reason_code'],
+                       result_sha256=hashlib.sha256(raw).hexdigest(),
+                       evidence_folder=str(path.parent.relative_to(root.parents[3])),
+                       interaction=None,verdict=case['verdict'],evidence=case['evidence'],
+                       diagnostics=case.get('diagnostics',{}))
+            transitions.append(dict(row))
+        from verify_keycloak_md05ff import ADOPTED as KC_FF_ADOPTED, verify as verify_kc_md05ff
+        if row['product']=='keycloak' and row['profile']=='metadata_idp' \
+                and row['case'] in KC_FF_ADOPTED and row.get('verdict','NOT_VERIFIED')=='NOT_VERIFIED':
+            path, imported_cases = verify_kc_md05ff(root.parent.parent/'reference-20260918')
+            raw=path.read_bytes(); result=json.loads(raw); case=imported_cases[row['case']]
+            row['baseline']={k:row.get(k) for k in ('run','reason_code','result_sha256','evidence_folder','interaction')}
+            row.update(run=result['run']['id'],reason_code=case['reason_code'],
+                       result_sha256=hashlib.sha256(raw).hexdigest(),
+                       evidence_folder=str(path.parent.relative_to(root.parents[3])),
+                       interaction=None,verdict=case['verdict'],evidence=case['evidence'],
+                       diagnostics=case.get('diagnostics',{}))
+            transitions.append(dict(row))
         if row['product']=='simplesamlphp' and row['profile']=='browser_sso_idp' and row['case'] in {'IIP-IDP06-a-idp-01','IIP-IDP06-b-idp-01'}:
             batch='literal-integrated-implementation' if row['case']=='IIP-IDP06-a-idp-01' else 'queue-integrated-implementation'
             path=root.parent/batch/'simplesamlphp/browser_sso_idp/result.json'
