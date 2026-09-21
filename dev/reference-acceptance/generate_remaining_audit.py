@@ -765,6 +765,14 @@ def render(root,definitions,output):
                 'を要する。driverにSP起点・IdP起点のlogout操作を追加し、SuiteのSLOプローブを完了させる必要がある。'
                 '無応答・probe-no-responseはFAILにしない。')
             row['observation_gap']='slo-logout-action-not-driven'
+        if row.get('profile')=='metadata_idp' and row['case']=='IIP-MD05-fj-idp-01':
+            row['next_action']=('receipt(samlscope-native-ui-display-receipt-v1)・replay proof・target-metadataは'
+                'reference-20260918/shibboleth-display-precedence-v60に存在し再現一致するが、UI display Runは'
+                'provider復元後に初期ログインが完了できずWAITING_BROWSERのためMD05-fjが起動していない'
+                '(case.not-executed)。campaignにprovider稼働中の初期ログインと/tests/startを追加し、'
+                'receipt設置後にcaseを起動する（またはUiDisplayBrowserEvidenceTestCaseに'
+                'RecordedEvidenceReevaluationを追加してreceipt設置後に再評価する）必要がある。')
+            row['observation_gap']='ui-display-case-not-started'
         if row.get('profile')=='metadata_idp' and row['case']=='IIP-MD05-aw-idp-01':
             row['next_action']=('variant「TLS with use=signing」はIdPのTLS経路の観測を要し、参照Shibbolethは'
                 'TLS経路を公開しない。制約に従い安全なTLS経路を構成できない場合はNOT_VERIFIED。'
