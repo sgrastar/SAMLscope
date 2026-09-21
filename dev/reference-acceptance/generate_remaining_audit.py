@@ -630,7 +630,7 @@ def render(root,definitions,output):
             selected=verify_metadata_keys(root.parent.parent/'reference-20260918','shibboleth')
         if row['product']=='shibboleth' and row['profile']=='metadata_idp' and row['case'] in {
                 'IIP-MD03-a-idp-01','IIP-MD04-a-idp-01','IIP-MD04-b-idp-01','IIP-MD04-c-idp-01',
-                'IIP-MD05-as-idp-01','IIP-MD05-an-idp-01','IIP-MD05-am-idp-01'}:
+                'IIP-MD05-a2-idp-01','IIP-MD05-as-idp-01','IIP-MD05-an-idp-01','IIP-MD05-am-idp-01'}:
             from verify_native_metadata_rejection_acceptance import verify as verify_native_rejection
             selected=verify_native_rejection(root.parent.parent/'reference-20260918','shibboleth',row['case'])
         if row['product']=='shibboleth' and row['profile']=='metadata_idp' and row['case']=='IIP-MD03-b-idp-01':

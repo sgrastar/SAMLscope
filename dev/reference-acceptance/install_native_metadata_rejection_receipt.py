@@ -10,7 +10,7 @@ import urllib.request
 BASE = 'http://localhost:18080'
 CONTAINER = 'samlscope-reference-suite'
 DESTINATION = '/data/metadata-rejection-evidence'
-ADAPTERS = {'shibboleth-resolver', 'simplesamlphp-parser', 'keycloak-import'}
+ADAPTERS = {'shibboleth-resolver', 'simplesamlphp-parser', 'keycloak-import', 'shibboleth-idp'}
 SHA = lambda raw: hashlib.sha256(raw).hexdigest()
 
 

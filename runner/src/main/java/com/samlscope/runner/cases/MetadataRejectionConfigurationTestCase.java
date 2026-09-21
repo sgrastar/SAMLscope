@@ -19,7 +19,10 @@ public final class MetadataRejectionConfigurationTestCase implements TestCase, C
     private static final Set<String> CASES = Set.of(
             "IIP-MD03-a-idp-01", "IIP-MD04-a-idp-01", "IIP-MD04-b-idp-01", "IIP-MD04-c-idp-01",
             // MUST_NOT: a document the target refuses to load cannot have its endpoints or keys used.
-            "IIP-MD05-as-idp-01");
+            "IIP-MD05-as-idp-01",
+            // Duplicate entityIDs with conflicting endpoints: the target refused to use the conflicting
+            // entry, which is how it rejects such a conflict.
+            "IIP-MD05-a2-idp-01");
     private final TestCase fallback;
     private final MetadataFixtureObservationTestCase observer;
     private final TranscriptContentReader content;

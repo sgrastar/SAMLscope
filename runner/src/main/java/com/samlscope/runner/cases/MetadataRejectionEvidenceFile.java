@@ -30,7 +30,8 @@ final class MetadataRejectionEvidenceFile {
         require(receipt.path("restored").asBoolean(false));
         require(hash(target).equals(text(receipt,"targetMetadataSha256")));
         var adapter=text(receipt,"evidenceAdapter");
-        require(Set.of("shibboleth-resolver","simplesamlphp-parser","keycloak-import").contains(adapter));
+        require(Set.of("shibboleth-resolver","simplesamlphp-parser","keycloak-import",
+                "shibboleth-idp").contains(adapter));
         var entries=new HashMap<String,TranscriptEntry>();
         var preparedByVariant=new HashMap<String,TranscriptEntry>();
         var originals=new HashMap<String,String>();

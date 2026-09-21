@@ -14,7 +14,7 @@ import subprocess
 
 
 SHA = lambda raw: hashlib.sha256(raw).hexdigest()
-ADAPTERS = {'shibboleth-resolver', 'simplesamlphp-parser', 'keycloak-import'}
+ADAPTERS = {'shibboleth-resolver', 'simplesamlphp-parser', 'keycloak-import', 'shibboleth-idp'}
 
 
 def read(path):

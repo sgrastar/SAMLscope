@@ -35,6 +35,16 @@ CASES = {
             log_path='/opt/reference-idp/logs/idp-warn.log',
             marker='Metadata did not include a validUntil attribute',
             expected=('SATISFIED', 'PASS', 'metadata.fixture-probe.satisfied')),
+        # MD05.a2: duplicate entityIDs with conflicting endpoints. The target surfaced the conflict
+        # and refused to use the conflicting entry (runtime endpoint refusal, source shibboleth-idp),
+        # which is how it rejects such a conflict. The control and distinct-entityIDs were accepted.
+        'IIP-MD05-a2-idp-01': dict(
+            folder='shibboleth-md05-a1a2-v76', variant='conflicting-duplicate-entity-ids',
+            adapter='shibboleth-idp', proof='verified-metadata-rejection-v85.json', level='WARN',
+            log_file='conflicting-duplicate-entity-ids/idp-refusal.log',
+            log_path='/opt/reference-idp/logs/idp-warn.log',
+            marker='Unable to resolve outbound message endpoint',
+            expected=('SATISFIED', 'PASS', 'metadata.fixture-probe.satisfied')),
         # MD04.c: the Run's tested threshold is T=20 days (RequiredValidUntil maxValidityInterval),
         # so now+T-delta is accepted and now+T+delta is refused.
         'IIP-MD04-c-idp-01': dict(
