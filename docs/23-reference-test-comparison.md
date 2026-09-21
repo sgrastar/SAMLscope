@@ -79,11 +79,11 @@ Shibbolethの`IIP-SSO01-fk/fu/gi`は、v8では事前生成された正常系要
 
 ## Not verifiedの内訳
 
-以下は表に採用したケース結果の延べ407件。†のケースは新Runの追加証拠を採用し、それ以外の既存証拠は保持しています。単一Runの集計や全試験の再完走を意味しません。比較表で設定不足として扱い直した旧FAILは、このNOT_VERIFIED集計には含めません。
+以下は表に採用したケース結果の延べ406件。†のケースは新Runの追加証拠を採用し、それ以外の既存証拠は保持しています。単一Runの集計や全試験の再完走を意味しません。比較表で設定不足として扱い直した旧FAILは、このNOT_VERIFIED集計には含めません。
 
 | 理由 | Keycloak | Shibboleth IdP | SimpleSAMLphp | 解消に必要なこと |
 |---|---:|---:|---:|---|
-| `case.pending-interaction` | 82 | 53 | 83 | 設定・受信待ちに加え、判定処理未実装の経路を含む。全件台帳を参照 |
+| `case.pending-interaction` | 82 | 52 | 83 | 設定・受信待ちに加え、判定処理未実装の経路を含む。全件台帳を参照 |
 | `attestation.interaction-disallowed` | 25 | 25 | 25 | 自己申告を無効にした構成。確認せずに申告を代行しない |
 | `browser_fixture_partial` | 18 | 20 | 18 | 一部の試験だけ実行。残るvariantの証拠が不足 |
 | `idp.acs-probe.inconclusive` | 3 | 3 | 1 | 当該ケースの応答・対象設定・正常系対照を追加確認 |
@@ -311,7 +311,7 @@ Chromeと承認のブロックを解除するだけでは解消しません。�
 | `IIP-MD03-c-idp-01` | Not verified | Success | Not verified |
 | `IIP-MD03-d-idp-01` | Not verified | Not verified | Not verified |
 | `IIP-MD03-e-idp-01` | Warning | Warning | Warning |
-| `IIP-MD04-a-idp-01` | Not verified | Not verified | Not verified |
+| `IIP-MD04-a-idp-01` | Not verified | Success † | Not verified |
 | `IIP-MD04-b-idp-01` | Not verified | Success † | Not verified |
 | `IIP-MD04-c-idp-01` | Not verified | Not verified | Not verified |
 | `IIP-MD05-a-idp-01` | Not verified | Not verified | Not verified |
@@ -641,6 +641,7 @@ Chromeと承認のブロックを解除するだけでは解消しません。�
 | metadata_idp († listed supplemental cases only) | shibboleth | `run_296ZHGM9XYDBAXHE3CP2XC3MC7` | `integrated-implementation/shibboleth/polling` |
 | metadata_idp († listed supplemental cases only) | shibboleth | `run_N7X58HSBHWGGP8FRZFVYKNKN2F` | `build/acceptance/reference-20260918/shibboleth-md03-signature-v78/evaluation` |
 | metadata_idp († listed supplemental cases only) | shibboleth | `run_29FRDNMD9ET5C0F9Z336Q6SFEH` | `build/acceptance/reference-20260918/shibboleth-md03b-signature-v78b` |
+| metadata_idp († listed supplemental cases only) | shibboleth | `run_YW7XT8SYF0K69PK3QN8GAH1GHF` | `build/acceptance/reference-20260918/shibboleth-md04a-required-validuntil-v84/evaluation` |
 | metadata_idp († listed supplemental cases only) | shibboleth | `run_7CZRNH7GGYQ137ZEDB23X3T16R` | `build/acceptance/reference-20260918/shibboleth-md05as-rejection-v77/evaluation` |
 | metadata_idp († listed supplemental cases only) | shibboleth | `run_296ZHGM9XYDBAXHE3CP2XC3MC7` | `build/acceptance/reference-20260914/integrated-implementation/shibboleth/polling` |
 | metadata_idp († listed supplemental cases only) | shibboleth | `run_2893MAJ9X84M3TVFWRNY5CAPK4` | `build/acceptance/reference-20260918/single-signing-key/shibboleth` |

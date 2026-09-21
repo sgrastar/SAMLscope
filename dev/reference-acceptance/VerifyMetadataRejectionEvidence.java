@@ -93,7 +93,7 @@ public final class VerifyMetadataRejectionEvidence {
                     case "wrong-original-hash" -> ((ObjectNode) raw.get(0)).put("sha256", "0".repeat(64));
                     case "duplicate-original" -> raw.set(1, raw.get(0).deepCopy());
                     case "empty-rejections" -> receipt.set("rejections", mapper.createArrayNode());
-                    case "wrong-reject-variant" -> rejection.put("variant", "no-valid-until");
+                    case "wrong-reject-variant" -> rejection.put("variant", "__mutation-unrelated-variant__");
                     case "wrong-fixture-hash" -> rejection.put("fixtureSha256", "0".repeat(64));
                     case "detail-not-hex" -> nativeRejection.put("detailSha256", "not-a-sha256");
                     case "wrong-source" -> nativeRejection.put("source", "other-adapter");

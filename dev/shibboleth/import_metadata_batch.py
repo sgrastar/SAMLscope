@@ -60,6 +60,8 @@ def main():
                         help='Trust this Suite key alias for the target variant instead of the control polling key')
     parser.add_argument('--trust-variant-poll', action='store_true',
                         help='Trust each variant polling key so its signature transform and KeyInfo are verified')
+    parser.add_argument('--required-valid-until', action='store_true',
+                        help='Require a validUntil attribute on the metadata root (rejects a document that omits it)')
     args = parser.parse_args()
     out = args.output.resolve()
     if out.exists() and any(out.iterdir()):
@@ -95,10 +97,13 @@ def main():
     providers = ET.fromstring(original)
     provider_attributes = {'id': 'Algorithm' + run, '{' + xsi + '}type': 'FilesystemMetadataProvider',
                            'metadataFile': path}
-    if args.metadata_signature_filter or args.trust_variant_poll:
+    if args.metadata_signature_filter or args.trust_variant_poll or args.required_valid_until:
         # A rejected document must not tear down the resolver service; keep the previous load.
         provider_attributes['failFastInitialization'] = 'false'
     provider = ET.Element('{' + ns + '}MetadataProvider', provider_attributes)
+    if args.required_valid_until:
+        ET.SubElement(provider, '{' + ns + '}MetadataFilter',
+            {'{' + xsi + '}type': 'RequiredValidUntil', 'maxValidityInterval': 'P30D'})
     providers.insert(0, provider)
     configured = ET.tostring(providers)
     (out / 'configured-providers.xml').write_bytes(configured)

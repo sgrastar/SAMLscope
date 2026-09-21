@@ -27,6 +27,14 @@ CASES = {
         # documents; one signature-validation campaign binds all three reject fixtures.
         'IIP-MD04-b-idp-01': _SHIBBOLETH_EXPIRED,
         'IIP-MD05-as-idp-01': _SHIBBOLETH_EXPIRED,
+        # MD04.a (capability to reject a root without validUntil) is exercised with the product's
+        # RequiredValidUntil metadata filter enabled; a missing attribute is then refused.
+        'IIP-MD04-a-idp-01': dict(
+            folder='shibboleth-md04a-required-validuntil-v84', variant='no-valid-until',
+            adapter='shibboleth-resolver', proof='verified-metadata-rejection-v84.json', level='ERROR',
+            log_path='/opt/reference-idp/logs/idp-warn.log',
+            marker='Metadata did not include a validUntil attribute',
+            expected=('SATISFIED', 'PASS', 'metadata.fixture-probe.satisfied')),
         'IIP-MD03-a-idp-01': dict(
             folder='shibboleth-md03-signature-v78', variants=['unsigned', 'bad-signature', 'signed-other-key'],
             adapter='shibboleth-resolver', proof='verified-metadata-rejection-v78.json',
