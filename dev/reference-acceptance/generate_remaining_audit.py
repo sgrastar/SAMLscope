@@ -766,14 +766,15 @@ def render(root,definitions,output):
                 '無応答・probe-no-responseはFAILにしない。')
             row['observation_gap']='slo-logout-action-not-driven'
         if row.get('profile')=='metadata_idp' and row['case']=='IIP-MD05-fj-idp-01':
-            row['next_action']=('campaign改修（polling完了でRunをCOMPLETED解放→/tests/start）と'
-                'UiDisplayBrowserEvidenceTestCaseのreceipt再評価により、RunはCOMPLETED・case起動・receipt読込まで'
-                '到達した（reference-20260918/shibboleth-display-precedence-v94b）。残るブロッカーは'
-                'ENTITY条件（UIInfo DisplayName/ServiceName無しでentityID/hostnameを表示）の観測が'
-                'not-observed(element-missing-or-ambiguous, selector header h1)のため '
-                'evidence_issues=[selection_unobserved_entity] となりNOT_VERIFIED。entity名表示要素の'
-                '観測（selector/ページ構造）を修正すれば確定できる。')
-            row['observation_gap']='ui-display-entity-selection-unobserved'
+            row['next_action']=('campaign改修とreceipt再評価によりRunはCOMPLETED・case起動・receipt読込まで到達'
+                '（reference-20260918/shibboleth-display-precedence-v94b）。残るNOT_VERIFIEDの原因は'
+                'Shibbolethログインテンプレートのentity名抑制ガード（login.vm: '
+                '$serviceName && !$rpContext.getRelyingPartyId().contains($serviceName) のときだけ <h1> を描画）で、'
+                'UIInfo DisplayName/ServiceNameが無いENTITY条件ではentityID/hostnameが表示されず '
+                'selection_unobserved_entity となる。製品テンプレートを改変せずにentity-fallbackを確定する経路は'
+                '現状なく、VerifyUiDisplayEvidenceも同issueをNOT_VERIFIEDとして許容する設計。'
+                '製品の既定挙動（抑制）を非適合と断定しない。')
+            row['observation_gap']='ui-display-entity-name-suppressed-by-template'
         if row.get('profile')=='metadata_idp' and row['case']=='IIP-MD05-aw-idp-01':
             row['next_action']=('variant「TLS with use=signing」はIdPのTLS経路の観測を要し、参照Shibbolethは'
                 'TLS経路を公開しない。制約に従い安全なTLS経路を構成できない場合はNOT_VERIFIED。'
