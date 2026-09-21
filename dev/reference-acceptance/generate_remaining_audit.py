@@ -633,6 +633,9 @@ def render(root,definitions,output):
                 'IIP-MD05-a2-idp-01','IIP-MD05-as-idp-01','IIP-MD05-an-idp-01','IIP-MD05-am-idp-01'}:
             from verify_native_metadata_rejection_acceptance import verify as verify_native_rejection
             selected=verify_native_rejection(root.parent.parent/'reference-20260918','shibboleth',row['case'])
+        if row['product']=='shibboleth' and row['profile']=='metadata_idp' and row['case']=='IIP-MD05-c-idp-01':
+            from verify_mdiop_acceptance import verify as verify_mdiop
+            selected=verify_mdiop(root.parent.parent/'reference-20260918','shibboleth')
         if row['product']=='shibboleth' and row['profile']=='metadata_idp' and row['case']=='IIP-MD03-b-idp-01':
             from verify_native_signature_key_acceptance import verify as verify_native_signature_key
             selected=verify_native_signature_key(root.parent.parent/'reference-20260918','shibboleth')

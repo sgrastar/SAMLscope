@@ -292,10 +292,14 @@ public final class MetadataFixtureObservationTestCase
     }
 
     private boolean requiresKeyValueDiscrimination() {
+        // The approved MD05.c interpretation defers runtime key interpretation to the MD06.a group,
+        // so MD05.c evaluates acceptance of the MDIOP representation (a correlated use) only and
+        // must not demand the signature-discrimination control.
+        if (id.startsWith("IIP-MD05-c-")) return false;
         // A native importer may silently disable signature validation when it cannot
         // import KeyValue. Successful SSO then proves neither key import nor use.
-        // Require a Suite-issued invalid control and normal request in the same campaign
-        // member; a missing response or externally submitted assertion is not enough.
+        // Require a Suite-issued invalid control and normal request in the same
+        // campaign member; a missing response or externally submitted assertion is not enough.
         return fixtures.stream().anyMatch(fixture -> "keyvalue-only".equals(fixture.variant()));
     }
 

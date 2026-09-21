@@ -40,6 +40,14 @@ final class MetadataConfigCaseFactory {
             Map.entry("IIP-MD04.c", List.of(
                     accept("valid-until-near", "accept a root whose validUntil is within the configured limit"),
                     reject("valid-until-far", "reject a root whose validUntil exceeds the configured limit"))),
+            Map.entry("IIP-MD05.c", List.of(
+                    accept("entity-root", "consume an MDIOP EntityDescriptor root"),
+                    accept("entities-root-one", "consume an MDIOP EntitiesDescriptor root"),
+                    accept("keyvalue-only", "consume a ds:KeyValue-only KeyDescriptor"),
+                    accept("certificate-expired", "consume an expired certificate representation"),
+                    accept("certificate-not-yet-valid", "consume a not-yet-valid certificate representation"),
+                    accept("multiple-signing-keys-first", "consume the first of multiple signing keys"),
+                    accept("multiple-signing-keys", "consume the second of multiple signing keys"))),
             Map.entry("IIP-MD05.a1", List.of(
                     accept("distinct-entity-ids", "consume distinct entityIDs in one deployment"),
                     reject("duplicate-entity-ids", "reject or surface a duplicate entityID conflict"))),
