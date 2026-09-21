@@ -264,8 +264,23 @@ public final class MetadataService {
         return generate(plan, variant, runId, keyStore.getOrCreate(plan.id()));
     }
 
+    /**
+     * Generates the Suite peer metadata that the target itself consumes. A metadata variant may only
+     * advertise attributes (for example an encryption method); the endpoint locations stay baseline
+     * so a normal correlated response is not mistaken for a fixture probe.
+     */
+    public byte[] generateSuiteMetadata(TestPlan plan, Variant variant, String runId) {
+        return generate(plan, variant, runId, keyStore.getOrCreate(plan.id()), false);
+    }
+
     private byte[] generate(
             TestPlan plan, Variant variant, String runId, PlanCredentials primary) {
+        return generate(plan, variant, runId, primary, true);
+    }
+
+    private byte[] generate(
+            TestPlan plan, Variant variant, String runId, PlanCredentials primary, boolean correlateEndpoints) {
+        var endpointVariant = correlateEndpoints ? variant : Variant.BASELINE;
         var signingCredentials = signingCredentials(plan, primary, variant);
         var roleCredentials = roleCredentials(plan, primary, variant);
         var document = SecureXml.newDocument();
@@ -284,16 +299,16 @@ public final class MetadataService {
                 plan.parameters().requestSigningMode() == TestPlan.RequestSigningMode.REQUIRED));
         sp.setAttribute("WantAssertionsSigned", Boolean.toString(variant != Variant.SIGNATURE_MODES_OPTIONAL));
         roleKeyDescriptors(document, sp, plan, roleCredentials, variant);
-        service(document, sp, "SingleLogoutService", REDIRECT, endpoint(plan, "/sp/slo", variant, runId), null, false);
-        service(document, sp, "SingleLogoutService", POST, endpoint(plan, "/sp/slo", variant, runId), null, false);
-        service(document, sp, "SingleLogoutService", SOAP, endpoint(plan, "/sp/slo/soap", variant, runId), null, false);
-        service(document, sp, "AssertionConsumerService", POST, endpoint(plan, "/sp/acs/0", variant, runId), 0,
+        service(document, sp, "SingleLogoutService", REDIRECT, endpoint(plan, "/sp/slo", endpointVariant, runId), null, false);
+        service(document, sp, "SingleLogoutService", POST, endpoint(plan, "/sp/slo", endpointVariant, runId), null, false);
+        service(document, sp, "SingleLogoutService", SOAP, endpoint(plan, "/sp/slo/soap", endpointVariant, runId), null, false);
+        service(document, sp, "AssertionConsumerService", POST, endpoint(plan, "/sp/acs/0", endpointVariant, runId), 0,
                 variant != Variant.DEFAULT_ACS_SECOND && variant != Variant.DEFAULT_ACS_IMPLICIT);
-        service(document, sp, "AssertionConsumerService", POST, endpoint(plan, "/sp/acs/1", variant, runId), 1, variant == Variant.DEFAULT_ACS_SECOND);
-        service(document, sp, "AssertionConsumerService", PAOS, endpoint(plan, "/sp/paos", variant, runId), 2, false);
+        service(document, sp, "AssertionConsumerService", POST, endpoint(plan, "/sp/acs/1", endpointVariant, runId), 1, variant == Variant.DEFAULT_ACS_SECOND);
+        service(document, sp, "AssertionConsumerService", PAOS, endpoint(plan, "/sp/paos", endpointVariant, runId), 2, false);
         // Deliberately advertise a Redirect ACS so SSO01.x can detect a target that emits a
         // advertising it never turns the binding into an allowed target behavior.
-        service(document, sp, "AssertionConsumerService", REDIRECT, endpoint(plan, "/sp/acs/3", variant, runId), 3, false);
+        service(document, sp, "AssertionConsumerService", REDIRECT, endpoint(plan, "/sp/acs/3", endpointVariant, runId), 3, false);
         applyDefaultAcsFixture(sp, variant);
         root.appendChild(sp);
 
@@ -301,13 +316,13 @@ public final class MetadataService {
         idp.setAttribute("protocolSupportEnumeration", "urn:oasis:names:tc:SAML:2.0:protocol");
         idp.setAttribute("WantAuthnRequestsSigned", "false");
         roleKeyDescriptors(document, idp, plan, roleCredentials, variant);
-        service(document, idp, "SingleLogoutService", REDIRECT, endpoint(plan, "/idp/slo", variant, runId), null, false);
-        service(document, idp, "SingleLogoutService", POST, endpoint(plan, "/idp/slo", variant, runId), null, false);
-        service(document, idp, "SingleLogoutService", SOAP, endpoint(plan, "/idp/slo/soap", variant, runId), null, false);
+        service(document, idp, "SingleLogoutService", REDIRECT, endpoint(plan, "/idp/slo", endpointVariant, runId), null, false);
+        service(document, idp, "SingleLogoutService", POST, endpoint(plan, "/idp/slo", endpointVariant, runId), null, false);
+        service(document, idp, "SingleLogoutService", SOAP, endpoint(plan, "/idp/slo/soap", endpointVariant, runId), null, false);
         nameIdFormat(document, idp, "urn:oasis:names:tc:SAML:2.0:nameid-format:persistent");
         nameIdFormat(document, idp, "urn:oasis:names:tc:SAML:2.0:nameid-format:transient");
-        service(document, idp, "SingleSignOnService", REDIRECT, endpoint(plan, "/idp/sso", variant, runId), null, false);
-        service(document, idp, "SingleSignOnService", POST, endpoint(plan, "/idp/sso", variant, runId), null, false);
+        service(document, idp, "SingleSignOnService", REDIRECT, endpoint(plan, "/idp/sso", endpointVariant, runId), null, false);
+        service(document, idp, "SingleSignOnService", POST, endpoint(plan, "/idp/sso", endpointVariant, runId), null, false);
         root.appendChild(idp);
 
         addExtensionFixture(document, root, variant);
