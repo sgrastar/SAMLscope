@@ -549,9 +549,7 @@ public final class SamlScopeApplication {
                         Map.of("type", "MetadataFetch", "variant", variant.id())));
                 ctx.header("Cache-Control", "no-store");
             }
-            var payload = "true".equals(ctx.queryParam("baselineEndpoints"))
-                    ? metadata.generateSuiteMetadata(plan, variant, runId)
-                    : metadata.generate(plan, variant, runId);
+            var payload = metadata.generate(plan, variant, runId);
             if (metadataFetch != null) MetadataResponseEvidence.record(transcript, metadataFetch, payload, clock);
             ctx.contentType("application/samlmetadata+xml").result(payload);
         });
