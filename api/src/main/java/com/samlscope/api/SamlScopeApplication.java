@@ -549,7 +549,13 @@ public final class SamlScopeApplication {
                         Map.of("type", "MetadataFetch", "variant", variant.id())));
                 ctx.header("Cache-Control", "no-store");
             }
-            var payload = metadata.generate(plan, variant, runId);
+            // A Suite peer metadata variant may advertise an attribute (e.g. a producer encryption
+            // algorithm) while the ACS/SSO locations stay baseline: a correlated SSO response then
+            // reaches the Suite peer as a normal round trip rather than a fixture probe. The
+            // attribute variant still applies, so this is not a baseline metadata response.
+            var payload = "true".equals(ctx.queryParam("baselineEndpoints"))
+                    ? metadata.generateSuiteMetadata(plan, variant, runId)
+                    : metadata.generate(plan, variant, runId);
             if (metadataFetch != null) MetadataResponseEvidence.record(transcript, metadataFetch, payload, clock);
             ctx.contentType("application/samlmetadata+xml").result(payload);
         });

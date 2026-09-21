@@ -56,7 +56,7 @@ def main(default_matrix="signature"):
     save(out/'preflight.json', api('/api/runs/'+run+'/preflight', {}))
     metadata_url = entity+'/metadata?run='+run
     if args.matrix == 'signature': metadata_url += '&variant=signature-modes-optional'
-    if args.metadata_variant: metadata_url += '&variant='+args.metadata_variant
+    if args.metadata_variant: metadata_url += '&variant='+args.metadata_variant+'&baselineEndpoints=true'
     with urllib.request.urlopen(metadata_url, timeout=30) as response: fixture = response.read()
     (out/'fixture.xml').write_bytes(fixture)
     role = ET.fromstring(fixture).find('{urn:oasis:names:tc:SAML:2.0:metadata}SPSSODescriptor')
