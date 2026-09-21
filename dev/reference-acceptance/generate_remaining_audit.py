@@ -747,6 +747,27 @@ def render(root,definitions,output):
                 'failFastInitialization=false 相当の構成が必要。構成できるまでNOT_VERIFIEDを維持し、'
                 '受理をVIOLATEDへ変換しない。観測は reference-20260918/shibboleth-md05-consumer-v76/finding.json に記録済み。')
             row['observation_gap']='metadata-signature-validation-not-configured'
+        if row.get('profile')=='metadata_idp' and row['case']=='IIP-MD05-a1-idp-01':
+            row['next_action']=('製品は重複entityIDを検出しWARNでsurfaceしたうえで最初の記述子を使用した。義務文は'
+                '「reject or surface」のため、ログsurfaceが代替を満たすかは解釈依存。承認済みobserverは非使用のみを'
+                'rejectとして扱うためVIOLATEDとなるが、G2解釈レビューまでNOT_VERIFIEDを維持する。')
+            row['observation_gap']='surface-semantics-undecided'
+        if row.get('profile')=='metadata_idp' and row['case']=='IIP-MD05-c-idp-01':
+            row['next_action']=('MD05.cはMDIOP表現の「受理」を評価し、キー解釈はMD06.aに委譲される。'
+                'KeyValue-only表現のfixtureを使うとfixture observerが署名判別（SAMLエラー応答必須）を要求し、'
+                'Shibbolethは不正署名にHTTPエラーを返すため充足不能。受理専用（判別を要求しない）証拠経路を'
+                '設計・実装する必要がある。')
+            row['observation_gap']='mdiop-acceptance-triggers-out-of-scope-discrimination'
+        if row.get('profile')=='metadata_idp' and row['case']=='IIP-MD05-a3-idp-01':
+            row['next_action']=('署名済みMD05.a3制約はnamespace qualificationとunknown-extension受理を分離し、'
+                '専用の証拠経路を要求する（consumer acceptanceは証拠にならない）。targetが公開する拡張の'
+                '名前空間修飾を検査する専用パス（passive metadata check）を設計・実装する必要がある。')
+            row['observation_gap']='namespace-qualification-evidence-path-unimplemented'
+        if row.get('profile')=='metadata_idp' and row['case']=='IIP-MD11-a-idp-01':
+            row['next_action']=('3variant（XML署名検証・TLS/SSL・暗号鍵ラップ）をall_ofで要求。TLS観測を含む'
+                '専用実装が必要（制約によりTLS経路が安全に構成できない場合はNOT_VERIFIED可）。'
+                'KeyDescriptorのuse省略keyが3用途で有効であることを個別に確認する。')
+            row['observation_gap']='tls-usage-path-unimplemented'
         if row['case']=='IIP-MD05-ah-idp-01' and row.get('profile')=='metadata_idp':
             row['next_action']=('approved variant「target自身がRSA-SHA1でメタデータに署名」(target-side)は'
                 '遠隔IdPの内部挙動でありSAML通信から観測できない。all_ofが揃わないため設計上partialで'
