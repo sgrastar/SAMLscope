@@ -5,7 +5,8 @@ import com.samlscope.core.evaluation.*;
 
 /** Approved algorithm order and role-precedence decisions, after input preparation is confirmed. */
 final class MetadataAlgorithmSelection {
-    static final String ORDER="IIP-MD05-ea-idp-01", ROLE="IIP-MD05-eb-idp-01", SEQUENTIAL="IIP-MD05-e9-idp-01";
+    static final String ORDER="IIP-MD05-ea-idp-01", ROLE="IIP-MD05-eb-idp-01", SEQUENTIAL="IIP-MD05-e9-idp-01",
+            PREFERENCE="IIP-MD05-e7-idp-01";
     static final String D256="http://www.w3.org/2001/04/xmlenc#sha256", D384="http://www.w3.org/2001/04/xmldsig-more#sha384";
     static final String S256="http://www.w3.org/2001/04/xmldsig-more#rsa-sha256", S384="http://www.w3.org/2001/04/xmldsig-more#rsa-sha384";
     record Methods(List<String> digests,List<String> signatures) {
@@ -35,13 +36,17 @@ final class MetadataAlgorithmSelection {
         if(SEQUENTIAL.equals(id)) {
             var variants=new ArrayList<>(required(ORDER));variants.add("algorithm-unsupported-first");return List.copyOf(variants);
         }
+        // MD05.e7 requires only that multiple advertised DigestMethod/SigningMethod elements are
+        // consulted in preference order; the entity- and role-level ordering fixtures cover both.
+        if(PREFERENCE.equals(id)) return List.of("control","algorithm-entity-order-256-384",
+                "algorithm-entity-order-384-256","algorithm-role-order-256-384","algorithm-role-order-384-256");
         return ORDER.equals(id) ? List.of("control","algorithm-entity-sha256","algorithm-entity-sha384",
             "algorithm-entity-order-256-384","algorithm-entity-order-384-256","algorithm-role-order-256-384","algorithm-role-order-384-256")
             : List.of("control","algorithm-entity-sha256","algorithm-entity-sha384","algorithm-role-signing-384",
                 "algorithm-role-digest-384","algorithm-role-both-384","algorithm-role-both-256");
     }
     static CaseOutcome evaluate(String id,List<Sample> samples,List<String> issues) {
-        if(!ORDER.equals(id) && !ROLE.equals(id) && !SEQUENTIAL.equals(id))throw new IllegalArgumentException("Unsupported algorithm obligation");
+        if(!ORDER.equals(id) && !ROLE.equals(id) && !SEQUENTIAL.equals(id) && !PREFERENCE.equals(id))throw new IllegalArgumentException("Unsupported algorithm obligation");
         var campaigns=samples.stream().map(Sample::campaign).distinct().toList();
         if(campaigns.size()>1) {
             var outcomes=campaigns.stream().map(c->evaluate(id,samples.stream().filter(s->c.equals(s.campaign())).toList(),issues)).toList();
@@ -80,7 +85,7 @@ final class MetadataAlgorithmSelection {
         boolean conflict=mismatches.stream().anyMatch(v->v.startsWith("algorithm-role-"));
         if(ROLE.equals(id) && conflict)return result(Outcome.VIOLATED,"metadata.algorithms.role-precedence-violated",evidence,details);
         if(!mismatches.isEmpty())return result(Outcome.NOT_VERIFIED,"metadata.algorithms.control-incomplete",evidence,details);
-        return result(Outcome.SATISFIED,SEQUENTIAL.equals(id)?"metadata.algorithms.supported-order-and-skip-observed":ORDER.equals(id)?"metadata.algorithms.first-supported-observed":"metadata.algorithms.role-precedence-observed",evidence,details);
+        return result(Outcome.SATISFIED,SEQUENTIAL.equals(id)?"metadata.algorithms.supported-order-and-skip-observed":ORDER.equals(id)?"metadata.algorithms.first-supported-observed":PREFERENCE.equals(id)?"metadata.algorithms.preference-order-observed":"metadata.algorithms.role-precedence-observed",evidence,details);
     }
     private static CaseOutcome result(Outcome outcome,String code,List<EvidenceRef> evidence,Map<String,Object>details) {
         return new CaseOutcome(outcome,outcome==Outcome.NOT_VERIFIED?"metadata_algorithm_evidence_unavailable":null,code,code,evidence,details);
