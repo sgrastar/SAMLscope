@@ -758,6 +758,13 @@ def render(root,definitions,output):
                 '「reject or surface」のため、ログsurfaceが代替を満たすかは解釈依存。承認済みobserverは非使用のみを'
                 'rejectとして扱うためVIOLATEDとなるが、G2解釈レビューまでNOT_VERIFIEDを維持する。')
             row['observation_gap']='surface-semantics-undecided'
+        if row.get('profile')=='single_logout_idp' and row.get('category')=='inconclusive' \
+                and row['case'].startswith(('IIP-IDP17','IIP-IDP18','IIP-IDP19')):
+            row['next_action']=('SLOブラウザchain（SSO/初期ログイン）は実機で動作するが、対象ケースはtargetが'
+                '送出するlogoutメッセージと特定シナリオ（伝播継続・部分ログアウト・Redirect要求/応答・暗号化ID複数鍵）'
+                'を要する。driverにSP起点・IdP起点のlogout操作を追加し、SuiteのSLOプローブを完了させる必要がある。'
+                '無応答・probe-no-responseはFAILにしない。')
+            row['observation_gap']='slo-logout-action-not-driven'
         if row.get('profile')=='metadata_idp' and row['case']=='IIP-MD05-aw-idp-01':
             row['next_action']=('variant「TLS with use=signing」はIdPのTLS経路の観測を要し、参照Shibbolethは'
                 'TLS経路を公開しない。制約に従い安全なTLS経路を構成できない場合はNOT_VERIFIED。'
