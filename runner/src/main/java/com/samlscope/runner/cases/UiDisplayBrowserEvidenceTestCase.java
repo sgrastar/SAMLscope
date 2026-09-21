@@ -10,7 +10,7 @@ import com.samlscope.core.transcript.TranscriptContentReader;
 
 /** Reads pre-collected native browser evidence; no completion click can supply a missing observation. */
 public final class UiDisplayBrowserEvidenceTestCase implements TestCase, ProtocolEvidenceCase,
-        com.samlscope.runner.EvidenceCampaignCase {
+        com.samlscope.runner.EvidenceCampaignCase, com.samlscope.runner.RecordedEvidenceReevaluation {
     private final TranscriptContentReader content;
     private final Function<String, byte[]> metadata;
     private final UiDisplayEvidenceFile evidence;
@@ -30,6 +30,14 @@ public final class UiDisplayBrowserEvidenceTestCase implements TestCase, Protoco
     @Override public CaseStep resume(CaseContext context, CaseState state, CaseEvent event) {
         if (!(event instanceof CaseEvent.TranscriptReady)) throw new IllegalArgumentException("Browser originals required");
         return new CaseStep.Finish(observe(context));
+    }
+    @Override public boolean supportsRecordedEvidenceReevaluation(CaseOutcome previous) {
+        return previous != null && previous.outcome() == Outcome.NOT_VERIFIED
+                && "native_browser_evidence_unproven".equals(previous.reasonCode());
+    }
+    @Override public Optional<CaseOutcome> reevaluateRecordedEvidence(CaseContext context, CaseOutcome previous) {
+        if (!supportsRecordedEvidenceReevaluation(previous) || !context.transcriptComplete()) return Optional.empty();
+        return com.samlscope.runner.RecordedEvidenceReevaluation.conclusiveUpdate(previous, observe(context));
     }
     CaseOutcome observe(CaseContext context) {
         try {
