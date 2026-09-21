@@ -763,9 +763,11 @@ def render(root,definitions,output):
                 'IIP-ALG06-c-idp-01','IIP-ALG06-d-idp-01'}:
             row['next_action']=('EncryptionAlgorithmBrowserEvidenceTestCaseは相関SSO応答中の'
                 'EncryptedAssertionをSuite鍵で復号して生成アルゴリズムを判定する（decrypted-target-assertion必須）。'
-                'ALG04-a/b(GCM)・ALG06-b/c(oaep11/digest)はSuite SPメタデータで対象アルゴリズムを広告し'
-                'targetに生成させる必要があり、現行のproducer campaignは既定1アルゴリズムのみ。'
-                'SPのEncryptionMethodを制御する共通campaignの実装が必要。')
+                'Suite SPメタデータのvariantでEncryptionMethodを広告できる（MetadataEncryptionAlgorithmFixtures）'
+                'ようにし、SSP producer campaignに --metadata-variant を追加した。しかし '
+                'algorithm-encryption-aes128-gcm を指定すると m0-roundtrip 後にRunがCOMPLETEDにならず'
+                'WAITING_BROWSERとなり /tests/start が400（variant無しでは成功）。GCM広告時のSSO完了/復号経路を'
+                '調査する必要がある。ALG06-b/c(oaep11/digest)も同様にSP側広告が必要。')
             row['observation_gap']='sp-encryption-algorithm-control-missing'
         if row.get('profile')=='single_logout_idp' and row.get('category')=='inconclusive' \
                 and row['case'].startswith(('IIP-IDP17','IIP-IDP18','IIP-IDP19')):
