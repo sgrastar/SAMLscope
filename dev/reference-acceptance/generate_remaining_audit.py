@@ -758,6 +758,15 @@ def render(root,definitions,output):
                 '「reject or surface」のため、ログsurfaceが代替を満たすかは解釈依存。承認済みobserverは非使用のみを'
                 'rejectとして扱うためVIOLATEDとなるが、G2解釈レビューまでNOT_VERIFIEDを維持する。')
             row['observation_gap']='surface-semantics-undecided'
+        if row.get('profile') in ('browser_sso_idp','ecp_idp') and row['case'] in {
+                'IIP-ALG04-a-idp-01','IIP-ALG04-b-idp-01','IIP-ALG06-b-idp-01',
+                'IIP-ALG06-c-idp-01','IIP-ALG06-d-idp-01'}:
+            row['next_action']=('EncryptionAlgorithmBrowserEvidenceTestCaseは相関SSO応答中の'
+                'EncryptedAssertionをSuite鍵で復号して生成アルゴリズムを判定する（decrypted-target-assertion必須）。'
+                'ALG04-a/b(GCM)・ALG06-b/c(oaep11/digest)はSuite SPメタデータで対象アルゴリズムを広告し'
+                'targetに生成させる必要があり、現行のproducer campaignは既定1アルゴリズムのみ。'
+                'SPのEncryptionMethodを制御する共通campaignの実装が必要。')
+            row['observation_gap']='sp-encryption-algorithm-control-missing'
         if row.get('profile')=='single_logout_idp' and row.get('category')=='inconclusive' \
                 and row['case'].startswith(('IIP-IDP17','IIP-IDP18','IIP-IDP19')):
             row['next_action']=('SLOブラウザchain（SSO/初期ログイン）は実機で動作するが、対象ケースはtargetが'
