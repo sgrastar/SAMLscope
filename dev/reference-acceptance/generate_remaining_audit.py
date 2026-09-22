@@ -256,7 +256,10 @@ def render(root,definitions,output):
             'IIP-MD05-c2-idp-01':('shibboleth-md05c2-v105',['nested-entities','roles-sp-second']),
             'IIP-MD05-e-idp-01':('shibboleth-md05e-v106',['algorithm-signing-256-keysize-excluded',
                 'algorithm-entity-sha256','algorithm-encryption-multiple','algorithm-absent']),
-            'IIP-MD05-f-idp-01':('shibboleth-md05f-v107',['full-ui-info'])}
+            'IIP-MD05-f-idp-01':('shibboleth-md05f-v107',['full-ui-info']),
+            'IIP-MD05-b-idp-01':('shibboleth-md05b-v110',['schema-global-element-families',
+                'schema-additional-metadata-location','schema-localized-name-boundary',
+                'schema-attribute-consuming-service','schema-sso-endpoint-set'])}
         if row['product']=='shibboleth' and row['profile']=='metadata_idp' \
                 and row['case'] in shib_import_evidence and row.get('verdict','NOT_VERIFIED')=='NOT_VERIFIED':
             folder,variants=shib_import_evidence[row['case']]

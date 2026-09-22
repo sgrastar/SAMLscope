@@ -89,6 +89,12 @@ final class MetadataConfigCaseFactory {
                     accept("entity-attributes-assertion", "consume a signed Assertion in EntityAttributes"),
                     accept("entity-attributes-assertion-conditions", "consume a signed Assertion carrying Conditions"),
                     accept("entity-attributes-multiple", "consume multiple direct Attributes in EntityAttributes"))),
+            Map.entry("IIP-MD05.b", List.of(
+                    accept("schema-global-element-families", "KeyDescriptor/AdditionalMetadataLocation/extensions/roles/affiliation"),
+                    accept("schema-additional-metadata-location", "several AdditionalMetadataLocation namespaces"),
+                    accept("schema-localized-name-boundary", "1,024-character entityID with required xml:lang"),
+                    accept("schema-attribute-consuming-service", "multilingual AttributeConsumingService with RequestedAttributes"),
+                    accept("schema-sso-endpoint-set", "SSO endpoint set, ArtifactResolutionService and NameIDFormat"))),
             Map.entry("IIP-MD05.f", List.of(
                     accept("full-ui-info", "multilingual UIInfo with every element plus a full DiscoHints set"))),
             Map.entry("IIP-MD05.ff", List.of(
