@@ -645,6 +645,24 @@ public final class MetadataService {
             case NESTED_ENTITIES -> wrapEntities(document,
                     wrapEntities(document, entity, plan, 1, false, variant, runId, "_inner"),
                     plan, 1, true, variant, runId);
+            // MD05.ap/aq: the child states a shorter effective lifetime than the parent. The
+            // consumer must apply the shorter value; a consumer that adopts the parent's longer
+            // value as the effective lifetime has not applied the profile.
+            case NESTED_VALID_UNTIL_CHILD_SHORTER -> {
+                var child = wrapEntities(document, entity, plan, 1, false, variant, runId, "_inner");
+                child.setAttribute("validUntil", DateTimeFormatter.ISO_INSTANT.format(
+                        clock.instant().plus(Duration.ofDays(3))));
+                yield wrapEntities(document, child, plan, 1, true, variant, runId);
+            }
+            case NESTED_CACHE_DURATION_PARENT_SHORTER -> {
+                var child = wrapEntities(document, entity, plan, 1, false, variant, runId, "_inner");
+                child.setAttribute("cacheDuration", "PT12H");
+                child.removeAttribute("validUntil");
+                var parent = wrapEntities(document, child, plan, 1, true, variant, runId);
+                parent.setAttribute("cacheDuration", "PT1H");
+                parent.removeAttribute("validUntil");
+                yield parent;
+            }
             // MD05.c2 variant 2: the tested SP role must not be the first role descriptor, so a
             // consumer that inspects only the first role cannot resolve the peer.
             case ROLES_SP_SECOND -> reorderSpAfterIdp(entity);
@@ -1060,6 +1078,8 @@ public final class MetadataService {
         SCHEMA_LOCALIZED_NAME_BOUNDARY("schema-localized-name-boundary"),
         SCHEMA_ATTRIBUTE_CONSUMING_SERVICE("schema-attribute-consuming-service"),
         SCHEMA_SSO_ENDPOINT_SET("schema-sso-endpoint-set"),
+        NESTED_VALID_UNTIL_CHILD_SHORTER("nested-valid-until-child-shorter"),
+        NESTED_CACHE_DURATION_PARENT_SHORTER("nested-cache-duration-parent-shorter"),
         ENTITY_ATTRIBUTES_DIRECT("entity-attributes-direct"),
         ENTITY_ATTRIBUTES_ASSERTION("entity-attributes-assertion"),
         ENTITY_ATTRIBUTES_ASSERTION_CONDITIONS("entity-attributes-assertion-conditions"),

@@ -89,6 +89,12 @@ final class MetadataConfigCaseFactory {
                     accept("entity-attributes-assertion", "consume a signed Assertion in EntityAttributes"),
                     accept("entity-attributes-assertion-conditions", "consume a signed Assertion carrying Conditions"),
                     accept("entity-attributes-multiple", "consume multiple direct Attributes in EntityAttributes"))),
+            Map.entry("IIP-MD05.ap", List.of(
+                    accept("nested-valid-until-child-shorter", "child validUntil is shorter than the parent"),
+                    accept("nested-entities", "control with matching parent and child lifetimes"))),
+            Map.entry("IIP-MD05.aq", List.of(
+                    accept("nested-cache-duration-parent-shorter", "parent cacheDuration is shorter than the child"),
+                    accept("nested-entities", "control with matching parent and child lifetimes"))),
             Map.entry("IIP-MD05.b", List.of(
                     accept("schema-global-element-families", "KeyDescriptor/AdditionalMetadataLocation/extensions/roles/affiliation"),
                     accept("schema-additional-metadata-location", "several AdditionalMetadataLocation namespaces"),
