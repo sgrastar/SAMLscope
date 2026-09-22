@@ -4,7 +4,7 @@
 
 | 再試験前 | 確定（Success / Failed / Warning） | 現在の未検証 | 未検証の異なるケースID |
 |---:|---:|---:|---:|
-| 594 | 209 | 385 | 142 |
+| 594 | 211 | 383 | 141 |
 
 ## 内訳
 
@@ -14,7 +14,7 @@
 | 一部の試験条件しか実装されていない | 56 | Suite実装 |
 | 設定後の証拠確認・自己申告経路 | 128 | 設定・証拠 |
 | 自己申告が無効 | 75 | 設定・証拠 |
-| メタデータの追加試験・観測不足 | 32 | 試験経路確認 |
+| メタデータの追加試験・観測不足 | 30 | 試験経路確認 |
 | ブラウザ・SLOの追加観測不足 | 25 | 試験経路確認 |
 | 古い待機結果・再開時には期限切れ | 0 | 新Runで再試験 |
 | 実行したが確定できない | 55 | 個別診断 |
@@ -130,6 +130,7 @@ approved variant全体の入力生成と観測を実装する。追加ログイ�
 | `IIP-IDP19-a-idp-01` | Not verified: slo.encrypted-id.key-unavailable | Success | Not verified: slo.encrypted-id.negative-control-failed |
 | `IIP-IDP19-b-idp-01` | Not verified（今回の再試験対象外） | Success | Not verified（今回の再試験対象外） |
 | `IIP-IDP19-c-idp-01` | Not verified: slo.encrypted-id.multiple-keys.key-unavailable | Success | Not verified: slo.encrypted-id.multiple-keys.configuration-unavailable |
+| `IIP-MD02-b-idp-01` | Success | Not verified（今回の再試験対象外） | Success |
 | `IIP-MD02-c-idp-01` | Success | Not verified（今回の再試験対象外） | Success |
 | `IIP-MD02-d-idp-01` | Not verified（今回の再試験対象外） | Not verified（今回の再試験対象外） | Success |
 | `IIP-MD03-a-idp-01` | Not verified（今回の再試験対象外） | Success | Not verified（今回の再試験対象外） |
@@ -242,7 +243,6 @@ approved variant全体の入力生成と観測を実装する。追加ログイ�
 | `IIP-IDP21-a-idp-01` | single_logout_idp | single_logout_idp | single_logout_idp | 自己申告が無効 |
 | `IIP-MD01-a-idp-01` | metadata_idp | metadata_idp | metadata_idp | 設定後の証拠確認・自己申告経路 |
 | `IIP-MD02-a-idp-01` | metadata_idp | metadata_idp | metadata_idp | 設定後の証拠確認・自己申告経路 |
-| `IIP-MD02-b-idp-01` | metadata_idp | — | metadata_idp | メタデータの追加試験・観測不足 |
 | `IIP-MD02-d-idp-01` | metadata_idp | — | — | メタデータの追加試験・観測不足 |
 | `IIP-MD03-a-idp-01` | metadata_idp | — | metadata_idp | メタデータの追加試験・観測不足 |
 | `IIP-MD03-b-idp-01` | metadata_idp | — | metadata_idp | メタデータの追加試験・観測不足 |
@@ -345,7 +345,7 @@ Verdictは変更せず、未検証の理由だけを分類します。feature-ab
 
 | 診断 | 件数 | 意味 | 表示案 |
 |---|---:|---|---|
-| `suite-observation-gap` | 246 | Suite側の観測・実行経路が未接続 | Suite側の実装で解消可能なNot verified |
+| `suite-observation-gap` | 244 | Suite側の観測・実行経路が未接続 | Suite側の実装で解消可能なNot verified |
 | `operator-attestation-available` | 77 | 自己申告または運用者証言で確認可能 | 運用者証言（ケースごとに1回答）で確認可能。現在のPlanは自己申告無効 |
 | `evidence-form-mismatch` | 27 | 承認済み判定条件が要求する証拠形式と製品応答が不一致 | 証拠形式が承認済み条件と一致しないためNot verified（要件解釈の再確認が必要） |
 | `role-inapplicable` | 24 | ロール上、対象が消費しない成果物を要求するvariant | IdPロールでは消費されないvariantのため実行対象外（対象外であることは判定済み） |
@@ -373,7 +373,7 @@ Verdictは変更せず、未検証の理由だけを分類します。feature-ab
 
 ### suite-observation-gap
 
-`IIP-ALG03-a-idp-01`, `IIP-ALG04-a-idp-01`, `IIP-ALG04-b-idp-01`, `IIP-ALG06-b-idp-01`, `IIP-ALG06-c-idp-01`, `IIP-ALG06-d-idp-01`, `IIP-ALG08-a-idp-01`, `IIP-ALG08-b-idp-01`, `IIP-G01-a-idp-01`, `IIP-G02-a-idp-01`, `IIP-G03-b-idp-01`, `IIP-IDP01-a-idp-01`, `IIP-IDP03-a-idp-01`, `IIP-IDP04-a-idp-01`, `IIP-IDP04-b-idp-01`, `IIP-IDP11-a-idp-01`, `IIP-IDP16-a-idp-01`, `IIP-IDP17-b2-idp-01`, `IIP-IDP17-c-idp-01`, `IIP-IDP17-n-idp-01`, `IIP-IDP17-r-idp-01`, `IIP-IDP17-s-idp-01`, `IIP-IDP17-u-idp-01`, `IIP-IDP18-c-idp-01`, `IIP-IDP18-d-idp-01`, `IIP-IDP19-b-idp-01`, `IIP-IDP19-c-idp-01`, `IIP-IDP20-a-idp-01`, `IIP-MD01-a-idp-01`, `IIP-MD02-a-idp-01`, `IIP-MD02-b-idp-01`, `IIP-MD02-d-idp-01`, `IIP-MD03-a-idp-01`, `IIP-MD03-b-idp-01`, `IIP-MD03-c-idp-01`, `IIP-MD03-d-idp-01`, `IIP-MD04-a-idp-01`, `IIP-MD04-b-idp-01`, `IIP-MD04-c-idp-01`, `IIP-MD05-a-idp-01`, `IIP-MD05-a1-idp-01`, `IIP-MD05-a2-idp-01`, `IIP-MD05-a3-idp-01`, `IIP-MD05-a8-idp-01`, `IIP-MD05-ac-idp-01`, `IIP-MD05-ad-idp-01`, `IIP-MD05-af-idp-01`, `IIP-MD05-ah-idp-01`, `IIP-MD05-am-idp-01`, `IIP-MD05-an-idp-01`, `IIP-MD05-ao-idp-01`, `IIP-MD05-ap-idp-01`, `IIP-MD05-aq-idp-01`, `IIP-MD05-ar-idp-01`, `IIP-MD05-as-idp-01`, `IIP-MD05-av-idp-01`, `IIP-MD05-aw-idp-01`, `IIP-MD05-b-idp-01`, `IIP-MD05-c-idp-01`, `IIP-MD05-c1-idp-01`, `IIP-MD05-c2-idp-01`, `IIP-MD05-c3-idp-01`, `IIP-MD05-cd-idp-01`, `IIP-MD05-d1-idp-01`, `IIP-MD05-e7-idp-01`, `IIP-MD05-e8-idp-01`, `IIP-MD05-e9-idp-01`, `IIP-MD05-ea-idp-01`, `IIP-MD05-f-idp-01`, `IIP-MD05-f5-idp-01`, `IIP-MD05-fg-idp-01`, `IIP-MD06-a-idp-01`, `IIP-MD06-a1-idp-01`, `IIP-MD06-a2-idp-01`, `IIP-MD06-a3-idp-01`, `IIP-MD06-a5-idp-01`, `IIP-MD06-a6-idp-01`, `IIP-MD06-a7-idp-01`, `IIP-MD06-ab-idp-01`, `IIP-MD06-b-idp-01`, `IIP-MD07-b-idp-01`, `IIP-MD11-a-idp-01`, `IIP-SSO01-ae-idp-01`, `IIP-SSO01-cz-idp-01`, `IIP-SSO01-eb-idp-01`, `IIP-SSO01-ep-idp-01`, `IIP-SSO01-fp-idp-01`, `IIP-SSO01-fr-idp-01`, `IIP-SSO01-g-idp-01`, `IIP-SSO01-ga-idp-01`, `IIP-SSO01-gb-idp-01`, `IIP-SSO01-gc-idp-01`, `IIP-SSO01-gd-idp-01`, `IIP-SSO01-gj-idp-01`, `IIP-SSO01-i2-idp-01`, `IIP-SSO01-k-idp-01`, `IIP-SSO01-z-idp-01`, `IIP-SSO03-b-idp-01`, `IIP-SSO05-a-idp-01`, `IIP-SSO05-a2-idp-01`, `IIP-SSO05-a3-idp-01`, `IIP-SSO07-b-idp-01`
+`IIP-ALG03-a-idp-01`, `IIP-ALG04-a-idp-01`, `IIP-ALG04-b-idp-01`, `IIP-ALG06-b-idp-01`, `IIP-ALG06-c-idp-01`, `IIP-ALG06-d-idp-01`, `IIP-ALG08-a-idp-01`, `IIP-ALG08-b-idp-01`, `IIP-G01-a-idp-01`, `IIP-G02-a-idp-01`, `IIP-G03-b-idp-01`, `IIP-IDP01-a-idp-01`, `IIP-IDP03-a-idp-01`, `IIP-IDP04-a-idp-01`, `IIP-IDP04-b-idp-01`, `IIP-IDP11-a-idp-01`, `IIP-IDP16-a-idp-01`, `IIP-IDP17-b2-idp-01`, `IIP-IDP17-c-idp-01`, `IIP-IDP17-n-idp-01`, `IIP-IDP17-r-idp-01`, `IIP-IDP17-s-idp-01`, `IIP-IDP17-u-idp-01`, `IIP-IDP18-c-idp-01`, `IIP-IDP18-d-idp-01`, `IIP-IDP19-b-idp-01`, `IIP-IDP19-c-idp-01`, `IIP-IDP20-a-idp-01`, `IIP-MD01-a-idp-01`, `IIP-MD02-a-idp-01`, `IIP-MD02-d-idp-01`, `IIP-MD03-a-idp-01`, `IIP-MD03-b-idp-01`, `IIP-MD03-c-idp-01`, `IIP-MD03-d-idp-01`, `IIP-MD04-a-idp-01`, `IIP-MD04-b-idp-01`, `IIP-MD04-c-idp-01`, `IIP-MD05-a-idp-01`, `IIP-MD05-a1-idp-01`, `IIP-MD05-a2-idp-01`, `IIP-MD05-a3-idp-01`, `IIP-MD05-a8-idp-01`, `IIP-MD05-ac-idp-01`, `IIP-MD05-ad-idp-01`, `IIP-MD05-af-idp-01`, `IIP-MD05-ah-idp-01`, `IIP-MD05-am-idp-01`, `IIP-MD05-an-idp-01`, `IIP-MD05-ao-idp-01`, `IIP-MD05-ap-idp-01`, `IIP-MD05-aq-idp-01`, `IIP-MD05-ar-idp-01`, `IIP-MD05-as-idp-01`, `IIP-MD05-av-idp-01`, `IIP-MD05-aw-idp-01`, `IIP-MD05-b-idp-01`, `IIP-MD05-c-idp-01`, `IIP-MD05-c1-idp-01`, `IIP-MD05-c2-idp-01`, `IIP-MD05-c3-idp-01`, `IIP-MD05-cd-idp-01`, `IIP-MD05-d1-idp-01`, `IIP-MD05-e7-idp-01`, `IIP-MD05-e8-idp-01`, `IIP-MD05-e9-idp-01`, `IIP-MD05-ea-idp-01`, `IIP-MD05-f-idp-01`, `IIP-MD05-f5-idp-01`, `IIP-MD05-fg-idp-01`, `IIP-MD06-a-idp-01`, `IIP-MD06-a1-idp-01`, `IIP-MD06-a2-idp-01`, `IIP-MD06-a3-idp-01`, `IIP-MD06-a5-idp-01`, `IIP-MD06-a6-idp-01`, `IIP-MD06-a7-idp-01`, `IIP-MD06-ab-idp-01`, `IIP-MD06-b-idp-01`, `IIP-MD07-b-idp-01`, `IIP-MD11-a-idp-01`, `IIP-SSO01-ae-idp-01`, `IIP-SSO01-cz-idp-01`, `IIP-SSO01-eb-idp-01`, `IIP-SSO01-ep-idp-01`, `IIP-SSO01-fp-idp-01`, `IIP-SSO01-fr-idp-01`, `IIP-SSO01-g-idp-01`, `IIP-SSO01-ga-idp-01`, `IIP-SSO01-gb-idp-01`, `IIP-SSO01-gc-idp-01`, `IIP-SSO01-gd-idp-01`, `IIP-SSO01-gj-idp-01`, `IIP-SSO01-i2-idp-01`, `IIP-SSO01-k-idp-01`, `IIP-SSO01-z-idp-01`, `IIP-SSO03-b-idp-01`, `IIP-SSO05-a-idp-01`, `IIP-SSO05-a2-idp-01`, `IIP-SSO05-a3-idp-01`, `IIP-SSO07-b-idp-01`
 
 
 ## 証拠
