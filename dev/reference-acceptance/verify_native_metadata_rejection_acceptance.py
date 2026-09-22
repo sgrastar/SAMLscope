@@ -79,7 +79,8 @@ def _args(folder, spec):
     args.variants = ','.join(spec['variants']) if spec.get('variants') else None
     args.rejected_order = ','.join(spec['rejected_order']) if spec.get('rejected_order') else None
     args.adapter = spec['adapter']
-    args.marker = spec['marker']
+    args.marker = spec.get('marker')
+    args.variant_markers = spec.get('variant_markers')
     args.level = spec.get('level')
     args.container = None
     args.log_path = None

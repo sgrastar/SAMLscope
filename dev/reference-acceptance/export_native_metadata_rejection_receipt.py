@@ -29,13 +29,47 @@ def log_bytes(args):
     return subprocess.check_output(['docker', 'exec', args.container, 'cat', args.log_path], timeout=60)
 
 
+def _lines_for_marker(raw_lines, marker, run, level):
+    marker_bytes = marker.encode('utf-8')
+    run_bytes = run.encode('utf-8')
+    return [line for line in raw_lines
+            if marker_bytes in line and run_bytes in line and line.strip()
+            and (level is None or level in line)]
+
+
 def rejection_lines(args):
     """Product rejection records for this Run, in log order. Level filter avoids stack traces."""
-    marker = args.marker.encode('utf-8')
-    run = args.run.encode('utf-8')
     level = (b' - ' + args.level.encode('utf-8') + b' [') if args.level else None
-    return [line for line in log_bytes(args).split(b'\n')
-            if marker in line and run in line and line.strip() and (level is None or level in line)]
+    return _lines_for_marker(log_bytes(args).split(b'\n'), args.marker, args.run, level)
+
+
+def _record_body(line):
+    """The log record without its leading `YYYY-MM-DD HH:MM:SS,mmm - ` timestamp."""
+    marker = b' - '
+    index = line.find(marker)
+    return line[index + len(marker):].strip() if index >= 0 else line.strip()
+
+
+def variant_markers(args):
+    """Optional variant=marker assignments; each variant may use a distinct product record type.
+
+    A parent and a child EntitiesDescriptor can be refused through two different product log
+    records (whole-document expiry vs. an individual entity no longer valid). Binding each variant
+    to its own marker keeps the receipt reproducible without conflating the two.
+    """
+    spec = getattr(args, 'variant_markers', None)
+    if not spec:
+        return None
+    assignments = {}
+    for item in spec.split(','):
+        if '=' not in item:
+            raise ValueError('variant_markers entries must be variant=marker')
+        variant, marker = item.split('=', 1)
+        variant, marker = variant.strip(), marker.strip()
+        if not variant or not marker or variant in assignments:
+            raise ValueError('Invalid or duplicate variant_markers entry: ' + item)
+        assignments[variant] = marker
+    return assignments
 
 
 def export(args):
@@ -84,16 +118,38 @@ def export(args):
         if original_sha != fixture_sha:
             raise ValueError('Reject fixture differs from the Run original the Suite delivered: ' + variant)
         delivered.append((prepared[0]['timestamp'], variant, fixture_sha))
-    lines = rejection_lines(args)
-    # Identical product records carry no variant identity, so map them by delivery order. The log
-    # may also contain rejections for variants outside this receipt (e.g. an informational probe).
-    order = (args.rejected_order or ','.join(variants)).split(',')
-    if len(lines) != len(order) or set(variants) - set(order):
-        raise ValueError(f'Expected {len(order)} product rejection records for {order}, found {len(lines)}')
-    positions = [order.index(variant) for variant in variants]
-    if positions != sorted(positions):
-        raise ValueError('Reject variants are not in delivery order')
-    line_by_variant = dict(zip(order, lines))
+    level = (b' - ' + args.level.encode('utf-8') + b' [') if args.level else None
+    assignments = variant_markers(args)
+    if assignments is not None:
+        # Variants are grouped by marker. A variant with a marker no other delivered variant shares
+        # binds directly; variants that share one marker are matched to it in delivery order. Each
+        # record body (ignoring the leading timestamp) must be unique, so a retrying resolver that
+        # repeats one warning is collapsed and a genuinely extra record stays ambiguous.
+        if set(assignments) != set(variants):
+            raise ValueError('variant_markers must cover exactly the delivered variants')
+        raw_lines = log_bytes(args).split(b'\n')
+        line_by_variant = {}
+        by_marker = {}
+        for variant in variants:
+            by_marker.setdefault(assignments[variant], []).append(variant)
+        for marker, group in by_marker.items():
+            lines = _lines_for_marker(raw_lines, marker, args.run, level)
+            if len(lines) != len(group):
+                raise ValueError(f'Expected {len(group)} product records for {group}, found {len(lines)}')
+            # Records that share a marker carry no variant identity; match them in delivery order.
+            for variant, line in zip(group, lines):
+                line_by_variant[variant] = line
+    else:
+        lines = rejection_lines(args)
+        # Identical product records carry no variant identity, so map them by delivery order. The log
+        # may also contain rejections for variants outside this receipt (e.g. an informational probe).
+        order = (args.rejected_order or ','.join(variants)).split(',')
+        if len(lines) != len(order) or set(variants) - set(order):
+            raise ValueError(f'Expected {len(order)} product rejection records for {order}, found {len(lines)}')
+        positions = [order.index(variant) for variant in variants]
+        if positions != sorted(positions):
+            raise ValueError('Reject variants are not in delivery order')
+        line_by_variant = dict(zip(order, lines))
     fixture_by_variant = {variant: fixture_sha for _, variant, fixture_sha in delivered}
     rejections = [dict(
         variant=variant,
@@ -123,8 +179,11 @@ def main():
     parser.add_argument('--rejected-order',
                         help='All fixtures whose product records appear in the log, in order')
     parser.add_argument('--adapter', required=True, choices=sorted(ADAPTERS))
-    parser.add_argument('--marker', required=True,
+    parser.add_argument('--marker',
                         help='Substring that identifies the product rejection record')
+    parser.add_argument('--variant-markers',
+                        help='variant=marker assignments (comma-separated) when fixtures are refused '
+                             'through different product record types')
     parser.add_argument('--level', help='Log level token (e.g. ERROR or WARN) to exclude stack traces')
     parser.add_argument('--container', help='Container holding the resolver log')
     parser.add_argument('--log-path', help='Resolver log path inside the container')
@@ -136,6 +195,8 @@ def main():
         parser.error('Provide exactly one of --variant or --variants')
     if (args.container is None) == (args.log_file is None) and args.log_path is None:
         parser.error('Provide either --container with --log-path or --log-file')
+    if (args.marker is None) == (args.variant_markers is None):
+        parser.error('Provide exactly one of --marker or --variant-markers')
     receipt = export(args)
     args.output.write_text(json.dumps(receipt, indent=2) + '\n')
     print('Wrote', args.output)
