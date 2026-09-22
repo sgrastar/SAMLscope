@@ -20,6 +20,16 @@ class ConfigurationBatch:
             handle.seek(0)
             handle.write(payload)
             handle.truncate()
+        # Docker Desktop caches the file contents for bind mounts, so even an in-place write can be
+        # served stale to the container. Push the same bytes into the container's own file to make
+        # the change visible to the product regardless of the host sharing layer.
+        container = getattr(self, 'container', None)
+        target = getattr(self, 'container_path', None)
+        if container and target:
+            import subprocess
+            subprocess.run(
+                ['docker', 'exec', '-i', container, 'sh', '-c', 'cat > ' + target],
+                input=payload, check=True, timeout=120)
 
     def apply(self, overlay):
         if self.path.read_bytes() != self.expected:

@@ -80,6 +80,8 @@ def main():
     save(out / 'preflight.json', api('/api/runs/' + run + '/preflight', {}))
 
     configuration = ConfigurationBatch(SP_REMOTE)
+    configuration.container = CONTAINER
+    configuration.container_path = '/var/simplesamlphp/metadata/saml20-sp-remote.php'
     original = configuration.original
     if b'?>' in original:
         raise ValueError('Unexpected PHP closing tag')
@@ -98,8 +100,8 @@ def main():
         if parsed.returncode:
             raise RuntimeError('Product native parser rejected fixture')
         data = json.loads(parsed.stdout)
-        configuration.apply(data['php'].encode())
-        # Register the two participants on the same recorded routes the Shibboleth harness uses.
+        # Register the Suite SP and the two participants in a single write. Two separate writes
+        # were seen to leave the container's shared file in a state the web workers could not read.
         import xml.etree.ElementTree as ET
         role = ET.fromstring(fixture).find('{urn:oasis:names:tc:SAML:2.0:metadata}SPSSODescriptor')
         acs = role.find('{urn:oasis:names:tc:SAML:2.0:metadata}AssertionConsumerService').get('Location')
@@ -108,26 +110,58 @@ def main():
             '{http://www.w3.org/2000/09/xmldsig#}X509Data').find(
             '{http://www.w3.org/2000/09/xmldsig#}X509Certificate').text.strip()
         base = BASE + '/p/' + plan
-        overlay = ''
+        overlay = data['php']
         if os.environ.get('SSP_SLO_PARTICIPANTS', '1') == '1':
-            overlay = participant_entry(base + '/sp-fail', base + '/sp/slo-fail?run=' + run, acs, x509)
+            overlay += participant_entry(base + '/sp-fail', base + '/sp/slo-fail?run=' + run, acs, x509)
             overlay += participant_entry(base + '/sp-remain', base + '/sp/slo?run=' + run, acs, x509)
-            configuration.apply(overlay.encode())
+        configuration.apply(overlay.encode())
         time.sleep(3)
         # The suite SP is added to saml20-sp-remote.php, but a running SimpleSAMLphp worker keeps
         # its metadata in memory. A graceful Apache reload picks up the new file without downtime.
         reload_result = subprocess.run(['docker', 'exec', CONTAINER, 'apache2ctl', 'graceful'],
                                        stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=60)
         operations.append(dict(step='apache-graceful-reload', returncode=reload_result.returncode))
-        time.sleep(3)
-        probe = subprocess.run(['docker', 'exec', CONTAINER, 'php', '-r',
-            "require '/var/simplesamlphp/lib/_autoload.php';"
-            "try { \\SimpleSAML\\Metadata\\MetaDataStorageHandler::getMetadataHandler()"
-            "->getMetaData('" + entity + "','saml20-sp-remote'); echo 'RESOLVED'; }"
-            "catch (\\Throwable $e) { echo 'UNRESOLVED: '.get_class($e); }"],
-            stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=40)
-        (out / 'resolve-probe.txt').write_bytes(probe.stdout + b'\n' + probe.stderr)
-        operations.append(dict(step='resolve-probe', output=probe.stdout.decode('utf-8', 'replace')[:200]))
+        # SimpleSAMLphp caches parsed metadata in APCu (shared by the web workers). A file change is
+        # not enough: the cache must be cleared through an HTTP request, because a CLI process has
+        # its own APCu segment. A short-lived probe under the public root does that and is removed
+        # immediately; no product setting is changed.
+        if os.environ.get('SSP_SLO_APCU', '1') != '0':
+            probe_name = 'samlscope-apcu-clear.php'
+            probe_path = '/var/simplesamlphp/public/' + probe_name
+            probe = ("<?php require '/var/simplesamlphp/lib/_autoload.php';"
+                     "if (function_exists('apcu_clear_cache')) apcu_clear_cache(); echo 'CLEARED';")
+            subprocess.run(['docker', 'exec', '-i', CONTAINER, 'sh', '-c', 'cat > ' + probe_path],
+                           input=probe.encode(), check=True, timeout=30)
+            try:
+                with urllib.request.urlopen('http://localhost:18380/simplesaml/' + probe_name, timeout=30) as response:
+                    operations.append(dict(step='apcu-clear', output=response.read().decode()[:40]))
+            finally:
+                subprocess.run(['docker', 'exec', CONTAINER, 'rm', '-f', probe_path], timeout=30)
+            time.sleep(2)
+        # Probe resolution through the web workers (not a CLI process): only the HTTP path shares
+        # the APCu metadata cache the product actually uses for SSO.
+        probe_name = 'samlscope-resolve-probe.php'
+        probe_path = '/var/simplesamlphp/public/' + probe_name
+        probe_src = ("<?php require '/var/simplesamlphp/lib/_autoload.php';"
+                     "try { \\SimpleSAML\\Metadata\\MetaDataStorageHandler::getMetadataHandler()"
+                     "->getMetaData('" + entity + "','saml20-sp-remote'); echo 'RESOLVED'; }"
+                     "catch (\\Throwable $e) { echo 'UNRESOLVED '.get_class($e); }")
+        subprocess.run(['docker', 'exec', '-i', CONTAINER, 'sh', '-c', 'cat > ' + probe_path],
+                       input=probe_src.encode(), check=True, timeout=30)
+        try:
+            # A graceful reload hands the request to a new worker; the first request can still be
+            # served by a worker that has not yet reloaded the metadata file. Retry until the
+            # product itself resolves the entity (bounded).
+            resolved = ''
+            for _ in range(30):
+                with urllib.request.urlopen('http://localhost:18380/simplesaml/' + probe_name, timeout=30) as response:
+                    resolved = response.read().decode('utf-8', 'replace')[:200]
+                if resolved.startswith('RESOLVED'):
+                    break
+                time.sleep(1)
+        finally:
+            subprocess.run(['docker', 'exec', CONTAINER, 'rm', '-f', probe_path], timeout=30)
+        operations.append(dict(step='resolve-probe', output=resolved))
         grep = subprocess.run(['docker', 'exec', CONTAINER, 'sh', '-c',
             'grep -c "' + plan + '" /var/simplesamlphp/metadata/saml20-sp-remote.php'],
             stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=30)
