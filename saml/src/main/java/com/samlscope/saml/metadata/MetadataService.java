@@ -663,6 +663,26 @@ public final class MetadataService {
                 parent.removeAttribute("validUntil");
                 yield parent;
             }
+            // MD05.ar: one level's validUntil has been reached. The consumer must treat the whole
+            // document as invalid at the earlier effective validUntil.
+            case NESTED_VALID_UNTIL_EXPIRED_PARENT -> {
+                var child = wrapEntities(document, entity, plan, 1, false, variant, runId, "_inner");
+                child.setAttribute("validUntil", DateTimeFormatter.ISO_INSTANT.format(
+                        clock.instant().plus(Duration.ofDays(7))));
+                var parent = wrapEntities(document, child, plan, 1, true, variant, runId);
+                parent.setAttribute("validUntil", DateTimeFormatter.ISO_INSTANT.format(
+                        clock.instant().minus(Duration.ofDays(1))));
+                yield parent;
+            }
+            case NESTED_VALID_UNTIL_EXPIRED_CHILD -> {
+                var child = wrapEntities(document, entity, plan, 1, false, variant, runId, "_inner");
+                child.setAttribute("validUntil", DateTimeFormatter.ISO_INSTANT.format(
+                        clock.instant().minus(Duration.ofDays(1))));
+                var parent = wrapEntities(document, child, plan, 1, true, variant, runId);
+                parent.setAttribute("validUntil", DateTimeFormatter.ISO_INSTANT.format(
+                        clock.instant().plus(Duration.ofDays(7))));
+                yield parent;
+            }
             // MD05.c2 variant 2: the tested SP role must not be the first role descriptor, so a
             // consumer that inspects only the first role cannot resolve the peer.
             case ROLES_SP_SECOND -> reorderSpAfterIdp(entity);
@@ -1080,6 +1100,8 @@ public final class MetadataService {
         SCHEMA_SSO_ENDPOINT_SET("schema-sso-endpoint-set"),
         NESTED_VALID_UNTIL_CHILD_SHORTER("nested-valid-until-child-shorter"),
         NESTED_CACHE_DURATION_PARENT_SHORTER("nested-cache-duration-parent-shorter"),
+        NESTED_VALID_UNTIL_EXPIRED_PARENT("nested-valid-until-expired-parent"),
+        NESTED_VALID_UNTIL_EXPIRED_CHILD("nested-valid-until-expired-child"),
         ENTITY_ATTRIBUTES_DIRECT("entity-attributes-direct"),
         ENTITY_ATTRIBUTES_ASSERTION("entity-attributes-assertion"),
         ENTITY_ATTRIBUTES_ASSERTION_CONDITIONS("entity-attributes-assertion-conditions"),
