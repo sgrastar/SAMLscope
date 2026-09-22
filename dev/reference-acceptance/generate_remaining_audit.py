@@ -255,7 +255,8 @@ def render(root,definitions,output):
                 'entity-attributes-assertion-conditions','entity-attributes-multiple']),
             'IIP-MD05-c2-idp-01':('shibboleth-md05c2-v105',['nested-entities','roles-sp-second']),
             'IIP-MD05-e-idp-01':('shibboleth-md05e-v106',['algorithm-signing-256-keysize-excluded',
-                'algorithm-entity-sha256','algorithm-encryption-multiple','algorithm-absent'])}
+                'algorithm-entity-sha256','algorithm-encryption-multiple','algorithm-absent']),
+            'IIP-MD05-f-idp-01':('shibboleth-md05f-v107',['full-ui-info'])}
         if row['product']=='shibboleth' and row['profile']=='metadata_idp' \
                 and row['case'] in shib_import_evidence and row.get('verdict','NOT_VERIFIED')=='NOT_VERIFIED':
             folder,variants=shib_import_evidence[row['case']]
@@ -276,7 +277,8 @@ def render(root,definitions,output):
                 'entity-attributes-assertion-conditions','entity-attributes-multiple']),
             'IIP-MD05-c2-idp-01':('simplesamlphp-md05c2-v105',['nested-entities','roles-sp-second']),
             'IIP-MD05-e-idp-01':('simplesamlphp-md05e-v106',['algorithm-signing-256-keysize-excluded',
-                'algorithm-entity-sha256','algorithm-encryption-multiple','algorithm-absent'])}
+                'algorithm-entity-sha256','algorithm-encryption-multiple','algorithm-absent']),
+            'IIP-MD05-f-idp-01':('simplesamlphp-md05f-v107',['full-ui-info'])}
         if row['product']=='simplesamlphp' and row['profile']=='metadata_idp' \
                 and row['case'] in ssp_import_evidence and row.get('verdict','NOT_VERIFIED')=='NOT_VERIFIED':
             folder,variants=ssp_import_evidence[row['case']]

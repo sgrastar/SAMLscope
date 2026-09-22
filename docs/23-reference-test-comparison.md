@@ -79,11 +79,11 @@ Shibbolethの`IIP-SSO01-fk/fu/gi`は、v8では事前生成された正常系要
 
 ## Not verifiedの内訳
 
-以下は表に採用したケース結果の延べ388件。†のケースは新Runの追加証拠を採用し、それ以外の既存証拠は保持しています。単一Runの集計や全試験の再完走を意味しません。比較表で設定不足として扱い直した旧FAILは、このNOT_VERIFIED集計には含めません。
+以下は表に採用したケース結果の延べ386件。†のケースは新Runの追加証拠を採用し、それ以外の既存証拠は保持しています。単一Runの集計や全試験の再完走を意味しません。比較表で設定不足として扱い直した旧FAILは、このNOT_VERIFIED集計には含めません。
 
 | 理由 | Keycloak | Shibboleth IdP | SimpleSAMLphp | 解消に必要なこと |
 |---|---:|---:|---:|---|
-| `case.pending-interaction` | 79 | 44 | 79 | 設定・受信待ちに加え、判定処理未実装の経路を含む。全件台帳を参照 |
+| `case.pending-interaction` | 79 | 43 | 78 | 設定・受信待ちに加え、判定処理未実装の経路を含む。全件台帳を参照 |
 | `attestation.interaction-disallowed` | 25 | 25 | 25 | 自己申告を無効にした構成。確認せずに申告を代行しない |
 | `browser_fixture_partial` | 18 | 20 | 18 | 一部の試験だけ実行。残るvariantの証拠が不足 |
 | `idp.acs-probe.inconclusive` | 3 | 3 | 1 | 当該ケースの応答・対象設定・正常系対照を追加確認 |
@@ -383,7 +383,7 @@ Chromeと承認のブロックを解除するだけでは解消しません。�
 | `IIP-MD05-eb-idp-01` | **Failed (台帳採用・原因分類未確認)** † | Success † | **Failed (台帳採用・原因分類未確認)** † |
 | `IIP-MD05-ec-idp-01` | Warning | Warning | Warning |
 | `IIP-MD05-ed-idp-01` | Warning | Warning | Warning |
-| `IIP-MD05-f-idp-01` | Not verified | Not verified | Not verified |
+| `IIP-MD05-f-idp-01` | Not verified | Success † | Success † |
 | `IIP-MD05-f1-idp-01` | Warning | Warning | Warning |
 | `IIP-MD05-f2-idp-01` | Warning | Warning | Warning |
 | `IIP-MD05-f3-idp-01` | Warning | Warning | Warning |
@@ -661,6 +661,7 @@ Chromeと承認のブロックを解除するだけでは解消しません。�
 | metadata_idp († listed supplemental cases only) | shibboleth | `run_XZ4CY23XHSV2NPFTDW2H0EVZCS` | `build/acceptance/reference-20260918/algorithm-followup/shibboleth` |
 | metadata_idp († listed supplemental cases only) | shibboleth | `run_XZ4CY23XHSV2NPFTDW2H0EVZCS` | `build/acceptance/reference-20260918/shibboleth-algorithm-evaluation` |
 | metadata_idp († listed supplemental cases only) | shibboleth | `run_XZ4CY23XHSV2NPFTDW2H0EVZCS` | `build/acceptance/reference-20260918/shibboleth-algorithm-evaluation` |
+| metadata_idp († listed supplemental cases only) | shibboleth | `run_2BY1BA5BX6205P5Q5YQ15YC1KF` | `build/acceptance/reference-20260918/shibboleth-md05f-v107` |
 | metadata_idp († listed supplemental cases only) | shibboleth | `run_G7RK00MQC0WZXS14JPFQPV8NKZ` | `build/acceptance/reference-20260918/publisher-ui-scoped/shibboleth` |
 | metadata_idp († listed supplemental cases only) | shibboleth | `run_G7RK00MQC0WZXS14JPFQPV8NKZ` | `build/acceptance/reference-20260918/publisher-ui-scoped/shibboleth` |
 | metadata_idp († listed supplemental cases only) | shibboleth | `run_GNBRVD9WSNFGHMXZEFN4BAH6NR` | `build/acceptance/reference-20260918/shibboleth-ui-logo-evaluation` |
@@ -693,6 +694,7 @@ Chromeと承認のブロックを解除するだけでは解消しません。�
 | metadata_idp († listed supplemental cases only) | simplesamlphp | `run_ZTEB6PCRWXJM0CZ6QWCZRR966T` | `build/acceptance/reference-20260918/algorithm-followup/simplesamlphp` |
 | metadata_idp († listed supplemental cases only) | simplesamlphp | `run_ZTEB6PCRWXJM0CZ6QWCZRR966T` | `build/acceptance/reference-20260918/algorithm-oracle-evaluation` |
 | metadata_idp († listed supplemental cases only) | simplesamlphp | `run_ZTEB6PCRWXJM0CZ6QWCZRR966T` | `build/acceptance/reference-20260918/algorithm-oracle-evaluation` |
+| metadata_idp († listed supplemental cases only) | simplesamlphp | `run_YHD2ZJ212CAQJHBN4QVZ129E1G` | `build/acceptance/reference-20260918/simplesamlphp-md05f-v107` |
 | metadata_idp († listed supplemental cases only) | simplesamlphp | `run_HNDN6YMHP5NZ9AP1GHB21V3AQH` | `build/acceptance/reference-20260918/publisher-ui-scoped/simplesamlphp` |
 | metadata_idp († listed supplemental cases only) | simplesamlphp | `run_HNDN6YMHP5NZ9AP1GHB21V3AQH` | `build/acceptance/reference-20260918/publisher-ui-scoped/simplesamlphp` |
 | metadata_idp († listed supplemental cases only) | simplesamlphp | `run_HNDN6YMHP5NZ9AP1GHB21V3AQH` | `build/acceptance/reference-20260918/publisher-ui-scoped/simplesamlphp` |

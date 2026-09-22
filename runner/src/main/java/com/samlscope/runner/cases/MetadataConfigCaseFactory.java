@@ -89,6 +89,8 @@ final class MetadataConfigCaseFactory {
                     accept("entity-attributes-assertion", "consume a signed Assertion in EntityAttributes"),
                     accept("entity-attributes-assertion-conditions", "consume a signed Assertion carrying Conditions"),
                     accept("entity-attributes-multiple", "consume multiple direct Attributes in EntityAttributes"))),
+            Map.entry("IIP-MD05.f", List.of(
+                    accept("full-ui-info", "multilingual UIInfo with every element plus a full DiscoHints set"))),
             Map.entry("IIP-MD05.ff", List.of(
                     accept("disco-hints-ipv6-cidr", "consume a DiscoHints IPHint that is an IPv6 CIDR"),
                     accept("disco-hints-ipv4-cidr", "consume a DiscoHints IPHint that is an IPv4 CIDR"))),

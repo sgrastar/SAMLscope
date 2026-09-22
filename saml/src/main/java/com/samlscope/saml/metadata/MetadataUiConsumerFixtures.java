@@ -42,6 +42,60 @@ final class MetadataUiConsumerFixtures {
         return entity;
     }
 
+    /** IIP-MD05.f: one fixture carrying every UIInfo element and a full DiscoHints set. */
+    static Element applyFullUi(Document doc, Element entity) {
+        var sp = (Element) entity.getElementsByTagNameNS(MetadataService.MD, "SPSSODescriptor").item(0);
+        if (sp == null) throw new IllegalArgumentException("Full UI fixture requires SP role");
+        var info = info(doc, sp);
+        for (var language : java.util.List.of("en", "ja")) {
+            var display = ui(doc, "DisplayName");
+            display.setAttributeNS(XMLConstants.XML_NS_URI, "xml:lang", language);
+            display.setTextContent(DISPLAY_NAME + " (" + language + ")");
+            info.appendChild(display);
+            var description = ui(doc, "Description");
+            description.setAttributeNS(XMLConstants.XML_NS_URI, "xml:lang", language);
+            description.setTextContent("SAMLscope description candidate (" + language + ")");
+            info.appendChild(description);
+            var keywords = ui(doc, "Keywords");
+            keywords.setAttributeNS(XMLConstants.XML_NS_URI, "xml:lang", language);
+            keywords.setTextContent("samlscope metadata interop");
+            info.appendChild(keywords);
+        }
+        logo(doc, info, "en", "LOCALIZED", "#b45309");
+        var informationUrl = ui(doc, "InformationURL");
+        informationUrl.setAttributeNS(XMLConstants.XML_NS_URI, "xml:lang", "en");
+        informationUrl.setTextContent("https://samlscope.com/information");
+        info.appendChild(informationUrl);
+        var privacyUrl = ui(doc, "PrivacyStatementURL");
+        privacyUrl.setAttributeNS(XMLConstants.XML_NS_URI, "xml:lang", "en");
+        privacyUrl.setTextContent("https://samlscope.com/privacy");
+        info.appendChild(privacyUrl);
+        // An extension in an unknown namespace inside UIInfo: schema-permitted and must not break parsing.
+        var unknown = doc.createElementNS("urn:samlscope:test:ui-extension", "samltest:Probe");
+        unknown.setAttributeNS(XMLConstants.XMLNS_ATTRIBUTE_NS_URI, "xmlns:samltest", "urn:samlscope:test:ui-extension");
+        unknown.setTextContent("ui-info-extension");
+        info.appendChild(unknown);
+
+        var hints = ui(doc, "DiscoHints");
+        for (var hint : java.util.List.of("2001:db8::/32", "192.0.2.0/24")) {
+            var ipHint = ui(doc, "IPHint");
+            ipHint.setTextContent(hint);
+            hints.appendChild(ipHint);
+        }
+        var domain = ui(doc, "DomainHint");
+        domain.setTextContent("example.org");
+        hints.appendChild(domain);
+        var geo = ui(doc, "GeolocationHint");
+        geo.setTextContent("geo:37.786971,-122.399677");
+        hints.appendChild(geo);
+        var hintsUnknown = doc.createElementNS("urn:samlscope:test:geo-extension", "geotest:Probe");
+        hintsUnknown.setAttributeNS(XMLConstants.XMLNS_ATTRIBUTE_NS_URI, "xmlns:geotest", "urn:samlscope:test:geo-extension");
+        hintsUnknown.setTextContent("disco-hints-extension");
+        hints.appendChild(hintsUnknown);
+        info.appendChild(hints);
+        return entity;
+    }
+
     private static Element info(Document doc, Element sp) {
         var extensions = doc.createElementNS(MetadataService.MD, "md:Extensions");
         var info = ui(doc, "UIInfo");

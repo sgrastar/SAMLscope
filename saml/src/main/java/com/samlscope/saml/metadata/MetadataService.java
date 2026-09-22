@@ -334,6 +334,7 @@ public final class MetadataService {
         root = MetadataExtensionPlacementFixtures.apply(document, root, variant);
         root = MetadataAttributePolicyFixtures.apply(document, root, variant);
         root = MetadataUiConsumerFixtures.apply(document, root, variant);
+        if (variant == Variant.FULL_UI_INFO) root = MetadataUiConsumerFixtures.applyFullUi(document, root);
         root = MetadataUiUrlFixtures.apply(document, root, variant, uiAssets);
         root = MetadataAlgorithmFixtures.apply(document, root, variant);
         root = MetadataEncryptionAlgorithmFixtures.apply(document, root, variant);
@@ -1052,6 +1053,7 @@ public final class MetadataService {
         DISCO_HINTS_IPV6_CIDR("disco-hints-ipv6-cidr"),
         DISCO_HINTS_IPV4_CIDR("disco-hints-ipv4-cidr"),
         ROLES_SP_SECOND("roles-sp-second"),
+        FULL_UI_INFO("full-ui-info"),
         ENTITY_ATTRIBUTES_DIRECT("entity-attributes-direct"),
         ENTITY_ATTRIBUTES_ASSERTION("entity-attributes-assertion"),
         ENTITY_ATTRIBUTES_ASSERTION_CONDITIONS("entity-attributes-assertion-conditions"),
