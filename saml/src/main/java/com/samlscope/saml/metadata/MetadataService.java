@@ -844,7 +844,8 @@ public final class MetadataService {
         if (variant != Variant.ENTITY_ATTRIBUTES_DIRECT
                 && variant != Variant.ENTITY_ATTRIBUTES_ASSERTION
                 && variant != Variant.ENTITY_ATTRIBUTES_ASSERTION_CONDITIONS
-                && variant != Variant.ENTITY_ATTRIBUTES_MULTIPLE) return;
+                && variant != Variant.ENTITY_ATTRIBUTES_MULTIPLE
+                && variant != Variant.ENTITY_ATTRIBUTES_ASSERTION_EXPIRED) return;
         var container = element(document, MD, "md:Extensions");
         container.setAttributeNS(XMLConstants.XMLNS_ATTRIBUTE_NS_URI, "xmlns:md", MD);
         var attributes = element(document, MDATTR, "mdattr:EntityAttributes");
@@ -853,7 +854,8 @@ public final class MetadataService {
         container.appendChild(attributes);
         root.insertBefore(container, root.getFirstChild());
         if (variant == Variant.ENTITY_ATTRIBUTES_ASSERTION
-                || variant == Variant.ENTITY_ATTRIBUTES_ASSERTION_CONDITIONS) {
+                || variant == Variant.ENTITY_ATTRIBUTES_ASSERTION_CONDITIONS
+                || variant == Variant.ENTITY_ATTRIBUTES_ASSERTION_EXPIRED) {
             var assertion = entityAttributesAssertion(document, variant);
             attributes.appendChild(assertion);
             // The signature is created only after the Assertion is attached: the enveloped
@@ -922,6 +924,14 @@ public final class MetadataService {
             var conditions = element(document, SAML, "saml:Conditions");
             conditions.setAttribute("NotBefore", DateTimeFormatter.ISO_INSTANT.format(clock.instant().minus(Duration.ofMinutes(5))));
             conditions.setAttribute("NotOnOrAfter", DateTimeFormatter.ISO_INSTANT.format(clock.instant().plus(Duration.ofDays(1))));
+            assertion.appendChild(conditions);
+        }
+        if (variant == Variant.ENTITY_ATTRIBUTES_ASSERTION_EXPIRED) {
+            // A valid signature over Conditions already in the past: the consumer must apply the
+            // standard Conditions window and refuse the assertion.
+            var conditions = element(document, SAML, "saml:Conditions");
+            conditions.setAttribute("NotBefore", DateTimeFormatter.ISO_INSTANT.format(clock.instant().minus(Duration.ofDays(2))));
+            conditions.setAttribute("NotOnOrAfter", DateTimeFormatter.ISO_INSTANT.format(clock.instant().minus(Duration.ofDays(1))));
             assertion.appendChild(conditions);
         }
         var statement = element(document, SAML, "saml:AttributeStatement");
@@ -1106,6 +1116,7 @@ public final class MetadataService {
         ENTITY_ATTRIBUTES_ASSERTION("entity-attributes-assertion"),
         ENTITY_ATTRIBUTES_ASSERTION_CONDITIONS("entity-attributes-assertion-conditions"),
         ENTITY_ATTRIBUTES_MULTIPLE("entity-attributes-multiple"),
+        ENTITY_ATTRIBUTES_ASSERTION_EXPIRED("entity-attributes-assertion-expired"),
         XPATH_IDENTITY("xpath-identity"),
         XPATH_EXCLUDE_ROLE_DESCRIPTORS("xpath-exclude-role-descriptors"),
         XPATH_EXCLUDE_ENDPOINTS("xpath-exclude-endpoints"),
