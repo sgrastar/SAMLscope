@@ -76,6 +76,11 @@ final class MetadataConfigCaseFactory {
             Map.entry("IIP-MD05.g", List.of(
                     accept("unknown-extension", "ignore a well-formed unknown extension without failure"),
                     accept("mdrpi-registration-info", "consume a real non-mandatory metadata extension"))),
+            Map.entry("IIP-MD05.d", List.of(
+                    accept("entity-attributes-direct", "consume a direct Attribute in EntityAttributes under a group root"),
+                    accept("entity-attributes-assertion", "consume a signed Assertion in EntityAttributes"),
+                    accept("entity-attributes-assertion-conditions", "consume a signed Assertion carrying Conditions"),
+                    accept("entity-attributes-multiple", "consume multiple direct Attributes in EntityAttributes"))),
             Map.entry("IIP-MD05.ff", List.of(
                     accept("disco-hints-ipv6-cidr", "consume a DiscoHints IPHint that is an IPv6 CIDR"),
                     accept("disco-hints-ipv4-cidr", "consume a DiscoHints IPHint that is an IPv4 CIDR"))),

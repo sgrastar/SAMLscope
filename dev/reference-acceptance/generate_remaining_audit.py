@@ -248,10 +248,16 @@ def render(root,definitions,output):
                        result_sha256=hashlib.sha256(raw).hexdigest(),evidence_folder=str(path.parent),interaction=None,
                        verdict=case['verdict'],evidence=case['evidence'])
             transitions.append(dict(row))
-        from verify_shibboleth_import_batch import ADOPTED as SHIB_IMPORT_ADOPTED, verify as verify_shib_import
+        from verify_shibboleth_import_batch import verify as verify_shib_import
+        shib_import_evidence={
+            'IIP-MD05-ff-idp-01':('shibboleth-md05ff-v99',['disco-hints-ipv6-cidr','disco-hints-ipv4-cidr']),
+            'IIP-MD05-d-idp-01':('shibboleth-md05d-v104',['entity-attributes-direct','entity-attributes-assertion',
+                'entity-attributes-assertion-conditions','entity-attributes-multiple'])}
         if row['product']=='shibboleth' and row['profile']=='metadata_idp' \
-                and row['case'] in SHIB_IMPORT_ADOPTED and row.get('verdict','NOT_VERIFIED')=='NOT_VERIFIED':
-            path, imported_cases = verify_shib_import(root.parent.parent/'reference-20260918')
+                and row['case'] in shib_import_evidence and row.get('verdict','NOT_VERIFIED')=='NOT_VERIFIED':
+            folder,variants=shib_import_evidence[row['case']]
+            path, imported_cases = verify_shib_import(root.parent.parent/'reference-20260918',
+                    folder=folder, adopted={row['case']:variants})
             raw=path.read_bytes(); result=json.loads(raw); case=imported_cases[row['case']]
             row['baseline']={k:row.get(k) for k in ('run','reason_code','result_sha256','evidence_folder','interaction')}
             row.update(run=result['run']['id'],reason_code=case['reason_code'],
@@ -260,12 +266,16 @@ def render(root,definitions,output):
                        interaction=None,verdict=case['verdict'],evidence=case['evidence'],
                        diagnostics=case.get('diagnostics',{}))
             transitions.append(dict(row))
-        from verify_simplesamlphp_import_batch import verify as verify_ssp_md05ff
+        from verify_simplesamlphp_import_batch import verify as verify_ssp_import2
+        ssp_import_evidence={
+            'IIP-MD05-ff-idp-01':('simplesamlphp-md05ff-v99',['disco-hints-ipv6-cidr','disco-hints-ipv4-cidr']),
+            'IIP-MD05-d-idp-01':('simplesamlphp-md05d-v104',['entity-attributes-direct','entity-attributes-assertion',
+                'entity-attributes-assertion-conditions','entity-attributes-multiple'])}
         if row['product']=='simplesamlphp' and row['profile']=='metadata_idp' \
-                and row['case']=='IIP-MD05-ff-idp-01' and row.get('verdict','NOT_VERIFIED')=='NOT_VERIFIED':
-            path, imported_cases = verify_ssp_md05ff(
-                root.parent.parent/'reference-20260918', folder='simplesamlphp-md05ff-v99',
-                adopted={'IIP-MD05-ff-idp-01': ['disco-hints-ipv6-cidr','disco-hints-ipv4-cidr']})
+                and row['case'] in ssp_import_evidence and row.get('verdict','NOT_VERIFIED')=='NOT_VERIFIED':
+            folder,variants=ssp_import_evidence[row['case']]
+            path, imported_cases = verify_ssp_import2(
+                root.parent.parent/'reference-20260918', folder=folder, adopted={row['case']: variants})
             raw=path.read_bytes(); result=json.loads(raw); case=imported_cases[row['case']]
             row['baseline']={k:row.get(k) for k in ('run','reason_code','result_sha256','evidence_folder','interaction')}
             row.update(run=result['run']['id'],reason_code=case['reason_code'],
@@ -274,10 +284,16 @@ def render(root,definitions,output):
                        interaction=None,verdict=case['verdict'],evidence=case['evidence'],
                        diagnostics=case.get('diagnostics',{}))
             transitions.append(dict(row))
-        from verify_keycloak_md05ff import ADOPTED as KC_FF_ADOPTED, verify as verify_kc_md05ff
+        from verify_keycloak_md05ff import verify as verify_kc_import2
+        kc_import_evidence={
+            'IIP-MD05-ff-idp-01':('keycloak-md05ff-v99',['disco-hints-ipv6-cidr','disco-hints-ipv4-cidr']),
+            'IIP-MD05-d-idp-01':('keycloak-md05d-v104',['entity-attributes-direct','entity-attributes-assertion',
+                'entity-attributes-assertion-conditions','entity-attributes-multiple'])}
         if row['product']=='keycloak' and row['profile']=='metadata_idp' \
-                and row['case'] in KC_FF_ADOPTED and row.get('verdict','NOT_VERIFIED')=='NOT_VERIFIED':
-            path, imported_cases = verify_kc_md05ff(root.parent.parent/'reference-20260918')
+                and row['case'] in kc_import_evidence and row.get('verdict','NOT_VERIFIED')=='NOT_VERIFIED':
+            folder,variants=kc_import_evidence[row['case']]
+            path, imported_cases = verify_kc_import2(root.parent.parent/'reference-20260918',
+                    folder=folder, adopted={row['case']:variants})
             raw=path.read_bytes(); result=json.loads(raw); case=imported_cases[row['case']]
             row['baseline']={k:row.get(k) for k in ('run','reason_code','result_sha256','evidence_folder','interaction')}
             row.update(run=result['run']['id'],reason_code=case['reason_code'],

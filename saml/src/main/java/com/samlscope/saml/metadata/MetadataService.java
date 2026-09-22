@@ -39,6 +39,7 @@ public final class MetadataService {
     public static final String SAML = "urn:oasis:names:tc:SAML:2.0:assertion";
     public static final String DS = "http://www.w3.org/2000/09/xmldsig#";
     public static final String UI = "urn:oasis:names:tc:SAML:metadata:ui";
+    public static final String MDATTR = "urn:oasis:names:tc:SAML:metadata:attribute";
     public static final String REDIRECT = "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect";
     public static final String POST = "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST";
     public static final String SOAP = "urn:oasis:names:tc:SAML:2.0:bindings:SOAP";
@@ -328,6 +329,7 @@ public final class MetadataService {
 
         addExtensionFixture(document, root, variant);
         root = applyStructureFixture(document, root, plan, variant, runId);
+        addEntityAttributesFixture(document, root, variant, signingCredentials);
         root = MetadataExtensionAttributeFixtures.apply(document, root, variant);
         root = MetadataExtensionPlacementFixtures.apply(document, root, variant);
         root = MetadataAttributePolicyFixtures.apply(document, root, variant);
@@ -641,6 +643,9 @@ public final class MetadataService {
             case NESTED_ENTITIES -> wrapEntities(document,
                     wrapEntities(document, entity, plan, 1, false, variant, runId, "_inner"),
                     plan, 1, true, variant, runId);
+            // MD05.d variant 1 places the EntityAttributes on the group root, so the tested entity
+            // must be wrapped in an EntitiesDescriptor first.
+            case ENTITY_ATTRIBUTES_DIRECT -> wrapEntities(document, entity, plan, 1, false, variant, runId);
             case DISTINCT_ENTITY_IDS -> wrapEntities(document, entity, plan, 2, false, variant, runId);
             case DUPLICATE_ENTITY_IDS, CONFLICTING_DUPLICATE_ENTITY_IDS ->
                     wrapEntities(document, entity, plan, 2, true, variant, runId);
@@ -789,6 +794,82 @@ public final class MetadataService {
             extensions.appendChild(registration);
         }
         entity.insertBefore(extensions, entity.getFirstChild());
+    }
+
+    private void addEntityAttributesFixture(
+            Document document, Element root, Variant variant, PlanCredentials credentials) {
+        if (variant != Variant.ENTITY_ATTRIBUTES_DIRECT
+                && variant != Variant.ENTITY_ATTRIBUTES_ASSERTION
+                && variant != Variant.ENTITY_ATTRIBUTES_ASSERTION_CONDITIONS
+                && variant != Variant.ENTITY_ATTRIBUTES_MULTIPLE) return;
+        var container = element(document, MD, "md:Extensions");
+        container.setAttributeNS(XMLConstants.XMLNS_ATTRIBUTE_NS_URI, "xmlns:md", MD);
+        var attributes = element(document, MDATTR, "mdattr:EntityAttributes");
+        attributes.setAttributeNS(XMLConstants.XMLNS_ATTRIBUTE_NS_URI, "xmlns:mdattr", MDATTR);
+        attributes.setAttributeNS(XMLConstants.XMLNS_ATTRIBUTE_NS_URI, "xmlns:saml", SAML);
+        container.appendChild(attributes);
+        root.insertBefore(container, root.getFirstChild());
+        if (variant == Variant.ENTITY_ATTRIBUTES_ASSERTION
+                || variant == Variant.ENTITY_ATTRIBUTES_ASSERTION_CONDITIONS) {
+            var assertion = entityAttributesAssertion(document, variant);
+            attributes.appendChild(assertion);
+            // The signature is created only after the Assertion is attached: the enveloped
+            // reference resolves the ID through the owning document.
+            signer.sign(assertion, credentials, directChild(assertion, SAML, "Subject"));
+        } else {
+            attributes.appendChild(entityAttribute(document, "urn:oid:1.3.6.1.4.1.5923.1.1.1.1", "member"));
+            if (variant == Variant.ENTITY_ATTRIBUTES_MULTIPLE) {
+                attributes.appendChild(entityAttribute(document, "urn:oid:2.5.4.3", "Example Organization"));
+                attributes.appendChild(entityAttribute(document, "urn:oid:1.3.6.1.4.1.5923.1.1.1.9", "staff"));
+            }
+        }
+    }
+
+    private Element directChild(Element parent, String namespace, String localName) {
+        for (var child = parent.getFirstChild(); child != null; child = child.getNextSibling()) {
+            if (child instanceof Element element && namespace.equals(element.getNamespaceURI())
+                    && localName.equals(element.getLocalName())) return element;
+        }
+        return null;
+    }
+
+    private Element entityAttribute(Document document, String name, String value) {
+        var attribute = element(document, SAML, "saml:Attribute");
+        attribute.setAttribute("Name", name);
+        attribute.setAttribute("NameFormat", "urn:oasis:names:tc:SAML:2.0:attrname-format:uri");
+        var attributeValue = element(document, SAML, "saml:AttributeValue");
+        attributeValue.setAttributeNS(XMLConstants.XMLNS_ATTRIBUTE_NS_URI, "xmlns:xs", "http://www.w3.org/2001/XMLSchema");
+        attributeValue.setAttributeNS(XMLConstants.XMLNS_ATTRIBUTE_NS_URI, "xmlns:xsi", "http://www.w3.org/2001/XMLSchema-instance");
+        attributeValue.setAttributeNS("http://www.w3.org/2001/XMLSchema-instance", "xsi:type", "xs:string");
+        attributeValue.setTextContent(value);
+        attribute.appendChild(attributeValue);
+        return attribute;
+    }
+
+    private Element entityAttributesAssertion(Document document, Variant variant) {
+        var assertion = element(document, SAML, "saml:Assertion");
+        assertion.setAttribute("ID", "_" + java.util.UUID.nameUUIDFromBytes(
+                variant.id().getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+        assertion.setAttribute("IssueInstant", DateTimeFormatter.ISO_INSTANT.format(clock.instant()));
+        assertion.setAttribute("Version", "2.0");
+        var issuer = element(document, SAML, "saml:Issuer");
+        issuer.setTextContent("https://samlscope.com");
+        assertion.appendChild(issuer);
+        var subject = element(document, SAML, "saml:Subject");
+        var nameId = element(document, SAML, "saml:NameID");
+        nameId.setTextContent("urn:samlscope:entity-attribute-assertion");
+        subject.appendChild(nameId);
+        assertion.appendChild(subject);
+        if (variant == Variant.ENTITY_ATTRIBUTES_ASSERTION_CONDITIONS) {
+            var conditions = element(document, SAML, "saml:Conditions");
+            conditions.setAttribute("NotBefore", DateTimeFormatter.ISO_INSTANT.format(clock.instant().minus(Duration.ofMinutes(5))));
+            conditions.setAttribute("NotOnOrAfter", DateTimeFormatter.ISO_INSTANT.format(clock.instant().plus(Duration.ofDays(1))));
+            assertion.appendChild(conditions);
+        }
+        var statement = element(document, SAML, "saml:AttributeStatement");
+        statement.appendChild(entityAttribute(document, "urn:oid:1.3.6.1.4.1.5923.1.1.1.1", "member"));
+        assertion.appendChild(statement);
+        return assertion;
     }
 
     private Element probeExtension(Document document, String value) {
@@ -951,6 +1032,10 @@ public final class MetadataService {
         MDRPI_REGISTRATION_INFO("mdrpi-registration-info"),
         DISCO_HINTS_IPV6_CIDR("disco-hints-ipv6-cidr"),
         DISCO_HINTS_IPV4_CIDR("disco-hints-ipv4-cidr"),
+        ENTITY_ATTRIBUTES_DIRECT("entity-attributes-direct"),
+        ENTITY_ATTRIBUTES_ASSERTION("entity-attributes-assertion"),
+        ENTITY_ATTRIBUTES_ASSERTION_CONDITIONS("entity-attributes-assertion-conditions"),
+        ENTITY_ATTRIBUTES_MULTIPLE("entity-attributes-multiple"),
         XPATH_IDENTITY("xpath-identity"),
         XPATH_EXCLUDE_ROLE_DESCRIPTORS("xpath-exclude-role-descriptors"),
         XPATH_EXCLUDE_ENDPOINTS("xpath-exclude-endpoints"),
