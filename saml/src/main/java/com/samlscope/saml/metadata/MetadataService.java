@@ -1030,6 +1030,7 @@ public final class MetadataService {
         ALGORITHM_ENCRYPTION_AES256_GCM("algorithm-encryption-aes256-gcm"),
         ALGORITHM_ENCRYPTION_ORDER_128_256("algorithm-encryption-order-128-256"),
         ALGORITHM_ENCRYPTION_ORDER_256_128("algorithm-encryption-order-256-128"),
+        ALGORITHM_ENCRYPTION_MULTIPLE("algorithm-encryption-multiple"),
         ALGORITHM_ENCRYPTION_KEYSIZE_128("algorithm-encryption-keysize-128"),
         ALGORITHM_ENCRYPTION_KEYSIZE_256("algorithm-encryption-keysize-256"),
         ALGORITHM_OAEP_10_SHA1("algorithm-oaep-10-sha1"),

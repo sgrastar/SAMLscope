@@ -79,11 +79,11 @@ Shibbolethの`IIP-SSO01-fk/fu/gi`は、v8では事前生成された正常系要
 
 ## Not verifiedの内訳
 
-以下は表に採用したケース結果の延べ391件。†のケースは新Runの追加証拠を採用し、それ以外の既存証拠は保持しています。単一Runの集計や全試験の再完走を意味しません。比較表で設定不足として扱い直した旧FAILは、このNOT_VERIFIED集計には含めません。
+以下は表に採用したケース結果の延べ388件。†のケースは新Runの追加証拠を採用し、それ以外の既存証拠は保持しています。単一Runの集計や全試験の再完走を意味しません。比較表で設定不足として扱い直した旧FAILは、このNOT_VERIFIED集計には含めません。
 
 | 理由 | Keycloak | Shibboleth IdP | SimpleSAMLphp | 解消に必要なこと |
 |---|---:|---:|---:|---|
-| `case.pending-interaction` | 80 | 45 | 80 | 設定・受信待ちに加え、判定処理未実装の経路を含む。全件台帳を参照 |
+| `case.pending-interaction` | 79 | 44 | 79 | 設定・受信待ちに加え、判定処理未実装の経路を含む。全件台帳を参照 |
 | `attestation.interaction-disallowed` | 25 | 25 | 25 | 自己申告を無効にした構成。確認せずに申告を代行しない |
 | `browser_fixture_partial` | 18 | 20 | 18 | 一部の試験だけ実行。残るvariantの証拠が不足 |
 | `idp.acs-probe.inconclusive` | 3 | 3 | 1 | 当該ケースの応答・対象設定・正常系対照を追加確認 |
@@ -369,7 +369,7 @@ Chromeと承認のブロックを解除するだけでは解消しません。�
 | `IIP-MD05-d7-idp-01` | Warning | Warning | Warning |
 | `IIP-MD05-d8-idp-01` | Warning | Warning | Warning |
 | `IIP-MD05-d9-idp-01` | Warning | Warning | Warning |
-| `IIP-MD05-e-idp-01` | Not verified | Not verified | Not verified |
+| `IIP-MD05-e-idp-01` | Success † | Success † | Success † |
 | `IIP-MD05-e1-idp-01` | Warning | Warning | Warning |
 | `IIP-MD05-e2-idp-01` | Warning | Warning | Warning |
 | `IIP-MD05-e3-idp-01` | Warning | Warning | Warning |
@@ -615,6 +615,7 @@ Chromeと承認のブロックを解除するだけでは解消しません。�
 | metadata_idp († listed supplemental cases only) | keycloak | `run_J7HCGRMNJHC614BA103CNGMVZ5` | `build/acceptance/reference-20260917/keycloak-signature-control-3` |
 | metadata_idp († listed supplemental cases only) | keycloak | `run_J5EY454Z5ZD3J7Q89SWCFNJNHD` | `build/acceptance/reference-20260918/single-signing-key/keycloak` |
 | metadata_idp († listed supplemental cases only) | keycloak | `run_CW996EM45SYJPJF4VGT54ZKTDA` | `build/acceptance/reference-20260918/keycloak-md05d-v104` |
+| metadata_idp († listed supplemental cases only) | keycloak | `run_9HE4ZZB92JHW6ZP10K44K5X7BD` | `build/acceptance/reference-20260918/keycloak-md05e-v106` |
 | metadata_idp († listed supplemental cases only) | keycloak | `run_SMA5VXA5EDP001PKPR37ZR2893` | `build/acceptance/reference-20260918/algorithm-followup/keycloak` |
 | metadata_idp († listed supplemental cases only) | keycloak | `run_SMA5VXA5EDP001PKPR37ZR2893` | `build/acceptance/reference-20260918/algorithm-followup/keycloak` |
 | metadata_idp († listed supplemental cases only) | keycloak | `run_SMA5VXA5EDP001PKPR37ZR2893` | `build/acceptance/reference-20260918/keycloak-algorithm-evaluation` |
@@ -653,6 +654,7 @@ Chromeと承認のブロックを解除するだけでは解消しません。�
 | metadata_idp († listed supplemental cases only) | shibboleth | `run_G03ZV1AB6ZERF0Q70HP2HRR7N9` | `build/acceptance/reference-20260918/shibboleth-md05c-mdiop-v86` |
 | metadata_idp († listed supplemental cases only) | shibboleth | `run_MAS75FBV4PTEKZA2M1895RYPBS` | `build/acceptance/reference-20260918/shibboleth-md05c2-v105` |
 | metadata_idp († listed supplemental cases only) | shibboleth | `run_WYXRSA1PEQ42W6KJ1X40697112` | `build/acceptance/reference-20260918/shibboleth-md05d-v104` |
+| metadata_idp († listed supplemental cases only) | shibboleth | `run_SGXSMPF0H9GDB15P8JABPQQYEY` | `build/acceptance/reference-20260918/shibboleth-md05e-v106` |
 | metadata_idp († listed supplemental cases only) | shibboleth | `run_XZ4CY23XHSV2NPFTDW2H0EVZCS` | `build/acceptance/reference-20260918/algorithm-followup/shibboleth` |
 | metadata_idp († listed supplemental cases only) | shibboleth | `run_XG5TCTRKY859K6HKXVB7TT53E3` | `build/acceptance/reference-20260918/shibboleth-md05e7-order-v90` |
 | metadata_idp († listed supplemental cases only) | shibboleth | `run_6E5BWBMYHJFZS31AKS9Q1WCP72` | `build/acceptance/reference-20260918/shibboleth-intersection-evaluation` |
@@ -685,6 +687,7 @@ Chromeと承認のブロックを解除するだけでは解消しません。�
 | metadata_idp († listed supplemental cases only) | simplesamlphp | `run_816C536YJ0JK4DB1KCMG2QQNH5` | `build/acceptance/reference-20260918/single-signing-key/simplesamlphp` |
 | metadata_idp († listed supplemental cases only) | simplesamlphp | `run_KVHNHP2ZPE93WW6A154P3FH09S` | `build/acceptance/reference-20260918/simplesamlphp-md05c2-v105` |
 | metadata_idp († listed supplemental cases only) | simplesamlphp | `run_MS5HDK610FJXD19ZR4C1YADKYW` | `build/acceptance/reference-20260918/simplesamlphp-md05d-v104` |
+| metadata_idp († listed supplemental cases only) | simplesamlphp | `run_JB9X92CZED5RV8H322VWSH1XGV` | `build/acceptance/reference-20260918/simplesamlphp-md05e-v106` |
 | metadata_idp († listed supplemental cases only) | simplesamlphp | `run_ZTEB6PCRWXJM0CZ6QWCZRR966T` | `build/acceptance/reference-20260918/algorithm-followup/simplesamlphp` |
 | metadata_idp († listed supplemental cases only) | simplesamlphp | `run_Z15GR24Z1AWTH8DX9ZFZYPQSEK` | `build/acceptance/reference-20260918/simplesamlphp-intersection-evaluation` |
 | metadata_idp († listed supplemental cases only) | simplesamlphp | `run_ZTEB6PCRWXJM0CZ6QWCZRR966T` | `build/acceptance/reference-20260918/algorithm-followup/simplesamlphp` |

@@ -29,6 +29,10 @@ final class MetadataEncryptionAlgorithmFixtures {
             case ALGORITHM_ENCRYPTION_ORDER_256_128 -> List.of(XENC11 + "aes256-gcm", XENC11 + "aes128-gcm");
             case ALGORITHM_OAEP_10_SHA1, ALGORITHM_OAEP_10_SHA256, ALGORITHM_OAEP_11_SHA1,
                  ALGORITHM_OAEP_11_SHA256, ALGORITHM_OAEP_11_DEFAULT_MGF -> List.of(XENC11 + "aes128-gcm");
+            // IIP-MD05.e variant 3: several methods in one KeyDescriptor, spanning a block cipher
+            // (aes128-cbc), a stream/authenticated cipher (aes128-gcm) and descriptors elsewhere in
+            // the metadata are independent inputs, not acceptance oracles.
+            case ALGORITHM_ENCRYPTION_MULTIPLE -> List.of(XENC + "aes128-cbc", XENC11 + "aes128-gcm");
             default -> List.<String>of();
         };
         if (data.isEmpty()) return entity;

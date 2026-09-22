@@ -76,6 +76,11 @@ final class MetadataConfigCaseFactory {
             Map.entry("IIP-MD05.g", List.of(
                     accept("unknown-extension", "ignore a well-formed unknown extension without failure"),
                     accept("mdrpi-registration-info", "consume a real non-mandatory metadata extension"))),
+            Map.entry("IIP-MD05.e", List.of(
+                    accept("algorithm-signing-256-keysize-excluded", "SigningMethod with MinKeySize/MaxKeySize"),
+                    accept("algorithm-entity-sha256", "DigestMethod and SigningMethod at the entity level"),
+                    accept("algorithm-encryption-multiple", "multiple EncryptionMethods in one KeyDescriptor"),
+                    accept("algorithm-absent", "metadata with every algorithm type absent"))),
             Map.entry("IIP-MD05.c2", List.of(
                     accept("nested-entities", "each role nested within an EntitiesDescriptor"),
                     accept("roles-sp-second", "the tested SP role is the second role descriptor"))),
