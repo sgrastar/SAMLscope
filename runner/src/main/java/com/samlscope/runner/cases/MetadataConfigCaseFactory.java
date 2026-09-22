@@ -76,6 +76,9 @@ final class MetadataConfigCaseFactory {
             Map.entry("IIP-MD05.g", List.of(
                     accept("unknown-extension", "ignore a well-formed unknown extension without failure"),
                     accept("mdrpi-registration-info", "consume a real non-mandatory metadata extension"))),
+            Map.entry("IIP-MD05.c2", List.of(
+                    accept("nested-entities", "each role nested within an EntitiesDescriptor"),
+                    accept("roles-sp-second", "the tested SP role is the second role descriptor"))),
             Map.entry("IIP-MD05.d", List.of(
                     accept("entity-attributes-direct", "consume a direct Attribute in EntityAttributes under a group root"),
                     accept("entity-attributes-assertion", "consume a signed Assertion in EntityAttributes"),

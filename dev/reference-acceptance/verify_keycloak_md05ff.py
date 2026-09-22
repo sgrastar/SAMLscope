@@ -45,9 +45,14 @@ def verify(root, folder='keycloak-md05ff-v99', adopted=None):
     for case_id, variants in adopted.items():
         case = cases[case_id]
         assert (case['verdict'], case['reason_code']) == ('PASS', 'metadata.fixture-probe.satisfied')
-        assert set(variants).issubset(case['diagnostics']['used_variants'])
-        assert 'control' in case['diagnostics']['used_variants']
+        used = set(case['diagnostics']['used_variants'])
+        assert set(variants).issubset(used)
+        assert 'control' in used
+        # A fixture variant the console could not import (recorded as a failure) is not adopted;
+        # only the variants actually used in the correlated flow need a successful import.
         for variant in ['control', *variants]:
+            if variant not in used:
+                continue
             assert variant in imports, (case_id, variant, 'no successful native import')
             for path, data in imports[variant]:
                 assert data['cleanup']['read_back_absent']

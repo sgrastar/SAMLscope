@@ -252,7 +252,8 @@ def render(root,definitions,output):
         shib_import_evidence={
             'IIP-MD05-ff-idp-01':('shibboleth-md05ff-v99',['disco-hints-ipv6-cidr','disco-hints-ipv4-cidr']),
             'IIP-MD05-d-idp-01':('shibboleth-md05d-v104',['entity-attributes-direct','entity-attributes-assertion',
-                'entity-attributes-assertion-conditions','entity-attributes-multiple'])}
+                'entity-attributes-assertion-conditions','entity-attributes-multiple']),
+            'IIP-MD05-c2-idp-01':('shibboleth-md05c2-v105',['nested-entities','roles-sp-second'])}
         if row['product']=='shibboleth' and row['profile']=='metadata_idp' \
                 and row['case'] in shib_import_evidence and row.get('verdict','NOT_VERIFIED')=='NOT_VERIFIED':
             folder,variants=shib_import_evidence[row['case']]
@@ -270,7 +271,8 @@ def render(root,definitions,output):
         ssp_import_evidence={
             'IIP-MD05-ff-idp-01':('simplesamlphp-md05ff-v99',['disco-hints-ipv6-cidr','disco-hints-ipv4-cidr']),
             'IIP-MD05-d-idp-01':('simplesamlphp-md05d-v104',['entity-attributes-direct','entity-attributes-assertion',
-                'entity-attributes-assertion-conditions','entity-attributes-multiple'])}
+                'entity-attributes-assertion-conditions','entity-attributes-multiple']),
+            'IIP-MD05-c2-idp-01':('simplesamlphp-md05c2-v105',['nested-entities','roles-sp-second'])}
         if row['product']=='simplesamlphp' and row['profile']=='metadata_idp' \
                 and row['case'] in ssp_import_evidence and row.get('verdict','NOT_VERIFIED')=='NOT_VERIFIED':
             folder,variants=ssp_import_evidence[row['case']]

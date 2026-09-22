@@ -643,6 +643,9 @@ public final class MetadataService {
             case NESTED_ENTITIES -> wrapEntities(document,
                     wrapEntities(document, entity, plan, 1, false, variant, runId, "_inner"),
                     plan, 1, true, variant, runId);
+            // MD05.c2 variant 2: the tested SP role must not be the first role descriptor, so a
+            // consumer that inspects only the first role cannot resolve the peer.
+            case ROLES_SP_SECOND -> reorderSpAfterIdp(entity);
             // MD05.d variant 1 places the EntityAttributes on the group root, so the tested entity
             // must be wrapped in an EntitiesDescriptor first.
             case ENTITY_ATTRIBUTES_DIRECT -> wrapEntities(document, entity, plan, 1, false, variant, runId);
@@ -823,6 +826,21 @@ public final class MetadataService {
                 attributes.appendChild(entityAttribute(document, "urn:oid:1.3.6.1.4.1.5923.1.1.1.9", "staff"));
             }
         }
+    }
+
+    private Element reorderSpAfterIdp(Element entity) {
+        Element sp = null;
+        Element idp = null;
+        for (var child = entity.getFirstChild(); child != null; child = child.getNextSibling()) {
+            if (!(child instanceof Element element)) continue;
+            if (MD.equals(element.getNamespaceURI()) && "SPSSODescriptor".equals(element.getLocalName())) sp = element;
+            if (MD.equals(element.getNamespaceURI()) && "IDPSSODescriptor".equals(element.getLocalName())) idp = element;
+        }
+        if (sp != null && idp != null) {
+            entity.removeChild(sp);
+            entity.insertBefore(sp, idp.getNextSibling());
+        }
+        return entity;
     }
 
     private Element directChild(Element parent, String namespace, String localName) {
@@ -1032,6 +1050,7 @@ public final class MetadataService {
         MDRPI_REGISTRATION_INFO("mdrpi-registration-info"),
         DISCO_HINTS_IPV6_CIDR("disco-hints-ipv6-cidr"),
         DISCO_HINTS_IPV4_CIDR("disco-hints-ipv4-cidr"),
+        ROLES_SP_SECOND("roles-sp-second"),
         ENTITY_ATTRIBUTES_DIRECT("entity-attributes-direct"),
         ENTITY_ATTRIBUTES_ASSERTION("entity-attributes-assertion"),
         ENTITY_ATTRIBUTES_ASSERTION_CONDITIONS("entity-attributes-assertion-conditions"),
