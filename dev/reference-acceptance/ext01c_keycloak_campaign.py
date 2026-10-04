@@ -73,12 +73,107 @@ def run(command):
     subprocess.run(command, cwd=REPO, check=True)
 
 
+def qualify_affiliation(root, source, classpath):
+    """Append real native parser observations to the original Run; no target writes or sends."""
+    sys.path.insert(0, str(REPO / "dev/keycloak"))
+    sys.path.insert(0, str(REPO / "dev/reference-acceptance"))
+    from algorithm_preference_campaign import recorded
+    from import_metadata_batch import api
+    from capture_run_originals import capture
+    from mdiop_representation_campaign import runtime
+    root.mkdir(parents=True, exist_ok=False)
+    directory = root / "receipts"
+    directory.mkdir()
+    results = []
+    for profile in PROFILES:
+        historical = source / profile
+        created = json.loads((historical / "active/created.json").read_bytes())
+        plan = json.loads((historical / "active/plan.json").read_bytes())["plan"]["plan"]
+        run_id = created["run"]["id"]
+        live = api("/api/runs/" + run_id)
+        live_plan = api("/api/plans/" + plan["id"])["plan"]
+        if plan["profile"] != profile or live["planId"] != plan["id"] or live_plan != plan:
+            raise ValueError("Original Run/profile ownership differs")
+        folder = root / profile
+        folder.mkdir()
+        save(folder / "created.json", created)
+        save(folder / "plan.json", plan)
+        target = (historical / "active/target-metadata.xml").read_bytes()
+        (folder / "target-metadata.xml").write_bytes(target)
+        raw = (historical / "metadata/foreign-attribute-affiliation/fixture.xml").read_bytes()
+        marker = b' foreign:undefined="ignored-content"'
+        if raw.count(marker) != 1:
+            raise ValueError("Parser baseline requires precisely one foreign attribute")
+        control = raw.replace(marker, b"")
+        owned = directory / (run_id + ".extension-attribute-parser")
+        owned.mkdir()
+        (owned / "input.xml").write_bytes(raw)
+        (owned / "control.xml").write_bytes(control)
+        before = runtime()
+        # Target code identity is separate from the archived Suite runtime.
+        names = {
+            "org.keycloak.keycloak-saml-core-26.7.2.jar": "main",
+            "org.keycloak.keycloak-saml-core-public-26.7.2.jar": "main",
+            "org.keycloak.keycloak-services-26.7.2.jar": "main",
+            "org.apache.santuario.xmlsec-3.0.6.jar": "main",
+            "org.jboss.logging.jboss-logging-3.6.2.Final.jar": "boot",
+        }
+        for name, jar_dir in names.items():
+            subprocess.run(["docker", "cp", "samlscope-reference-keycloak:/opt/keycloak/lib/lib/" + jar_dir + "/" + name,
+                            str(owned / name)], check=True, capture_output=True)
+        subprocess.run(["java", "-cp", classpath,
+                        "com.samlscope.runner.cases.ObserveKeycloakExtensionAttributeParser",
+                        str(owned), str(owned / "input.xml"), str(owned / "control.xml"), str(owned / "native-output.json")],
+                       check=True, capture_output=True)
+        observed = json.loads((owned / "native-output.json").read_bytes())
+        after = runtime()
+        if before != after or observed["inputTreeBase64"] != observed["controlTreeBase64"]:
+            raise ValueError("Native runtime or full native object tree differs")
+        observed.update(schema="samlscope-native-affiliation-parser-invocation-v1", runId=run_id,
+                        targetMetadataSha256=sha(target), profile=profile, runtimeBefore=before, runtimeAfter=after)
+        reference = recorded(folder, created, observed, "affiliation-parser")
+        entries = api("/api/runs/" + run_id + "/transcript")
+        prepared = [entry for entry in entries if entry.get("samlSummary", {}).get("type") == "MetadataPrepared"
+                    and entry["samlSummary"].get("variant") == "foreign-attribute-affiliation"
+                    and entry["samlSummary"].get("metadataSha256") == sha(raw)]
+        if len(prepared) != 1:
+            raise ValueError("Original affiliation preparation is ambiguous")
+        hashes = {p.name: sha(p.read_bytes()) for p in owned.iterdir() if p.is_file()}
+        manifest = dict(schema="samlscope-extension-attribute-parser-v1", adapter="keycloak-native-affiliation-parser-v1",
+                        caseId=CASE, runId=run_id, sourceRunId=run_id, targetMetadataSha256=sha(target),
+                        targetEntityId=plan["target"]["entityId"], profile=profile, files=hashes,
+                        inputSha256=sha(raw), preparedReference=prepared[0]["id"], invocation=reference)
+        save(directory / (run_id + ".extension-attribute-parser.json"), manifest)
+        save(folder / "manifest.json", manifest)
+        save(folder / "transcript.json", entries)
+        capture(folder, run_id, entries)
+        replay = subprocess.run(["java", "-cp", classpath,
+                                "com.samlscope.runner.cases.VerifyExtensionAttributeParserEvidence",
+                                str(folder), str(directory), str(folder / "reader-replay.json")], capture_output=True, text=True)
+        (folder / "reader-replay.stderr").write_text(replay.stderr)
+        if replay.returncode:
+            raise RuntimeError("Complete native/parser replay did not conclude; inspect saved originals")
+        results.append(dict(profile=profile, run=run_id, target_configuration_writes=0,
+                            protocol_submissions=0, credential_posts=0, native_parser_invocations=2,
+                            suite_original_writes=1, verdict_adopted=False))
+        save(root / "qualification.json", dict(schema="samlscope-extension-attribute-parser-qualification-v1",
+                                              observations=results, verdict_adopted=False))
+        print(profile + " complete originals replayed", flush=True)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path, required=True)
-    parser.add_argument("--playwright-modules", type=Path, required=True)
+    parser.add_argument("--playwright-modules", type=Path)
+    parser.add_argument("--qualify-affiliation-from", type=Path)
+    parser.add_argument("--reader-classpath")
     args = parser.parse_args()
     root = args.output.resolve()
+    if args.qualify_affiliation_from:
+        if not args.reader_classpath: parser.error("--reader-classpath is required for native replay")
+        qualify_affiliation(root, args.qualify_affiliation_from.resolve(), args.reader_classpath)
+        return
+    if args.playwright_modules is None: parser.error("--playwright-modules is required for a live import campaign")
     modules = args.playwright_modules.resolve()
     if root.exists() and any(root.iterdir()):
         raise ValueError("Evidence directory must be empty")

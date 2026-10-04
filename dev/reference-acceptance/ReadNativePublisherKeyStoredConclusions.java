@@ -9,7 +9,8 @@ import java.util.*;
 /** Narrow read-only query of public UI/attester outcomes. Case state/credentials are never exported. */
 public final class ReadNativePublisherKeyStoredConclusions {
     private static final JsonCodec JSON=new JsonCodec();
-    private static final Map<String,Rfc2119Level> LEVELS=Map.of("IIP-MD05-c1-idp-01",Rfc2119Level.MUST,"IIP-MD05-c3-idp-01",Rfc2119Level.MUST);
+    private static final Map<String,Rfc2119Level> LEVELS=Map.of("IIP-MD05-c1-idp-01",Rfc2119Level.MUST,"IIP-MD05-c3-idp-01",Rfc2119Level.MUST,
+        "IIP-IDP06-b-idp-01",Rfc2119Level.MUST);
     public static void main(String[]args)throws Exception {
         JSON.mapper().enable(com.fasterxml.jackson.databind.SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS);
         var cases=new TreeMap<String,Object>();String run;

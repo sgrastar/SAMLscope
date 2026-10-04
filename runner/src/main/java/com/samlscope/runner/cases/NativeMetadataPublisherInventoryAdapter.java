@@ -25,4 +25,7 @@ public interface NativeMetadataPublisherInventoryAdapter {
     }
     String id();
     Inventory validate(MetadataPublisherKeyInventoryEvidence.Frame frame, JsonNode epoch) throws Exception;
+    void validateTransition(MetadataPublisherKeyInventoryEvidence.Frame frame, JsonNode epoch, byte[] target) throws Exception;
+    List<String> validateControls(MetadataPublisherKeyInventoryEvidence.Frame frame, String caseId) throws Exception;
+    void validateRestoration(MetadataPublisherKeyInventoryEvidence.Frame frame) throws Exception;
 }

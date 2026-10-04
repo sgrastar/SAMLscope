@@ -42,7 +42,13 @@ def main():
             and proof['unrelatedWorktreeSourcesIncluded'] is False
             and proof['mainClassSourcesBoundToArchive'] is True, 'Packaged qualification unavailable')
     expected = proof['projectJars']
-    prior = json.loads((parent / 'runtime-live-verification.json').read_text())['projectJars']
+    parent_runtime = json.loads((parent / 'runtime-live-verification.json').read_text())
+    prior = parent_runtime['projectJars']
+    require(proof['parentImageId'] == parent_runtime['imageId']
+            and proof['testedArchiveSha256'] == expected and proof['archiveUnchangedAfterTesting'] is True,
+            'Parent image or tested archive binding unavailable')
+    dependencies = proof['runtimeDependencySha256']
+    require(dependencies and dependencies == proof['parentRuntimeDependencySha256'], 'Runtime dependency binding unavailable')
     require(set(expected) == set(prior) == PROJECT_JARS, 'Project JAR scope changed')
     changed = {n for n in PROJECT_JARS if expected[n] != prior[n]}
     require(changed and changed <= ALLOWED_CHANGED and changed == set(proof['changedProjectJars']), 'Unqualified module change')
@@ -56,16 +62,24 @@ def main():
     require(container['State']['Running'] and container['Image'] == deployment['imageId']
             and container['Id'] == deployment['suiteContainerId'], 'Unexpected live runtime')
     public_inputs = deployment.get('allowedEnvironmentChange', {})
-    require(public_inputs == {'SAMLSCOPE_SLO_BACKCHANNEL_BASE': 'http://host.docker.internal:18080'},
-            'Unqualified public callback input')
+    require(public_inputs == {'SAMLSCOPE_SLO_BACKCHANNEL_BASE': 'http://host.docker.internal:18080'}
+            or (public_inputs == {'SAMLSCOPE_IMAGE_DIGEST': deployment['imageId']}
+                and deployment.get('effectiveEnvironmentComparedInMemory') is True),
+            'Unqualified public runtime input')
     environment = {value.split('=', 1)[0]: value.split('=', 1)[1]
                    for value in container['Config'].get('Env', []) if '=' in value}
     require(all(environment.get(name) == value for name, value in public_inputs.items()),
-            'Live callback input differs')
+            'Live public runtime input differs')
     raw = command(['docker', 'exec', 'samlscope-reference-suite', 'sha256sum',
                    *('/opt/samlscope/lib/' + n for n in sorted(PROJECT_JARS))])
     live = {Path(line.split()[1]).name: line.split()[0] for line in raw.splitlines()}
     require(live == expected, 'Live JARs differ from tested archive')
+    dependency_raw = command(['docker', 'exec', 'samlscope-reference-suite', 'sh', '-c',
+                              'sha256sum /opt/samlscope/lib/*.jar'])
+    all_jars = {Path(line.split()[1]).name: line.split()[0] for line in dependency_raw.splitlines()}
+    require(all_jars == expected | dependencies, 'Live dependency inventory differs from qualified parent')
+    for name, digest in dependencies.items():
+        require(sha(ROOT / 'api/build/install/samlscope/lib' / name) == digest, 'Host dependency differs')
     gates = {'g1-docgen.log': 'docs/04 matches coverage.yaml', 'g1-structural.log': '46/46 PASS', 'g2.log': '21/21 PASS'}
     for name, message in gates.items():
         require(message in (output / name).read_text(), 'Gate unavailable: ' + name)
@@ -109,9 +123,16 @@ def main():
               'changedProjectJars': sorted(changed), 'liveMatchesIndependentArchive': True,
               'liveMatchesHostDistribution': True, 'protectedApiJarUnchanged': True,
               'packagedTestCount': proof['testCount'], 'personOperations': 0,
+              'runtimeDependencySha256': dependencies, 'liveDependenciesMatchQualifiedParent': True,
               'publicRuntimeInputs': public_inputs,
               'nativeCampaignMayResume': True, 'runtimeQualifierSha256': sha(Path(__file__))}
     (output / 'runtime-live-verification.json').write_text(json.dumps(result, indent=2) + '\n')
+    third_party = {'schema': 'samlscope-runtime-third-party-verification-v1', 'recordedAt': stamp,
+                   'imageId': deployment['imageId'], 'suiteContainerId': container['Id'],
+                   'parentRuntimeVerificationSha256': sha(output / 'runtime-live-verification.json'),
+                   'thirdPartyJars': dependencies, 'liveEqualsHostAndQualifiedParent': True,
+                   'containerMutations': 0, 'productOperations': 0}
+    (output / 'runtime-third-party-verification.json').write_text(json.dumps(third_party, indent=2) + '\n')
     (output / 'runtime-qualifier-source.py').write_bytes(Path(__file__).read_bytes())
     (output / 'gates.json').write_text(json.dumps({'g1Docgen': 'PASS', 'g1Structural': '46/46 PASS',
                                                  'g2': '21/21 PASS',

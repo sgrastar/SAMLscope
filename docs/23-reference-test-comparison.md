@@ -102,13 +102,13 @@ Additional results adopted in the inventory are included in the comparison after
 
 ## Breakdown of Not verified observations
 
-The table adopts 203 case-result observations. Cases marked † adopt additional evidence from new Runs; other existing evidence is retained. These counts do not represent a single Run or a complete rerun of all tests. Earlier FAIL results reclassified as configuration gaps in the comparison are excluded from this NOT_VERIFIED total.
+The table adopts 192 case-result observations. Cases marked † adopt additional evidence from new Runs; other existing evidence is retained. These counts do not represent a single Run or a complete rerun of all tests. Earlier FAIL results reclassified as configuration gaps in the comparison are excluded from this NOT_VERIFIED total.
 
 | Reason | Keycloak | Shibboleth IdP | SimpleSAMLphp | Required follow-up |
 |---|---:|---:|---:|---|
-| `case.pending-interaction` | 34 | 14 | 33 | Includes configuration and reception waits as well as unimplemented evaluation paths. See the complete inventory |
-| `attestation.interaction-disallowed` | 22 | 21 | 22 | Attestation is disabled. Do not submit an attestation without verification |
-| `browser_fixture_partial` | 11 | 7 | 11 | Only some tests were executed; evidence for remaining variants is missing |
+| `case.pending-interaction` | 34 | 13 | 31 | Includes configuration and reception waits as well as unimplemented evaluation paths. See the complete inventory |
+| `attestation.interaction-disallowed` | 20 | 20 | 22 | Attestation is disabled. Do not submit an attestation without verification |
+| `browser_fixture_partial` | 7 | 7 | 11 | Only some tests were executed; evidence for remaining variants is missing |
 | `idp.acs-probe.inconclusive` | 1 | 2 | 1 | Further inspect the case response, target configuration, and positive controls |
 | `metadata.algorithms.local-policy-unverified` | 2 | 0 | 2 | Further inspect the case response, target configuration, and positive controls |
 | `slo.propagation.not-observed` | 2 | 0 | 1 | Further inspect the case response, target configuration, and positive controls |
@@ -117,7 +117,6 @@ The table adopts 203 case-result observations. Cases marked † adopt additional
 | `slo.redirect-response.not-observed` | 1 | 0 | 1 | Further inspect the case response, target configuration, and positive controls |
 | `audit.force-authn-mechanism-access-unproven` | 0 | 0 | 1 | Further inspect the case response, target configuration, and positive controls |
 | `audit.metadata-full-ui-controls-unproven` | 0 | 0 | 1 | Import correctly placed UIInfo and DiscoHints and verify values for every variant through the product UI or effective read-back |
-| `control_failed` | 1 | 0 | 0 | The positive control failed, so abnormal behavior cannot be evaluated |
 | `idp.nameid-policy.inconclusive` | 1 | 0 | 0 | Further inspect the case response, target configuration, and positive controls |
 | `slo.async.feedback.unrecognized` | 0 | 0 | 1 | Further inspect the case response, target configuration, and positive controls |
 | `slo.encrypted-id.key-unavailable` | 1 | 0 | 0 | Further inspect the case response, target configuration, and positive controls |
@@ -152,7 +151,7 @@ Removing Chrome and approval blocks alone cannot resolve these observations. Mis
 | `IIP-EXT01-a-idp-01` | Success | Success | Success |
 | `IIP-EXT01-b-idp-01` | Success † | Success † | Success † |
 | `IIP-EXT01-b1-idp-01` | Warning | Warning | Warning |
-| `IIP-EXT01-c-idp-01` | Not verified | Success † | Not verified |
+| `IIP-EXT01-c-idp-01` | Success † | Success † | Not verified |
 | `IIP-EXT01-c1-idp-01` | Warning | Warning | Warning |
 | `IIP-G01-a-idp-01` | Not verified | Not verified | Not verified |
 | `IIP-G02-a-idp-01` | Success † | Success † | Success † |
@@ -166,7 +165,7 @@ Removing Chrome and approval blocks alone cannot resolve these observations. Mis
 | `IIP-IDP04-b-idp-01` | Not verified | Success † | **Failed (Product)** † |
 | `IIP-IDP05-a-idp-01` | **Failed (Product)** † | Success | **Failed (Product)** |
 | `IIP-IDP06-a-idp-01` | Success † | Success † | Success † |
-| `IIP-IDP06-b-idp-01` | Not verified | Success † | Not verified † |
+| `IIP-IDP06-b-idp-01` | Success † | Success † | Not verified † |
 | `IIP-IDP06-c-idp-01` | Success | Success | Success |
 | `IIP-IDP07-a-idp-01` | Success | Success | Success |
 | `IIP-IDP08-a-idp-01` | **Failed (Product)** † | Success † | **Failed (Product)** |
@@ -287,10 +286,10 @@ Removing Chrome and approval blocks alone cannot resolve these observations. Mis
 | `IIP-SSO03-b-idp-01` | Success † | Success † | Success † |
 | `IIP-SSO04-a-idp-01` | Success † | Success † | Success † |
 | `IIP-SSO05-a-idp-01` | Success | Success † | **Failed (Product)** |
-| `IIP-SSO05-a1-idp-01` | Not verified | Not verified | Not verified |
+| `IIP-SSO05-a1-idp-01` | Success † | Not verified | Not verified |
 | `IIP-SSO05-a2-idp-01` | Success | Success † | Success † |
 | `IIP-SSO05-a3-idp-01` | Success † | Success † | Success † |
-| `IIP-SSO05-a8-idp-01` | Not verified | Not verified | Not verified |
+| `IIP-SSO05-a8-idp-01` | Success † | Not verified | Not verified |
 | `IIP-SSO05-b-idp-01` | Success | Success | Success |
 | `IIP-SSO05-b1-idp-01` | Success | Success | Success |
 | `IIP-SSO05-b2-idp-01` | Success | **Failed (Product)** | Success |
@@ -308,7 +307,7 @@ Removing Chrome and approval blocks alone cannot resolve these observations. Mis
 | `IIP-EXT01-a-idp-01` | Success | Success | Success |
 | `IIP-EXT01-b-idp-01` | Success † | Success † | Success † |
 | `IIP-EXT01-b1-idp-01` | Warning | Warning | Warning |
-| `IIP-EXT01-c-idp-01` | Not verified | Success † | Not verified |
+| `IIP-EXT01-c-idp-01` | Success † | Success † | Not verified |
 | `IIP-EXT01-c1-idp-01` | Warning | Warning | Warning |
 | `IIP-G01-a-idp-01` | Not verified | Not verified | Not verified |
 | `IIP-IDP17-b4-idp-01` | Warning | Warning | Warning |
@@ -359,9 +358,9 @@ Removing Chrome and approval blocks alone cannot resolve these observations. Mis
 | `IIP-MD05-aw-idp-01` | Not verified | Not verified | Not verified |
 | `IIP-MD05-b-idp-01` | **Failed (Product)** † | Success † | **Failed (adopted in inventory; cause classification unconfirmed)** † |
 | `IIP-MD05-c-idp-01` | Success † | Success † | Success † |
-| `IIP-MD05-c1-idp-01` | Not verified | Not verified | Not verified |
+| `IIP-MD05-c1-idp-01` | Not verified | **Failed (adopted in inventory; cause classification unconfirmed)** † | **Failed (adopted in inventory; cause classification unconfirmed)** † |
 | `IIP-MD05-c2-idp-01` | Not verified | Success † | Success † |
-| `IIP-MD05-c3-idp-01` | Not verified | Not verified | Not verified |
+| `IIP-MD05-c3-idp-01` | Not verified | Not verified | **Failed (adopted in inventory; cause classification unconfirmed)** † |
 | `IIP-MD05-c4-idp-01` | Warning | Warning | Warning |
 | `IIP-MD05-c5-idp-01` | Not verified | Not verified | Not verified |
 | `IIP-MD05-c6-idp-01` | Not verified | Not verified | Not verified |
@@ -459,11 +458,11 @@ Removing Chrome and approval blocks alone cannot resolve these observations. Mis
 | `IIP-ALG07-a-idp-01` | Not verified | Not verified | Not verified |
 | `IIP-ALG08-a-idp-01` | Success † | Success † | Not verified |
 | `IIP-ALG08-b-idp-01` | Success † | Success † | Not verified |
-| `IIP-ALG08-c-idp-01` | Not verified | Not verified | Not verified |
+| `IIP-ALG08-c-idp-01` | Not verified | Success † | Not verified |
 | `IIP-EXT01-a-idp-01` | Success | Success | Success |
 | `IIP-EXT01-b-idp-01` | Success † | Success † | Success † |
 | `IIP-EXT01-b1-idp-01` | Warning | Warning | Warning |
-| `IIP-EXT01-c-idp-01` | Not verified | Success † | Not verified |
+| `IIP-EXT01-c-idp-01` | Success † | Success † | Not verified |
 | `IIP-EXT01-c1-idp-01` | Warning | Warning | Warning |
 | `IIP-G01-a-idp-01` | Not verified | Not verified | Not verified |
 | `IIP-G03-a-idp-01` | Success | Success | Success |
@@ -483,7 +482,7 @@ Removing Chrome and approval blocks alone cannot resolve these observations. Mis
 | `IIP-EXT01-a-idp-01` | Success † | Success † | Success † |
 | `IIP-EXT01-b-idp-01` | Success † | Success † | Success † |
 | `IIP-EXT01-b1-idp-01` | Warning | Warning | Warning |
-| `IIP-EXT01-c-idp-01` | Not verified † | Success † | Not verified † |
+| `IIP-EXT01-c-idp-01` | Success † | Success † | Not verified † |
 | `IIP-EXT01-c1-idp-01` | Warning | Warning | Warning |
 | `IIP-G01-a-idp-01` | Not verified † | Not verified † | Not verified † |
 | `IIP-G03-a-idp-01` | Success | Success | Success |
@@ -552,9 +551,12 @@ Removing Chrome and approval blocks alone cannot resolve these observations. Mis
 | browser_sso_idp († listed supplemental cases only) | keycloak | `run_FZY4Z3QD3NFN0CZSGFY73Y38ZD` | `build/acceptance/reference-20260918/keycloak-browser-chain-v71` |
 | browser_sso_idp († listed supplemental cases only) | keycloak | `run_EJYK4M640FX4PJAWT2YQW6STER` | `build/acceptance/reference-20260930/post-error-binding-keycloak-v173/evaluation` |
 | browser_sso_idp († listed supplemental cases only) | keycloak | `run_9XH0Y4Z7P4JFHJTYQ3ZJKE633N` | `build/acceptance/reference-20260918/keycloak-signature-modes-v61/adoption` |
+| browser_sso_idp († listed supplemental cases only) | keycloak | `run_5PVJ1E05DBMMMASJ9QTS45T3TM` | `build/acceptance/reference-20261004/keycloak-persistent-opaque-r1` |
 | browser_sso_idp († listed supplemental cases only) | keycloak | `run_WGE123Q325NKQX590ZR0F1ZH9Y` | `build/acceptance/reference-20261001/keycloak-native-persistent-pairwise-v180-r4/evaluation` |
+| browser_sso_idp († listed supplemental cases only) | keycloak | `run_5PVJ1E05DBMMMASJ9QTS45T3TM` | `build/acceptance/reference-20261004/keycloak-persistent-opaque-r1` |
 | browser_sso_idp († listed supplemental cases only) | keycloak | `run_AT0T8032SAJ8FETMM2JTMQGB7H` | `build/acceptance/reference-20260914/crypto-integrated-implementation/keycloak/browser_sso_idp` |
 | browser_sso_idp († listed supplemental cases only) | keycloak | `run_3MZXNDWFZ62FNETRN75P79TVPT` | `build/acceptance/reference-20260930/ext01b-keycloak-v158/browser_sso_idp/evaluation-terminal-http-v1` |
+| browser_sso_idp († listed supplemental cases only) | keycloak | `run_PNTFR0MBDQX80WRN8HYPM094XM` | `build/acceptance/reference-20261004/keycloak-extension-attribute-parser-r2/evaluation-v230/browser_sso_idp` |
 | browser_sso_idp († listed supplemental cases only) | keycloak | `run_QXEKAXFXVK2Y48CH9HJD7A5DW7` | `build/acceptance/reference-20260918/keycloak-native-ec-signature-v2/observations/browser_sso_idp/evaluation` |
 | browser_sso_idp († listed supplemental cases only) | keycloak | `run_6AD6T3VS8H87WQQBB1T2DEB3MX` | `build/acceptance/reference-20260915/algorithm-observation-batch/keycloak/browser_alg_combo` |
 | browser_sso_idp († listed supplemental cases only) | keycloak | `run_5X1B1RGKPNK7C7J3C1KT4B3EFM` | `build/acceptance/reference-20260915/algorithm-observation-batch/keycloak/browser_sso_idp` |
@@ -570,6 +572,7 @@ Removing Chrome and approval blocks alone cannot resolve these observations. Mis
 | browser_sso_idp († listed supplemental cases only) | keycloak | `run_T6YFS3EDNTS92F0RHS33WTZTRV` | `build/acceptance/reference-20260930/keycloak-attribute-policy-capability-absence-v159` |
 | browser_sso_idp († listed supplemental cases only) | keycloak | `run_E8R3MNZD0NM9S6QYGPVD3S215V` | `build/acceptance/reference-20260930/keycloak-idp05a-v127-retry1` |
 | browser_sso_idp († listed supplemental cases only) | keycloak | `run_F9VD5CSM4XV01J1Q2X1BPJ6DG2` | `build/acceptance/reference-20260918/keycloak-browser-chain-v73` |
+| browser_sso_idp († listed supplemental cases only) | keycloak | `run_8KJN2EHMVRDZVB4EM2CS1THHPG` | `build/acceptance/reference-20261004/keycloak-forceauthn-mechanism-r2` |
 | browser_sso_idp († listed supplemental cases only) | keycloak | `run_JQTKB2M3V6887FKT0DF49G38QZ` | `build/acceptance/reference-20260918/keycloak-browser-chain-v75` |
 | browser_sso_idp († listed supplemental cases only) | keycloak | `run_P57XA0ZDWHSVWX8PNW01MXSVT7` | `build/acceptance/reference-20260930/keycloak-nameid-omission-probe-v2` |
 | browser_sso_idp († listed supplemental cases only) | keycloak | `run_YT60WQ4FCYBC6ET6HGTDZQT3RE` | `build/acceptance/reference-20260930/keycloak-idp12e-v145/evaluation-v139` |
@@ -678,6 +681,7 @@ Removing Chrome and approval blocks alone cannot resolve these observations. Mis
 | browser_sso_idp († listed supplemental cases only) | simplesamlphp | `run_XKNHNHTS27D8V15RGGVWPPNWX4` | `build/acceptance/reference-20260918/simplesamlphp-default-acs` |
 | browser_sso_idp († listed supplemental cases only) | simplesamlphp | `run_BAYBZ159BPMKKVXCQWESKDGFAQ` | `build/acceptance/reference-20260918/simplesamlphp-native-signature-observation-v2/browser_sso_idp/evaluation` |
 | browser_sso_idp († listed supplemental cases only) | simplesamlphp | `run_BAYBZ159BPMKKVXCQWESKDGFAQ` | `build/acceptance/reference-20260918/simplesamlphp-native-signature-observation-v2/browser_sso_idp/evaluation` |
+| browser_sso_idp († listed supplemental cases only) | simplesamlphp | `run_TN5M4DR92CBYYSVVDTWZ48NVDV` | `build/acceptance/reference-20261004/ssp-forceauthn-mechanism-r3/evaluation` |
 | browser_sso_idp († listed supplemental cases only) | simplesamlphp | `run_J7Z6YANJCXYTHVJXX820D4NNPY` | `build/acceptance/reference-20260914/queue-integrated-implementation/simplesamlphp/browser_sso_idp` |
 | browser_sso_idp | simplesamlphp | `run_SJWWBQT1S24VSJGRZMSQ8TJYM4` | `interaction-followup/after/simplesamlphp/browser_sso_idp` |
 | metadata_idp († listed supplemental cases only) | keycloak | `run_HRAC88P0KKA5WQX8MF75WD198X` | `additional-implementation/keycloak/metadata_idp` |
@@ -738,6 +742,7 @@ Removing Chrome and approval blocks alone cannot resolve these observations. Mis
 | metadata_idp († listed supplemental cases only) | keycloak | `run_J7HCGRMNJHC614BA103CNGMVZ5` | `build/acceptance/reference-20260917/keycloak-signature-control-3` |
 | metadata_idp († listed supplemental cases only) | keycloak | `run_AX3ZB21BWSJM8S2HMPXRD8N7K6` | `build/acceptance/reference-20260918/keycloak-native-certificate-signature/observations/metadata_idp/evaluation` |
 | metadata_idp († listed supplemental cases only) | keycloak | `run_MT4QSB65RGQRC6MZKXF15KCJMS` | `build/acceptance/reference-20260930/ext01b-keycloak-v158/metadata_idp/evaluation-terminal-http-v1` |
+| metadata_idp († listed supplemental cases only) | keycloak | `run_FB6GSNKXQRGTFC36605PEA7GC0` | `build/acceptance/reference-20261004/keycloak-extension-attribute-parser-r2/evaluation-v230/metadata_idp` |
 | metadata_idp († listed supplemental cases only) | keycloak | `run_YN5FBG6NPMGQZ5VYKEEHFSF6ZR` | `build/acceptance/reference-20260918/keycloak-native-signature-audit/metadata_idp/evaluation` |
 | metadata_idp († listed supplemental cases only) | keycloak | `run_YN5FBG6NPMGQZ5VYKEEHFSF6ZR` | `build/acceptance/reference-20260918/keycloak-native-signature-audit/metadata_idp/evaluation` |
 | metadata_idp († listed supplemental cases only) | keycloak | `run_ASRA03EB5GQ074VCME7HESPZ6G` | `build/acceptance/reference-20260918/keycloak-native-ec-signature-v3/observations/metadata_idp/evaluation` |
@@ -768,6 +773,7 @@ Removing Chrome and approval blocks alone cannot resolve these observations. Mis
 | metadata_idp († listed supplemental cases only) | shibboleth | `run_VG6RYQ2RN6TMS2GMFVM1QHQJ36` | `build/acceptance/reference-20260930/shibboleth-default-acs-v138/evaluation-v138` |
 | metadata_idp († listed supplemental cases only) | shibboleth | `run_P1KVNHQWPCRSGHZ8RN0ZXDQC3J` | `build/acceptance/reference-20260918/shibboleth-md05b-v110` |
 | metadata_idp († listed supplemental cases only) | shibboleth | `run_J7GJGATXAXDTV916CXJN8RRK5Z` | `build/acceptance/reference-20260930/shibboleth-mdiop-full-v172-r2/evaluation-terminal-http-v1` |
+| metadata_idp († listed supplemental cases only) | shibboleth | `run_MDNFTC368ZZ3FDCDAECD1SMSG4` | `build/acceptance/reference-20261004/shibboleth-publisher-endpoints-r3/evaluation-actual` |
 | metadata_idp († listed supplemental cases only) | shibboleth | `run_MAS75FBV4PTEKZA2M1895RYPBS` | `build/acceptance/reference-20260918/shibboleth-md05c2-v105` |
 | metadata_idp († listed supplemental cases only) | shibboleth | `run_WYXRSA1PEQ42W6KJ1X40697112` | `build/acceptance/reference-20260918/shibboleth-md05d-v104` |
 | metadata_idp († listed supplemental cases only) | shibboleth | `run_SGXSMPF0H9GDB15P8JABPQQYEY` | `build/acceptance/reference-20260918/shibboleth-md05e-v106` |
@@ -837,7 +843,9 @@ Removing Chrome and approval blocks alone cannot resolve these observations. Mis
 | metadata_idp († listed supplemental cases only) | simplesamlphp | `run_08Q5460F7J5MFDXQQMT0CTGDRR` | `build/acceptance/reference-20260930/ssp-default-acs-v136/evaluation-v136` |
 | metadata_idp († listed supplemental cases only) | simplesamlphp | `run_A1G3DYBWJDCSPBZW71DZ38R69Q` | `build/acceptance/reference-20260930/ssp-native-mdq-schema-valid-v1/evaluation-native-positive-v125` |
 | metadata_idp († listed supplemental cases only) | simplesamlphp | `run_C13B6TD29Y7SKNF0MTVFGFQ6W1` | `build/acceptance/reference-20261001/ssp-mdiop-native-admission-v175-r1/evaluation` |
+| metadata_idp († listed supplemental cases only) | simplesamlphp | `run_XFE204ASYT3HEY5FWW02B3NYHZ` | `build/acceptance/reference-20261004/simplesamlphp-publisher-used-signers-r2/evaluation-actual` |
 | metadata_idp († listed supplemental cases only) | simplesamlphp | `run_KVHNHP2ZPE93WW6A154P3FH09S` | `build/acceptance/reference-20260918/simplesamlphp-md05c2-v105` |
+| metadata_idp († listed supplemental cases only) | simplesamlphp | `run_XFE204ASYT3HEY5FWW02B3NYHZ` | `build/acceptance/reference-20261004/simplesamlphp-publisher-used-signers-r2/evaluation-actual` |
 | metadata_idp († listed supplemental cases only) | simplesamlphp | `run_AFVTMTVZ37FHCFGNHJ7PMGGVMC` | `build/acceptance/reference-20261001/ssp-native-keyvalue-runtime-v170-r3/evaluation` |
 | metadata_idp († listed supplemental cases only) | simplesamlphp | `run_MS5HDK610FJXD19ZR4C1YADKYW` | `build/acceptance/reference-20260918/simplesamlphp-md05d-v104` |
 | metadata_idp († listed supplemental cases only) | simplesamlphp | `run_JB9X92CZED5RV8H322VWSH1XGV` | `build/acceptance/reference-20260918/simplesamlphp-md05e-v106` |
@@ -881,6 +889,7 @@ Removing Chrome and approval blocks alone cannot resolve these observations. Mis
 | ecp_idp († listed supplemental cases only) | keycloak | `run_B5BVZPZHA77V8B2SV0AKJZDJYC` | `build/acceptance/reference-20260915/algorithm-observation-batch/keycloak/ecp_idp` |
 | ecp_idp († listed supplemental cases only) | keycloak | `run_B05XBA5FYGXDV933K9PKA9X441` | `build/acceptance/reference-20260915/peer-intent/keycloak/ecp_alg` |
 | ecp_idp († listed supplemental cases only) | keycloak | `run_VDEDAMN49X5D6DJHF4GPJ1CA9M` | `build/acceptance/reference-20260930/ext01b-keycloak-v158/ecp_idp/evaluation-terminal-http-v1` |
+| ecp_idp († listed supplemental cases only) | keycloak | `run_H5HT1BGQ7DM7ED1VT0M502Y0BA` | `build/acceptance/reference-20261004/keycloak-extension-attribute-parser-r2/evaluation-v230/ecp_idp` |
 | ecp_idp († listed supplemental cases only) | keycloak | `run_YWWTJMD3P4MQWVNNYPNJD559CK` | `build/acceptance/reference-20260918/keycloak-native-signature-audit/ecp_idp/evaluation` |
 | ecp_idp († listed supplemental cases only) | keycloak | `run_YWWTJMD3P4MQWVNNYPNJD559CK` | `build/acceptance/reference-20260918/keycloak-native-signature-audit/ecp_idp/evaluation` |
 | ecp_idp († listed supplemental cases only) | keycloak | `run_9CQ4T26CJT03AJ9A3ZT7XDM6AW` | `build/acceptance/reference-20260918/keycloak-native-ec-signature-v3/observations/ecp_idp/evaluation` |
@@ -905,6 +914,7 @@ Removing Chrome and approval blocks alone cannot resolve these observations. Mis
 | ecp_idp († listed supplemental cases only) | shibboleth | `run_YNSFE9WE4CNTHHB57W2RFVVR3K` | `build/acceptance/reference-20260915/algorithm-observation-batch/shibboleth/ecp_idp` |
 | ecp_idp († listed supplemental cases only) | shibboleth | `run_E27G00G2FF6M2HGC2GT64CQ5KA` | `build/acceptance/reference-20260930/shibboleth-alg08-ecp-v162-relay-r2` |
 | ecp_idp († listed supplemental cases only) | shibboleth | `run_E27G00G2FF6M2HGC2GT64CQ5KA` | `build/acceptance/reference-20260930/shibboleth-alg08-ecp-v162-relay-r2` |
+| ecp_idp († listed supplemental cases only) | shibboleth | `run_3FME5QSED778KCFZ028413KC3P` | `build/acceptance/reference-20261004/shibboleth-default-algorithm-ecp-source-r1` |
 | ecp_idp († listed supplemental cases only) | shibboleth | `run_GQ70KKEYFZFHR5PYTZS4M3YKSZ` | `build/acceptance/reference-20260918/shibboleth-native-signed-request-v2/ecp_idp/evaluation` |
 | ecp_idp († listed supplemental cases only) | shibboleth | `run_GQ70KKEYFZFHR5PYTZS4M3YKSZ` | `build/acceptance/reference-20260918/shibboleth-native-signed-request-v2/ecp_idp/evaluation` |
 | ecp_idp | shibboleth | `run_4E2YMVJR6DPW196YFMWX4V9DN3` | `shibboleth/ecp_idp/run4` |
@@ -924,7 +934,7 @@ Removing Chrome and approval blocks alone cannot resolve these observations. Mis
 | single_logout_idp († listed supplemental cases only) | keycloak | `run_K6A6ZHJNKWDYARKT4E4ZJGHQHT` | `build/acceptance/reference-20260914/remaining-audit/keycloak/fresh_common` |
 | single_logout_idp († listed supplemental cases only) | keycloak | `run_K6A6ZHJNKWDYARKT4E4ZJGHQHT` | `build/acceptance/reference-20260914/remaining-audit/keycloak/fresh_common` |
 | single_logout_idp († listed supplemental cases only) | keycloak | `run_QX707K2D5QHG7VR68206H0FB72` | `build/acceptance/reference-20260930/ext01b-keycloak-v158/single_logout_idp/evaluation-terminal-http-v1` |
-| single_logout_idp († listed supplemental cases only) | keycloak | `run_K6A6ZHJNKWDYARKT4E4ZJGHQHT` | `build/acceptance/reference-20260914/remaining-audit/keycloak/fresh_common` |
+| single_logout_idp († listed supplemental cases only) | keycloak | `run_2KT95AZ1GYY8P50CAD9TW4FRBV` | `build/acceptance/reference-20261004/keycloak-extension-attribute-parser-r2/evaluation-v230/single_logout_idp` |
 | single_logout_idp († listed supplemental cases only) | keycloak | `run_DVQNW0ZY3675WNFYAYCTQ81J4X` | `build/acceptance/reference-20260918/keycloak-native-signature-audit/single_logout_idp/evaluation` |
 | single_logout_idp († listed supplemental cases only) | keycloak | `run_DVQNW0ZY3675WNFYAYCTQ81J4X` | `build/acceptance/reference-20260918/keycloak-native-signature-audit/single_logout_idp/evaluation` |
 | single_logout_idp († listed supplemental cases only) | keycloak | `run_W2DFV6VZDAB4S8GN6GAYNQ45MM` | `build/acceptance/reference-20260918/keycloak-native-ec-signature-v3/observations/single_logout_idp/evaluation` |

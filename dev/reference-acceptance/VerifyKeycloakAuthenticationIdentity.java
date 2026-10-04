@@ -52,7 +52,7 @@ public final class VerifyKeycloakAuthenticationIdentity {
         var context=new DefaultCaseContext(run,TargetRole.IDP,Clock.systemUTC(),TestPlan.Parameters.defaults(),TestPlan.Interaction.defaults(),Reachability.CONFIRMED,recorder,true);
         Path root=Files.createTempDirectory("kc-identity-replay-").toRealPath(),directory=Files.createDirectory(root.resolve("keycloak-authentication-identity-evidence")),folder=Files.createDirectory(directory.resolve(run));
         var originals=new HashMap<String,byte[]>();try(var paths=Files.walk(source)) {for(var path:paths.filter(Files::isRegularFile).toList()) {String name=source.relativize(path).toString();if(name.equals("manifest.json")||originalManifest.path("files").has(name)) {byte[] raw=Files.readAllBytes(path);originals.put(name,raw);Files.createDirectories(folder.resolve(name).getParent());Files.write(folder.resolve(name),raw);}}}
-        var reader=new KeycloakAuthenticationIdentityEvidence(directory,e->decoded.get(e.id()),r->target,r->Optional.empty());
+        var reader=args.length>4?new KeycloakAuthenticationIdentityEvidence(directory,e->decoded.get(e.id()),r->target,r->Optional.empty(),args[3],args[4]):new KeycloakAuthenticationIdentityEvidence(directory,e->decoded.get(e.id()),r->target,r->Optional.empty());
         boolean leafOnly=args.length>2&&args[2].equals("candidate-leaf");var wrapper=new AuthenticationIdentityConfigurationTestCase(new Fallback(),e->decoded.get(e.id()),r->target,r->Optional.empty(),root.resolve("authentication-identity-evidence"));
         var controls=new LinkedHashMap<String,String>();
         try {

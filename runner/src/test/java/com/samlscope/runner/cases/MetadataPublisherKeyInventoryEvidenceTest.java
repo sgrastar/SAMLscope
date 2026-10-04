@@ -52,6 +52,21 @@ class MetadataPublisherKeyInventoryEvidenceTest {
         assertTrue(compare(role(kd("signing",a)+kd("signing",b),""),inv,C3).isEmpty());
         assertEquals(List.of("key:signing:"+certificateSpki(b)),compare(role(kd("signing",a),""),inv,C3));
     }
+    @Test void independentlyProvenOmissionFalsifiesAllOfWhileUnknownOtherPurposesStillBlockSuccess()throws Exception {
+        String a=certificate("a"),b=certificate("b");
+        var keys=new ArrayList<NativeMetadataPublisherInventoryAdapter.RoleKey>();
+        keys.addAll(inventory(a,"signing").keys());keys.addAll(inventory(b,"signing").keys());
+        var inv=new NativeMetadataPublisherInventoryAdapter.Inventory(keys,List.of(),Set.of(P),null,List.of("operative-transport-unproven"));
+        for(String id:List.of(C1,C3)) {
+            var absent=compare(role(kd("signing",a),""),inv,id);
+            assertEquals(List.of("key:signing:"+certificateSpki(b)),absent);
+            assertEquals(com.samlscope.core.evaluation.Outcome.VIOLATED,stockOutcome(id,absent,inv.unresolvedScope(),true,true,false));
+            var present=compare(role(kd("signing",a)+kd("signing",b),""),inv,id);
+            assertEquals(com.samlscope.core.evaluation.Outcome.NOT_VERIFIED,stockOutcome(id,present,inv.unresolvedScope(),true,true,false));
+        }
+        assertEquals(com.samlscope.core.evaluation.Outcome.NOT_VERIFIED,stockOutcome(C3,List.of(),List.of(),false,true,true));
+        assertEquals(com.samlscope.core.evaluation.Outcome.SATISFIED,stockOutcome(C3,List.of(),List.of(),true,true,true));
+    }
     @Test void nestedForeignRoleAndDocumentSignerCannotSupplyOwnRoleKey()throws Exception {
         String cert=certificate("other");String xml="<md:EntityDescriptor xmlns:md='"+MD+"' xmlns:ds='"+DS+"' entityID='"+ENTITY+"'><ds:Signature><ds:KeyInfo><ds:X509Data><ds:X509Certificate>"+cert+"</ds:X509Certificate></ds:X509Data></ds:KeyInfo></ds:Signature><md:SPSSODescriptor protocolSupportEnumeration='"+P+"'>"+kd("signing",cert)+"</md:SPSSODescriptor><md:IDPSSODescriptor protocolSupportEnumeration='"+P+"'/></md:EntityDescriptor>";
         assertFalse(compare(MetadataPublisherKeyInventoryEvidence.role(xml.getBytes(),ENTITY),inventory(cert,"signing"),C3).isEmpty());

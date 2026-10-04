@@ -8,6 +8,8 @@ import subprocess
 import tempfile
 import zipfile
 
+from acceptance_dependency_discovery import runtime_classpath
+
 if not __debug__:
     raise RuntimeError('acceptance verification must not run with Python optimization')
 
@@ -25,15 +27,9 @@ def replay_production_reader(folder, runtime):
     repository = Path(__file__).resolve().parents[2]
     runner = runtime / 'runtime-runner.jar'
     helper = repository / 'dev/reference-acceptance/VerifyMetadataSignatureEvidence.java'
-    init = '''gradle.projectsEvaluated {\n  def p = gradle.rootProject.project(":runner")\n  p.tasks.register("printAcceptanceRuntimeClasspath") {\n    doLast { println(p.configurations.runtimeClasspath.asPath) }\n  }\n}\n'''
     with tempfile.TemporaryDirectory(prefix='samlscope-ssp-signature-replay-') as temporary:
         temporary = Path(temporary)
-        init_path = temporary / 'classpath.gradle'
-        init_path.write_text(init)
-        dependency_classpath = subprocess.run(
-            [str(repository / 'gradlew'), '-q', '-I', str(init_path),
-             ':runner:printAcceptanceRuntimeClasspath'],
-            cwd=repository, check=True, text=True, capture_output=True).stdout.strip()
+        dependency_classpath = runtime_classpath(repository, project=':runner')
         assert dependency_classpath
         classpath = str(runner) + ':' + dependency_classpath
         classes = temporary / 'classes'

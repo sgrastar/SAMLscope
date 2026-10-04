@@ -213,10 +213,17 @@ class CatalogDocumentsTest {
                         || value instanceof InformationalChoiceTestCase)
                 .count();
         assertTrue(IdpExecutableBrowserFixtureScenarioTestCase.CASE_IDS.stream()
-                .allMatch(caseId -> m1Browser.find(caseId)
+                .allMatch(caseId -> {
+                    var implementation = m1Browser.find(caseId)
                         .or(() -> m2Browser.find(caseId))
                         .or(() -> m3Browser.find(caseId))
-                        .orElseThrow() instanceof IdpExecutableBrowserFixtureScenarioTestCase),
+                        .orElseThrow();
+                    return implementation instanceof IdpExecutableBrowserFixtureScenarioTestCase
+                            || ("IIP-EXT01-c-idp-01".equals(caseId)
+                                && implementation instanceof com.samlscope.runner.cases.ExtensionAttributeParserTestCase
+                                && !((BrowserFrontChannelScenario) implementation).evidenceActionKeys().isEmpty()
+                                && !((BrowserFrontChannelScenario) implementation).supplementalEvidenceCampaigns().isEmpty());
+                }),
                 "Every former instruction-only browser case must have a runnable front-channel fixture");
         var conclusiveAttested = java.util.stream.Stream.concat(
                         m1Attested.forRole(TargetRole.IDP).stream(),

@@ -8,6 +8,9 @@ import com.samlscope.store.JsonCodec;
 import java.nio.file.Path;
 import java.time.*;
 import java.util.*;
+import com.samlscope.saml.crypto.PlanCredentials;
+import com.samlscope.saml.crypto.XmlSigner;
+import com.samlscope.saml.normal.SecureXml;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -69,4 +72,46 @@ class SimpleSamlPhpPublisherInventoryAdapterTest {
         }
     }
 
+    private PlanCredentials signer(String alias) {
+        return new FilePlanKeyStore(data.resolve("signed-key-tests"),Clock.systemUTC())
+                .getOrCreate("plan_0123456789ABCDEFGHJKMNPQRS",alias);
+    }
+    private static String der(PlanCredentials key)throws Exception {return Base64.getEncoder().encodeToString(key.certificate().getEncoded());}
+    private static org.w3c.dom.Element peer()throws Exception {
+        return SecureXml.parse(("<md:EntityDescriptor xmlns:md='"+MD+"' entityID='http://localhost:18080/p/plan_0123456789ABCDEFGHJKMNPQRS'><md:SPSSODescriptor protocolSupportEnumeration='"+P+"'/></md:EntityDescriptor>").getBytes()).getDocumentElement();
+    }
+    private static byte[] response(PlanCredentials key,String issuer,String audience,String request,String status)throws Exception {
+        String acs="http://localhost:18080/p/plan_0123456789ABCDEFGHJKMNPQRS/sp/acs";
+        var root=SecureXml.parse(("<p:Response xmlns:p='"+P+"' xmlns:s='urn:oasis:names:tc:SAML:2.0:assertion' ID='_response' InResponseTo='"+request+"' Destination='"+acs+"'><s:Issuer>"+issuer+"</s:Issuer><p:Status><p:StatusCode Value='urn:oasis:names:tc:SAML:2.0:status:"+status+"'/></p:Status><s:Assertion ID='_assertion'><s:Issuer>"+issuer+"</s:Issuer><s:Subject><s:SubjectConfirmation Method='urn:oasis:names:tc:SAML:2.0:cm:bearer'><s:SubjectConfirmationData InResponseTo='"+request+"' Recipient='"+acs+"'/></s:SubjectConfirmation></s:Subject><s:Conditions><s:AudienceRestriction><s:Audience>"+audience+"</s:Audience></s:AudienceRestriction></s:Conditions></s:Assertion></p:Response>").getBytes()).getDocumentElement();
+        var assertion=MetadataAlgorithmEvidence.children(root,"urn:oasis:names:tc:SAML:2.0:assertion","Assertion").getFirst();
+        new XmlSigner().sign(assertion,key,MetadataAlgorithmEvidence.children(assertion,"urn:oasis:names:tc:SAML:2.0:assertion","Subject").getFirst());
+        new XmlSigner().sign(root,key,MetadataAlgorithmEvidence.children(root,P,"Status").getFirst());
+        return SecureXml.serialize(root.getOwnerDocument());
+    }
+    @Test void originalResponseProvesTheIndependentNativeKeyInsteadOfMessageKeyInfo()throws Exception {
+        var a=signer("a");var b=signer("b");String entity=peer().getAttribute("entityID"),acs=entity+"/sp/acs";
+        byte[] raw=response(b,SimpleSamlPhpPublisherInventoryAdapter.TARGET,entity,"_request","Success");
+        assertEquals(certificateSpki(der(b)),SimpleSamlPhpPublisherInventoryAdapter.verifiedResponseSigningKey(raw,der(b),peer(),"_request",acs));
+        assertThrows(IllegalArgumentException.class,()->SimpleSamlPhpPublisherInventoryAdapter.verifiedResponseSigningKey(raw,der(a),peer(),"_request",acs));
+    }
+    @Test void signedErrorForeignAudienceIssuerAndRequestCannotProveCurrentSignerUse()throws Exception {
+        var b=signer("b");String entity=peer().getAttribute("entityID"),acs=entity+"/sp/acs";
+        for(var wrong:List.of(response(b,SimpleSamlPhpPublisherInventoryAdapter.TARGET,entity,"_request","Responder"),
+                response(b,"http://foreign/idp",entity,"_request","Success"),
+                response(b,SimpleSamlPhpPublisherInventoryAdapter.TARGET,"http://foreign/sp","_request","Success"),
+                response(b,SimpleSamlPhpPublisherInventoryAdapter.TARGET,entity,"_other","Success")))
+            assertThrows(IllegalArgumentException.class,()->SimpleSamlPhpPublisherInventoryAdapter.verifiedResponseSigningKey(wrong,der(b),peer(),"_request",acs));
+    }
+    @Test void outerSignatureCannotHideAnInvalidAssertionSignatureOrRecipient()throws Exception {
+        var b=signer("b");String entity=peer().getAttribute("entityID"),acs=entity+"/sp/acs";
+        var raw=response(b,SimpleSamlPhpPublisherInventoryAdapter.TARGET,entity,"_request","Success");
+        var root=SecureXml.parse(raw).getDocumentElement();
+        var assertion=MetadataAlgorithmEvidence.children(root,"urn:oasis:names:tc:SAML:2.0:assertion","Assertion").getFirst();
+        assertion.getElementsByTagNameNS(DS,"SignatureValue").item(0).setTextContent("invalid");
+        root.removeChild(MetadataAlgorithmEvidence.children(root,DS,"Signature").getFirst());
+        new XmlSigner().sign(root,b,MetadataAlgorithmEvidence.children(root,P,"Status").getFirst());
+        var changed=SecureXml.serialize(root.getOwnerDocument());
+        assertThrows(IllegalArgumentException.class,()->SimpleSamlPhpPublisherInventoryAdapter.verifiedResponseSigningKey(changed,der(b),peer(),"_request",acs));
+        assertThrows(IllegalArgumentException.class,()->SimpleSamlPhpPublisherInventoryAdapter.verifiedResponseSigningKey(raw,der(b),peer(),"_request",acs+"-foreign"));
+    }
 }
