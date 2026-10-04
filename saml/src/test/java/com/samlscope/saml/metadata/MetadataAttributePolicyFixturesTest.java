@@ -29,7 +29,7 @@ class MetadataAttributePolicyFixturesTest {
         assertEquals(0, root.getElementsByTagNameNS("urn:oasis:names:tc:SAML:metadata:ui", "UIInfo").getLength());
         assertThrows(IllegalArgumentException.class, () -> service.generatePreloadedCampaign(plan, "run_subset", java.util.List.of()));
         assertThrows(IllegalArgumentException.class, () -> service.generatePreloadedCampaign(plan, "run_subset",
-                java.util.List.of(MetadataService.Variant.UI_URL_LOGO_JAVASCRIPT)));
+                java.util.List.of(MetadataService.Variant.BAD_SIGNATURE)));
     }
 
     @Test void metadataPolicyInputsDistinguishEveryApprovedCondition() {
