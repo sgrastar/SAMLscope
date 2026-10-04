@@ -77,7 +77,9 @@ public final class VerifyMetadataRejectionEvidence {
             for (String mutation : List.of("wrong-target", "wrong-run", "not-restored", "unknown-adapter",
                     "empty-raw-evidence", "unknown-original-ref", "wrong-original-hash", "duplicate-original",
                     "empty-rejections", "wrong-reject-variant", "wrong-fixture-hash", "detail-not-hex",
-                    "wrong-source", "condition-issues", "wrong-schema")) {
+                    "wrong-source", "condition-issues", "wrong-schema", "wrong-native-log",
+                    "wrong-native-request", "wrong-native-log-hash",
+                    "wrong-native-log-with-matching-hash", "wrong-native-time")) {
                 var receipt = base.deepCopy();
                 var raw = (ArrayNode) receipt.path("rawEvidence");
                 var rejections = (ArrayNode) receipt.path("rejections");
@@ -97,6 +99,19 @@ public final class VerifyMetadataRejectionEvidence {
                     case "wrong-fixture-hash" -> rejection.put("fixtureSha256", "0".repeat(64));
                     case "detail-not-hex" -> nativeRejection.put("detailSha256", "not-a-sha256");
                     case "wrong-source" -> nativeRejection.put("source", "other-adapter");
+                    case "wrong-native-log" -> nativeRejection.put("logRecord", "Metadata expired");
+                    case "wrong-native-request" -> nativeRejection.put("requestReference", "tx_UNRELATEDREQUEST");
+                    case "wrong-native-log-hash" -> nativeRejection.put("detailSha256", "0".repeat(64));
+                    case "wrong-native-log-with-matching-hash" -> {
+                        var wrong = "[Tue Sep 29 20:10:36.256245 2026] product returned a generic error";
+                        nativeRejection.put("logRecord", wrong);
+                        nativeRejection.put("detailSha256", hash(wrong.getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+                    }
+                    case "wrong-native-time" -> {
+                        var wrong = nativeRejection.path("logRecord").asText().replace("2026]", "2036]");
+                        nativeRejection.put("logRecord", wrong);
+                        nativeRejection.put("detailSha256", hash(wrong.getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+                    }
                     case "condition-issues" -> { var issues = mapper.createArrayNode(); issues.add("unsupported"); receipt.set("conditionIssues", issues); }
                     case "wrong-schema" -> receipt.put("schema", "other-schema");
                     default -> throw new IllegalStateException();

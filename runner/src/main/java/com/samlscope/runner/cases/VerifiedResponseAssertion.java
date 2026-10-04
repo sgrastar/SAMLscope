@@ -47,12 +47,21 @@ final class VerifiedResponseAssertion {
             var issuers = children(assertion, S, "Issuer");
             require(issuers.size() == 1 && targetEntity.equals(issuers.getFirst().getTextContent()));
             if (!children(assertion, DS, "Signature").isEmpty()) {
-                var document = SecureXml.newDocument();
-                var envelope = document.createElementNS(P, "p:Response");
-                document.appendChild(envelope);
-                envelope.appendChild(document.importNode(assertion, true));
-                var verified = new VerifiedSignatureAlgorithms().read(envelope, targetEntity, targetSigningKeys);
-                require(verified.size() == 1 && "Assertion".equals(verified.getFirst().element()));
+                if (encrypted.isEmpty()) {
+                    // A plaintext Assertion was already verified in its original Response DOM above.
+                    // Moving it into a synthetic document can discard an ancestor namespace declaration
+                    // that was part of canonicalization and falsely reject a valid target signature.
+                    require(signatures.stream().anyMatch(s -> "Assertion".equals(s.element())
+                            && assertion.getAttribute("ID").equals(s.id())));
+                } else {
+                    // A decrypted Assertion was not visible to the outer signature scan.
+                    var document = SecureXml.newDocument();
+                    var envelope = document.createElementNS(P, "p:Response");
+                    document.appendChild(envelope);
+                    envelope.appendChild(document.importNode(assertion, true));
+                    var verified = new VerifiedSignatureAlgorithms().read(envelope, targetEntity, targetSigningKeys);
+                    require(verified.size() == 1 && "Assertion".equals(verified.getFirst().element()));
+                }
             }
             if (requestId != null) {
                 require(requestId.equals(response.getAttribute("InResponseTo"))

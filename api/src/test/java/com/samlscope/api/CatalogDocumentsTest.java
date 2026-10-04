@@ -135,7 +135,7 @@ class CatalogDocumentsTest {
                 value instanceof ProtocolEvidenceCase
                         || (value instanceof BrowserFrontChannelScenario
                             && !(value instanceof IdpExecutableBrowserFixtureScenarioTestCase))).count();
-        assertEquals(67, automatedM1Idp,
+        assertEquals(78, automatedM1Idp,
                 "Update this explicit automatic-oracle inventory when adding or removing an oracle");
         var ec = org.junit.jupiter.api.Assertions.assertInstanceOf(
                 com.samlscope.runner.cases.EcSignatureSupportTestCase.class,
@@ -235,13 +235,13 @@ class CatalogDocumentsTest {
         var questionnaireFree = automated + browserActions + conclusiveAttested + conclusiveConfig;
 
         assertEquals(413, totalIdpFull);
-        assertEquals(246, conclusive,
+        assertEquals(281, conclusive,
                 "Update this explicit IDP Full automatic-oracle inventory when an oracle changes: automated="
                         + automated + ", browser=" + conclusiveBrowser + ", attested="
                         + conclusiveAttested + ", config=" + conclusiveConfig);
         assertTrue(conclusive * 2 > totalIdpFull,
                 "At least half of IDP Full must conclude without an operator-supplied verdict");
-        assertEquals(290, questionnaireFree,
+        assertEquals(314, questionnaireFree,
                 "Update this explicit IDP Full no-questionnaire inventory when an interaction changes");
     }
 

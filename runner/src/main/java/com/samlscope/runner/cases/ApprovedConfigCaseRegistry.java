@@ -32,11 +32,49 @@ public final class ApprovedConfigCaseRegistry {
 
     public static TestCaseRegistry withMetadataRejection(TestCaseRegistry registry,
             TranscriptContentReader content, Function<String, byte[]> metadata, java.nio.file.Path directory) {
-        return new TestCaseRegistry(registry.all().stream().map(testCase ->
-                MetadataRejectionConfigurationTestCase.supports(testCase.id())
-                        && testCase instanceof MetadataFixtureObservationTestCase
-                        ? (TestCase)new MetadataRejectionConfigurationTestCase(testCase, content, metadata, directory)
-                        : testCase).toList());
+        return new TestCaseRegistry(registry.all().stream().map(testCase -> {
+            if (MetadataPublisherKeyInventoryConfigurationTestCase.supports(testCase.id())
+                    && testCase.role() == com.samlscope.core.plan.TargetRole.IDP
+                    && testCase instanceof ConfigurationPrompt && testCase instanceof AttestationPrompt
+                    && !(testCase instanceof MetadataPublisherKeyInventoryConfigurationTestCase)) {
+                return (TestCase) new MetadataPublisherKeyInventoryConfigurationTestCase(testCase, content, metadata,
+                        directory.toAbsolutePath().normalize().getParent().resolve("metadata-publisher-key-evidence"));
+            }
+            if (MetadataFullUiConfigurationTestCase.CASE.equals(testCase.id())) {
+                return withNativeFullUi(testCase, directory.toAbsolutePath().normalize().getParent(), content, metadata);
+            }
+            if (MetadataSchemaAdmissionConfigurationTestCase.ID.equals(testCase.id())
+                    && !(testCase instanceof MetadataSchemaAdmissionConfigurationTestCase)) {
+                return (TestCase) new MetadataSchemaAdmissionConfigurationTestCase(testCase, content, metadata, directory);
+            }
+            if (KeycloakMdiopRepresentationEvidenceFile.ID.equals(testCase.id())
+                    && testCase instanceof MetadataFixtureObservationTestCase) {
+                return (TestCase) new KeycloakMdiopRepresentationConfigurationTestCase(
+                        testCase, content, metadata, directory);
+            }
+            if (MetadataRefreshConfigurationTestCase.ID.equals(testCase.id())) {
+                return (TestCase) new MetadataRefreshConfigurationTestCase(testCase, content, directory);
+            }
+            if (MdqAcquisitionConfigurationTestCase.ID.equals(testCase.id())) {
+                return (TestCase) new MdqAcquisitionConfigurationTestCase(testCase, content, directory);
+            }
+            if (PublisherRootSignatureConfigurationTestCase.ID.equals(testCase.id())) {
+                return (TestCase) new PublisherRootSignatureConfigurationTestCase(testCase, metadata, directory);
+            }
+            if (MetadataRejectionConfigurationTestCase.supports(testCase.id())
+                    && testCase instanceof MetadataFixtureObservationTestCase) {
+                return (TestCase) new MetadataRejectionConfigurationTestCase(testCase, content, metadata, directory);
+            }
+            // Acceptance of a metadata document only decides MD03.b/c once the Run proves the target
+            // verifies the document signature with an out-of-band anchor. The same Run-scoped evidence
+            // directory carries that product-independent proof.
+            if (MetadataSignatureVerificationConfigurationTestCase.supports(testCase.id())
+                    && testCase instanceof MetadataFixtureObservationTestCase) {
+                return (TestCase) new MetadataSignatureVerificationConfigurationTestCase(
+                        testCase, content, metadata, directory);
+            }
+            return testCase;
+        }).toList());
     }
 
     public static TestCaseRegistry withNativeCertificates(TestCaseRegistry registry,
@@ -52,7 +90,9 @@ public final class ApprovedConfigCaseRegistry {
             java.util.function.BiFunction<String,String,java.util.Optional<com.samlscope.saml.crypto.PlanCredentials>> keys,
             java.nio.file.Path directory) {
         return new TestCaseRegistry(registry.all().stream().map(testCase ->
-                AttributePolicyConfigurationTestCase.supports(testCase.id())
+                testCase instanceof SubjectConfirmationConfigurationTestCase subjectConfirmation
+                        ? (TestCase)subjectConfirmation.withMetadataKeys(keys)
+                        : AttributePolicyConfigurationTestCase.supports(testCase.id())
                         ? (TestCase)new AttributePolicyConfigurationTestCase(testCase, content, metadata, keys, directory)
                         : testCase).toList());
     }
@@ -147,7 +187,27 @@ public final class ApprovedConfigCaseRegistry {
             return new InformationalChoiceTestCase(definition.id(), definition.role());
         }
         var metadata = MetadataConfigCaseFactory.create(definition);
-        if (metadata.isPresent()) return metadata.orElseThrow();
+        if (metadata.isPresent()) {
+            var candidate = metadata.orElseThrow();
+            TestCase prepared = candidate;
+            if (MetadataFullUiConfigurationTestCase.CASE.equals(definition.id())) {
+                return withNativeFullUi(prepared, SuiteRunProfileLookup.configuredDataDirectory(),
+                        transcriptContent, targetMetadata);
+            }
+            if (targetMetadata != null && transcriptContent != null && decryptionKeys != null
+                    && ShibbolethEntityIdUniquenessEvidence.CASE.equals(definition.id())
+                    && candidate instanceof MetadataFixtureObservationTestCase fixture) {
+                prepared = new EntityIdUniquenessConfigurationTestCase(fixture, transcriptContent, targetMetadata,
+                        decryptionKeys, SuiteRunProfileLookup.configuredDataDirectory().resolve("entityid-uniqueness-evidence"));
+            }
+            if (targetMetadata != null && transcriptContent != null && decryptionKeys != null
+                    && MetadataEntityIdentityConfigurationTestCase.IDS.contains(definition.id())) {
+                return new MetadataEntityIdentityConfigurationTestCase(prepared,
+                        SuiteRunProfileLookup.configuredDataDirectory().resolve("keycloak-metadata-entity-identity-evidence"),
+                        transcriptContent, targetMetadata, decryptionKeys);
+            }
+            return prepared;
+        }
         var evidence = new AttestedOutcomeTestCase(
                 definition.id(), definition.role(), "case." + definition.id() + ".evidence",
                 evidencePrompt(definition), EVIDENCE_TTL,
@@ -165,11 +225,63 @@ public final class ApprovedConfigCaseRegistry {
                 configurationPrompt(definition),
                 CONFIG_TTL,
                 definition.configurationFailureSemantics());
+        if (targetMetadata != null && transcriptContent != null && metadataKeys != null
+                && MetadataValidityConfigurationTestCase.ID.equals(definition.id())) {
+            return new MetadataValidityConfigurationTestCase(fallback,
+                    SuiteRunProfileLookup.configuredDataDirectory().resolve("metadata-validity-evidence"),
+                    transcriptContent, targetMetadata, metadataKeys);
+        }
+        if (targetMetadata != null && transcriptContent != null && metadataKeys != null
+                && MetadataRoleKeyProbeTestCase.CASE.equals(definition.id())) {
+            return new MetadataRoleKeyProbeTestCase(fallback, targetMetadata, transcriptContent, metadataKeys,
+                    SuiteRunProfileLookup.configuredDataDirectory().resolve("metadata-role-key-evidence"),
+                    new SimpleSamlPhpMetadataRoleKeyNativeAdapter(transcriptContent),
+                    new KeycloakMetadataRoleKeyNativeAdapter(transcriptContent));
+        }
+        if (targetMetadata != null && transcriptContent != null && metadataKeys != null
+                && MetadataCertificateRuntimeProbeTestCase.CASE.equals(definition.id())) {
+            return new MetadataCertificateRuntimeProbeTestCase(fallback, targetMetadata, transcriptContent,
+                    metadataKeys, SuiteRunProfileLookup.configuredDataDirectory()
+                            .resolve("metadata-certificate-runtime-evidence"),
+                    SuiteRunProfileLookup.configuredDataDirectory()
+                            .resolve("metadata-certificate-runtime-evidence-simplesamlphp"));
+        }
+        if (targetMetadata != null && transcriptContent != null
+                && SubjectConfirmationConfigurationTestCase.supports(definition.id())) {
+            var data = SuiteRunProfileLookup.configuredDataDirectory();
+            var profiles = new SuiteRunProfileLookup(data);
+            return new SubjectConfirmationConfigurationTestCase(fallback, transcriptContent, targetMetadata,
+                    data.resolve("subject-confirmation-evidence"), profiles::profile, metadataKeys);
+        }
+        if (targetMetadata != null && transcriptContent != null && decryptionKeys != null
+                && AuthenticationIdentityConfigurationTestCase.ID.equals(definition.id())) {
+            return new AuthenticationIdentityConfigurationTestCase(fallback, transcriptContent, targetMetadata,
+                    decryptionKeys, SuiteRunProfileLookup.configuredDataDirectory().resolve("authentication-identity-evidence"));
+        }
+        if (targetMetadata != null && transcriptContent != null
+                && MetadataSupersessionProbeTestCase.supports(definition.id())) {
+            return new MetadataSupersessionProbeTestCase(fallback, targetMetadata, transcriptContent,
+                    metadataKeys, SuiteRunProfileLookup.configuredDataDirectory().resolve("metadata-rejection-evidence"),
+                    decryptionKeys);
+        }
+        if (targetMetadata != null && transcriptContent != null && decryptionKeys != null
+                && AlgorithmPreventionConfigurationTestCase.supports(definition.id())) {
+            var data = SuiteRunProfileLookup.configuredDataDirectory();
+            var profiles = new SuiteRunProfileLookup(data);
+            return new AlgorithmPreventionConfigurationTestCase(
+                    fallback, transcriptContent, targetMetadata, decryptionKeys, profiles::profile,
+                    data.resolve("algorithm-prevention-evidence"));
+        }
         if (targetMetadata != null && transcriptContent != null && decryptionKeys != null && AttributeNameConfigurationTestCase.ID.equals(definition.id())) {
             return new AttributeNameConfigurationTestCase(fallback,transcriptContent,targetMetadata,decryptionKeys);
         }
         if (targetMetadata != null && transcriptContent != null && MetadataAlgorithmConfigurationTestCase.supports(definition.id())) {
-            return new MetadataAlgorithmConfigurationTestCase(fallback, transcriptContent, targetMetadata, metadataKeys);
+            var algorithm = new MetadataAlgorithmConfigurationTestCase(fallback, transcriptContent, targetMetadata, metadataKeys);
+            if (KeycloakAlgorithmPreferenceEvidenceFile.CASES.contains(definition.id())) {
+                return new KeycloakAlgorithmPreferenceConfigurationTestCase(algorithm, transcriptContent, targetMetadata,
+                        SuiteRunProfileLookup.configuredDataDirectory().resolve("metadata-rejection-evidence"));
+            }
+            return algorithm;
         }
         if (targetMetadata != null && TargetMetadataObservation.supports(definition.id())) {
             return new AutoConfigurationEvidenceTestCase(fallback, targetMetadata);
@@ -180,6 +292,17 @@ public final class ApprovedConfigCaseRegistry {
                     fallback, transcriptContent, decryptionKeys);
         }
         return fallback;
+    }
+
+    static TestCase withNativeFullUi(TestCase fallback, java.nio.file.Path data,
+            TranscriptContentReader transcriptContent, Function<String, byte[]> targetMetadata) {
+        if (fallback instanceof MetadataFullUiConfigurationTestCase) return fallback;
+        var bridge = new KeycloakNativeRunEvidenceBridge(data);
+        var content = transcriptContent == null
+                ? (TranscriptContentReader) bridge::content : transcriptContent;
+        return new MetadataFullUiConfigurationTestCase(fallback,
+                new ShibbolethMetadataFullUiEvidence(data.resolve("metadata-full-ui-evidence"), content),
+                targetMetadata == null ? bridge::targetMetadata : targetMetadata);
     }
 
     private static String configurationPrompt(CaseDefinition definition) {

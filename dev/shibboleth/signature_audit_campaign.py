@@ -22,6 +22,7 @@ def main():
     parser.add_argument('--output',type=Path,required=True)
     parser.add_argument('--profiles',default='browser_sso_idp,metadata_idp')
     parser.add_argument('--scenario',choices=['ec-signature','signed-request','metadata-key-signature'],default='ec-signature')
+    parser.add_argument('--variants',help='Select a native metadata-key group, retaining its baseline and paired controls')
     args=parser.parse_args();out=args.output.resolve();out.mkdir(parents=True,exist_ok=False)
     profiles=args.profiles.split(',')
     allowed={'browser_sso_idp','metadata_idp','ecp_idp','single_logout_idp'}
@@ -30,7 +31,12 @@ def main():
     if args.scenario=='metadata-key-signature':
         from metadata_key_matrix import KEY_CAMPAIGN
         key_variants=list(KEY_CAMPAIGN)
+        if args.variants:
+            key_variants=args.variants.split(',')
+            if not key_variants or key_variants[0]!='control' or len(set(key_variants))!=len(key_variants) or not set(key_variants)<=set(KEY_CAMPAIGN):
+                raise ValueError('Selected native keys must be unique, allowed, and begin with control')
         (out/'matrix.json').write_text(json.dumps(dict(matrix='keys',variants=key_variants,verdict_adopted=False),indent=2)+'\n')
+    elif args.variants:raise ValueError('Variant selection requires a metadata-key signature campaign')
     original=docker('cat',CONFIG);configured=signature_audit(original)
     (out/'original-audit.xml').write_bytes(original);(out/'configured-audit.xml').write_bytes(configured)
     operations=[]

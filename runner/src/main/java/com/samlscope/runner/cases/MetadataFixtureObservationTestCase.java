@@ -97,6 +97,17 @@ public final class MetadataFixtureObservationTestCase
 
     @Override
     public CaseStep resume(CaseContext context, CaseState state, CaseEvent event) {
+        // Older Runs can retain a configuration phase written by the former
+        // generic gate. Expiration/abort is uncertainty even for that state;
+        // only a confirming event requires the current fixture phase.
+        if (event instanceof CaseEvent.TimedOut) {
+            return new CaseStep.Finish(CaseOutcome.notVerified(
+                    "metadata_fixture_probe_timeout", "metadata.fixture-probe.timeout"));
+        }
+        if (event instanceof CaseEvent.Aborted) {
+            return new CaseStep.Finish(CaseOutcome.notVerified(
+                    "metadata_fixture_probe_skipped", "metadata.fixture-probe.skipped"));
+        }
         if (!PHASE.equals(state.phase())) throw new IllegalArgumentException("Unexpected metadata fixture phase");
         if (event instanceof CaseEvent.ConfigConfirmed) return new CaseStep.Finish(evaluate(context, true));
         if (event instanceof CaseEvent.ConfigUnavailable unavailable) {
@@ -114,14 +125,6 @@ public final class MetadataFixtureObservationTestCase
                     List.of(), Map.of(
                             "configuration_issue", unavailable.issue().name().toLowerCase(java.util.Locale.ROOT),
                             "configuration_note", unavailable.note())));
-        }
-        if (event instanceof CaseEvent.TimedOut) {
-            return new CaseStep.Finish(CaseOutcome.notVerified(
-                    "metadata_fixture_probe_timeout", "metadata.fixture-probe.timeout"));
-        }
-        if (event instanceof CaseEvent.Aborted) {
-            return new CaseStep.Finish(CaseOutcome.notVerified(
-                    "metadata_fixture_probe_skipped", "metadata.fixture-probe.skipped"));
         }
         throw new IllegalArgumentException("Expected metadata fixture configuration completion");
     }
@@ -200,6 +203,15 @@ public final class MetadataFixtureObservationTestCase
         var wrongEndpoints = new LinkedHashSet<String>();
         var evidence = new ArrayList<EvidenceRef>();
         var entries = context.transcript().list(context.runId());
+        var entryIds = new LinkedHashSet<String>();
+        // Recorder normally scopes this list, but a replay or alternate implementation must
+        // not turn another Run's fetch/use summaries or ambiguous IDs into target evidence.
+        if (entries.stream().anyMatch(entry -> entry == null
+                || !context.runId().equals(entry.runId()) || !entryIds.add(entry.id()))) {
+            return new Observation(false, Set.of(), Set.of(), Set.of(), Set.of(), List.of(),
+                    Map.of("metadata_history_identity_unproven", true,
+                            "transcript_complete", context.transcriptComplete()));
+        }
         var signature = MetadataSignatureObservation.observe(context.runId(), entries);
         signature.evidence().stream().sorted().forEach(id -> evidence.add(new EvidenceRef("transcript", "transcript:" + id)));
         for (var entry : entries) {

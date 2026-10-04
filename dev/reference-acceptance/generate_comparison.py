@@ -5,6 +5,11 @@ import hashlib
 import json
 from pathlib import Path
 
+# This generator selects evidence for public comparison.  Its integrity assertions
+# must never be stripped by an optimized interpreter.
+if not __debug__:
+    raise RuntimeError('comparison generation must not run with Python optimization')
+
 PRODUCTS = ("keycloak", "shibboleth", "simplesamlphp")
 COMMON_RETESTS = {"IIP-G01-a-idp-01", "IIP-EXT01-a-idp-01", "IIP-EXT01-b-idp-01",
                   "IIP-EXT01-c-idp-01", "IIP-ALG01-a-idp-01", "IIP-ALG02-a-idp-01"}
@@ -29,14 +34,49 @@ QUALIFICATIONS = {
 
 CONFIRMED_FAILURES = {
     "IIP-SSO07-b-idp-01", "IIP-SSO01-fk-idp-01", "IIP-SSO01-ag-idp-01", "IIP-SSO05-b2-idp-01",
-    "IIP-SSO05-a-idp-01", "IIP-IDP10-b-idp-01", "IIP-IDP10-d-idp-01",
+    "IIP-SSO05-a-idp-01", "IIP-SSO01-d-idp-01", "IIP-IDP10-b-idp-01", "IIP-IDP10-d-idp-01",
     "IIP-IDP05-a-idp-01", "IIP-IDP08-a-idp-01", "IIP-IDP17-t-idp-01",
     "IIP-IDP17-m-idp-01", "IIP-IDP15-a-idp-01",
 }
 
+def withdrawn_source_case(qualification):
+    """Load the pinned withdrawn conclusion, not an older baseline placeholder."""
+    path = Path(qualification['evidence_folder']) / qualification.get('result_file', 'result.json')
+    raw = path.read_bytes()
+    if hashlib.sha256(raw).hexdigest() != qualification['result_sha256']:
+        raise ValueError('Withdrawn comparison source digest differs')
+    result = json.loads(raw)
+    cases = [c for req in result['requirements'] for c in req['cases']
+             if c['id'] == qualification['case']]
+    if (result['run']['id'] != qualification['run'] or len(cases) != 1
+            or cases[0]['verdict'] != qualification['audit_withdrawal']['original_verdict']
+            or cases[0]['reason_code'] != qualification['audit_withdrawal']['original_reason']):
+        raise ValueError('Withdrawn comparison Run or original conclusion differs')
+    return cases[0]
+
 def render(root, output):
+    # One immutable campaign can qualify several comparison cells. Verify its
+    # complete originals once per render; another invocation verifies them anew.
+    campaign_checks = {}
+
+    def check_once(verifier, *args, **kwargs):
+        def freeze(value):
+            if isinstance(value, dict):
+                return tuple(sorted((key, freeze(item)) for key, item in value.items()))
+            if isinstance(value, (tuple, list)):
+                return tuple(freeze(item) for item in value)
+            return value
+        key = (verifier, freeze(args), freeze(kwargs))
+        if key not in campaign_checks:
+            campaign_checks[key] = verifier(*args, **kwargs)
+        return campaign_checks[key]
+
+    verified_native_key_campaigns = {}
     from audit_algorithm_verification_evidence import withdrawals as algorithm_withdrawals
-    withdrawn={(r['product'],r['profile'],r['case']):r for r in algorithm_withdrawals(root)}
+    from audit_force_authn_mechanism_evidence import withdrawals as force_authn_withdrawals
+    from audit_async_feedback_failure_evidence import withdrawals as async_feedback_withdrawals
+    from audit_metadata_full_ui_evidence import withdrawals as metadata_full_ui_withdrawals
+    withdrawn={(r['product'],r['profile'],r['case']):r for r in algorithm_withdrawals(root) + force_authn_withdrawals(root) + async_feedback_withdrawals(root) + metadata_full_ui_withdrawals(root)}
     # The audited ledger owns the final per-case selection, including withdrawn conclusions.
     # Older feature-specific selections above must not resurrect a result rejected by that audit.
     ledger_selection = {}
@@ -44,6 +84,55 @@ def render(root, output):
     if delta_path.exists():
         for row in json.loads(delta_path.read_text()):
             ledger_selection[(row["product"], row["profile"], row["case"])] = row
+    for product in PRODUCTS:
+        signer_key = (product, "single_logout_idp", "IIP-IDP17-ab-idp-01")
+        signer_row = ledger_selection.get(signer_key)
+        if signer_row is None or signer_row.get("verdict") == "NOT_VERIFIED":
+            continue
+        from verify_slo_registered_signer_acceptance import verify_adoption as verify_slo_signer
+        signer_path, signer_cases = check_once(
+            verify_slo_signer, root.parent / "reference-20261004", product, live=False)
+        signer_raw = signer_path.read_bytes()
+        signer_case = signer_cases[signer_key[2]]
+        if (signer_row["run"] != json.loads(signer_raw)["run"]["id"]
+                or signer_row["result_sha256"] != hashlib.sha256(signer_raw).hexdigest()
+                or signer_row["verdict"] != signer_case["verdict"]
+                or signer_row["reason_code"] != signer_case["reason_code"]
+                or signer_row["evidence"] != signer_case["evidence"]):
+            raise ValueError("Native SLO signer comparison selection differs from its verified Run")
+    version_key = ("simplesamlphp", "browser_sso_idp", "IIP-SSO01-ep-idp-01")
+    version_row = ledger_selection.get(version_key)
+    if version_row is not None and version_row.get("verdict") != "NOT_VERIFIED":
+        from verify_version_mismatch_acceptance import verify as verify_version_mismatch
+        version_path, version_ids = check_once(
+            verify_version_mismatch, root.parent / "reference-20261004", live=False)
+        version_raw = version_path.read_bytes()
+        version_result = json.loads(version_raw)
+        version_cases = [case for requirement in version_result["requirements"]
+                         for case in requirement["cases"] if case["id"] in version_ids]
+        if version_ids != {version_key[2]} or len(version_cases) != 1:
+            raise ValueError("Version mismatch comparison has an unexpected case scope")
+        version_case = version_cases[0]
+        if (version_row["run"] != version_result["run"]["id"]
+                or version_row["result_sha256"] != hashlib.sha256(version_raw).hexdigest()
+                or version_row["verdict"] != version_case["verdict"]
+                or version_row["reason_code"] != version_case["reason_code"]
+                or version_row["evidence"] != version_case["evidence"]):
+            raise ValueError("Version mismatch comparison selection differs from its verified Run")
+    full_ui_key = ("shibboleth", "metadata_idp", "IIP-MD05-f-idp-01")
+    full_ui_row = ledger_selection.get(full_ui_key)
+    if full_ui_row is not None and full_ui_row.get("verdict") == "PASS":
+        from verify_shibboleth_full_ui_acceptance import verify_adoption as verify_shib_full_ui
+        path, verified_cases = check_once(verify_shib_full_ui,
+            root.parent / "reference-20261003", live=False)
+        raw = path.read_bytes()
+        verified_case = verified_cases[full_ui_key[2]]
+        if (full_ui_row["run"] != json.loads(raw)["run"]["id"]
+                or full_ui_row["result_sha256"] != hashlib.sha256(raw).hexdigest()
+                or full_ui_row["reason_code"] != verified_case["reason_code"]
+                or full_ui_row["evidence"] != verified_case["evidence"]):
+            raise ValueError("Native full UI ledger selection differs from its independently verified Run")
+        withdrawn.pop(full_ui_key, None)
     sections = []
     manifest = []
     alg_adopted = set()
@@ -256,9 +345,9 @@ def render(root, output):
                 if (selected_product, selected_profile) != (product, profile):
                     continue
                 selected_folder = Path(row["evidence_folder"])
-                result_path = selected_folder / "result.json"
+                result_path = selected_folder / row.get("result_file", "result.json")
                 if not result_path.exists():
-                    result_path = root / selected_folder / "result.json"
+                    result_path = root / selected_folder / row.get("result_file", "result.json")
                 selected_raw = result_path.read_bytes()
                 assert hashlib.sha256(selected_raw).hexdigest() == row["result_sha256"]
                 selected = json.loads(selected_raw)
@@ -267,22 +356,57 @@ def render(root, output):
                 assert len(matches) == 1
                 replacement = matches[0]
                 assert (replacement["verdict"], replacement["reason_code"]) == (row["verdict"], row["reason_code"])
+                if (product, profile, case_id) in {
+                        ("shibboleth", "browser_sso_idp", "IIP-ALG08-a-idp-01"),
+                        ("shibboleth", "browser_sso_idp", "IIP-ALG08-b-idp-01"),
+                        ("shibboleth", "ecp_idp", "IIP-ALG08-a-idp-01"),
+                        ("shibboleth", "ecp_idp", "IIP-ALG08-b-idp-01")}:
+                    if profile == "ecp_idp":
+                        from verify_algorithm_prevention_ecp_acceptance import \
+                            verify_adoption as verify_algorithm_prevention
+                    else:
+                        from verify_algorithm_prevention_acceptance import \
+                            verify_adoption as verify_algorithm_prevention
+                    verified_path, verified_cases = check_once(verify_algorithm_prevention,
+                        root.parent / "reference-20260930")
+                    assert result_path.resolve() == verified_path.resolve()
+                    assert replacement == verified_cases[case_id]
                 cases[case_id] = replacement
                 peer_adopted.add((product, profile, case_id))
                 manifest.append({"profile": profile, "product": product, "folder": str(result_path.parent),
                                  "run": row["run"], "cases": [case_id],
                                  "result_sha256": row["result_sha256"],
                                  "suite_image": selected["suite"]["image_digest"], "selection": "audited-ledger"})
+            # This observation was already conclusive in the baseline, so it is not
+            # part of remaining-audit's unresolved set. Preserve its stronger native
+            # signed-original verification without counting it as a new resolution.
+            if product == 'shibboleth' and profile == 'browser_sso_idp':
+                from verify_shibboleth_post_error_binding_acceptance import verify as verify_shibboleth_post_error
+                verified_path, verified_cases = check_once(verify_shibboleth_post_error, root.parent / 'reference-20261001')
+                case_id = 'IIP-SSO03-b-idp-01'
+                assert cases[case_id]['verdict'] == verified_cases[case_id]['verdict'] == 'PASS'
+                selected_raw = verified_path.read_bytes()
+                selected = json.loads(selected_raw)
+                cases[case_id] = verified_cases[case_id]
+                peer_adopted.add((product, profile, case_id))
+                manifest.append({'profile': profile, 'product': product,
+                    'folder': str(verified_path.parent), 'run': selected['run']['id'], 'cases': [case_id],
+                    'result_sha256': hashlib.sha256(selected_raw).hexdigest(),
+                    'suite_image': selected['suite']['image_digest'], 'selection': 'native-original-strengthening'})
             for case_id in list(cases):
                 qualification=withdrawn.get((product,profile,case_id))
                 if qualification is None: continue
                 original=cases[case_id]
                 if original['reason_code']=='algorithm.native-verification-observed':
                     from verify_native_signed_acceptance import verify as verify_native_signed
-                    _,verified=verify_native_signed(root.parent/'reference-20260918',profile,product)
+                    _,verified=check_once(verify_native_signed, root.parent/'reference-20260918',profile,product)
                     assert product in {'shibboleth','simplesamlphp','keycloak'} and original==verified[case_id]
                     continue
-                assert original['verdict']=='PASS' and original['reason_code']=='idp.signed-request.satisfied'
+                # Ledger selection skips withdrawn results. The baseline can therefore
+                # still hold a much older NOT_VERIFIED instead of the audited legacy PASS.
+                # Qualify the actual pinned source before rendering its withdrawn state.
+                original=withdrawn_source_case(qualification)
+                assert original['verdict']=='PASS'
                 cases[case_id]=dict(original,outcome='NOT_VERIFIED',verdict='NOT_VERIFIED',
                     reason_code=qualification['reason_code'],reason=qualification['reason_code'])
                 manifest.append(dict(profile=profile,product=product,folder=qualification['evidence_folder'],
@@ -322,17 +446,152 @@ def render(root, output):
                     and (product, profile, case_id) in ledger_selection)
                 if native_certificate_failure:
                     from verify_native_certificate_acceptance import verify as verify_native_certificates
-                    _, verified = verify_native_certificates(root.parent / 'reference-20260918', runtime=case_id == "IIP-MD06-a9-idp-01")
+                    _, verified = check_once(verify_native_certificates, root.parent / 'reference-20260918', runtime=case_id == "IIP-MD06-a9-idp-01")
                     assert case == verified[case_id]
                 native_key_failure = ((product,profile,case_id)==("keycloak","metadata_idp","IIP-MD07-a-idp-01")
                     and case["reason_code"]=="metadata.keys.selection-violated" and (product,profile,case_id) in ledger_selection)
                 if native_key_failure:
                     from verify_metadata_key_acceptance import verify as verify_metadata_keys
-                    _,verified=verify_metadata_keys(root.parent/'reference-20260918')
+                    _,verified=check_once(verify_metadata_keys, root.parent/'reference-20260918')
                     assert case==verified[case_id]
-                if verdict == "FAIL" and case_id not in CONFIRMED_FAILURES and not native_authn_failure and not native_certificate_failure and not native_key_failure:
+                native_runtime_key_failure = (
+                    profile == "metadata_idp" and product in {"keycloak", "simplesamlphp"}
+                    and case_id in {"IIP-MD05-cd-idp-01", "IIP-MD06-a5-idp-01", "IIP-MD06-a7-idp-01"}
+                    and case["reason_code"] == {
+                        "keycloak": "metadata.keys.selection-violated",
+                        "simplesamlphp": "metadata.keys.keyvalue-runtime-unavailable",
+                    }[product]
+                    and (product, profile, case_id) in ledger_selection)
+                if native_runtime_key_failure:
+                    if product not in verified_native_key_campaigns:
+                        if product == "keycloak":
+                            from verify_keycloak_native_key_policy_acceptance import verify_adoption as verify_runtime_keys
+                            evidence_root = root.parent / 'reference-20260930'
+                        else:
+                            from verify_ssp_keyvalue_runtime_acceptance import verify as verify_runtime_keys
+                            evidence_root = root.parent / 'reference-20261001'
+                        _, verified_native_key_campaigns[product] = check_once(verify_runtime_keys, evidence_root, live=False)
+                    assert case == verified_native_key_campaigns[product][case_id]
+                    native_key_failure = True
+                native_default_acs_failure = ((product, profile, case_id) in {
+                    ("keycloak", "metadata_idp", "IIP-MD05-av-idp-01"),
+                    ("shibboleth", "metadata_idp", "IIP-MD05-av-idp-01"),
+                    ("simplesamlphp", "metadata_idp", "IIP-MD05-av-idp-01"),
+                }
+                    and case["reason_code"] == "metadata.fixture-probe.violated"
+                    and (product, profile, case_id) in ledger_selection)
+                if native_default_acs_failure:
+                    if product == "keycloak":
+                        from verify_keycloak_default_acs_acceptance import verify as verify_default_acs
+                    elif product == "shibboleth":
+                        from verify_shibboleth_default_acs_acceptance import verify as verify_default_acs
+                    else:
+                        from verify_ssp_default_acs_acceptance import verify as verify_default_acs
+                    _, verified = check_once(verify_default_acs, root.parent / 'reference-20260930')
+                    assert case == verified[case_id]
+                native_attribute_name_failure = (
+                    (product, profile, case_id) == ("keycloak", "browser_sso_idp", "IIP-IDP01-a-idp-01")
+                    and case["reason_code"] == "capability_absent"
+                    and (product, profile, case_id) in ledger_selection)
+                if native_attribute_name_failure:
+                    from verify_keycloak_attribute_name_absence import verify as verify_attribute_name_absence
+                    _, verified = check_once(verify_attribute_name_absence, root.parent / 'reference-20260930')
+                    assert case == verified[case_id]
+                native_nameid_omission_failure = (
+                    (product, profile, case_id) == ("keycloak", "browser_sso_idp", "IIP-IDP11-a-idp-01")
+                    and case["reason_code"] == "capability_absent"
+                    and (product, profile, case_id) in ledger_selection)
+                if native_nameid_omission_failure:
+                    from verify_keycloak_nameid_omission_absence import verify_adoption as verify_nameid_absence
+                    _, verified = check_once(verify_nameid_absence, root.parent / 'reference-20260930')
+                    assert case == verified[case_id]
+                native_ssp_validity_failure = (
+                    product == "simplesamlphp" and profile == "metadata_idp"
+                    and case_id in {"IIP-MD04-a-idp-01", "IIP-MD04-c-idp-01"}
+                    and case["reason_code"] == "metadata.fixture-probe.violated"
+                    and (product, profile, case_id) in ledger_selection)
+                if native_ssp_validity_failure:
+                    from verify_ssp_validity_capability_absence import verify as verify_ssp_validity
+                    _, verified = check_once(verify_ssp_validity, root.parent / 'reference-20260930')
+                    assert case == verified[case_id]
+                native_keycloak_validity_failure = (
+                    product == "keycloak" and profile == "metadata_idp"
+                    and case_id in {"IIP-MD04-a-idp-01", "IIP-MD04-b-idp-01",
+                                    "IIP-MD04-c-idp-01", "IIP-MD05-as-idp-01"}
+                    and case["reason_code"] in {
+                        "metadata.fixture-probe.violated", "capability_absent"}
+                    and (product, profile, case_id) in ledger_selection)
+                if native_keycloak_validity_failure:
+                    from verify_keycloak_validity_capability_absence import \
+                        verify as verify_keycloak_validity
+                    _, verified = check_once(verify_keycloak_validity,
+                        root.parent / 'reference-20260930', case_id)
+                    assert case == verified[case_id]
+                native_metadata_source_failure = (
+                    product == "keycloak" and profile == "metadata_idp"
+                    and case_id in {"IIP-MD06-b-idp-01", "IIP-MD03-d-idp-01"}
+                    and case["reason_code"] == "capability_absent"
+                    and (product, profile, case_id) in ledger_selection)
+                if native_metadata_source_failure:
+                    from verify_keycloak_metadata_source_capability_absence import \
+                        verify_adoption as verify_metadata_source_absence
+                    _, verified = check_once(verify_metadata_source_absence, root.parent / 'reference-20260930')
+                    assert case == verified[case_id]
+                native_metadata_signature_failure = (
+                    product == "keycloak" and profile == "metadata_idp"
+                    and case_id in {"IIP-MD03-a-idp-01", "IIP-MD03-b-idp-01",
+                                    "IIP-MD03-c-idp-01"}
+                    and case["reason_code"] == "capability_absent"
+                    and (product, profile, case_id) in ledger_selection)
+                if native_metadata_signature_failure:
+                    from verify_keycloak_metadata_signature_capability_absence import \
+                        verify_adoption as verify_metadata_signature_absence
+                    _, verified = check_once(verify_metadata_signature_absence,
+                        root.parent / 'reference-20260930')
+                    assert case == verified[case_id]
+                native_metadata_application_failure = (
+                    (product, profile, case_id) == ("keycloak", "metadata_idp", "IIP-MD06-a-idp-01")
+                    and case["reason_code"] == "metadata.application.accepted-post-endpoint-rejected"
+                    and (product, profile, case_id) in ledger_selection)
+                if native_metadata_application_failure:
+                    from verify_keycloak_metadata_supersession_acceptance import verify_adoption as verify_native_application
+                    _, verified = check_once(verify_native_application, root.parent / 'reference-20261001', live=False)
+                    assert case == verified[case_id]
+                native_metadata_supersession_failure = (
+                    (product, profile, case_id) == ("keycloak", "metadata_idp", "IIP-MD06-ab-idp-01")
+                    and case["reason_code"] == "metadata.supersession.accepted-post-endpoint-rejected"
+                    and (product, profile, case_id) in ledger_selection)
+                if native_metadata_supersession_failure:
+                    from verify_keycloak_supersession_counterexample_acceptance import verify_adoption as verify_native_supersession
+                    _, verified = check_once(verify_native_supersession, root.parent / 'reference-20261001', live=False)
+                    assert case == verified[case_id]
+                native_encrypted_logout_failure = (
+                    (product, profile, case_id) == ("simplesamlphp", "single_logout_idp", "IIP-IDP19-c-idp-01")
+                    and case["reason_code"] == "slo.encrypted-id.multiple-keys.unknown-key-accepted"
+                    and (product, profile, case_id) in ledger_selection)
+                if native_encrypted_logout_failure:
+                    from verify_ssp_encrypted_logout_acceptance import verify as verify_native_encrypted_logout
+                    _, verified = check_once(verify_native_encrypted_logout, root.parent / 'reference-20261001', live=False)
+                    assert case == verified[case_id]
+                native_schema_admission_failure = (
+                    (product, profile, case_id) == ("keycloak", "metadata_idp", "IIP-MD05-b-idp-01")
+                    and case["reason_code"] == "metadata.schema.native-valid-endpoint-extension-rejected"
+                    and (product, profile, case_id) in ledger_selection)
+                if native_schema_admission_failure:
+                    from verify_keycloak_native_schema_admission_acceptance import verify_adoption as verify_native_schema
+                    _, verified = check_once(verify_native_schema, root.parent / 'reference-20261001', live=False)
+                    assert case == verified[case_id]
+                native_attribute_index_failure = (
+                    (product, profile, case_id) == ("simplesamlphp", "browser_sso_idp", "IIP-IDP04-b-idp-01")
+                    and case["reason_code"] == "browser.attribute-index.selection-ignored"
+                    and (product, profile, case_id) in ledger_selection)
+                if native_attribute_index_failure:
+                    from verify_ssp_attribute_service_index_acceptance import verify as verify_native_attribute_index
+                    _, verified = check_once(verify_native_attribute_index, root.parent / 'reference-20261001', live=False)
+                    assert case == verified[case_id]
+                if verdict == "FAIL" and case_id not in CONFIRMED_FAILURES and not native_authn_failure and not native_certificate_failure and not native_key_failure and not native_default_acs_failure and not native_attribute_name_failure and not native_nameid_omission_failure and not native_ssp_validity_failure and not native_keycloak_validity_failure and not native_metadata_source_failure and not native_metadata_signature_failure and not native_metadata_application_failure and not native_metadata_supersession_failure and not native_encrypted_logout_failure and not native_schema_admission_failure and not native_attribute_index_failure:
                     display = "**Failed (台帳採用・原因分類未確認)**"
-                if product == 'simplesamlphp' and profile == 'browser_sso_idp' and case_id == 'IIP-IDP06-b-idp-01':
+                if product == 'simplesamlphp' and profile == 'browser_sso_idp' and case_id == 'IIP-IDP06-b-idp-01' and case['reason_code'] != 'audit.force-authn-mechanism-access-unproven':
                     display += " (prior run; latest precision not verified)"
                 cells.append(display + (" †" if (product == "shibboleth" and profile == "browser_sso_idp" and case_id in {'IIP-SSO01-fk-idp-01','IIP-SSO01-fu-idp-01','IIP-SSO01-gi-idp-01'}) or (product == "simplesamlphp" and profile == "browser_sso_idp" and case_id in {"IIP-IDP06-a-idp-01", "IIP-IDP06-b-idp-01"}) or (profile == "single_logout_idp" and (case_id in COMMON_RETESTS or case_id == "IIP-IDP17-a-idp-01" or case_id == "IIP-IDP18-a-idp-01" or case_id == "IIP-IDP19-a-idp-01" or case_id == "IIP-IDP19-c-idp-01" or (product == "shibboleth" and case_id == "IIP-IDP19-b-idp-01"))) or case_id in ADDITIONAL_RETESTS.get(profile, set()) or (product, profile, case_id) in alg_adopted or (product, profile, case_id) in peer_adopted or (product == "shibboleth" and ((profile == "metadata_idp" and case_id in POLLING_RETESTS) or (profile == "browser_sso_idp" and case_id == "IIP-IDP12-c-idp-01"))) else ""))
             lines.append(f"| `{case_id}` | " + " | ".join(cells) + " |")
@@ -348,6 +607,8 @@ def render(root, output):
         "browser_fixture_partial": "一部の試験だけ実行。残るvariantの証拠が不足",
         "request.signing.unavailable": "署名必須構成でSuiteが当該要求を署名できない",
         "force_authn_timestamp_precision_insufficient": "報告された時刻精度では新規認証を証明できない",
+        "audit.slo-async-session-failure-unproven": "IdP自身のセッション終了失敗を安全に誘導し、正常終了と失敗通知の両対照を観測する必要がある",
+        "audit.metadata-full-ui-controls-unproven": "正しい配置のUIInfo・DiscoHintsを取り込み、全variantの値を製品のUIまたは実効読み戻しで確認する必要がある",
         "control_failed": "正常系対照が成立せず異常系を判定できない",
     }
     total = sum(sum(counter.values()) for counter in unresolved.values())
@@ -371,4 +632,6 @@ if __name__ == "__main__":
     parser.add_argument("--evidence-root", type=Path, required=True)
     parser.add_argument("--output", type=Path, default=Path("docs/23-reference-test-comparison.md"))
     args = parser.parse_args()
-    render(args.evidence_root, args.output)
+    from acceptance_dependency_discovery import dependency_discovery_scope
+    with dependency_discovery_scope():
+        render(args.evidence_root, args.output)

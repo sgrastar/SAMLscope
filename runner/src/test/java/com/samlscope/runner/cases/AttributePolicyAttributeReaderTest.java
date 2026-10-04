@@ -45,6 +45,21 @@ class AttributePolicyAttributeReaderTest {
         new XmlSigner().sign(response, key, null);
         return new Fixture(response, metadata, key);
     }
+
+    private Fixture plaintextSignedInResponseContext(String attributes) throws Exception {
+        var key = new FilePlanKeyStore(directory, Clock.systemUTC()).getOrCreate("plan_0123456789ABCDEFGHJKMNPQRS", "context");
+        var metadata = parse("<md:EntityDescriptor xmlns:md='" + MD + "' entityID='https://sp.example'><md:SPSSODescriptor/></md:EntityDescriptor>");
+        var response = parse("<p:Response xmlns:p='" + P + "' xmlns:s='" + S + "' ID='_response-context'>"
+                + "<s:Issuer>https://idp.example</s:Issuer><p:Status><p:StatusCode Value='urn:oasis:names:tc:SAML:2.0:status:Success'/></p:Status>"
+                + "<s:Assertion ID='_assertion-context'><s:Issuer>https://idp.example</s:Issuer><s:AttributeStatement>"
+                + attributes + "</s:AttributeStatement></s:Assertion></p:Response>");
+        var assertion = (Element) response.getElementsByTagNameNS(S, "Assertion").item(0);
+        // The s prefix is declared by the Response. This is the shape emitted by SimpleSAMLphp.
+        assertFalse(assertion.hasAttribute("xmlns:s"));
+        new XmlSigner().sign(assertion, key, null);
+        new XmlSigner().sign(response, key, null);
+        return new Fixture(response, metadata, key);
+    }
     private AttributePolicyAttributeReader.Observation read(Fixture f, String run) {
         return AttributePolicyAttributeReader.read(run, f.response(), "https://idp.example", List.of(f.key().certificate()),
                 f.metadata(), Optional.of(f.key()));
@@ -60,6 +75,11 @@ class AttributePolicyAttributeReaderTest {
         assertFalse(plain.toString().contains(plain.attributeInputFingerprint()));
         assertNotEquals(plain.attributeInputFingerprint(), read(fixture(attributes, true), "another_run").attributeInputFingerprint());
         assertNotEquals(plain.attributeInputFingerprint(), read(fixture(attribute("anchor", "other-user"), true), "run_test").attributeInputFingerprint());
+    }
+
+    @Test void plaintextSignatureIsCheckedInItsOriginalAncestorNamespaceContext() throws Exception {
+        var evidence = read(plaintextSignedInResponseContext(attribute("anchor", "synthetic-user")), "run_test");
+        assertEquals(Set.of("anchor"), evidence.markers());
     }
 
     @Test void incompleteOrAmbiguousAttributesCannotProveAbsenceOrSameInput() throws Exception {

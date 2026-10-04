@@ -429,17 +429,10 @@ class TargetMetadataObservationTest {
 
     @Test
     void algorithmPublicationCapabilityRequiresPositiveSignatureAndEncryptionDeclarations() {
-        var complete = metadata("""
-                <md:Extensions>
-                  <alg:SigningMethod Algorithm="urn:example:signature" MinKeySize="2048"/>
-                  <alg:EncryptionMethod Algorithm="urn:example:encryption"/>
-                </md:Extensions>
-                """);
-        var partial = metadata("""
-                <md:Extensions>
-                  <alg:SigningMethod Algorithm="urn:example:signature"/>
-                </md:Extensions>
-                """);
+        var signing = "<md:Extensions><alg:SigningMethod Algorithm='urn:example:signature'/></md:Extensions>";
+        var encryption = encryptionKeyDescriptor("encryption", encryptionMethod("urn:example:encryption"));
+        var complete = metadata(signing + role("IDPSSODescriptor", SAML2, encryption));
+        var partial = metadata(signing + role("IDPSSODescriptor", SAML2, ""));
 
         var outcome = TargetMetadataObservation.evaluate("IIP-MD09-a-idp-01", complete, NOW)
                 .orElseThrow();
@@ -449,6 +442,36 @@ class TargetMetadataObservationTest {
         assertTrue(TargetMetadataObservation.evaluate("IIP-MD09-a-idp-01", partial, NOW).isEmpty());
         assertTrue(TargetMetadataObservation.evaluate(
                 "IIP-MD09-a-idp-01", metadata(""), NOW).isEmpty());
+        assertEquals("IDPSSODescriptor", outcome.details().get("role"));
+        assertEquals("https://idp.example/entity", outcome.details().get("entity_id"));
+        assertOutcome("IIP-MD09-a-sp-01", Outcome.SATISFIED,
+                metadata(role("SPSSODescriptor", SAML2, signing + encryption)));
+        assertOutcome("IIP-MD09-a-idp-01", Outcome.SATISFIED,
+                metadata(role("IDPSSODescriptor", SAML2, signing + encryption.replace(" use=\"encryption\"", ""))));
+    }
+
+    @Test
+    void algorithmCapabilityCannotBorrowWrongNamespacePlacementRoleOrEntity() {
+        var signing = "<md:Extensions><alg:SigningMethod Algorithm='urn:example:signature'/></md:Extensions>";
+        var encryption = encryptionKeyDescriptor("encryption", encryptionMethod("urn:example:encryption"));
+        var idp = role("IDPSSODescriptor", SAML2, encryption);
+        for (var contents : List.of(
+                signing + role("SPSSODescriptor", SAML2, encryption),
+                signing + role("IDPSSODescriptor", "urn:example:other-protocol", encryption),
+                signing + role("IDPSSODescriptor", SAML2, encryption.replace("md:EncryptionMethod", "alg:EncryptionMethod")),
+                signing + role("IDPSSODescriptor", SAML2, encryption.replace("use=\"encryption\"", "use=\"signing\"")),
+                signing + role("IDPSSODescriptor", SAML2, encryption.replace("urn:example:encryption", "")),
+                signing.replace("urn:example:signature", "") + idp,
+                "<md:Extensions><alg:SigningMethod Algorithm='urn:example:signature'/>"
+                        + encryptionMethod("urn:example:encryption") + "</md:Extensions>" + role("IDPSSODescriptor", SAML2, ""),
+                "<md:Extensions><ext:Other>" + signing + "</ext:Other></md:Extensions>" + idp,
+                role("IDPSSODescriptor", SAML2, signing) + role("SPSSODescriptor", SAML2, encryption))) {
+            assertTrue(TargetMetadataObservation.evaluate("IIP-MD09-a-idp-01", metadata(contents), NOW).isEmpty(), contents);
+        }
+        var aggregate = ("<md:EntitiesDescriptor xmlns:md='urn:oasis:names:tc:SAML:2.0:metadata'>"
+                + entity("https://target.example/entity", role("IDPSSODescriptor", SAML2, ""))
+                + entity("https://unrelated.example/entity", signing + idp) + "</md:EntitiesDescriptor>").getBytes(StandardCharsets.UTF_8);
+        assertTrue(TargetMetadataObservation.evaluate("IIP-MD09-a-idp-01", aggregate, NOW).isEmpty());
     }
 
     @Test

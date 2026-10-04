@@ -20,6 +20,12 @@ class ConfigurationBatch:
             handle.seek(0)
             handle.write(payload)
             handle.truncate()
+        if self.path.read_bytes() != payload:
+            raise RuntimeError('Host configuration read-back failed')
+        # A subsequent Docker push can fail after this exact host write. Retain
+        # our known state so finally-restoration does not mistake it for an
+        # operator edit; unrecognized external edits are still never overwritten.
+        self.expected = payload
         # Docker Desktop caches the file contents for bind mounts, so even an in-place write can be
         # served stale to the container. Push the same bytes into the container's own file to make
         # the change visible to the product regardless of the host sharing layer.

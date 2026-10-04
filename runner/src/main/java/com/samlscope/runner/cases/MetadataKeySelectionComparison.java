@@ -14,8 +14,10 @@ final class MetadataKeySelectionComparison {
     static final String KEY_COUNT = "IIP-MD07-a-idp-01";
     static final String REPRESENTATION = "IIP-MD06-a7-idp-01";
     static final String PUBLIC_KEY = "IIP-MD06-a8-idp-01";
+    static final String HINT_FREE = "IIP-MD05-cd-idp-01";
+    static final String NO_ADDITIONAL_CRITERIA = "IIP-MD06-a5-idp-01";
     static final String SAME_KEY = "certificate-runtime-same-key", OTHER_KEY = "certificate-runtime-other-key";
-    static final Set<String> CASES = Set.of(CASE_ID, ANY_PURPOSE, KEY_COUNT, REPRESENTATION, PUBLIC_KEY);
+    static final Set<String> CASES = Set.of(CASE_ID, ANY_PURPOSE, KEY_COUNT, REPRESENTATION, PUBLIC_KEY, HINT_FREE, NO_ADDITIONAL_CRITERIA);
     record Condition(String family, int count, int signerIndex, boolean omittedUse) {}
     static final Map<String, Condition> CONDITIONS = Map.ofEntries(
             Map.entry("entity-root",new Condition("single",1,0,false)),
@@ -35,7 +37,8 @@ final class MetadataKeySelectionComparison {
             case CASE_ID -> REQUIRED;
             case ANY_PURPOSE -> Set.of("entity-root",FIRST,SECOND,"multiple-omitted-keys-first","multiple-omitted-keys-second");
             case PUBLIC_KEY -> Set.of("entity-root",SAME_KEY,OTHER_KEY);
-            case REPRESENTATION -> Set.of("entity-root","keyvalue-only");
+            case REPRESENTATION, HINT_FREE -> Set.of("entity-root","keyvalue-only");
+            case NO_ADDITIONAL_CRITERIA -> Set.of("entity-root",SAME_KEY,OTHER_KEY,"keyvalue-only");
             case KEY_COUNT -> Set.of("entity-root",FIRST,SECOND,"three-signing-keys-first","three-signing-keys-second","three-signing-keys");
             default -> throw new IllegalArgumentException("Unsupported key selection case");
         };
@@ -90,13 +93,14 @@ final class MetadataKeySelectionComparison {
         if (identities.size() != 1) issues.add("mixed_experiment");
         if (!variants.keySet().containsAll(required)) issues.add("missing_condition");
         var baseline=CASE_ID.equals(caseId)?FIRST:"entity-root";
-        boolean baselineObserved=REPRESENTATION.equals(caseId)
+        boolean representationCase=Set.of(REPRESENTATION,HINT_FREE).contains(caseId);
+        boolean baselineObserved=representationCase
                 ? required.stream().anyMatch(v -> variants.containsKey(v) && variants.get(v).decision()==Decision.SIGNED_SUCCESS)
                 : variants.containsKey(baseline) && variants.get(baseline).decision()==Decision.SIGNED_SUCCESS;
         if (!baselineObserved) issues.add("positive_control_unproven");
         var violations = new ArrayList<String>();
         for(var variant:required.stream().sorted().toList()) {
-            if(!variants.containsKey(variant)||(!REPRESENTATION.equals(caseId)&&variant.equals(baseline)))continue;
+            if(!variants.containsKey(variant)||(!representationCase&&variant.equals(baseline)))continue;
             var decision=variants.get(variant).decision();
             if(OTHER_KEY.equals(variant)) {
                 // Approved as a control, not an independently evaluative variant.

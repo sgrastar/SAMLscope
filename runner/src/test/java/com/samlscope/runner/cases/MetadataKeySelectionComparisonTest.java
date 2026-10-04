@@ -94,6 +94,23 @@ class MetadataKeySelectionComparisonTest {
         assertEquals(Outcome.NOT_VERIFIED,evaluate(REPRESENTATION,none,List.of()).outcome());
     }
 
+    @Test void hintsAndAdditionalCriteriaRequireEveryApprovedForm() {
+        for(var id:List.of(HINT_FREE,NO_ADDITIONAL_CRITERIA)) {
+            for(var variant:required(id)) {
+                var missing=expanded().stream().filter(s -> !s.variant().equals(variant)).toList();
+                assertEquals(Outcome.NOT_VERIFIED,evaluate(id,missing,List.of()).outcome(),id+":"+variant);
+            }
+            var rejected=expanded().stream().map(s -> !s.variant().equals("keyvalue-only")?s:
+                new Sample(s.variant(),s.runId(),s.entityId(),s.advertisedKeyHashes(),s.signerKeyHash(),
+                    true,true,true,Decision.NATIVE_SIGNATURE_REJECTION,s.evidence())).toList();
+            assertEquals(Outcome.VIOLATED,evaluate(id,rejected,List.of()).outcome(),id);
+        }
+        var wrongAccepted=expanded().stream().map(s -> !s.variant().equals(OTHER_KEY)?s:
+                new Sample(s.variant(),s.runId(),s.entityId(),s.advertisedKeyHashes(),s.signerKeyHash(),
+                    true,true,true,Decision.SIGNED_SUCCESS,s.evidence())).toList();
+        assertEquals(Outcome.NOT_VERIFIED,evaluate(NO_ADDITIONAL_CRITERIA,wrongAccepted,List.of()).outcome());
+    }
+
     @Test void certificateEqualityMutantViolatesButNameOnlyAcceptanceFailsTheControl() {
         var sameRejected=expanded().stream().map(s -> !s.variant().equals(SAME_KEY)?s:
                 new Sample(s.variant(),s.runId(),s.entityId(),s.advertisedKeyHashes(),s.signerKeyHash(),

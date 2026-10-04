@@ -1,6 +1,9 @@
 package com.samlscope.runner.cases;
 
+import java.security.PrivateKey;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import com.samlscope.core.caseexec.CaseContext;
 import com.samlscope.core.caseexec.CaseEvent;
 import com.samlscope.core.caseexec.CaseState;
@@ -17,6 +20,8 @@ import com.samlscope.saml.normal.SamlErrorProbeRequestFactory;
 import com.samlscope.saml.normal.SamlErrorProbeRequestFactory.Probe;
 import com.samlscope.saml.normal.SamlException;
 import com.samlscope.saml.normal.SecureXml;
+import com.samlscope.saml.crypto.SamlElementDecrypter;
+import com.samlscope.saml.crypto.SamlXmlDecrypter;
 import org.w3c.dom.Element;
 
 /** The approved IdP error-response scenario, executed by the generic fixture scenario engine. */
@@ -35,15 +40,24 @@ public final class IdpErrorResponseTestCase implements TestCase, BrowserFrontCha
     private final FixtureScenarioTestCase scenario;
 
     public IdpErrorResponseTestCase(IdpErrorProbeConfiguration configuration) {
-        this(configuration, new SamlErrorProbeRequestFactory());
+        this(configuration, new SamlErrorProbeRequestFactory(), null, new SamlXmlDecrypter());
+    }
+
+    public IdpErrorResponseTestCase(IdpErrorProbeConfiguration configuration, PrivateKey key) {
+        this(configuration, new SamlErrorProbeRequestFactory(), key, new SamlXmlDecrypter());
     }
 
     IdpErrorResponseTestCase(
             IdpErrorProbeConfiguration configuration, SamlErrorProbeRequestFactory requests) {
+        this(configuration, requests, null, new SamlXmlDecrypter());
+    }
+
+    IdpErrorResponseTestCase(IdpErrorProbeConfiguration configuration,
+            SamlErrorProbeRequestFactory requests, PrivateKey key, SamlElementDecrypter decrypter) {
         java.util.Objects.requireNonNull(configuration, "configuration");
         java.util.Objects.requireNonNull(requests, "requests");
         var fixtures = PROBES.stream()
-                .<ScenarioFixture>map(probe -> new ErrorProbeFixture(probe, configuration, requests))
+                .<ScenarioFixture>map(probe -> new ErrorProbeFixture(probe, configuration, requests, key, decrypter))
                 .toList();
         scenario = new FixtureScenarioTestCase(
                 CASE_ID,
@@ -80,14 +94,20 @@ public final class IdpErrorResponseTestCase implements TestCase, BrowserFrontCha
         private final Probe probe;
         private final IdpErrorProbeConfiguration configuration;
         private final SamlErrorProbeRequestFactory requests;
+        private final PrivateKey key;
+        private final SamlElementDecrypter decrypter;
 
         private ErrorProbeFixture(
                 Probe probe,
                 IdpErrorProbeConfiguration configuration,
-                SamlErrorProbeRequestFactory requests) {
+                SamlErrorProbeRequestFactory requests,
+                PrivateKey key,
+                SamlElementDecrypter decrypter) {
             this.probe = probe;
             this.configuration = configuration;
             this.requests = requests;
+            this.key = key;
+            this.decrypter = java.util.Objects.requireNonNull(decrypter, "decrypter");
         }
 
         @Override
@@ -132,19 +152,12 @@ public final class IdpErrorResponseTestCase implements TestCase, BrowserFrontCha
                 if (probe == Probe.UNSATISFIABLE_AUTHN_CONTEXT) {
                     if (RESPONDER.equals(topLevel)) return FixtureObservation.SATISFIED;
                     if (SUCCESS.equals(topLevel)) {
-                        // This observer receives the wire XML, not decrypted assertions. The
-                        // requested context may be inside ciphertext, so Success alone cannot
-                        // establish that the target failed to satisfy the request.
-                        if (root.getElementsByTagNameNS(ASSERTION, "EncryptedAssertion").getLength() > 0) {
-                            return FixtureObservation.NOT_VERIFIED;
-                        }
-                        var classRefs = root.getElementsByTagNameNS(ASSERTION, "AuthnContextClassRef");
-                        if (classRefs.getLength() > 0 && requests.unavailableAuthnContext(requestId)
-                                .equals(classRefs.item(0).getTextContent())) {
-                            return FixtureObservation.NOT_VERIFIED;
-                        }
+                        var different = successfulContextIsDifferent(root,
+                                requests.unavailableAuthnContext(requestId));
+                        return different.isPresent() && different.orElseThrow()
+                                ? FixtureObservation.VIOLATED : FixtureObservation.NOT_VERIFIED;
                     }
-                    return FixtureObservation.VIOLATED;
+                    return FixtureObservation.NOT_VERIFIED;
                 }
                 return SUCCESS.equals(topLevel)
                         ? FixtureObservation.VIOLATED
@@ -152,6 +165,50 @@ public final class IdpErrorResponseTestCase implements TestCase, BrowserFrontCha
             } catch (SamlException malformed) {
                 return FixtureObservation.NOT_VERIFIED;
             }
+        }
+
+        private Optional<Boolean> successfulContextIsDifferent(Element response, String requested) {
+            var assertions = new ArrayList<Element>();
+            var plain = response.getElementsByTagNameNS(ASSERTION, "Assertion");
+            for (var index = 0; index < plain.getLength(); index++) {
+                assertions.add((Element) plain.item(index));
+            }
+            var encrypted = response.getElementsByTagNameNS(ASSERTION, "EncryptedAssertion");
+            if (encrypted.getLength() > 0 && key == null) return Optional.empty();
+            for (var index = 0; index < encrypted.getLength(); index++) {
+                try {
+                    var assertion = decrypter.decrypt((Element) encrypted.item(index), key);
+                    if (!ASSERTION.equals(assertion.getNamespaceURI())
+                            || !"Assertion".equals(assertion.getLocalName())) return Optional.empty();
+                    assertions.add(assertion);
+                } catch (SamlException unavailable) {
+                    return Optional.empty();
+                }
+            }
+            if (assertions.isEmpty()) return Optional.empty();
+            var observed = false;
+            for (var assertion : assertions) {
+                var statements = directChildren(assertion, "AuthnStatement");
+                if (statements.isEmpty()) return Optional.empty();
+                for (var statement : statements) {
+                    var contexts = directChildren(statement, "AuthnContext");
+                    if (contexts.size() != 1) return Optional.empty();
+                    var classRefs = directChildren(contexts.getFirst(), "AuthnContextClassRef");
+                    if (classRefs.size() != 1) return Optional.empty();
+                    observed = true;
+                    if (requested.equals(classRefs.getFirst().getTextContent())) return Optional.of(false);
+                }
+            }
+            return observed ? Optional.of(true) : Optional.empty();
+        }
+
+        private List<Element> directChildren(Element parent, String localName) {
+            var found = new ArrayList<Element>();
+            for (var child = parent.getFirstChild(); child != null; child = child.getNextSibling()) {
+                if (child instanceof Element element && ASSERTION.equals(element.getNamespaceURI())
+                        && localName.equals(element.getLocalName())) found.add(element);
+            }
+            return found;
         }
 
         @Override public java.time.Duration timeout() { return configuration.responseTimeout(); }

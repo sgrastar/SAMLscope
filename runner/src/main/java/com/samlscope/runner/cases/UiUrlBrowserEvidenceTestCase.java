@@ -15,9 +15,15 @@ public final class UiUrlBrowserEvidenceTestCase implements TestCase, QueuedProto
     private final TranscriptContentReader content;
     private final Function<String,byte[]> metadata;
     private final UiUrlEvidenceFile evidence;
+    private final ShibbolethUiConsumerEvidence nativeShibboleth;
+    private final KeycloakNativeUiConsumerEvidence nativeKeycloak;
+    private final SimpleSamlPhpConsentUriEvidence nativeSimpleSamlPhp;
     public UiUrlBrowserEvidenceTestCase(TranscriptContentReader content,Function<String,byte[]> metadata,Path directory) {
         this.content=Objects.requireNonNull(content);this.metadata=Objects.requireNonNull(metadata);
         this.evidence=new UiUrlEvidenceFile(directory);
+        this.nativeShibboleth=new ShibbolethUiConsumerEvidence(directory,content);
+        this.nativeKeycloak=new KeycloakNativeUiConsumerEvidence(directory.resolveSibling("ui-native-feature-absence"),content);
+        this.nativeSimpleSamlPhp=new SimpleSamlPhpConsentUriEvidence(directory.resolveSibling("ui-consent-uri-evidence"),content);
     }
     @Override public String id(){return UiUrlComparison.CASE_ID;}
     @Override public TargetRole role(){return TargetRole.IDP;}
@@ -39,6 +45,16 @@ public final class UiUrlBrowserEvidenceTestCase implements TestCase, QueuedProto
     }
     private CaseOutcome observe(CaseContext context){
         try {
+            boolean keycloakOwned=nativeKeycloak.exists(context.runId());
+            boolean shibbolethOwned=nativeShibboleth.exists(context.runId());
+            boolean simpleSamlPhpOwned=nativeSimpleSamlPhp.exists(context.runId());
+            if((keycloakOwned?1:0)+(shibbolethOwned?1:0)+(simpleSamlPhpOwned?1:0)>1)
+                throw new IllegalArgumentException("Ambiguous native URL product");
+            if(keycloakOwned)return nativeKeycloak.read(context,metadata.apply(context.runId()),id()).orElseThrow();
+            if(simpleSamlPhpOwned)return nativeSimpleSamlPhp.evaluate(context,metadata.apply(context.runId())).orElseThrow();
+            if(shibbolethOwned) {
+                return nativeShibboleth.read(context,metadata.apply(context.runId()),id()).orElseThrow();
+            }
             var collected=evidence.read(context,metadata.apply(context.runId()),content);
             return UiUrlComparison.evaluate(collected.samples(),collected.issues());
         } catch(Exception unproven) {

@@ -40,6 +40,8 @@ def main(default_matrix="signature"):
     args = parser.parse_args()
     out = args.output.resolve(); out.mkdir(parents=True, exist_ok=False)
     configuration = ConfigurationBatch(REPO/'build/acceptance/reference-20260914/ssp-config/saml20-sp-remote.php')
+    configuration.container = 'samlscope-reference-ssp'
+    configuration.container_path = '/var/simplesamlphp/metadata/saml20-sp-remote.php'
     if b'?>' in configuration.original: raise ValueError('Unexpected PHP closing tag')
     created = api('/api/plans', dict(name='SimpleSAMLphp native ' + args.matrix + ' modes', profile='browser_sso_idp',
         targetKind='IDP', targetEntityId='http://localhost:18380/idp', metadataSourceKind='URL',
@@ -79,6 +81,9 @@ def main(default_matrix="signature"):
                 "$metadata['"+entity+"']['"+key+"'] = "+str(value).lower()+";"
                 for key,value in [('saml20.sign.response',response_signed),('saml20.sign.assertion',assertion_signed),('assertion.encryption',encrypted)])
             configured = configuration.apply(overlay.encode())
+            product_bytes = subprocess.check_output(['docker', 'exec', 'samlscope-reference-ssp',
+                'cat', configuration.container_path], timeout=30)
+            if SHA(product_bytes) != configured: raise ValueError('Product metadata configuration read-back differs')
             readback_attempts += 1
             readback = json.loads(subprocess.check_output(['docker','exec','samlscope-reference-ssp','php','-r',READBACK,entity], timeout=30))
             if readback != requested: raise ValueError('Native signing settings differ')
@@ -100,6 +105,10 @@ def main(default_matrix="signature"):
         save(out/'result.json', api('/api/runs/'+run+'/result.json'))
     finally:
         restoration = configuration.restore(); save(out/'restoration.json', restoration)
+        product_final = subprocess.check_output(['docker', 'exec', 'samlscope-reference-ssp',
+            'cat', configuration.container_path], timeout=30)
+        if product_final != configuration.original:
+            raise RuntimeError('Product metadata configuration restoration read-back differs')
         save(out/'operations.json', dict(run=run, matrix=args.matrix, phases=phases, restored=restoration['restored'],
             configuration_write_attempts=configuration.write_count, native_readback_attempts=readback_attempts, native_readback_successes=readback_successes,
             product_restarts=0, human_operations=0, evidence_scope='explicit-native-settings-and-browser-sso'))

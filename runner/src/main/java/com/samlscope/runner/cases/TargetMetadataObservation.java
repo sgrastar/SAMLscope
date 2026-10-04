@@ -83,7 +83,7 @@ final class TargetMetadataObservation {
         catch (SamlException invalid) { return Optional.empty(); }
         var evidence = List.of(new EvidenceRef("target-metadata", digest(metadata)));
         if (isAlgorithmPublicationCapability(caseId)) {
-            return algorithmPublicationCapability(document, evidence);
+            return algorithmPublicationCapability(caseId, document, evidence);
         }
         if (idpSuffix(caseId, "f7") || suffix(caseId, "f8") || suffix(caseId, "fa")) {
             return publishedUiGuidance(caseId, document, evidence);
@@ -248,15 +248,40 @@ final class TargetMetadataObservation {
      * in another runtime configuration.
      */
     private static Optional<CaseOutcome> algorithmPublicationCapability(
-            Document document, List<EvidenceRef> evidence) {
-        var signing = elements(document, ALG, "SigningMethod").stream()
+            String caseId, Document document, List<EvidenceRef> evidence) {
+        var root = document.getDocumentElement();
+        // This API has no selected entity ID. Do not borrow another entity's declarations
+        // from an aggregate, or declarations placed inside unrelated extension content.
+        if (!MD.equals(root.getNamespaceURI()) || !"EntityDescriptor".equals(root.getLocalName())
+                || root.getAttribute("entityID").isBlank()) return Optional.empty();
+        var roleName = caseId.contains("-idp-") ? "IDPSSODescriptor" : "SPSSODescriptor";
+        var entityExtensions = direct(root, MD, "Extensions");
+        for (var role : directElements(root, MD, roleName)) {
+            if (!List.of(role.getAttribute("protocolSupportEnumeration").strip().split("\\s+"))
+                    .contains(SAML2)) continue;
+            var roleExtensions = direct(role, MD, "Extensions");
+            long signing = algorithmDeclarations(entityExtensions, ALG, "SigningMethod")
+                    + algorithmDeclarations(roleExtensions, ALG, "SigningMethod");
+            long encryption = 0;
+            // EncryptionMethod is defined by SAML metadata, not the algsupport schema.
+            // A signing-only KeyDescriptor does not advertise an encryption capability.
+            for (var key : directElements(role, MD, "KeyDescriptor")) {
+                if (!key.getAttribute("use").isBlank() && !"encryption".equals(key.getAttribute("use"))) continue;
+                if (direct(key, DS, "KeyInfo") == null) continue;
+                encryption += algorithmDeclarations(key, MD, "EncryptionMethod");
+            }
+            if (signing > 0 && encryption > 0) return Optional.of(result(
+                    Outcome.SATISFIED, "metadata.publisher.algorithm-capability-published", evidence,
+                    Map.of("signing_methods", signing, "encryption_methods", encryption,
+                            "entity_id", root.getAttribute("entityID"), "role", roleName)));
+        }
+        return Optional.empty();
+    }
+
+    private static long algorithmDeclarations(Element parent, String namespace, String localName) {
+        if (parent == null) return 0;
+        return directElements(parent, namespace, localName).stream()
                 .filter(value -> !value.getAttribute("Algorithm").isBlank()).count();
-        var encryption = elements(document, ALG, "EncryptionMethod").stream()
-                .filter(value -> !value.getAttribute("Algorithm").isBlank()).count();
-        if (signing == 0 || encryption == 0) return Optional.empty();
-        return Optional.of(result(
-                Outcome.SATISFIED, "metadata.publisher.algorithm-capability-published", evidence,
-                Map.of("signing_methods", signing, "encryption_methods", encryption)));
     }
 
     private static CaseOutcome rootOnlyExpiration(Document document, List<EvidenceRef> evidence) {

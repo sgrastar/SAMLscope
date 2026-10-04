@@ -67,8 +67,8 @@ public final class RunCampaignService implements RunCampaignQuery {
         var context = contexts.contextFor(runId);
         var classified = executions.list(runId).stream()
                 // ECP send fixtures carry evidence, but are not approved evaluative cases.
-                .filter(execution -> !com.samlscope.runner.outbox.EcpProbeService.requiredFixtureIds()
-                        .contains(execution.caseId()))
+                .filter(execution -> !com.samlscope.runner.outbox.EcpProbeService
+                        .isKnownNonEvaluativeFixture(execution.caseId()))
                 .map(execution -> classify(execution, context))
                 .toList();
 
@@ -172,7 +172,7 @@ public final class RunCampaignService implements RunCampaignQuery {
             case OPERATOR_ASSISTED -> Plan.STANDARD;
             case SELF_ATTESTED -> Plan.FULL;
         };
-        var campaign = campaign(definition, testCase, evidenceClass);
+        var campaign = campaign(definition, testCase, evidenceClass, execution);
         var shareableAction = evidenceClass == EvidenceClass.SELF_ATTESTED
                 || testCase instanceof EvidenceCampaignCase source && source.sharesDeliberateAction()
                 || testCase instanceof ProtocolEvidenceCase
@@ -216,8 +216,7 @@ public final class RunCampaignService implements RunCampaignQuery {
             CaseExecution execution) {
         if (definition.mode() == ExecutionMode.AUTOMATED) return EvidenceClass.PROTOCOL_OBSERVED;
         if (testCase instanceof FallbackEvidenceCase fallback) {
-            return fallback.resolvedFromExternalEvidence(execution)
-                    ? EvidenceClass.PROTOCOL_OBSERVED : EvidenceClass.SELF_ATTESTED;
+            return fallback.evidenceClass(execution);
         }
         if (testCase instanceof OperatorAssistedCase
                 || testCase instanceof EvidenceCampaignCase source && !source.supplementalEvidenceCampaigns().isEmpty()) {
@@ -248,13 +247,14 @@ public final class RunCampaignService implements RunCampaignQuery {
     private CampaignSeed campaign(
             CaseDefinition definition,
             com.samlscope.core.caseexec.TestCase testCase,
-            EvidenceClass evidenceClass) {
+            EvidenceClass evidenceClass,
+            CaseExecution execution) {
         if (definition.mode() == ExecutionMode.AUTOMATED) {
             return new CampaignSeed("automatic-evaluation", "Automatic protocol and metadata evaluation", ActionKind.NONE);
         }
         if (testCase instanceof EvidenceCampaignCase source) {
             return new CampaignSeed(
-                    source.evidenceCampaignId(), source.evidenceCampaignTitle(), source.evidenceActionKind());
+                    source.evidenceCampaignId(), source.evidenceCampaignTitle(), source.evidenceActionKind(execution));
         }
         if (evidenceClass == EvidenceClass.PROTOCOL_OBSERVED
                 && !(testCase instanceof com.samlscope.runner.cases.BrowserPrompt)
@@ -413,7 +413,9 @@ public final class RunCampaignService implements RunCampaignQuery {
                 throw new IllegalStateException("Campaign mixes incompatible evidence: " + id);
             }
             caseIds.add(value.caseId());
-            if (!value.finished()) remainingCaseIds.add(value.caseId());
+            // A terminal NOT_VERIFIED still lacks a conclusion. Keep it visible without
+            // planning another operator action or restarting the finished execution.
+            if (!value.resolved()) remainingCaseIds.add(value.caseId());
             if (actionKind != ActionKind.NONE) {
                 totalActionUnits += value.actionUnits();
                 if (!value.finished()) remainingActionUnits += value.actionUnits();

@@ -41,7 +41,11 @@ class MetadataLabServiceTest {
         assertThrows(IllegalArgumentException.class, () -> service.requirePreloadedFlow("run", "plan", token, 2));
         assertThrows(IllegalArgumentException.class, () -> service.startPreloadedCampaign("run", List.of()));
         assertThrows(IllegalArgumentException.class, () -> service.startPreloadedCampaign("run", List.of(selected.getFirst(), selected.getFirst())));
-        assertThrows(IllegalArgumentException.class, () -> service.startPreloadedCampaign("run", List.of("ui-url-logo-javascript")));
+        // URL-safety negative fixtures are now supported preloaded inputs. The
+        // complete UI configuration fixture remains outside that browser inventory.
+        assertTrue(com.samlscope.saml.metadata.MetadataService.preloadedCampaignVariants()
+                .contains(com.samlscope.saml.metadata.MetadataService.Variant.UI_URL_LOGO_JAVASCRIPT));
+        assertThrows(IllegalArgumentException.class, () -> service.startPreloadedCampaign("run", List.of("full-ui-info")));
         service.startPreloadedCampaign("run", List.of(selected.getLast()));
         assertThrows(IllegalArgumentException.class, () -> service.authorizePreloadedFetch("run", "plan", token));
     }

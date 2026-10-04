@@ -27,7 +27,13 @@ def export(folder):
         raw = path.read_bytes()
         if SHA(raw) != row['sha256'] or row['id'] not in entries or row['id'] in originals:
             raise ValueError('Original identity mismatch')
-        originals[row['id']] = ET.fromstring(raw)
+        try:
+            originals[row['id']] = ET.fromstring(raw)
+        except ET.ParseError:
+            native = json.loads(raw)
+            if native.get('schema') != 'samlscope-keycloak-role-signing-transport-v1' or native.get('runId') != run:
+                raise ValueError('Unknown non-XML original')
+            continue
         raw_refs.append(dict(reference=row['id'], sha256=row['sha256']))
     audit = read('native-signature-audit.json')
     http = read('native-http-observations.json')
@@ -90,11 +96,17 @@ def export(folder):
         except (OSError, ValueError, KeyError, TypeError, StopIteration) as error:
             issues.append(dict(variant=variant,code='native-condition-unavailable',
                                error_type=type(error).__name__,reason=str(error)))
-    return dict(schema='samlscope-native-key-selection-receipt-v1', runId=run,
+    receipt = dict(schema='samlscope-native-key-selection-receipt-v1', runId=run,
         targetMetadataSha256=SHA((folder / 'target-metadata.xml').read_bytes()), restored=True,
         collectedAt=restoration['finished_at'], observerSourceSha256=restoration['source_sha256'],
         nativeAuditSha256=SHA((folder / 'native-signature-audit.json').read_bytes()),
         rawEvidence=raw_refs, conditions=rows, conditionIssues=issues)
+    if (folder/'role-signing-transport-capture.json').exists():
+        transport=read('role-signing-transport-capture.json')
+        if transport['run'] != run:raise ValueError('Mixed native transport original')
+        receipt['evidenceAdapter']='keycloak-native-event'
+        receipt['roleSigningTransport']=transport['original']
+    return receipt
 
 
 if __name__ == '__main__':

@@ -19,12 +19,27 @@ public final class SamlAcsSelectionRequestFactory {
             URI defaultAcs,
             URI secondaryAcs,
             Instant issueInstant) {
+        return build(
+                fixture, requestId, destination, issuer, defaultAcs, secondaryAcs,
+                otherEntityAcs(defaultAcs), issueInstant);
+    }
+
+    public byte[] build(
+            Fixture fixture,
+            String requestId,
+            URI destination,
+            String issuer,
+            URI defaultAcs,
+            URI secondaryAcs,
+            URI otherEntityAcs,
+            Instant issueInstant) {
         java.util.Objects.requireNonNull(fixture, "fixture");
         requireText(requestId, "requestId");
         requireText(issuer, "issuer");
         java.util.Objects.requireNonNull(destination, "destination");
         java.util.Objects.requireNonNull(defaultAcs, "defaultAcs");
         java.util.Objects.requireNonNull(secondaryAcs, "secondaryAcs");
+        java.util.Objects.requireNonNull(otherEntityAcs, "otherEntityAcs");
         java.util.Objects.requireNonNull(issueInstant, "issueInstant");
         var document = SecureXml.newDocument();
         var request = document.createElementNS(PROTOCOL, "samlp:AuthnRequest");
@@ -41,6 +56,8 @@ public final class SamlAcsSelectionRequestFactory {
             case URL_ONE -> request.setAttribute("AssertionConsumerServiceURL", secondaryAcs.toString());
             case UNKNOWN_URL -> request.setAttribute(
                     "AssertionConsumerServiceURL", defaultAcs.resolve("999999").toString());
+            case OTHER_ENTITY_URL -> request.setAttribute(
+                    "AssertionConsumerServiceURL", otherEntityAcs.toString());
             case UNSUPPORTED_BINDING -> {
                 request.setAttribute("AssertionConsumerServiceURL", defaultAcs.toString());
                 request.setAttribute("ProtocolBinding", "urn:samlscope:unsupported:response-binding");
@@ -53,7 +70,35 @@ public final class SamlAcsSelectionRequestFactory {
         return SecureXml.serialize(document);
     }
 
-    public enum Fixture { DEFAULT, INDEX_ONE, UNKNOWN_INDEX, URL_ONE, UNKNOWN_URL, UNSUPPORTED_BINDING }
+    public enum Fixture {
+        DEFAULT,
+        INDEX_ONE,
+        UNKNOWN_INDEX,
+        URL_ONE,
+        UNKNOWN_URL,
+        OTHER_ENTITY_URL,
+        UNSUPPORTED_BINDING
+    }
+
+    public static URI otherEntityAcs(URI defaultAcs) {
+        java.util.Objects.requireNonNull(defaultAcs, "defaultAcs");
+        if (!defaultAcs.isAbsolute() || defaultAcs.getHost() == null) {
+            throw new IllegalArgumentException("defaultAcs must be an absolute HTTP(S) URI");
+        }
+        var path = defaultAcs.getPath();
+        var marker = "/sp/acs/";
+        var markerAt = path == null ? -1 : path.lastIndexOf(marker);
+        if (markerAt < 0) {
+            throw new IllegalArgumentException("defaultAcs must use the Suite SP ACS path");
+        }
+        try {
+            return new URI(
+                    defaultAcs.getScheme(), null, defaultAcs.getHost(), defaultAcs.getPort(),
+                    path.substring(0, markerAt) + "/samlscope-other-sp/acs", null, null);
+        } catch (java.net.URISyntaxException impossible) {
+            throw new IllegalArgumentException("Could not derive the other-entity ACS", impossible);
+        }
+    }
 
     private static void requireText(String value, String name) {
         if (value == null || value.isBlank()) throw new IllegalArgumentException(name + " must not be blank");

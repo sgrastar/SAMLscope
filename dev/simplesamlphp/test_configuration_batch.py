@@ -1,5 +1,7 @@
 import tempfile
 import unittest
+from unittest.mock import patch
+import subprocess
 from pathlib import Path
 from configuration_batch import ConfigurationBatch
 
@@ -52,6 +54,32 @@ class ConfigurationBatchTest(unittest.TestCase):
 
     def test_empty_batch_does_not_write(self):
         self.assertEqual(0, ConfigurationBatch(self.path).restore()['configuration_write_attempts'])
+
+    def test_failed_container_push_restores_known_host_write(self):
+        batch = ConfigurationBatch(self.path)
+        batch.container = 'reference-product'
+        batch.container_path = '/public/metadata.php'
+        with patch('subprocess.run', side_effect=[subprocess.CalledProcessError(1, 'docker'), None]):
+            with self.assertRaises(subprocess.CalledProcessError):
+                batch.apply(b'next')
+            result = batch.restore()
+        self.assertTrue(result['restored'])
+        self.assertEqual(self.original, self.path.read_bytes())
+        self.assertEqual(2, batch.write_count)
+        self.assertEqual(0, batch.applied_count)
+        self.assertEqual(1, batch.restoration_writes)
+
+    def test_external_edit_after_failed_push_is_preserved(self):
+        batch = ConfigurationBatch(self.path)
+        batch.container = 'reference-product'
+        batch.container_path = '/public/metadata.php'
+        with patch('subprocess.run', side_effect=subprocess.CalledProcessError(1, 'docker')):
+            with self.assertRaises(subprocess.CalledProcessError):
+                batch.apply(b'next')
+        self.path.write_bytes(b'operator edit')
+        with self.assertRaises(RuntimeError):
+            batch.restore()
+        self.assertEqual(b'operator edit', self.path.read_bytes())
 
 
 if __name__ == '__main__':

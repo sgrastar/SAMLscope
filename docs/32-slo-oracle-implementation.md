@@ -183,3 +183,35 @@ Suite SPがRedirect応答エンドポイントのみを広告する構成を、�
 - 実環境への接続: Run作成、fixture送出、応答記録。
 - 実証による未検証解消: Success/Failed/Warningへ到達した観測数。
 - 診断だけの更新: Verdictを変えず理由・分類を更新した観測数。
+
+## 13. 参照製品の再測定
+
+SimpleSAMLphpのiframeログアウトは、参加者エラーの後に製品画面のContinue操作が必要だった。ブラウザドライバにこの操作を追加したが、同じアクションでログアウト開始ボタンを二重に押すと伝播継続の見かけのSuccessが生じた。二重クリックを排除した`ssp-slo-iframe-v131i`では、相関する最終LogoutResponseの第二階層StatusCodeにPartialLogoutを確認し、`IIP-IDP17.s`だけを採用した。`IIP-IDP17.r`は別参加者への継続要求を観測できずNOT_VERIFIEDのままとした。採用検証は`dev/reference-acceptance/verify_ssp_iframe_partial_logout.py`がSAML原本、失敗応答、単一処理、設定復元ハッシュを照合する。
+
+ShibbolethのIdP起点ログアウトでは、`shibboleth-target-slo-v131`に失敗応答の後の別参加者への要求と相関するSuite応答を再記録した。これは既に採用済みの`IIP-IDP17.r`の証拠を、製品メタデータのバイト一致復元付きRunへ更新するもので、未検証件数の追加削減ではない。SP起点Webflowの再測定`shibboleth-webflow-v131`は失敗参加者への試行を生まず、`IIP-IDP17.s`を確定しなかった。
+
+## 14. 非同期ログアウトの失敗誘導に関する取り消し
+
+`IIP-IDP17-b2-idp-01` は、正常終了とIdP自身のセッション終了失敗の両方について、利用者への通知を検証する。誤ったDestinationを持つ要求への拒否は、IdP自身のセッション終了失敗を起こした証拠にならない。承認済み定義では `IIP-IDP17.o` と同じ失敗誘導を使い、安全に誘導できなければ未検証を維持する。
+
+<!--g1-literal--> KeycloakとShibbolethの旧Success 2観測は、誤DestinationへのHTTP 400と正常要求後のHTTP 200または相関LogoutResponseを根拠としていた。この原本を独立に調べ、失敗側の承認済み条件が証明されていないため採用を取り消した。保存済みresult.jsonとtranscriptは変更せず、`audit_async_feedback_failure_evidence.py` が固定したRun・要求原本・署名・非同期Extensions・相関・承認済み条件を照合し、生成器の採用結果だけをNOT_VERIFIEDへ戻す。製品の違反とはしていない。
+
+修正後の `LogoutAsyncScenarioTestCase` も、従来の誤Destination試験や画面の違いからこのケースを確定しない。IdP自身のセッション終了失敗を誘導する実装と証拠が揃うまで、`slo.async.feedback.own-session-failure-unproven` を返す。同期ログアウトと他の非同期ケースの条件は維持する。実配備の確認は、対象Runner JARのハッシュと配備記録で別途行う。
+
+原本と独立監査は `build/acceptance/reference-20261002/cross-cluster-audit/slo-async-feedback-adopted-boundary/` に保存する。失敗通知を調べるために追加のログインや製品設定変更は行っていない。
+
+## 15. SOAP伝播継続の実行・採用条件
+
+ShibbolethのSOAPログアウト経路を使い、同じRunで参加者エラーを返す試験と全参加者が成功する対照を実行する。ケースが準備した署名済みメタデータを製品へ適用し、参加者ごとのログイン、起点要求、伝播要求と応答、相関する最終応答を原本として保存する。設定はスクリプトが変更・読み戻し・復元し、復元後の状態を変更前と照合する。
+
+IdPの参加者選択順は登録順と一致するとは限らない。失敗用の固定参加者が途中で選ばれた試行は、承認済みの「最初の参加者が失敗する」という条件を満たさないため採用しない。失敗fixtureは、Run・trial・準備メタデータに束縛した最初の真正SOAP要求へ署名済みResponderを返し、後続の参加者へSuccessを返す。重複要求や別スコープの要求を最初の試行として再利用しない。
+
+伝播の判定は、検証済みの参加者集合、実際の試行順、署名応答、処理終了時の集合から共通処理で算出する。失敗後に残参加者を試行した原本で成立を確認し、処理が完全に終了した証拠と未試行の参加者が揃う場合に違反を判定する。応答欠落や完全性の証拠不足は未検証を維持する。
+
+承認済みの負の対照は、隔離したSuite所有ターゲットで実際にHTTP・SAMLを実行する。正常ターゲットと失敗後に停止する変異ターゲットは同じ前提と判定処理を使う。校正の原本へアクセスする許可は、判定結果を切り替える条件にしない。校正ターゲットの結果を参照製品の結果として採用しないよう、公開受領証の設置と採用検証で製品由来の原本を確認する。
+
+正式採用では、配布JARと独立保存したJARの一致、ケース全体の開始・再開・証拠確認・再評価、正常系と負の対照、設定復元、再評価前後のtranscriptとoutboxの不変を確認する。比較表と未検証台帳は、この検証を通った保存済み結果から生成する。
+
+実機採用は `build/acceptance/reference-20261004/shibboleth-soap-slo-continuation-r5/` に保存した。正式Runは `run_8N96KQNNSSG8NAK632QZRG5SCG`、対象ケースは `IIP-IDP17-r-idp-01`。配備済みJARと独立アーカイブで同じケース全体の結果を確認し、正常継続をSATISFIED、隔離した停止対照をVIOLATEDとした。製品由来のケースだけを正式再評価し、Successを確認した。署名済み通信原本、設定復元、再評価前後のtranscriptとoutboxの不変も照合済みである。
+
+`operation-counts.json` は当該試行、`failed-inclusive-operation-counts.json` は先行試行を含む費用を記録する。設定変更・認証・プロトコル操作はスクリプトが実施し、利用者本人の操作と製品再起動は発生していない。先行試行の途中停止や参加者順の不適合、採用補助処理の失敗は原本を保持し、台帳削減として数えない。残る完全性証拠がない製品挙動を、この停止対照の結果から違反と推定しない。

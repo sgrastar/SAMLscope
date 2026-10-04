@@ -79,6 +79,29 @@ class CaseRunProjectionTest {
                 () -> new CaseRunProjection(repository, registry()).completed(RUN_ID));
     }
 
+    @Test
+    void excludesOnlyKnownEcpEvidenceFixturesFromVerdictArithmetic() {
+        persist(finished("IIP-G03-a-idp-01", Outcome.SATISFIED));
+        for (var id : com.samlscope.runner.outbox.EcpProbeService.requiredFixtureIds())
+            persist(finished(id, Outcome.VIOLATED));
+        for (var id : com.samlscope.saml.ecp.MetadataApplicationEcpProbeFactory.FIXTURES)
+            persist(finished(id, Outcome.VIOLATED));
+
+        var projected = new CaseRunProjection(repository, registry("IIP-G03-a-idp-01"))
+                .completed(RUN_ID);
+
+        assertEquals(1, projected.size());
+        assertEquals("IIP-G03-a-idp-01", projected.getFirst().id());
+        assertEquals(Outcome.SATISFIED, projected.getFirst().outcome().outcome());
+    }
+
+    @Test
+    void anUnknownEcpFixtureStillFailsClosed() {
+        persist(finished("fixture-ecp-metadata-unknown", Outcome.SATISFIED));
+        assertThrows(IllegalArgumentException.class,
+                () -> new CaseRunProjection(repository, registry()).completed(RUN_ID));
+    }
+
     private void persist(CaseExecution execution) {
         repository.apply(-1, execution, List.of());
     }

@@ -26,6 +26,165 @@ class IdpBasicLogoutScenarioTestCaseTest {
     private PlanCredentials suite,target,wrong;
     private List<com.samlscope.core.transcript.TranscriptEntry> recorded = List.of();
     private IdpBasicLogoutScenarioTestCase.Configuration configuration;
+    @Test void explicitSoapPropagationCollectsSignedSessionIntoDeterministicEnvelopeButNeverConcludesFromFinalResponseAlone() {
+        fixture();
+        configuration = new IdpBasicLogoutScenarioTestCase.Configuration(configuration.login(), URI.create(TARGET + "/SAML2/SOAP/SLO"),
+                SLO, TARGET, suite, List.of(target.certificate()));
+        var bodies = new HashMap<String, byte[]>();
+        var test = IdpBasicLogoutScenarioTestCase.soapPropagation(ignored -> configuration, e -> bodies.get(e.id()));
+        var first = assertInstanceOf(CaseStep.AwaitInbound.class, test.start(context(true)));
+        var next = assertInstanceOf(CaseStep.AwaitInbound.class, test.resume(context(true), first.next(),
+                inbound(login(first.next(), "transient", false, false, true, 1), "login")));
+        var action = next.actions().getFirst();
+        assertEquals(OutboundKind.LOGOUT_PROBE, action.kind()); assertFalse(action.requiresEphemeralCredential());
+        var envelope = SecureXml.parse(action.payload()).getDocumentElement();
+        assertEquals("http://schemas.xmlsoap.org/soap/envelope/", envelope.getNamespaceURI());
+        var request = (Element) envelope.getElementsByTagNameNS(P, "LogoutRequest").item(0);
+        assertTrue(new XmlSignatureVerifier().hasValidEnvelopedSignature(request, suite.certificate()));
+        assertEquals(configuration.logoutEndpoint().toString(), request.getAttribute("Destination"));
+        assertEquals("_" + action.actionId(), request.getAttribute("ID"));
+        var reply = logoutResponse(next.next(), "Success", "none"); bodies.put("actual-soap", reply);
+        recorded = List.of(new com.samlscope.core.transcript.TranscriptEntry("actual-soap", RUN,
+                com.samlscope.core.transcript.Direction.INBOUND, NOW, action.actionId(), "POST", configuration.logoutEndpoint().toString(), 200,
+                Map.of(), "body", 1, "decoded", reply.length, "text/xml", null,
+                Map.of("probe_transport", "direct-soap", "saml_message", "LogoutResponse")));
+        var result = assertInstanceOf(CaseStep.Finish.class, test.resume(context(true), next.next(),
+                inbound("actual-soap".getBytes(StandardCharsets.UTF_8), "actual-soap")));
+        assertEquals(Outcome.NOT_VERIFIED, result.outcome().outcome());
+        assertEquals("slo.propagation.native-chain-pending", result.outcome().reasonCode());
+    }
+    @Test void soapResponseCannotBorrowForeignWrongTargetUnknownDeliveryOrWrongRecordedContent() {
+        fixture(); var bodies = new HashMap<String, byte[]>();
+        var test = IdpBasicLogoutScenarioTestCase.soapPropagation(ignored -> configuration, e -> bodies.get(e.id()));
+        var first = assertInstanceOf(CaseStep.AwaitInbound.class, test.start(context(true)));
+        var next = assertInstanceOf(CaseStep.AwaitInbound.class, test.resume(context(true), first.next(),
+                inbound(login(first.next(), "transient", false, false, true, 1), "login")));
+        var action = next.actions().getFirst(); var reply = logoutResponse(next.next(), "Success", "none"); bodies.put("actual-soap", reply);
+        for (var mutation : List.of("foreign-run", "foreign-action", "wrong-target", "unknown-status", "wrong-transport", "wrong-size", "wrong-delivery-bytes")) {
+            recorded = List.of(new com.samlscope.core.transcript.TranscriptEntry("actual-soap", mutation.equals("foreign-run") ? "foreign" : RUN,
+                    com.samlscope.core.transcript.Direction.INBOUND, NOW, mutation.equals("foreign-action") ? "foreign-action" : action.actionId(),
+                    "POST", mutation.equals("wrong-target") ? "https://foreign.example" : configuration.logoutEndpoint().toString(), mutation.equals("unknown-status") ? null : 200,
+                    Map.of(), "body", 1, "decoded", mutation.equals("wrong-size") ? reply.length + 1 : reply.length, "text/xml", null,
+                    Map.of("probe_transport", mutation.equals("wrong-transport") ? "browser" : "direct-soap", "saml_message", "LogoutResponse")));
+            var result = assertInstanceOf(CaseStep.Finish.class, test.resume(context(true), next.next(),
+                    inbound((mutation.equals("wrong-delivery-bytes") ? "foreign" : "actual-soap").getBytes(StandardCharsets.UTF_8), "actual-soap")));
+            assertEquals(Outcome.NOT_VERIFIED, result.outcome().outcome(), mutation);
+            assertNotEquals("slo.propagation.native-chain-pending", result.outcome().reasonCode(), mutation);
+        }
+    }
+    @Test void soapPreparationAndTwoTrialLifecycleRegistersAllFourPeersWithoutEarlyConclusion() {
+        fixture(); var bodies = new HashMap<String,byte[]>(); var rows = new ArrayList<com.samlscope.core.transcript.TranscriptEntry>();
+        var issuer = "https://suite.example/p/plan_0123456789ABCDEFGHJKMNPQRS";
+        configuration = new IdpBasicLogoutScenarioTestCase.Configuration(new IdpErrorProbeConfiguration(configuration.login().ssoEndpoint(), issuer,
+                URI.create(issuer+"/sp/acs/0"),Duration.ofMinutes(5),true,true,true),configuration.logoutEndpoint(),SLO,TARGET,suite,List.of(target.certificate()));
+        var recorder = new com.samlscope.core.transcript.TranscriptRecorder() {
+            public com.samlscope.core.transcript.TranscriptEntry record(com.samlscope.core.transcript.TranscriptInput in) {
+                var id="tx-"+rows.size(); var e=new com.samlscope.core.transcript.TranscriptEntry(id,in.runId(),in.direction(),in.timestamp(),in.correlationId(),in.method(),in.url(),in.status(),in.headers(),id+"body",in.body().length,id+"decoded",in.decodedSaml().length,in.contentType(),in.rawQuery(),in.samlSummary());
+                rows.add(e);bodies.put(id,in.decodedSaml());return e;
+            }
+            public com.samlscope.core.transcript.TranscriptEntry updateSamlAnalysis(String id,String correlation,Map<String,Object> summary){throw new UnsupportedOperationException();}
+            public List<com.samlscope.core.transcript.TranscriptEntry> list(String run){return rows;}
+        };
+        var context=new DefaultCaseContext(RUN,TargetRole.IDP,Clock.fixed(NOW,ZoneOffset.UTC),TestPlan.Parameters.defaults(),TestPlan.Interaction.defaults(),Reachability.CONFIRMED,recorder,true);
+        TestCase observer=new TestCase(){public String id(){return SoapSloPropagationTestCase.ID;}public TargetRole role(){return TargetRole.IDP;}public CaseStep start(CaseContext c){return new CaseStep.Finish(CaseOutcome.notVerified("missing","missing"));}public CaseStep resume(CaseContext c,CaseState st,CaseEvent ev){return start(c);}};
+        var meta=("<md:EntityDescriptor xmlns:md='urn:oasis:names:tc:SAML:2.0:metadata' entityID='"+TARGET+"'><md:IDPSSODescriptor><md:SingleLogoutService Binding='urn:oasis:names:tc:SAML:2.0:bindings:SOAP' Location='"+TARGET+"/SOAP/SLO'/></md:IDPSSODescriptor></md:EntityDescriptor>").getBytes(StandardCharsets.UTF_8);
+        var test=new SoapSloPropagationTestCase(observer,ignored->configuration,e->bodies.get(e.id())).withTargetMetadata(ignored->meta);
+        var step=test.start(context);assertInstanceOf(CaseStep.AwaitConfig.class,step);assertEquals(2,rows.size());
+        assertEquals(Set.of("slo-propagation-soap-failure","slo-propagation-soap-all-success"),rows.stream().map(e->e.samlSummary().get("variant")).collect(java.util.stream.Collectors.toSet()));
+        var actions=new HashSet<String>();
+        for(var trial:List.of("failure","all-success")) {
+            var config=assertInstanceOf(CaseStep.AwaitConfig.class,step);
+            assertSoapConfigurationProjectsServerInstructions(test, config);
+            step=test.resume(context,config.next(),new CaseEvent.ConfigConfirmed());
+            for(var participant:List.of("primary","fail","remain","remain2")) {
+                var waiting=assertInstanceOf(CaseStep.AwaitInbound.class,step);var action=waiting.actions().getFirst();assertEquals(OutboundKind.AUTHN_REQUEST,action.kind());assertTrue(actions.add(action.actionId()));
+                assertEquals(participant.equals("primary"),test.requiresFreshSession(waiting.next()));
+                var req=SecureXml.parse(action.payload()).getDocumentElement();assertEquals(issuer+(participant.equals("primary")?"":"/sp-"+participant),req.getElementsByTagNameNS(A,"Issuer").item(0).getTextContent());
+                var reply=SecureXml.parse(login(waiting.next(),"transient",false,false,true,1));reply.getDocumentElement().setAttribute("Destination",configuration.login().registeredAcs().toString());var bytes=SecureXml.serialize(reply);
+                var tx=recorder.record(new com.samlscope.core.transcript.TranscriptInput(RUN,com.samlscope.core.transcript.Direction.INBOUND,NOW,action.actionId(),"POST",configuration.login().registeredAcs().toString(),200,Map.of(),bytes,"text/xml",null,bytes,Map.of()));
+                step=test.resume(context,waiting.next(),inbound(bytes,tx.id()));
+            }
+            var waiting=assertInstanceOf(CaseStep.AwaitInbound.class,step);var action=waiting.actions().getFirst();assertEquals(OutboundKind.LOGOUT_PROBE,action.kind());assertTrue(actions.add(action.actionId()));assertFalse(test.requiresFreshSession(waiting.next()));
+            var reply=SecureXml.parse(logoutResponse(waiting.next(),"Success","unsigned"));reply.getDocumentElement().removeAttribute("Destination");sign(reply.getDocumentElement(),target);var bytes=SecureXml.serialize(reply);
+            var tx=recorder.record(new com.samlscope.core.transcript.TranscriptInput(RUN,com.samlscope.core.transcript.Direction.INBOUND,NOW,action.actionId(),"POST",action.target().toString(),200,Map.of(),bytes,"text/xml",null,bytes,Map.of("probe_transport","direct-soap","saml_message","LogoutResponse")));
+            step=test.resume(context,waiting.next(),inbound(tx.id().getBytes(StandardCharsets.UTF_8),tx.id()));
+        }
+        assertEquals(10,actions.size());assertEquals(Outcome.NOT_VERIFIED,assertInstanceOf(CaseStep.Finish.class,step).outcome().outcome());
+        assertFalse(rows.stream().anyMatch(e->e.samlSummary().containsKey("password")));
+    }
+    @Test void partialGenericLogoutEvidenceCannotAutomaticallyConfirmNextSoapTrial() {
+        fixture();
+        var reply = logoutResponse(new CaseState("logout", Map.of("request_id", "_origin")), "Success", "none");
+        var factory = new SamlLogoutRequestFactory();
+        var origin = factory.sign(factory.build("_origin", configuration.logoutEndpoint(), SUITE,
+                parse("<a:NameID xmlns:a='" + A + "'>user</a:NameID>"), List.of("session-0"),
+                NOW.minusSeconds(1), null, false), suite);
+        recorded = List.of(new com.samlscope.core.transcript.TranscriptEntry("partial-origin", RUN,
+                com.samlscope.core.transcript.Direction.OUTBOUND, NOW.minusSeconds(1), "origin", "POST", configuration.logoutEndpoint().toString(), null,
+                Map.of(), "origin-body", origin.length, "origin-decoded", origin.length, "text/xml", null, Map.of("type", "LogoutRequest")),
+                new com.samlscope.core.transcript.TranscriptEntry("partial-final", RUN,
+                com.samlscope.core.transcript.Direction.INBOUND, NOW, "origin", "POST", SLO.toString(), 200,
+                Map.of(), "body", reply.length, "decoded", reply.length, "text/xml", null, Map.of("type", "LogoutResponse")));
+        var fallback = new BrowserEvidenceTestCase(new AttestedOutcomeTestCase(SoapSloPropagationTestCase.ID,
+                TargetRole.IDP, "logout", Duration.ofMinutes(5),
+                List.of(AttestationOption.notVerified("unavailable", "slo.unavailable", "unavailable"))),
+                URI.create(SUITE), "Collect logout evidence", Duration.ofMinutes(5));
+        var observer = new LogoutBrowserEvidenceTestCase(fallback, e -> e.id().equals("partial-origin") ? origin : reply,
+                ignored -> Optional.of(TARGET), ignored -> List.of(target.certificate()));
+        assertTrue(observer.evidenceStatus(context(true)).ready(), "Reproduce generic partial-evidence readiness");
+        var test = new SoapSloPropagationTestCase(observer, ignored -> {
+            throw new AssertionError("Partial evidence must not auto-confirm configuration or issue a login");
+        }, e -> reply);
+        var step = new CaseStep.AwaitConfig(new CaseState("soap-slo-propagation-v1-all-success",
+                Map.of("soap_definition", "soap-slo-propagation-v1", "soap_trial", "all-success", "soap_phase", "configure")),
+                List.of(), "slo.propagation.soap.apply-prepared-metadata", Duration.ofMinutes(15));
+        assertFalse(test.evidenceStatus(context(true)).ready());
+        assertSoapConfigurationProjectsServerInstructions(test, step);
+    }
+    private void assertSoapConfigurationProjectsServerInstructions(SoapSloPropagationTestCase test, CaseStep.AwaitConfig step) {
+        var execution = new CaseExecution(RUN, test.id(), 0, CaseExecutionStatus.WAITING_CONFIG, step.next(),
+                new WaitCondition(WaitCondition.Kind.CONFIG, step.instructionKey(), null, null, NOW.plus(step.ttl())), null, NOW);
+        var repository = new CaseExecutionRepository() {
+            public Optional<CaseExecution> find(String run, String id) { return Optional.of(execution); }
+            public List<CaseExecution> list(String run) { assertEquals(RUN, run); return List.of(execution); }
+            public boolean apply(long revision, CaseExecution next, List<OutboundAction> actions) { throw new AssertionError("Projection must not change state or issue actions"); }
+            public List<OutboxEntry> listOutbox(String run) { return List.of(); }
+            public Optional<OutboxEntry> findOutbox(String id) { return Optional.empty(); }
+            public boolean transitionOutbox(String id, OutboxStatus expected, OutboxStatus next,
+                    Map<String,Object> result, String ref, Instant at) { throw new AssertionError("Projection must not send"); }
+            public int recoverSendingAsUnknownDelivery(Instant at) { throw new AssertionError("Projection must not change delivery"); }
+        };
+        var pending = new com.samlscope.runner.PendingInteractionService(repository,
+                new com.samlscope.runner.TestCaseRegistry(List.of(test))).pending(RUN);
+        var registry = new com.samlscope.runner.TestCaseRegistry(List.of(test));
+        var automation = new com.samlscope.runner.ProtocolEvidenceAutomationService(repository, registry,
+                new com.samlscope.runner.CaseExecutionService(repository), ignored -> context(true));
+        assertEquals(0, automation.status(RUN).readyCases());
+        assertTrue(automation.evaluateReady(RUN).completed().isEmpty());
+        assertSame(execution, repository.find(RUN, test.id()).orElseThrow());
+        assertTrue(repository.listOutbox(RUN).isEmpty());
+        assertEquals(com.samlscope.runner.InteractionQuery.Kind.CONFIGURATION,
+                new com.samlscope.runner.PendingInteractionService(repository, registry).pending(RUN).getFirst().kind());
+        assertEquals(1, pending.size());
+        var prompt = pending.getFirst();
+        assertEquals(com.samlscope.runner.InteractionQuery.Kind.CONFIGURATION, prompt.kind());
+        assertEquals(step.instructionKey(), prompt.promptKey());
+        assertEquals(test.instructionEn(), prompt.promptEn());
+        assertTrue(prompt.promptEn().contains("MetadataPrepared"));
+        assertEquals(List.of("confirmed", "capability_absent", "target_config_unavailable", "capability_undetermined"), prompt.answerValues());
+        assertEquals(com.samlscope.runner.InteractionQuery.CompletionMode.TRANSCRIPT_OR_OPERATOR, prompt.completionMode());
+        assertNull(prompt.startUrl()); assertEquals(NOW.plus(step.ttl()), prompt.expiresAt());
+        assertTrue(step.actions().isEmpty()); assertEquals(0, execution.revision());
+        assertEquals(CaseExecutionStatus.WAITING_CONFIG, execution.status());
+    }
+    @Test void soapWrapperCannotRequestLoginWithoutFixedTargetSoapAdvertisementOrBrowserPermission() {
+        fixture();TestCase observer=new TestCase(){public String id(){return SoapSloPropagationTestCase.ID;}public TargetRole role(){return TargetRole.IDP;}public CaseStep start(CaseContext c){return new CaseStep.Finish(CaseOutcome.notVerified("missing","missing"));}public CaseStep resume(CaseContext c,CaseState s,CaseEvent e){return start(c);}};
+        var test=new SoapSloPropagationTestCase(observer,ignored->configuration,e->new byte[0]);
+        assertEquals(Outcome.NOT_VERIFIED,assertInstanceOf(CaseStep.Finish.class,test.start(context(true))).outcome().outcome());
+        var noSoap=("<md:EntityDescriptor xmlns:md='urn:oasis:names:tc:SAML:2.0:metadata' entityID='"+TARGET+"'><md:IDPSSODescriptor/></md:EntityDescriptor>").getBytes(StandardCharsets.UTF_8);
+        assertEquals(Outcome.NOT_VERIFIED,assertInstanceOf(CaseStep.Finish.class,test.withTargetMetadata(ignored->noSoap).start(context(true))).outcome().outcome());
+        assertEquals(Outcome.NOT_VERIFIED,assertInstanceOf(CaseStep.Finish.class,test.withTargetMetadata(ignored->noSoap).resume(context(true),CaseState.initial(),new CaseEvent.ConfigConfirmed())).outcome().outcome());
+    }
     private IdpBasicLogoutScenarioTestCase fixture() {
         if(suite==null) {
             var keys=new FilePlanKeyStore(directory,Clock.fixed(NOW,ZoneOffset.UTC));
@@ -257,14 +416,42 @@ class IdpBasicLogoutScenarioTestCaseTest {
                 configuration.logoutBinding(),target.certificate().getPublicKey(),List.of(target.certificate().getPublicKey(),wrong.certificate().getPublicKey()));
         var test=new IdpBasicLogoutScenarioTestCase(caseId,ignored->configuration);var first=assertInstanceOf(CaseStep.AwaitInbound.class,test.start(context(true)));
         var next=assertInstanceOf(CaseStep.AwaitInbound.class,test.resume(context(true),first.next(),inbound(login(first.next(),"persistent",false,false,false,1),"login")));
-        for(var mutation:List.of("none","destination","correlation","issuer","unsigned","wrong-key","tampered")) {
+        for(var mutation:List.of("destination","correlation","issuer","unsigned","wrong-key","tampered")) {
             var result=assertInstanceOf(CaseStep.Finish.class,test.resume(context(true),next.next(),
                     inbound(logoutResponse(next.next(),"Success",mutation),"control"))).outcome();
             assertEquals(Outcome.NOT_VERIFIED,result.outcome(),mutation);
         }
+        var fresh=assertInstanceOf(CaseStep.AwaitInbound.class,test.resume(context(true),next.next(),
+                inbound(logoutResponse(next.next(),"Success","none"),"accepted-unknown-key")));
+        assertTrue(test.requiresFreshSession(fresh.next()));
+        assertEquals(Boolean.TRUE,fresh.next().data().get("negative_control_failed"));
+        var normal=assertInstanceOf(CaseStep.AwaitInbound.class,test.resume(context(true),fresh.next(),
+                inbound(login(fresh.next(),"persistent",false,false,false,1),"registered-key-login")));
+        assertEquals(Boolean.TRUE,normal.next().data().get("negative_control_failed"));
+        var normalRequest=SecureXml.parse(normal.actions().getFirst().payload()).getDocumentElement();
+        var encrypted=(Element)normalRequest.getElementsByTagNameNS(A,"EncryptedID").item(0);
+        var recipient=caseId.equals(IdpBasicLogoutScenarioTestCase.MULTI_KEY_ID)?wrong:target;
+        assertEquals(" user-😀 ",new SamlXmlDecrypter().decrypt(encrypted,recipient.privateKey()).getTextContent());
+        assertThrows(RuntimeException.class,()->new SamlXmlDecrypter().decrypt(encrypted,suite.privateKey()));
+        for(String status:List.of("Success","Requester","Responder")) {
+            var outcome=assertInstanceOf(CaseStep.Finish.class,test.resume(context(true),normal.next(),
+                    inbound(logoutResponse(normal.next(),status,"none"),"registered-key-result"))).outcome();
+            assertEquals(Outcome.NOT_VERIFIED,outcome.outcome());
+            assertTrue(outcome.reasonCode().endsWith("negative-control-failed"));
+            assertEquals(Boolean.TRUE,outcome.details().get("negative_control_failed"));
+            assertEquals(4,outcome.evidence().size());
+        }
         for(var event:List.<CaseEvent>of(new CaseEvent.Aborted("stopped"),new CaseEvent.TimedOut(Duration.ofSeconds(1)),new CaseEvent.InboundUnavailable("no response")))
             assertEquals(Outcome.NOT_VERIFIED,assertInstanceOf(CaseStep.Finish.class,test.resume(context(true),next.next(),event)).outcome().outcome());
         }
+    }
+
+    @Test void legacyEncryptedScenarioStateCannotContinueUnderTheNewDefinition() {
+        var test=encryptedFixture();var first=assertInstanceOf(CaseStep.AwaitInbound.class,test.start(context(true)));
+        var old=new LinkedHashMap<String,Object>(first.next().data());old.put("definition","slo-basic-v5");
+        var outcome=assertInstanceOf(CaseStep.Finish.class,test.resume(context(true),
+                new CaseState("slo-basic-v5-login-control",old),inbound(login(first.next(),"transient",false,false,false,1),"legacy"))).outcome();
+        assertEquals(Outcome.NOT_VERIFIED,outcome.outcome());assertEquals("slo.basic.scenario-changed",outcome.reasonCode());
     }
 
     @Test void multipleKeysRequireDistinctRegisteredRecipientsAndExcludeControlKey() {

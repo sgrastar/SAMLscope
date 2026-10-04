@@ -114,6 +114,68 @@ class IdpSignedRequestScenarioTestCaseTest {
     }
 
     @Test
+    void targetHttpErrorsForInvalidSignaturesViolateTheShouldCase() {
+        var testCase = testCase(IdpSignedRequestScenarioTestCase.ERROR_CASE);
+        var valid = assertInstanceOf(CaseStep.AwaitInbound.class, testCase.start(context()));
+        var tampered = next(testCase, valid, response(valid.next(), true, false));
+        var reference = assertInstanceOf(CaseStep.AwaitInbound.class, testCase.resume(
+                context(), tampered.next(), browser(500, "https://IDP.example:443/error", true)));
+        var signature = assertInstanceOf(CaseStep.AwaitInbound.class, testCase.resume(
+                context(), reference.next(), browser(400, "https://idp.example/rejected", true)));
+        var finish = assertInstanceOf(CaseStep.Finish.class, testCase.resume(
+                context(), signature.next(), browser(503, "https://idp.example/unavailable", true)));
+
+        assertEquals(Outcome.VIOLATED, finish.outcome().outcome());
+        assertEquals(4, finish.outcome().evidence().size());
+    }
+
+    @Test
+    void signatureHttpObservationFailsClosedWithoutTheTargetOriginStatusOrRecorderEvidence() {
+        for (var observation : java.util.List.of(
+                browser(500, "https://idp.example/error", false),
+                browser(399, "https://idp.example/error", true),
+                browser(600, "https://idp.example/error", true),
+                browser(500, "http://idp.example/error", true),
+                browser(500, "https://idp.example:444/error", true),
+                browser(500, "https://other.example/error", true))) {
+            var testCase = testCase(IdpSignedRequestScenarioTestCase.ERROR_CASE);
+            var valid = assertInstanceOf(CaseStep.AwaitInbound.class, testCase.start(context()));
+            var tampered = next(testCase, valid, response(valid.next(), true, false));
+            var reference = assertInstanceOf(CaseStep.AwaitInbound.class, testCase.resume(
+                    context(), tampered.next(), observation));
+            var signature = next(testCase, reference, response(reference.next(), false, false));
+            var finish = assertInstanceOf(CaseStep.Finish.class, testCase.resume(
+                    context(), signature.next(), inbound(response(signature.next(), false, false))));
+            assertEquals(Outcome.NOT_VERIFIED, finish.outcome().outcome(), observation.toString());
+        }
+    }
+
+    @Test
+    void targetHttpErrorCannotReplaceTheValidSignedControl() {
+        var testCase = testCase(IdpSignedRequestScenarioTestCase.ERROR_CASE);
+        var valid = assertInstanceOf(CaseStep.AwaitInbound.class, testCase.start(context()));
+        var finish = assertInstanceOf(CaseStep.Finish.class, testCase.resume(
+                context(), valid.next(), browser(500, "https://idp.example/error", true)));
+
+        assertEquals(Outcome.NOT_VERIFIED, finish.outcome().outcome());
+        assertEquals("control_failed", finish.outcome().reasonCode());
+    }
+
+    @Test
+    void localHttpErrorsRemainInconclusiveForOtherSignedRequestObligations() {
+        var testCase = testCase(IdpSignedRequestScenarioTestCase.VERIFY_CASE);
+        var valid = assertInstanceOf(CaseStep.AwaitInbound.class, testCase.start(context()));
+        CaseStep step = next(testCase, valid, response(valid.next(), true, false));
+        while (step instanceof CaseStep.AwaitInbound current) {
+            step = testCase.resume(context(), current.next(),
+                    browser(500, "https://idp.example/error", true));
+        }
+
+        assertEquals(Outcome.NOT_VERIFIED, assertInstanceOf(CaseStep.Finish.class, step)
+                .outcome().outcome());
+    }
+
+    @Test
     void rejectsExcludedSignatureContentAndSignedObjectFixtures() {        for (var id : java.util.List.of(
                 IdpSignedRequestScenarioTestCase.EXCLUDED_CONTENT_CASE,
                 IdpSignedRequestScenarioTestCase.SIGNED_OBJECT_CASE)) {
@@ -150,6 +212,11 @@ class IdpSignedRequestScenarioTestCaseTest {
     private CaseEvent.InboundMessage inbound(String xml) {
         return new CaseEvent.InboundMessage(
                 xml.getBytes(StandardCharsets.UTF_8), new EvidenceRef("transcript", "tx"));
+    }
+
+    private CaseEvent.BrowserObservation browser(int status, String url, boolean evidence) {
+        return new CaseEvent.BrowserObservation(status, url, "not examined",
+                evidence ? new EvidenceRef("transcript", "tx-browser-" + status) : null);
     }
 
     private String response(CaseState state, boolean success, boolean sha256Signature) {

@@ -43,6 +43,12 @@ public final class XmlSigner {
                     xpath.setAttributeNS(
                             "http://www.w3.org/2000/xmlns/", "xmlns:md",
                             "urn:oasis:names:tc:SAML:2.0:metadata");
+                    // A dedicated prefix survives serialization even when md is inherited from
+                    // the document root. Some native verifiers detach Signature before evaluating
+                    // XPath, so the transform must retain its own namespace binding.
+                    xpath.setAttributeNS(
+                            "http://www.w3.org/2000/xmlns/", "xmlns:mdx",
+                            "urn:oasis:names:tc:SAML:2.0:metadata");
                     xpath.setAttributeNS(
                             "http://www.w3.org/2000/xmlns/", "xmlns:samlp",
                             "urn:oasis:names:tc:SAML:2.0:protocol");

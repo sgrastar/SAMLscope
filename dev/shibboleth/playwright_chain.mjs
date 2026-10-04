@@ -55,7 +55,10 @@ try {
   const { execFileSync } = await import('node:child_process');
   execFileSync('python3', [path.join(repoRoot, 'build/acceptance/reference-20260915/slo-oracle/setup_rs_participants.py'), run], { cwd: repoRoot, stdio: 'pipe' });
 
-  browser = await chromium.launch({ channel: 'chrome', headless: true });
+  browser = await chromium.launch({ headless: true,
+    ...(process.env.SAML_SCOPE_CHROMIUM_EXECUTABLE
+      ? { executablePath: process.env.SAML_SCOPE_CHROMIUM_EXECUTABLE }
+      : { channel: 'chrome' }) });
   const context = await browser.newContext();
   let page = await context.newPage();
   const ensurePage = async () => {

@@ -11,6 +11,14 @@ from pathlib import Path
 CASE = 'IIP-MD05-c-idp-01'
 FIXTURES = ['entity-root', 'entities-root-one', 'keyvalue-only', 'certificate-expired',
             'certificate-not-yet-valid', 'multiple-signing-keys-first', 'multiple-signing-keys']
+REQUIRED_FIXTURES = {
+    'entity-root', 'entities-root-one', 'keyvalue-only', 'keyvalue-and-x509',
+    'certificate-expired', 'certificate-not-yet-valid', 'certificate-empty-subject',
+    'certificate-unknown-ca', 'certificate-critical-extension', 'certificate-noncritical-extension',
+    'certificate-no-digital-signature', 'certificate-unrelated-eku', 'key-use-omitted',
+    'multiple-signing-keys-first', 'multiple-signing-keys', 'multiple-omitted-keys-first',
+    'multiple-omitted-keys-second', 'multiple-encryption-keys',
+}
 SUCCESS = 'urn:oasis:names:tc:SAML:2.0:status:Success'
 SHA = lambda raw: hashlib.sha256(raw).hexdigest()
 
@@ -49,11 +57,20 @@ def verify(root, product='shibboleth'):
         flow = load(Path(variant) / 'flow.json')
         assert flow['negative_control']['correlated_success'] is False, variant
         assert flow['positive_exchange']['success'] is True, variant
-    return folder / 'result.json', {CASE: case}
+    observed = {e['samlSummary'].get('variant') for e in transcript
+                if e['direction'] == 'OUTBOUND' and e['samlSummary'].get('type') == 'MetadataPrepared'}
+    # This historical campaign proves its seven original members, but the signed case is an
+    # all-of over wider representation families. Keep the original PASS as historical data;
+    # never adopt the incomplete campaign as proof of the whole obligation.
+    missing = sorted(REQUIRED_FIXTURES - observed)
+    (folder / 'admission-withdrawal-v171.json').write_text(json.dumps(dict(
+        case=CASE, adoptable=False, historicalResultUnchanged=True,
+        reason='required-mdiop-representation-variants-unobserved',
+        verifiedPartialFixtures=FIXTURES, missingFixtures=missing), indent=2) + '\n')
+    return None
 
 
 if __name__ == '__main__':
     import sys
-    _, cases = verify(sys.argv[1], 'shibboleth')
-    for name, row in cases.items():
-        print(name, row['verdict'])
+    verified = verify(sys.argv[1], 'shibboleth')
+    print(CASE, 'NOT_VERIFIED: historical campaign does not cover all approved representation variants')

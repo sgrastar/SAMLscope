@@ -148,7 +148,7 @@ final class UiDisplayEvidenceFile {
     }
 
     /** Structural fingerprint; keep keys and policy, normalize only defined experiment changes. */
-    private static Object fixedMetadata(Element original, String variant, String run) {
+    static Object fixedMetadata(Element original, String variant, String run) {
         var metadata = (Element) original.cloneNode(true);
         metadata.removeAttribute("validUntil");
         final String ds = "http://www.w3.org/2000/09/xmldsig#";

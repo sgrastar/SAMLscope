@@ -17,6 +17,17 @@ public interface EvidenceCampaignCase extends ExternallyObservedCase {
     RunCampaignQuery.ActionKind evidenceActionKind();
 
     /**
+     * Describe the next human action from the recorded execution. A native campaign may
+     * require preparation before its browser chain can run; presenting that wait as a new
+     * login sends the test user through authentication without collecting useful evidence.
+     * Existing campaigns retain their static action unless they opt into this distinction.
+     */
+    default RunCampaignQuery.ActionKind evidenceActionKind(
+            com.samlscope.core.caseexec.CaseExecution execution) {
+        return evidenceActionKind();
+    }
+
+    /**
      * Stable operation keys needed by this case. Cases in one campaign may reuse the same key;
      * the interaction budget counts the union rather than one answer per case.
      */

@@ -157,6 +157,35 @@ class ActiveProbeCoordinatorTest {
         assertEquals(50,signed.get());
     }
 
+    @Test
+    void metadataScenarioRedirectUsesItsRunScopedFixtureKeyAndPreservesOriginalQuery() {
+        var clock=Clock.fixed(NOW,ZoneOffset.UTC);
+        var keys=new com.samlscope.saml.crypto.FilePlanKeyStore(directory.resolve("fixture-signers"),clock);
+        var primary=keys.getOrCreate(PLAN);var fixtureKey=keys.getOrCreate(PLAN,"polling-b");
+        String runId="run_2123456789ABCDEFGHJKMNPQRS";
+        runs.save(new TestRun(runId,PLAN,RunStatus.COMPLETED,Reachability.CONFIRMED,Map.of(),NOW,NOW));
+        var plan=plans.find(PLAN).orElseThrow();
+        CaseContextProvider context=r->new DefaultCaseContext(r,plan.profile().role(),clock,plan.parameters(),plan.interaction(),Reachability.CONFIRMED,transcript,true);
+        class Fixture implements com.samlscope.core.caseexec.TestCase,BrowserFrontChannelScenario,ScenarioRedirectCredentials {
+            private final QueueFixture delegate=new QueueFixture("metadata-fixture-key",false);
+            public String id(){return delegate.id();}public com.samlscope.core.plan.TargetRole role(){return delegate.role();}
+            public com.samlscope.core.caseexec.CaseStep start(com.samlscope.core.caseexec.CaseContext c){return delegate.start(c);}
+            public com.samlscope.core.caseexec.CaseStep resume(com.samlscope.core.caseexec.CaseContext c,com.samlscope.core.caseexec.CaseState s,com.samlscope.core.caseexec.CaseEvent e){return delegate.resume(c,s,e);}
+            public String instructionsEn(com.samlscope.core.caseexec.CaseState s){return "Use the native accepted fixture key.";}
+            public Binding outboundBinding(com.samlscope.core.caseexec.CaseState s){return Binding.SIGNED_REDIRECT;}
+            public Optional<com.samlscope.saml.crypto.PlanCredentials> redirectCredentials(String r,com.samlscope.core.caseexec.CaseState s){return Optional.of(fixtureKey);}
+        }
+        var fixture=new Fixture();var service=new CaseExecutionService(executions);service.enqueueFrontChannel(runId,fixture,context.contextFor(runId));
+        var dispatcher=new OutboundDispatcher(executions,(r,a,c)->new OutboundSender.SendResult(false,Map.of(),"unused"),(r,a)->Optional.empty(),new OutboundPolicy(true),clock);
+        var probe=new ActiveProbeCoordinator(URI.create("https://suite.example"),plans,runs,executions,dispatcher,transcript,context,
+            (p,r)->configuration(true),new TestCaseRegistry(List.of(fixture)),clock,service,r->primary);
+        var ready=probe.status(runId);var prepared=probe.prepare(runId,ready.actionId(),false);
+        var entry=transcript.list(runId).getFirst();var verifier=new com.samlscope.saml.binding.RedirectSignatureVerifier();
+        assertEquals(prepared.redirectDestination().getRawQuery(),entry.rawQuery());
+        assertTrue(verifier.isValidForMessage(entry.rawQuery(),fixtureKey.certificate(),transcript.readDecodedSaml(entry)));
+        assertFalse(verifier.isValid(entry.rawQuery(),primary.certificate()));
+    }
+
     private static final class QueueClock extends Clock {
         private Instant now;
         private QueueClock(Instant now) {this.now=now;}
@@ -268,6 +297,59 @@ class ActiveProbeCoordinatorTest {
                 new EvidenceRef("transcript", "tx-cross-run")));
         assertEquals(OutboxStatus.UNKNOWN_DELIVERY,
                 executions.findOutbox(current.actionId()).orElseThrow().status());
+    }
+
+    @Test
+    void browserObservationCorrelationCannotBeReusedAcrossRuns() {
+        var otherRun = "run_1123456789ABCDEFGHJKMNPQRS";
+        runs.save(new TestRun(
+                otherRun, PLAN, RunStatus.COMPLETED, Reachability.CONFIRMED, Map.of(), NOW, NOW));
+        var current = coordinator.status(RUN);
+        coordinator.prepare(RUN, current.actionId(), true);
+
+        assertThrows(IllegalArgumentException.class, () -> coordinator.reportBrowserResponse(
+                otherRun, current.actionId(), 400, "https://idp.example/error", "local error"));
+        assertTrue(transcript.list(otherRun).isEmpty());
+        assertEquals(OutboxStatus.UNKNOWN_DELIVERY,
+                executions.findOutbox(current.actionId()).orElseThrow().status());
+    }
+
+    @Test
+    void oldBrowserObservationIsRecordedButCannotAdvanceTheCurrentFixture() {
+        var first = coordinator.status(RUN);
+        coordinator.prepare(RUN, first.actionId(), true);
+        var next = coordinator.accept(
+                RUN, first.actionId(), response("Requester"), new EvidenceRef("transcript", "tx-first"));
+        var waiting = executions.find(RUN, IdpErrorResponseTestCase.CASE_ID).orElseThrow();
+
+        var afterOldObservation = coordinator.reportBrowserResponse(
+                RUN, first.actionId(), 400, "https://idp.example/error", "local error");
+
+        assertEquals(ActiveProbeCoordinator.State.READY, afterOldObservation.state());
+        assertEquals(next.actionId(), afterOldObservation.actionId());
+        assertEquals(waiting.state(), executions.find(RUN, IdpErrorResponseTestCase.CASE_ID)
+                .orElseThrow().state());
+        assertTrue(transcript.list(RUN).stream().anyMatch(entry ->
+                first.actionId().equals(entry.correlationId())
+                        && "BrowserResponseObservation".equals(entry.samlSummary().get("type"))));
+    }
+
+    @Test
+    void browserObservationBodyIsBoundedBeforeRecorderPersistence() {
+        var first = coordinator.status(RUN);
+        coordinator.prepare(RUN, first.actionId(), true);
+        coordinator.accept(
+                RUN, first.actionId(), response("Requester"), new EvidenceRef("transcript", "tx-first"));
+        var oversized = "é".repeat(40_000);
+
+        coordinator.reportBrowserResponse(
+                RUN, first.actionId(), 400, "https://idp.example/error", oversized);
+
+        var recorded = transcript.list(RUN).stream()
+                .filter(entry -> "BrowserResponseObservation".equals(entry.samlSummary().get("type")))
+                .findFirst().orElseThrow();
+        assertTrue(recorded.bodyBytes() <= 64 * 1024);
+        assertTrue(recorded.bodyBytes() > 0);
     }
 
     @Test

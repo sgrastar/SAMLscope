@@ -19,7 +19,11 @@ final class MetadataUiUrlFixtures {
         };
         var value = switch (tokens[3]) {
             case "data" -> MetadataUiFixtureAsset.dataUri();
-            case "javascript" -> "javascript:void(0)";
+            // A hierarchical javascript URI also reaches native URL validators that
+            // require an authority. It remains the same excluded scheme; the browser
+            // payload is only a comment followed by void(0), with no external request.
+            case "javascript" -> name.equals("Logo")
+                    ? "javascript://samlscope-fixture/%0Avoid(0)" : "javascript:void(0)";
             case "file" -> "file:///samlscope-fixture-nonexistent/ui-url.svg";
             case "http" -> assets.http().toASCIIString();
             case "https" -> assets.https().toASCIIString();

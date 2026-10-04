@@ -24,7 +24,10 @@ public final class SamlErrorProbeRequestFactory {
         BASELINE_SUCCESS,
         UNKNOWN_NAMEID_FORMAT,
         UNKNOWN_EXTENSION,
+        UNKNOWN_ADVICE_EXTENSION,
+        UNKNOWN_METADATA_EXTENSION,
         UNKNOWN_ANY_ATTRIBUTE,
+        UNKNOWN_ATTRIBUTE_ANY_ATTRIBUTE,
         STRING_BOUNDARY_255,
         STRING_BOUNDARY_256,
         STRING_ASCII_255,
@@ -107,17 +110,45 @@ public final class SamlErrorProbeRequestFactory {
             }
             case UNKNOWN_EXTENSION -> {
                 var extensions = element(document, PROTOCOL, "samlp:Extensions");
-                var unknown = element(document, "urn:samlscope:probe:unknown-extension", "probe:UnknownExtension");
-                unknown.setAttributeNS(XMLConstants.XMLNS_ATTRIBUTE_NS_URI, "xmlns:probe",
-                        "urn:samlscope:probe:unknown-extension");
-                unknown.setAttribute("fixture", token(requestId));
-                extensions.appendChild(unknown);
+                extensions.appendChild(unknownExtension(document, requestId, "protocol-extensions"));
+                request.appendChild(extensions);
+            }
+            case UNKNOWN_ADVICE_EXTENSION -> {
+                var extensions = element(document, PROTOCOL, "samlp:Extensions");
+                var assertion = embeddedAssertion(document, requestId, issuer, issueInstant);
+                var advice = element(document, ASSERTION, "saml:Advice");
+                advice.appendChild(unknownExtension(document, requestId, "assertion-advice"));
+                assertion.appendChild(advice);
+                extensions.appendChild(assertion);
+                request.appendChild(extensions);
+            }
+            case UNKNOWN_METADATA_EXTENSION -> {
+                var extensions = element(document, PROTOCOL, "samlp:Extensions");
+                var metadata = element(document, "urn:oasis:names:tc:SAML:2.0:metadata", "md:EntityDescriptor");
+                metadata.setAttributeNS(XMLConstants.XMLNS_ATTRIBUTE_NS_URI, "xmlns:md",
+                        "urn:oasis:names:tc:SAML:2.0:metadata");
+                metadata.setAttribute("entityID", "urn:samlscope:probe:metadata:" + token(requestId));
+                var metadataExtensions = element(document,
+                        "urn:oasis:names:tc:SAML:2.0:metadata", "md:Extensions");
+                metadataExtensions.appendChild(unknownExtension(document, requestId, "metadata-extensions"));
+                metadata.appendChild(metadataExtensions);
+                var affiliation = element(document,
+                        "urn:oasis:names:tc:SAML:2.0:metadata", "md:AffiliationDescriptor");
+                affiliation.setAttribute("affiliationOwnerID", metadata.getAttribute("entityID"));
+                var member = element(document,
+                        "urn:oasis:names:tc:SAML:2.0:metadata", "md:AffiliateMember");
+                member.setTextContent(metadata.getAttribute("entityID") + ":member");
+                affiliation.appendChild(member);
+                metadata.appendChild(affiliation);
+                extensions.appendChild(metadata);
                 request.appendChild(extensions);
             }
             case UNKNOWN_ANY_ATTRIBUTE -> {
+                var extensions = element(document, PROTOCOL, "samlp:Extensions");
+                var assertion = embeddedAssertion(document, requestId, issuer, issueInstant);
                 var subject = element(document, ASSERTION, "saml:Subject");
                 var confirmation = element(document, ASSERTION, "saml:SubjectConfirmation");
-                confirmation.setAttribute("Method", "urn:samlscope:probe:confirmation-method");
+                confirmation.setAttribute("Method", "urn:oasis:names:tc:SAML:2.0:cm:bearer");
                 var data = element(document, ASSERTION, "saml:SubjectConfirmationData");
                 data.setAttributeNS(XMLConstants.XMLNS_ATTRIBUTE_NS_URI, "xmlns:probe",
                         "urn:samlscope:probe:unknown-attribute");
@@ -125,7 +156,24 @@ public final class SamlErrorProbeRequestFactory {
                         "urn:samlscope:probe:unknown-attribute", "probe:fixture", token(requestId));
                 confirmation.appendChild(data);
                 subject.appendChild(confirmation);
-                request.appendChild(subject);
+                assertion.appendChild(subject);
+                extensions.appendChild(assertion);
+                request.appendChild(extensions);
+            }
+            case UNKNOWN_ATTRIBUTE_ANY_ATTRIBUTE -> {
+                var extensions = element(document, PROTOCOL, "samlp:Extensions");
+                var assertion = embeddedAssertion(document, requestId, issuer, issueInstant);
+                var statement = element(document, ASSERTION, "saml:AttributeStatement");
+                var attribute = element(document, ASSERTION, "saml:Attribute");
+                attribute.setAttribute("Name", "urn:samlscope:probe:attribute");
+                attribute.setAttributeNS(XMLConstants.XMLNS_ATTRIBUTE_NS_URI, "xmlns:probe",
+                        "urn:samlscope:probe:unknown-attribute");
+                attribute.setAttributeNS(
+                        "urn:samlscope:probe:unknown-attribute", "probe:fixture", token(requestId));
+                statement.appendChild(attribute);
+                assertion.appendChild(statement);
+                extensions.appendChild(assertion);
+                request.appendChild(extensions);
             }
             case PERSISTENT_NAMEID_POLICY -> {
                 var policy = element(document, PROTOCOL, "samlp:NameIDPolicy");
@@ -179,7 +227,7 @@ public final class SamlErrorProbeRequestFactory {
             var declarationEnd = xml.indexOf("?>");
             var insertion = probe == Probe.DTD_AUTHN_REQUEST
                     ? "<!DOCTYPE samlp:AuthnRequest>"
-                    : "<!DOCTYPE samlp:AuthnRequest [<!ENTITY samlscope SYSTEM \"https://invalid.example/samlscope.dtd\">]>";
+                    : "<!DOCTYPE samlp:AuthnRequest [<!ENTITY % samlscope SYSTEM \"https://invalid.example/samlscope.dtd\"> %samlscope;]>";
             xml = declarationEnd >= 0
                     ? xml.substring(0, declarationEnd + 2) + insertion + xml.substring(declarationEnd + 2)
                     : insertion + xml;
@@ -225,6 +273,28 @@ public final class SamlErrorProbeRequestFactory {
 
     public String unavailableAuthnContext(String requestId) {
         return "urn:samlscope:probe:unavailable-authn-context:" + token(requestId);
+    }
+
+    private Element embeddedAssertion(
+            Document document, String requestId, String issuer, Instant issueInstant) {
+        var assertion = element(document, ASSERTION, "saml:Assertion");
+        assertion.setAttribute("ID", "_embedded_" + token(requestId));
+        assertion.setAttribute("Version", "2.0");
+        assertion.setAttribute("IssueInstant", DateTimeFormatter.ISO_INSTANT.format(issueInstant));
+        var assertionIssuer = element(document, ASSERTION, "saml:Issuer");
+        assertionIssuer.setTextContent(issuer);
+        assertion.appendChild(assertionIssuer);
+        return assertion;
+    }
+
+    private Element unknownExtension(Document document, String requestId, String placement) {
+        var unknown = element(document,
+                "urn:samlscope:probe:unknown-extension", "probe:UnknownExtension");
+        unknown.setAttributeNS(XMLConstants.XMLNS_ATTRIBUTE_NS_URI, "xmlns:probe",
+                "urn:samlscope:probe:unknown-extension");
+        unknown.setAttribute("fixture", token(requestId));
+        unknown.setAttribute("placement", placement);
+        return unknown;
     }
 
     private String token(String requestId) {

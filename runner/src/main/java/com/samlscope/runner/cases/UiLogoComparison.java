@@ -57,7 +57,9 @@ final class UiLogoComparison {
                     || !Objects.equals(preferred.localizedImageHash(), fallback.localizedImageHash())) issues.add("uncontrolled_input_changed");
             if (Objects.equals(preferred.metadataHash(), fallback.metadataHash())) issues.add("language_input_not_changed");
             if (!preferred.observedAt().isBefore(fallback.requestedAt())) issues.add("overlapping_or_reordered_conditions");
-            if (preferred.selection() != Selection.LOCALIZED || fallback.selection() != Selection.DEFAULT) {
+            // Selecting a preferred-language logo is MAY; the default fallback is SHOULD.
+            // A visible default in the preferred condition therefore remains permitted.
+            if (preferred.selection() == Selection.UNOBSERVED || fallback.selection() != Selection.DEFAULT) {
                 issues.add("selection_difference_unproven");
             }
         }

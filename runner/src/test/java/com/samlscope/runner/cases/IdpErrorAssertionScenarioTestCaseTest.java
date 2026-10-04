@@ -73,6 +73,102 @@ class IdpErrorAssertionScenarioTestCaseTest {
         assertEquals(Outcome.SATISFIED, finish.outcome().outcome());
     }
 
+    @Test
+    void successfulUnknownSubjectResponseWithAssertionViolatesSubjectObligation() {
+        assertSuccessfulUnknownSubjectIsViolation(true);
+    }
+
+    @Test
+    void successfulUnknownSubjectResponseWithoutAssertionViolatesSubjectObligation() {
+        assertSuccessfulUnknownSubjectIsViolation(false);
+    }
+
+    @Test
+    void successfulUnknownSubjectResponseRemainsInconclusiveForGeneralAssertionAbsenceCase() {
+        var baseline = assertInstanceOf(CaseStep.AwaitInbound.class, testCase.start(context()));
+        var unknownFormat = next(baseline, response(baseline.next(), true, true, false));
+        var unknownSubject = next(unknownFormat, response(unknownFormat.next(), false, false, false));
+        var passive = next(unknownSubject, response(unknownSubject.next(), true, true, false));
+        var finish = assertInstanceOf(CaseStep.Finish.class, testCase.resume(
+                context(), passive.next(), inbound(response(passive.next(), false, false, false))));
+
+        assertEquals(Outcome.NOT_VERIFIED, finish.outcome().outcome());
+    }
+
+    @Test
+    void targetHttpErrorForUnknownSubjectViolatesTheRequiredSamlErrorResponse() {
+        var subjectCase = new IdpErrorAssertionScenarioTestCase(
+                IdpErrorAssertionScenarioTestCase.SUBJECT_ERROR_CASE, ignored -> configuration());
+        var baseline = assertInstanceOf(CaseStep.AwaitInbound.class, subjectCase.start(context()));
+        var subject = assertInstanceOf(CaseStep.AwaitInbound.class, subjectCase.resume(
+                context(), baseline.next(), inbound(response(baseline.next(), true, true, false))));
+        var finish = assertInstanceOf(CaseStep.Finish.class, subjectCase.resume(
+                context(), subject.next(), browser(500, "https://IDP.example:443/local-error", true)));
+
+        assertEquals(Outcome.VIOLATED, finish.outcome().outcome());
+        assertEquals(2, finish.outcome().evidence().size());
+    }
+
+    @Test
+    void subjectHttpObservationFailsClosedWithoutTheTargetOriginStatusOrRecorderEvidence() {
+        for (var observation : java.util.List.of(
+                browser(500, "https://idp.example/error", false),
+                browser(399, "https://idp.example/error", true),
+                browser(600, "https://idp.example/error", true),
+                browser(500, "http://idp.example/error", true),
+                browser(500, "https://idp.example:444/error", true),
+                browser(500, "https://other.example/error?body=https://idp.example", true))) {
+            var subjectCase = new IdpErrorAssertionScenarioTestCase(
+                    IdpErrorAssertionScenarioTestCase.SUBJECT_ERROR_CASE, ignored -> configuration());
+            var baseline = assertInstanceOf(CaseStep.AwaitInbound.class, subjectCase.start(context()));
+            var subject = assertInstanceOf(CaseStep.AwaitInbound.class, subjectCase.resume(
+                    context(), baseline.next(), inbound(response(baseline.next(), true, true, false))));
+            var finish = assertInstanceOf(CaseStep.Finish.class, subjectCase.resume(
+                    context(), subject.next(), observation));
+            assertEquals(Outcome.NOT_VERIFIED, finish.outcome().outcome(), observation.toString());
+        }
+    }
+
+    @Test
+    void targetHttpErrorCannotReplaceTheExistingPrincipalControl() {
+        var subjectCase = new IdpErrorAssertionScenarioTestCase(
+                IdpErrorAssertionScenarioTestCase.SUBJECT_ERROR_CASE, ignored -> configuration());
+        var baseline = assertInstanceOf(CaseStep.AwaitInbound.class, subjectCase.start(context()));
+        var finish = assertInstanceOf(CaseStep.Finish.class, subjectCase.resume(
+                context(), baseline.next(), browser(500, "https://idp.example/error", true)));
+
+        assertEquals(Outcome.NOT_VERIFIED, finish.outcome().outcome());
+        assertEquals("control_failed", finish.outcome().reasonCode());
+    }
+
+    @Test
+    void localHttpErrorDoesNotProveAssertionAbsenceForTheGeneralErrorCase() {
+        var baseline = assertInstanceOf(CaseStep.AwaitInbound.class, testCase.start(context()));
+        var unknownFormat = next(baseline, response(baseline.next(), true, true, false));
+        var unknownSubject = assertInstanceOf(CaseStep.AwaitInbound.class, testCase.resume(
+                context(), unknownFormat.next(),
+                browser(500, "https://idp.example/error", true)));
+        var passive = next(unknownSubject, response(unknownSubject.next(), false, false, false));
+        var finish = assertInstanceOf(CaseStep.Finish.class, testCase.resume(
+                context(), passive.next(), inbound(response(passive.next(), false, false, false))));
+
+        assertEquals(Outcome.NOT_VERIFIED, finish.outcome().outcome());
+    }
+
+    private void assertSuccessfulUnknownSubjectIsViolation(boolean assertion) {
+        var subjectCase = new IdpErrorAssertionScenarioTestCase(
+                IdpErrorAssertionScenarioTestCase.SUBJECT_ERROR_CASE, ignored -> configuration());
+        var baseline = assertInstanceOf(CaseStep.AwaitInbound.class, subjectCase.start(context()));
+        var subject = assertInstanceOf(CaseStep.AwaitInbound.class, subjectCase.resume(
+                context(), baseline.next(), inbound(response(baseline.next(), true, true, false))));
+        var finish = assertInstanceOf(CaseStep.Finish.class, subjectCase.resume(
+                context(), subject.next(), inbound(response(subject.next(), true, assertion, false))));
+
+        assertEquals(Outcome.VIOLATED, finish.outcome().outcome());
+        assertEquals("error_response_contains_assertion", finish.outcome().reasonCode());
+        assertEquals(2, finish.outcome().evidence().size());
+    }
+
     private CaseStep.AwaitInbound next(CaseStep.AwaitInbound step, String response) {
         return assertInstanceOf(CaseStep.AwaitInbound.class,
                 testCase.resume(context(), step.next(), inbound(response)));
@@ -81,6 +177,11 @@ class IdpErrorAssertionScenarioTestCaseTest {
     private CaseEvent.InboundMessage inbound(String xml) {
         return new CaseEvent.InboundMessage(
                 xml.getBytes(StandardCharsets.UTF_8), new EvidenceRef("transcript", "tx"));
+    }
+
+    private CaseEvent.BrowserObservation browser(int status, String url, boolean evidence) {
+        return new CaseEvent.BrowserObservation(status, url, "response body is ignored",
+                evidence ? new EvidenceRef("transcript", "tx-browser-" + status) : null);
     }
 
     private String xml(CaseStep.AwaitInbound step) {

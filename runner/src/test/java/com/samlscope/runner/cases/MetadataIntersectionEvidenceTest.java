@@ -31,6 +31,28 @@ class MetadataIntersectionEvidenceTest {
         var incapable=mutant.stream().map(s->new MetadataIntersectionEvidence.Sample(s.campaign(),s.variant(),s.mismatches(),List.of(MetadataAlgorithmSelection.S256),s.evidence())).toList();
         assertEquals(Outcome.NOT_VERIFIED,MetadataIntersectionEvidence.evaluate(incapable,List.of()).outcome());
     }
+    @Test void separateControlProvesCapabilityButNeverCompletesAnotherCampaignMatrix() {
+        var original=matrix().stream().map(s->new MetadataIntersectionEvidence.Sample(s.campaign(),s.variant(),
+                s.variant().equals("algorithm-entity-sha384")?List.of("signature-intersection"):List.of(),
+                List.of(MetadataAlgorithmSelection.S256),s.evidence(),List.of("matrix-signer"))).toList();
+        var auxiliary=new MetadataIntersectionEvidence.Sample("capability", "control",List.of(),
+                List.of(MetadataAlgorithmSelection.S384),List.of(new EvidenceRef("transcript","capability-original")),List.of("matrix-signer"));
+        var combined=new ArrayList<>(original);combined.add(auxiliary);
+        var result=MetadataIntersectionEvidence.evaluate(combined,List.of());
+        assertEquals(Outcome.VIOLATED,result.outcome());
+        assertTrue(result.evidence().contains(new EvidenceRef("transcript","capability-original")));
+        var partial=new ArrayList<>(combined);partial.remove(1);
+        assertEquals(Outcome.NOT_VERIFIED,MetadataIntersectionEvidence.evaluate(partial,List.of()).outcome());
+        combined.set(combined.size()-1,new MetadataIntersectionEvidence.Sample("capability","algorithm-entity-sha384",List.of(),
+                auxiliary.signatureAlgorithms(),auxiliary.evidence()));
+        assertEquals(Outcome.NOT_VERIFIED,MetadataIntersectionEvidence.evaluate(combined,List.of()).outcome());
+        combined.set(combined.size()-1,new MetadataIntersectionEvidence.Sample("capability","control",List.of(),
+                auxiliary.signatureAlgorithms(),auxiliary.evidence(),List.of("different-authorized-key")));
+        assertEquals(Outcome.NOT_VERIFIED,MetadataIntersectionEvidence.evaluate(combined,List.of()).outcome());
+        combined.set(combined.size()-1,new MetadataIntersectionEvidence.Sample("capability","control",List.of("corrupt-control"),
+                auxiliary.signatureAlgorithms(),auxiliary.evidence()));
+        assertEquals(Outcome.NOT_VERIFIED,MetadataIntersectionEvidence.evaluate(combined,List.of()).outcome());
+    }
     private PlanCredentials key(String alias) { return new FilePlanKeyStore(directory,Clock.systemUTC()).getOrCreate("plan_0123456789ABCDEFGHJKMNPQRS",alias); }
     private MetadataAlgorithmEvidence.Exchange exchange(String variant,PlanCredentials key,String ads,SamlEncryptionFixtureFactory.Algorithms algorithms,String signature) throws Exception {
         var metadata=SecureXml.parse(("<md:EntityDescriptor xmlns:md='"+MD+"' xmlns:ds='"+DS+"' xmlns:xenc11='"+X11+"' xmlns:alg='urn:oasis:names:tc:SAML:metadata:algsupport'><md:SPSSODescriptor>"+(variant.endsWith("keysize-excluded")?"<md:Extensions><alg:SigningMethod Algorithm='"+MetadataAlgorithmSelection.S256+"' MaxKeySize='1'/><alg:SigningMethod Algorithm='"+MetadataAlgorithmSelection.S384+"'/></md:Extensions>":"")+"<md:KeyDescriptor use='encryption'><ds:KeyInfo><ds:X509Data><ds:X509Certificate>"+Base64.getEncoder().encodeToString(key.certificate().getEncoded())+"</ds:X509Certificate></ds:X509Data></ds:KeyInfo>"+ads+"</md:KeyDescriptor></md:SPSSODescriptor></md:EntityDescriptor>").getBytes(StandardCharsets.UTF_8)).getDocumentElement();
@@ -63,5 +85,40 @@ class MetadataIntersectionEvidenceTest {
         var key=key("fixture");
         assertEquals(List.of(),MetadataIntersectionEvidence.inspect(exchange("algorithm-signing-256-keysize-excluded",key,"",algorithms(true),MetadataAlgorithmSelection.S384),key).mismatches());
         assertEquals(List.of("signing-keysize-intersection"),MetadataIntersectionEvidence.inspect(exchange("algorithm-signing-256-keysize-excluded",key,"",algorithms(true),MetadataAlgorithmSelection.S256),key).mismatches());
+    }
+    @Test void completeExplicitSha512PairKeepsFullMatrixAndSameSignerControls() {
+        var s512="http://www.w3.org/2001/04/xmldsig-more#rsa-sha512";
+        var matrix512=MetadataIntersectionEvidence.REQUIRED_SHA512.stream().map(v->new MetadataIntersectionEvidence.Sample("matrix512",v,
+                v.equals("algorithm-entity-sha512")?List.of("signature-intersection"):List.<String>of(),
+                List.of(MetadataAlgorithmSelection.S256),List.of(new EvidenceRef("transcript",v)),List.of("actual-key"))).toList();
+        var control=new MetadataIntersectionEvidence.Sample("separate-capability","control",List.of(),List.of(s512),
+                List.of(new EvidenceRef("transcript","capability")),List.of("actual-key"));
+        var complete=new ArrayList<>(matrix512);complete.add(control);
+        var result=MetadataIntersectionEvidence.evaluate(complete,List.of());
+        assertEquals(Outcome.VIOLATED,result.outcome());
+        assertEquals(MetadataIntersectionEvidence.REQUIRED_SHA512,result.details().get("required_variants"));
+        for(var missing:matrix512) {
+            var partial=new ArrayList<>(complete);partial.remove(missing);
+            assertEquals(Outcome.NOT_VERIFIED,MetadataIntersectionEvidence.evaluate(partial,List.of()).outcome());
+        }
+        complete.set(complete.size()-1,new MetadataIntersectionEvidence.Sample("separate-capability","control",List.of(),
+                List.of(MetadataAlgorithmSelection.S384),control.evidence(),control.signingKeySha256()));
+        assertEquals(Outcome.NOT_VERIFIED,MetadataIntersectionEvidence.evaluate(complete,List.of()).outcome());
+        complete.set(complete.size()-1,control);
+        complete.add(new MetadataIntersectionEvidence.Sample("matrix512","algorithm-entity-sha384",List.of(),
+                List.of(s512),List.of(),List.of("actual-key")));
+        assertEquals(Outcome.NOT_VERIFIED,MetadataIntersectionEvidence.evaluate(complete,List.of()).outcome());
+    }
+    @Test void explicitSha512KeysizeInputCannotBeRelabeledFromSha384() throws Exception {
+        var key=key("fixture");var s512="http://www.w3.org/2001/04/xmldsig-more#rsa-sha512";
+        var old=exchange("algorithm-signing-256-keysize-excluded",key,"",algorithms(true),s512);
+        var labeled=new MetadataAlgorithmEvidence.Exchange(old.campaign(),"algorithm-signing-256-512-keysize-excluded",
+                old.metadata(),old.response(),old.signatures(),old.signingKeys(),old.evidence());
+        assertThrows(Exception.class,()->MetadataIntersectionEvidence.inspect(labeled,key));
+        var methods=old.metadata().getElementsByTagNameNS("urn:oasis:names:tc:SAML:metadata:algsupport","SigningMethod");
+        ((org.w3c.dom.Element)methods.item(1)).setAttribute("Algorithm",s512);
+        assertEquals(List.of(),MetadataIntersectionEvidence.inspect(labeled,key).mismatches());
+        ((org.w3c.dom.Element)methods.item(0)).removeAttribute("MaxKeySize");
+        assertThrows(Exception.class,()->MetadataIntersectionEvidence.inspect(labeled,key));
     }
 }

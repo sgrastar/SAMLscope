@@ -23,6 +23,7 @@ native=importlib.util.module_from_spec(spec);spec.loader.exec_module(native)
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output',type=pathlib.Path,required=True)
+    parser.add_argument('--profile',choices=['browser_sso_idp','ecp_idp'],default='browser_sso_idp')
     parser.add_argument('--shared-key-gcm',type=int,choices=[128,256],help='Generate an ephemeral AES key; retain only its digest')
     parser.add_argument('--wrong-key-control',action='store_true',help='Evaluate using an unrelated key; no algorithm may pass')
     args=parser.parse_args();out=args.output.resolve()
@@ -33,7 +34,7 @@ def main():
     config=REPO/'build/acceptance/reference-20260914/ssp-config/saml20-sp-remote.php'
     original=config.read_bytes()
     if b'?>' in original:raise ValueError('Unexpected PHP closing tag')
-    created=api('/api/plans',dict(name='SimpleSAMLphp normal encrypted SSO',profile='browser_sso_idp',
+    created=api('/api/plans',dict(name='SimpleSAMLphp normal encrypted SSO',profile=args.profile,
         targetKind='IDP',targetEntityId='http://localhost:18380/idp',metadataSourceKind='URL',
         metadataSourceLocation='http://samlscope-reference-ssp/simplesaml/module.php/saml/idp/metadata',
         suiteMetadataDelivery='HTTP_URL',declaredFeatures={},parameters=dict(clockSkewToleranceSeconds=180,

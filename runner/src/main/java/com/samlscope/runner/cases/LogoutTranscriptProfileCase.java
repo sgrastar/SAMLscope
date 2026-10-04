@@ -107,8 +107,7 @@ public final class LogoutTranscriptProfileCase {
             case REQUEST_NOT_ON_OR_AFTER_BOUND -> requestNotOnOrAfterBound(targetLogout, all);
             case REDIRECT_LOGOUT_REQUEST_ACCEPTED -> redirectLogoutRequestAccepted(targetLogout, all);
             case TARGET_REDIRECT_LOGOUT_REQUEST -> targetRedirectLogoutRequest(targetLogout);
-            case TARGET_REDIRECT_RESPONSE_CONSUMED -> targetRedirectResponseConsumed(
-                    targetLogout, all, snapshot.entries());
+            case TARGET_REDIRECT_RESPONSE_CONSUMED -> targetRedirectResponseConsumed(targetLogout, all);
             case INFORMATIONAL_PROPAGATION -> informationalPropagation(targetLogout);
             case TARGET_PROPAGATION_CONTINUE -> targetPropagationContinue(targetLogout, all);
             case TARGET_PARTIAL_LOGOUT -> targetPartialLogout(targetLogout, all);
@@ -582,48 +581,11 @@ public final class LogoutTranscriptProfileCase {
                 .filter(value -> is(value.logout(), "LogoutRequest"))
                 .toList();
         if (initiators.isEmpty()) {
-            // Local logout propagation: the target initiates, so the run itself is the processing
-            // unit. Exactly one issued failure response keeps the attribution unambiguous.
-            var failing = targetLogout.stream()
-                    .filter(value -> "SloFailParticipant".equals(value.entry().samlSummary().get("type")))
-                    .filter(value -> Integer.valueOf(500)
-                            .equals(value.entry().samlSummary().get("http_status")))
-                    .toList();
-            if (failing.isEmpty()) {
-                return notVerified("slo.propagation.failure-induction-unavailable",
-                        "slo.propagation.failure-induction-unavailable");
-            }
-            if (failing.size() > 1) {
-                return notVerified("slo.propagation.processing-ambiguous",
-                        "slo.propagation.processing-ambiguous");
-            }
-            var failureAt = failing.getFirst().entry().timestamp();
-            var remaining = targetLogout.stream()
-                    .filter(value -> is(value.logout(), "LogoutRequest"))
-                    .filter(value -> !"SloFailParticipant".equals(value.entry().samlSummary().get("type")))
-                    .filter(value -> value.entry().timestamp().isAfter(failureAt))
-                    .toList();
-            if (remaining.isEmpty()) {
-                return notVerified("slo.propagation.continuation-unobserved",
-                        "slo.propagation.continuation-unobserved");
-            }
-            var answered = remaining.stream().anyMatch(value -> all.stream()
-                    .filter(candidate -> candidate.entry().direction() == Direction.OUTBOUND)
-                    .filter(candidate -> is(candidate.logout(), "LogoutResponse"))
-                    .anyMatch(candidate -> !candidate.entry().timestamp().isBefore(value.entry().timestamp())));
-            if (!answered) {
-                return notVerified("slo.propagation.continuation-response-unavailable",
-                        "slo.propagation.continuation-response-unavailable");
-            }
-            var localEvidence = new java.util.ArrayList<EvidenceRef>();
-            localEvidence.addAll(evidence(failing));
-            localEvidence.addAll(evidence(remaining));
-            return new CaseOutcome(Outcome.SATISFIED, null, "slo.propagation.continue-after-failure",
-                    "slo.propagation.continue-after-failure", localEvidence,
-                    Map.of("processing_unit", "local-logout",
-                            "failing_attempts", failing.size(),
-                            "remaining_endpoints", remaining.stream()
-                                    .map(value -> String.valueOf(value.entry().url())).distinct().count()));
+            // A Run alone does not delimit a target-initiated local logout processing.
+            // Without a recorded initiating request and its final response, later activity
+            // may belong to a different session or browser operation.
+            return notVerified("slo.propagation.initiator-response-unavailable",
+                    "slo.propagation.initiator-response-unavailable");
         }
         // Each initiating request defines one logout processing bounded by its correlated final
         // response. Evidence outside the window, or windows that cannot be attributed separately,
@@ -636,7 +598,14 @@ public final class LogoutTranscriptProfileCase {
                     .filter(value -> initiator.logout().getAttribute("ID")
                             .equals(value.logout().getAttribute("InResponseTo")))
                     .toList();
-            if (responses.isEmpty()) continue;
+            if (responses.isEmpty()) {
+                return notVerified("slo.propagation.initiator-response-unavailable",
+                        "slo.propagation.initiator-response-unavailable");
+            }
+            if (responses.size() != 1) {
+                return notVerified("slo.propagation.processing-ambiguous",
+                        "slo.propagation.processing-ambiguous");
+            }
             var end = responses.stream().map(value -> value.entry().timestamp())
                     .max(java.util.Comparator.naturalOrder()).orElseThrow();
             windows.add(new Processing(initiator, responses, initiator.entry().timestamp(), end));
@@ -645,13 +614,32 @@ public final class LogoutTranscriptProfileCase {
             return notVerified("slo.propagation.initiator-response-unavailable",
                     "slo.propagation.initiator-response-unavailable");
         }
-        // A straggler from another processing in the same run can arrive inside this window at
-        // the same participant endpoint, so a run with several processings cannot attribute
-        // continuation until participant endpoints are allocated per processing.
-        if (windows.size() > 1) {
-            return notVerified("slo.propagation.processing-ambiguous",
-                    "slo.propagation.processing-ambiguous");
+        for (var processing : windows) {
+            if (!processing.start().isBefore(processing.end())
+                    || windows.stream().anyMatch(other -> other != processing && processing.overlaps(other))) {
+                return notVerified("slo.propagation.processing-ambiguous",
+                        "slo.propagation.processing-ambiguous");
+            }
         }
+        // An endpoint shared by different processings can receive delayed traffic from the
+        // previous operation. Allocate participant endpoints per processing until the recorder
+        // exposes a stronger operation identity.
+        var endpointsByProcessing = new java.util.ArrayList<java.util.Set<String>>();
+        for (var processing : windows) {
+            var endpoints = targetLogout.stream()
+                    .filter(value -> is(value.logout(), "LogoutRequest"))
+                    .filter(value -> !value.entry().timestamp().isBefore(processing.start())
+                            && !value.entry().timestamp().isAfter(processing.end()))
+                    .map(value -> endpoint(value.entry().url())).filter(java.util.Objects::nonNull)
+                    .collect(java.util.stream.Collectors.toSet());
+            if (endpointsByProcessing.stream().anyMatch(previous -> previous.stream().anyMatch(endpoints::contains))) {
+                return notVerified("slo.propagation.processing-ambiguous",
+                        "slo.propagation.processing-ambiguous");
+            }
+            endpointsByProcessing.add(endpoints);
+        }
+        var completedEvidence = new java.util.ArrayList<EvidenceRef>();
+        var completedDiagnostics = new java.util.ArrayList<Map<String, Object>>();
         var bestReason = "slo.propagation.not-observed";
         var bestEvidence = new java.util.ArrayList<EvidenceRef>();
         for (var processing : windows) {
@@ -668,6 +656,8 @@ public final class LogoutTranscriptProfileCase {
                     .filter(value -> "SloFailParticipant".equals(value.entry().samlSummary().get("type")))
                     .filter(value -> Integer.valueOf(500)
                             .equals(value.entry().samlSummary().get("http_status")))
+                    .filter(value -> Integer.valueOf(500).equals(value.entry().status()))
+                    .filter(this::requestEndpointRecorded)
                     .toList();
             if (failing.isEmpty()) {
                 bestReason = "slo.propagation.failure-induction-unavailable";
@@ -676,12 +666,13 @@ public final class LogoutTranscriptProfileCase {
             }
             var failureAt = failing.stream().map(value -> value.entry().timestamp())
                     .max(java.util.Comparator.naturalOrder()).orElseThrow();
-            var failingEndpoints = failing.stream().map(value -> String.valueOf(value.entry().url()))
+            var failingEndpoints = failing.stream().map(value -> endpoint(value.entry().url()))
                     .collect(java.util.stream.Collectors.toSet());
             var continuation = within.stream()
                     .filter(value -> is(value.logout(), "LogoutRequest"))
                     .filter(value -> !"SloFailParticipant".equals(value.entry().samlSummary().get("type")))
-                    .filter(value -> !failingEndpoints.contains(String.valueOf(value.entry().url())))
+                    .filter(this::requestEndpointRecorded)
+                    .filter(value -> !failingEndpoints.contains(endpoint(value.entry().url())))
                     .filter(value -> value.entry().timestamp().isAfter(failureAt))
                     .toList();
             if (continuation.isEmpty()) {
@@ -689,13 +680,23 @@ public final class LogoutTranscriptProfileCase {
                 bestEvidence = new java.util.ArrayList<>(evidence(within));
                 continue;
             }
-            // The Suite must have answered the remaining participant inside the same processing.
-            var answered = continuation.stream().anyMatch(value -> all.stream()
+            // The response must answer this participant's request, not merely occur later.
+            var answered = continuation.stream().flatMap(value -> all.stream()
                     .filter(candidate -> candidate.entry().direction() == Direction.OUTBOUND)
                     .filter(candidate -> is(candidate.logout(), "LogoutResponse"))
-                    .anyMatch(candidate -> !candidate.entry().timestamp().isBefore(value.entry().timestamp())
-                            && !candidate.entry().timestamp().isAfter(processing.end())));
-            if (!answered) {
+                    .filter(candidate -> !value.logout().getAttribute("ID").isBlank()
+                            && value.logout().getAttribute("ID")
+                                    .equals(candidate.logout().getAttribute("InResponseTo")))
+                    .filter(candidate -> all.stream().filter(request -> is(request.logout(), "LogoutRequest"))
+                            .filter(request -> value.logout().getAttribute("ID")
+                                    .equals(request.logout().getAttribute("ID"))).count() == 1)
+                    .filter(candidate -> endpoint(candidate.entry().url()) != null
+                            && endpoint(candidate.entry().url())
+                                    .equals(endpoint(candidate.logout().getAttribute("Destination"))))
+                    .filter(candidate -> !candidate.entry().timestamp().isBefore(value.entry().timestamp())
+                            && !candidate.entry().timestamp().isAfter(processing.end())))
+                    .distinct().toList();
+            if (answered.isEmpty()) {
                 bestReason = "slo.propagation.continuation-response-unavailable";
                 bestEvidence = new java.util.ArrayList<>(evidence(continuation));
                 continue;
@@ -705,18 +706,39 @@ public final class LogoutTranscriptProfileCase {
             satisfiedEvidence.addAll(evidence(processing.responses()));
             satisfiedEvidence.addAll(evidence(failing));
             satisfiedEvidence.addAll(evidence(continuation));
-            return new CaseOutcome(Outcome.SATISFIED, null, "slo.propagation.continue-after-failure",
-                    "slo.propagation.continue-after-failure", satisfiedEvidence,
-                    Map.of("processing_start", processing.start().toString(),
+            satisfiedEvidence.addAll(evidence(answered));
+            completedEvidence.addAll(satisfiedEvidence);
+            completedDiagnostics.add(Map.of("processing_start", processing.start().toString(),
                             "processing_end", processing.end().toString(),
                             "failing_attempts", failing.size(),
                             "remaining_endpoints", continuation.stream()
-                                    .map(value -> String.valueOf(value.entry().url())).distinct().count(),
+                                    .map(value -> endpoint(value.entry().url())).distinct().count(),
                             "partial_logout_final", processing.responses().stream().anyMatch(value ->
                                     PARTIAL_LOGOUT_STATUS.equals(secondaryStatus(value.logout())))));
         }
+        if (!completedDiagnostics.isEmpty()) {
+            return new CaseOutcome(Outcome.SATISFIED, null, "slo.propagation.continue-after-failure",
+                    "slo.propagation.continue-after-failure", completedEvidence.stream().distinct().toList(),
+                    Map.of("processings", List.copyOf(completedDiagnostics)));
+        }
         return new CaseOutcome(Outcome.NOT_VERIFIED, bestReason, bestReason, bestReason,
                 bestEvidence, Map.of());
+    }
+
+    private boolean requestEndpointRecorded(Message message) {
+        var recorded = endpoint(message.entry().url());
+        return recorded != null && recorded.equals(endpoint(message.logout().getAttribute("Destination")));
+    }
+
+    private String endpoint(String value) {
+        if (value == null || value.isBlank()) return null;
+        try {
+            var uri = java.net.URI.create(value);
+            if (uri.getScheme() == null || uri.getRawAuthority() == null) return null;
+            // SAML binding parameters do not identify the participant endpoint.
+            return uri.getScheme().toLowerCase(java.util.Locale.ROOT) + "://"
+                    + uri.getRawAuthority().toLowerCase(java.util.Locale.ROOT) + uri.getRawPath();
+        } catch (IllegalArgumentException invalid) { return null; }
     }
 
     private CaseOutcome notVerified(String reasonCode, String detail) {
@@ -785,8 +807,7 @@ public final class LogoutTranscriptProfileCase {
                 evidence(requests), Map.of("methods", List.copyOf(methods), "violations", misleading));
     }
 
-    private CaseOutcome targetRedirectResponseConsumed(List<Message> targetLogout, List<Message> all,
-            List<TranscriptEntry> entries) {
+    private CaseOutcome targetRedirectResponseConsumed(List<Message> targetLogout, List<Message> all) {
         var requests = targetLogout.stream().filter(value -> is(value.logout(), "LogoutRequest")).toList();
         if (requests.isEmpty()) {
             return notVerifiedWithEvidence(List.of(), "slo.redirect-response.not-observed",
@@ -807,29 +828,18 @@ public final class LogoutTranscriptProfileCase {
                         value.entry().samlSummary().getOrDefault("binding", "")).endsWith(":HTTP-Redirect"))
                 .map(Message::reference).toList();
         if (!nonRedirect.isEmpty()) {
-            return new CaseOutcome(Outcome.VIOLATED, null, "slo.redirect-response.binding-violated",
-                    "slo.redirect-response.binding-violated", evidence(responses),
-                    Map.of("violations", nonRedirect));
+            // The Suite selects its outbound binding. A POST response does not exercise
+            // the target's ability to consume Redirect and cannot prove a target violation.
+            return new CaseOutcome(Outcome.NOT_VERIFIED, "suite_logout_response_not_redirect",
+                    "slo.redirect-response.fixture-binding-unavailable",
+                    "slo.redirect-response.fixture-binding-unavailable", evidence(responses),
+                    Map.of("suite_non_redirect_responses", nonRedirect));
         }
-        var lastResponseAt = responses.stream().map(value -> value.entry().timestamp())
-                .max(java.util.Comparator.naturalOrder()).orElse(null);
-        var observations = entries.stream()
-                .filter(entry -> "BROWSER".equalsIgnoreCase(entry.method()))
-                .filter(entry -> lastResponseAt == null || !entry.timestamp().isBefore(lastResponseAt))
-                .toList();
-        if (observations.isEmpty()) {
-            return notVerifiedWithEvidence(responses, "slo.redirect-response.consumption-unobserved",
-                    "slo.redirect-response.consumption-unobserved");
-        }
-        var failed = observations.stream().anyMatch(entry -> Boolean.TRUE.equals(
-                entry.samlSummary().getOrDefault("failure_indicated",
-                        entry.status() != null && entry.status() >= 400)));
-        if (failed) {
-            return new CaseOutcome(Outcome.VIOLATED, null, "slo.redirect-response.not-consumed",
-                    "slo.redirect-response.not-consumed", evidence(responses),
-                    Map.of("observations", observations.size()));
-        }
-        // A successful page load does not prove that the IdP consumed the response.
+        // BrowserResponseObservation records a landing page, HTTP status and generic error
+        // keywords. Even a later failed page on the target has neither a unique binding to
+        // this LogoutResponse nor product-native evidence of refusing that exact response.
+        // There is currently no supported native refusal receipt for this passive rule.
+        // Both apparent success and apparent failure therefore leave consumption unproven.
         return notVerifiedWithEvidence(responses, "slo.redirect-response.consumption-unobserved",
                 "slo.redirect-response.consumption-unobserved");
     }

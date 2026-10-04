@@ -45,6 +45,52 @@ class IdpVersionScenarioTestCaseTest {
         assertEquals(Outcome.VIOLATED, finish.outcome().outcome());
     }
 
+    @Test
+    void recorderBackedTargetHttpErrorsProveBothUnsupportedVersionsWereRejected() {
+        var testCase = testCase();
+        var control = assertInstanceOf(CaseStep.AwaitInbound.class, testCase.start(context()));
+        var old = next(testCase, control, response(control.next(), true));
+        var future = assertInstanceOf(CaseStep.AwaitInbound.class, testCase.resume(
+                context(), old.next(), browser(500, "https://IDP.example:443/local-error", true)));
+        var finish = assertInstanceOf(CaseStep.Finish.class, testCase.resume(
+                context(), future.next(), browser(400, "https://idp.example/rejected", true)));
+
+        assertEquals(Outcome.SATISFIED, finish.outcome().outcome());
+        assertEquals(3, finish.outcome().evidence().size());
+    }
+
+    @Test
+    void versionHttpObservationFailsClosedWithoutTheControlOriginOrRecorderEvidence() {
+        for (var observation : java.util.List.of(
+                browser(500, "https://idp.example/error", false),
+                browser(399, "https://idp.example/error", true),
+                browser(600, "https://idp.example/error", true),
+                browser(500, "http://idp.example/error", true),
+                browser(500, "https://idp.example:444/error", true),
+                browser(500, "https://other.example/error?mentions=https://idp.example", true),
+                browser(500, "not a URI", true))) {
+            var testCase = testCase();
+            var control = assertInstanceOf(CaseStep.AwaitInbound.class, testCase.start(context()));
+            var old = next(testCase, control, response(control.next(), true));
+            var future = assertInstanceOf(CaseStep.AwaitInbound.class, testCase.resume(
+                    context(), old.next(), observation));
+            var finish = assertInstanceOf(CaseStep.Finish.class, testCase.resume(
+                    context(), future.next(), browser(500, "https://idp.example/error", true)));
+            assertEquals(Outcome.NOT_VERIFIED, finish.outcome().outcome(), observation.toString());
+        }
+    }
+
+    @Test
+    void targetHttpErrorCannotReplaceTheSamlSuccessControl() {
+        var testCase = testCase();
+        var control = assertInstanceOf(CaseStep.AwaitInbound.class, testCase.start(context()));
+        var finish = assertInstanceOf(CaseStep.Finish.class, testCase.resume(
+                context(), control.next(), browser(500, "https://idp.example/error", true)));
+
+        assertEquals(Outcome.NOT_VERIFIED, finish.outcome().outcome());
+        assertEquals("control_failed", finish.outcome().reasonCode());
+    }
+
     private IdpVersionScenarioTestCase testCase() {
         return new IdpVersionScenarioTestCase(ignored -> configuration());
     }
@@ -58,6 +104,11 @@ class IdpVersionScenarioTestCaseTest {
     private CaseEvent.InboundMessage inbound(String xml) {
         return new CaseEvent.InboundMessage(
                 xml.getBytes(StandardCharsets.UTF_8), new EvidenceRef("transcript", "tx"));
+    }
+
+    private CaseEvent.BrowserObservation browser(int status, String url, boolean evidence) {
+        return new CaseEvent.BrowserObservation(status, url, "body text is not an oracle",
+                evidence ? new EvidenceRef("transcript", "tx-browser-" + status) : null);
     }
 
     private String xml(CaseStep.AwaitInbound step) {

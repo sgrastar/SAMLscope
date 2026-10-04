@@ -302,10 +302,18 @@ class MetadataServiceTest {
                 }
             }
             var serialized=new String(xml, java.nio.charset.StandardCharsets.UTF_8);
-            if(variant==MetadataService.Variant.SIGNATURE_MODES_OPTIONAL) {
+            if(variant==MetadataService.Variant.SCHEMA_AFFILIATION_ONLY) {
+                assertFalse(serialized.contains("AssertionConsumerService"),variant.name());
+            } else if(variant==MetadataService.Variant.SIGNATURE_MODES_OPTIONAL) {
                 // Signature-mode observation uses the normal ACS, not metadata-lab dispatch.
                 assertFalse(serialized.contains("mdv="),variant.name());
                 // Exact normal ACS/SLO equality is covered by the dedicated signature-mode metadata test.
+            } else if(variant==MetadataService.Variant.SCHEMA_SSO_ENDPOINT_WITHOUT_FOREIGN
+                    || variant==MetadataService.Variant.SCHEMA_INVALID_ENDPOINT_LOCATION) {
+                // Signed controls retain the tested operative endpoint queries. Altering them
+                // would add an unrelated routing difference to the intended XML contrast.
+                assertTrue(serialized.contains("mdv="+MetadataService.Variant.SCHEMA_SSO_ENDPOINT_SET.id()+"&amp;run="+runId),variant.name());
+                assertFalse(serialized.contains("mdv="+variant.id()+"&amp;run="+runId),variant.name());
             } else assertTrue(serialized.contains("mdv="+variant.id()+"&amp;run="+runId),variant.name());
         }
     }
@@ -479,6 +487,38 @@ class MetadataServiceTest {
         assertEquals(0, signature.getElementsByTagNameNS(MetadataService.DS, "KeyInfo").getLength());
         assertTrue(document.getElementsByTagNameNS(MetadataService.DS, "KeyInfo").getLength() > 0,
                 "metadata role KeyDescriptors remain intact");
+    }
+
+    @Test
+    void serializedXPathExclusionsKeepNamespaceWhenSignatureIsDetached() throws Exception {
+        var clock = Clock.fixed(Instant.parse("2026-08-29T00:00:00Z"), ZoneOffset.UTC);
+        var keys = new FilePlanKeyStore(directory, clock);
+        var plan = SamlTestFixtures.idpPlan();
+        var service = new MetadataService(URI.create("https://peer.example"), keys, new XmlSigner(), clock);
+        for (var variant : java.util.List.of(MetadataService.Variant.XPATH_EXCLUDE_ROLE_DESCRIPTORS,
+                MetadataService.Variant.XPATH_EXCLUDE_ENDPOINTS, MetadataService.Variant.XPATH_EXCLUDE_KEY_DESCRIPTORS)) {
+            var document = SecureXml.parse(service.generate(plan, variant, "run_xpath_probe"));
+            var root = document.getDocumentElement();
+            root.setIdAttribute("ID", true);
+            var signatureElement = (org.w3c.dom.Element) document.getElementsByTagNameNS(MetadataService.DS, "Signature").item(0);
+            var signature = new XMLSignature(signatureElement, "");
+            assertTrue(signature.checkSignatureValue(keys.getOrCreate(plan.id()).certificate()), variant.id());
+            var transformed = SecureXml.parse(signature.getSignedInfo().item(0).getContentsAfterTransformation().getBytes());
+            var excluded = switch (variant) {
+                case XPATH_EXCLUDE_ROLE_DESCRIPTORS -> "SPSSODescriptor";
+                case XPATH_EXCLUDE_ENDPOINTS -> "AssertionConsumerService";
+                case XPATH_EXCLUDE_KEY_DESCRIPTORS -> "KeyDescriptor";
+                default -> throw new AssertionError();
+            };
+            assertEquals(0, transformed.getElementsByTagNameNS(MetadataService.MD, excluded).getLength(), variant.id());
+            assertTrue(root.getElementsByTagNameNS(MetadataService.MD, excluded).getLength() > 0,
+                    "the original still contains the deliberately unsigned content");
+            root.removeChild(signatureElement);
+            var xpath = (org.w3c.dom.Element) signatureElement.getElementsByTagNameNS(MetadataService.DS, "XPath").item(0);
+            assertEquals(MetadataService.MD, xpath.lookupNamespaceURI("mdx"), variant.id());
+            assertTrue(xpath.hasAttributeNS("http://www.w3.org/2000/xmlns/", "mdx"),
+                    "the transform owns this binding rather than inheriting it from EntityDescriptor");
+        }
     }
 
     @Test

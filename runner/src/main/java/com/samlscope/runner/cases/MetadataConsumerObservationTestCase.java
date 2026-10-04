@@ -39,6 +39,7 @@ public final class MetadataConsumerObservationTestCase
     private final TranscriptContentReader content;
     private final java.util.function.Function<String, byte[]> metadata;
     private final MetadataRejectionEvidenceFile rejectionEvidence;
+    private final MetadataSignatureVerificationEvidenceFile signatureVerification;
 
     public MetadataConsumerObservationTestCase(String id, TargetRole role, Rule rule) {
         this(id, role, rule, null, null, null);
@@ -62,18 +63,58 @@ public final class MetadataConsumerObservationTestCase
         this.content = content;
         this.metadata = metadata;
         this.rejectionEvidence = rejectionDirectory == null ? null : new MetadataRejectionEvidenceFile(rejectionDirectory);
+        this.signatureVerification = rejectionDirectory == null
+                ? null : new MetadataSignatureVerificationEvidenceFile(rejectionDirectory);
+    }
+
+    /**
+     * The transform and KeyInfo rules only decide once the target verifies the document signature.
+     * Fail closed when the evidence directory is not wired so a real Run can never treat a missing
+     * receipt as proof.
+     */
+    private boolean signatureVerificationProven(CaseContext context) {
+        if (signatureVerification == null || metadata == null || content == null) return false;
+        try {
+            signatureVerification.verify(context, metadata.apply(context.runId()), content, evidenceCampaignId());
+            return true;
+        } catch (Exception unproven) {
+            return false;
+        }
     }
 
     @Override public boolean supportsRecordedEvidenceReevaluation(CaseOutcome previous) {
         return previous != null && previous.outcome() == Outcome.NOT_VERIFIED
-                && "metadata.consumer-probe.incomplete".equals(previous.reasonCode());
+                && ("metadata.consumer-probe.incomplete".equals(previous.reasonCode())
+                    || "metadata.signature-verification.unproven".equals(previous.reasonCode()));
     }
 
     @Override public java.util.Optional<CaseOutcome> reevaluateRecordedEvidence(CaseContext context, CaseOutcome previous) {
         if (!supportsRecordedEvidenceReevaluation(previous) || !context.transcriptComplete()) return java.util.Optional.empty();
         var fromReceipt = concludeFromReceipt(context, previous);
         if (fromReceipt.isPresent()) return fromReceipt;
-        return com.samlscope.runner.RecordedEvidenceReevaluation.conclusiveUpdate(previous, evaluate(context, false));
+        var next = evaluate(context, false);
+        if ("metadata.signature-verification.unproven".equals(previous.reasonCode())) {
+            // The original probe evidence is already in the previous outcome. Record the actual
+            // signature-proof originals read by the gate so a late proof can be a new, auditable
+            // basis for conclusiveUpdate without replaying the protocol operation.
+            if (next.outcome() != Outcome.SATISFIED && next.outcome() != Outcome.SATISFIED_WITH_NOTE
+                    && next.outcome() != Outcome.VIOLATED) return java.util.Optional.empty();
+            var proofEvidence = new ArrayList<EvidenceRef>();
+            try {
+                signatureVerification.verify(context, metadata.apply(context.runId()), entry -> {
+                    var original = content.readDecodedSaml(entry);
+                    proofEvidence.add(new EvidenceRef("transcript", "transcript:" + entry.id()));
+                    return original;
+                }, evidenceCampaignId());
+            } catch (Exception unproven) {
+                return java.util.Optional.empty();
+            }
+            var refs = new ArrayList<>(next.evidence());
+            refs.addAll(proofEvidence);
+            next = new CaseOutcome(next.outcome(), next.notVerifiedReason(), next.reasonCode(),
+                    next.reasonMessageKey(), distinct(refs), next.details());
+        }
+        return com.samlscope.runner.RecordedEvidenceReevaluation.conclusiveUpdate(previous, next);
     }
 
     /** A native refusal of every probed document proves the recorded choice without a probe flow. */
@@ -82,6 +123,9 @@ public final class MetadataConsumerObservationTestCase
                 || rejectionEvidence == null || content == null || metadata == null) {
             return java.util.Optional.empty();
         }
+        // A native refusal is only meaningful once the target is proven to verify document
+        // signatures, so the receipt path obeys the same precondition as the probe path.
+        if (!signatureVerificationProven(context)) return java.util.Optional.empty();
         if (previous.outcome() != Outcome.NOT_VERIFIED
                 || !"metadata.consumer-probe.incomplete".equals(previous.reasonCode())
                 || !rejectionEvidence.exists(context.runId())) {
@@ -171,6 +215,14 @@ public final class MetadataConsumerObservationTestCase
                     "metadata.consumer-probe.incomplete", "metadata.consumer-probe.incomplete",
                     distinct(evidence), details);
         }
+        // A consumer that never verifies the document signature accepts every transform/KeyInfo
+        // variant through its parser, so acceptance alone cannot decide these rules.
+        if (!signatureVerificationProven(context)) {
+            return new CaseOutcome(
+                    Outcome.NOT_VERIFIED, "metadata_signature_verification_unproven",
+                    "metadata.signature-verification.unproven", "metadata.signature-verification.unproven",
+                    distinct(evidence), details);
+        }
         return switch (rule) {
             case PERMITTED_IDENTITY_TRANSFORM -> new CaseOutcome(
                     Outcome.SATISFIED_WITH_NOTE, null,
@@ -205,7 +257,7 @@ public final class MetadataConsumerObservationTestCase
     public EvidenceStatus evidenceStatus(CaseContext context) {
         var observation = observe(context);
         var fromReceipt = rejectionStatus(context, observation);
-        if (fromReceipt != null) return fromReceipt;
+        if (fromReceipt != null) return requireSignatureVerification(context, fromReceipt);
         var required = new ArrayList<String>();
         required.add("fetched:" + CONTROL);
         required.add("used:" + CONTROL);
@@ -223,9 +275,16 @@ public final class MetadataConsumerObservationTestCase
         } else if (observation.used().contains(variants.getFirst())) {
             completed.add("used:" + variants.getFirst());
         }
-        return new EvidenceStatus(
+        return requireSignatureVerification(context, new EvidenceStatus(
                 observation.ready(), required,
-                completed, observation.details());
+                completed, observation.details()));
+    }
+
+    private EvidenceStatus requireSignatureVerification(CaseContext context, EvidenceStatus status) {
+        if (signatureVerificationProven(context)) return status;
+        var required = new ArrayList<>(status.requiredObservations());
+        required.add("signature-verification:out-of-band-anchor");
+        return new EvidenceStatus(false, required, status.completedObservations(), status.details());
     }
 
     /** When a rejection receipt covers every excluding document, non-use of excluded content is proven. */

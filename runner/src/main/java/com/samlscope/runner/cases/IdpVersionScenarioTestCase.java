@@ -14,6 +14,7 @@ import com.samlscope.runner.BrowserFrontChannelScenario;
 import com.samlscope.runner.scenario.FixtureObservation;
 import com.samlscope.runner.scenario.FixtureScenarioTestCase;
 import com.samlscope.runner.scenario.ScenarioFixture;
+import com.samlscope.runner.scenario.TargetHttpObservation;
 import com.samlscope.saml.normal.SamlErrorProbeRequestFactory;
 import com.samlscope.saml.normal.SamlErrorProbeRequestFactory.Probe;
 import com.samlscope.saml.normal.SamlException;
@@ -118,10 +119,21 @@ public final class IdpVersionScenarioTestCase
             }
         }
 
+        @Override public FixtureObservation observeBrowser(
+                String requestId, int httpStatus, String url, String body) {
+            if (!TargetHttpObservation.isSameOriginError(
+                    configuration.ssoEndpoint(), httpStatus, url)) {
+                return FixtureObservation.NOT_VERIFIED;
+            }
+            // A local HTTP error proves rejection for an unsupported version. The SAML 2.0
+            // control still requires a correlated Success Response and cannot pass this way.
+            return control ? FixtureObservation.CONTROL_FAILED : FixtureObservation.SATISFIED;
+        }
+
         @Override public Duration timeout() { return configuration.responseTimeout(); }
         @Override public String definitionKey() {
             return String.join("|", probe.name(), configuration.ssoEndpoint().toString(),
-                    configuration.registeredAcs().toString());
+                    configuration.registeredAcs().toString(), "recorder-terminal-http-v1");
         }
     }
 }

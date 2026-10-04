@@ -44,10 +44,21 @@ final class MetadataConfigCaseFactory {
                     accept("entity-root", "consume an MDIOP EntityDescriptor root"),
                     accept("entities-root-one", "consume an MDIOP EntitiesDescriptor root"),
                     accept("keyvalue-only", "consume a ds:KeyValue-only KeyDescriptor"),
+                    accept("keyvalue-and-x509", "consume matching KeyValue and X509Certificate in one KeyInfo"),
                     accept("certificate-expired", "consume an expired certificate representation"),
                     accept("certificate-not-yet-valid", "consume a not-yet-valid certificate representation"),
-                    accept("multiple-signing-keys-first", "consume the first of multiple signing keys"),
-                    accept("multiple-signing-keys", "consume the second of multiple signing keys"))),
+                    accept("certificate-empty-subject", "consume an optional empty certificate subject"),
+                    accept("certificate-unknown-ca", "consume an arbitrary certificate issuer"),
+                    accept("certificate-critical-extension", "consume critical certificate extension content"),
+                    accept("certificate-noncritical-extension", "consume non-critical certificate extension content"),
+                    accept("certificate-no-digital-signature", "consume certificate KeyUsage flags"),
+                    accept("certificate-unrelated-eku", "consume certificate ExtendedKeyUsage flags"),
+                    accept("key-use-omitted", "consume a KeyDescriptor without use"),
+                    accept("multiple-signing-keys-first", "consume multiple signing KeyDescriptors with first-key flow"),
+                    accept("multiple-signing-keys", "consume multiple signing KeyDescriptors with second-key flow"),
+                    accept("multiple-omitted-keys-first", "consume multiple omitted-use KeyDescriptors with first-key flow"),
+                    accept("multiple-omitted-keys-second", "consume multiple omitted-use KeyDescriptors with second-key flow"),
+                    accept("multiple-encryption-keys", "consume multiple encryption KeyDescriptors"))),
             Map.entry("IIP-MD05.a1", List.of(
                     accept("distinct-entity-ids", "consume distinct entityIDs in one deployment"),
                     reject("duplicate-entity-ids", "reject or surface a duplicate entityID conflict"))),
@@ -95,8 +106,14 @@ final class MetadataConfigCaseFactory {
             Map.entry("IIP-MD05.aq", List.of(
                     accept("nested-cache-duration-parent-shorter", "parent cacheDuration is shorter than the child"),
                     accept("nested-entities", "control with matching parent and child lifetimes"))),
+            Map.entry("IIP-MD05.av", List.of(
+                    accept("default-acs-first", "select the first explicit default", 0),
+                    accept("default-acs-first-omitted", "select the first omitted default after explicit false", 1),
+                    accept("default-acs-all-false", "select the first endpoint when every default is explicit false", 0),
+                    reject("default-acs-duplicate-index", "reject duplicate indexes under the same parent and element name"))),
             Map.entry("IIP-MD05.b", List.of(
-                    accept("schema-global-element-families", "KeyDescriptor/AdditionalMetadataLocation/extensions/roles/affiliation"),
+                    accept("schema-global-element-families", "KeyDescriptor/AdditionalMetadataLocation/extensions/roles"),
+                    accept("schema-affiliation-only", "exclusive AffiliationDescriptor document"),
                     accept("schema-additional-metadata-location", "several AdditionalMetadataLocation namespaces"),
                     accept("schema-localized-name-boundary", "1,024-character entityID with required xml:lang"),
                     accept("schema-attribute-consuming-service", "multilingual AttributeConsumingService with RequestedAttributes"),
@@ -177,6 +194,10 @@ final class MetadataConfigCaseFactory {
 
     private static Fixture accept(String variant, String purpose) {
         return new Fixture(variant, Behavior.ACCEPT, purpose);
+    }
+
+    private static Fixture accept(String variant, String purpose, int expectedAcsIndex) {
+        return new Fixture(variant, Behavior.ACCEPT, purpose, expectedAcsIndex);
     }
 
     private static Fixture reject(String variant, String purpose) {

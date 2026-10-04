@@ -209,6 +209,9 @@ public record ResultDocument(
             @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_EMPTY)
             Map<String, List<String>> diagnostics) {
         public CaseView {
+            // The approved measurement mode and the evidence actually used are distinct.
+            // Keep the public badge consistent with the same provenance used by evidenceSummary.
+            attested = "SELF_ATTESTED".equals(evidenceClass);
             evidence = List.copyOf(evidence);
             var copy = new java.util.LinkedHashMap<String,List<String>>();
             if (diagnostics != null) diagnostics.forEach((key, values) -> copy.put(key, List.copyOf(values)));

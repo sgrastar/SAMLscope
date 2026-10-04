@@ -42,6 +42,8 @@ public final class LogoutBrowserEvidenceTestCase implements TestCase, BrowserPro
     private final Function<String, Optional<String>> targetEntityIds;
     private final Function<String, List<X509Certificate>> signingCertificates;
     private final SamlDecryptionKeyProvider decryptionKeys;
+    private final ShibbolethNativeSloPropagationEvidence nativePropagation;
+    private final ShibbolethNativeSloContinuationEvidence nativeContinuation;
 
     public LogoutBrowserEvidenceTestCase(
             BrowserEvidenceTestCase fallback,
@@ -57,12 +59,53 @@ public final class LogoutBrowserEvidenceTestCase implements TestCase, BrowserPro
             Function<String, Optional<String>> targetEntityIds,
             Function<String, List<X509Certificate>> signingCertificates,
             SamlDecryptionKeyProvider decryptionKeys) {
+        this(fallback, content, targetEntityIds, signingCertificates, decryptionKeys, null, null);
+    }
+
+    private LogoutBrowserEvidenceTestCase(
+            BrowserEvidenceTestCase fallback,
+            TranscriptContentReader content,
+            Function<String, Optional<String>> targetEntityIds,
+            Function<String, List<X509Certificate>> signingCertificates,
+            SamlDecryptionKeyProvider decryptionKeys,
+            ShibbolethNativeSloPropagationEvidence nativePropagation,
+            ShibbolethNativeSloContinuationEvidence nativeContinuation) {
         this.fallback = Objects.requireNonNull(fallback, "fallback");
         this.content = Objects.requireNonNull(content, "content");
         this.targetEntityIds = Objects.requireNonNull(targetEntityIds, "targetEntityIds");
         this.signingCertificates = Objects.requireNonNull(signingCertificates, "signingCertificates");
         this.decryptionKeys = Objects.requireNonNull(decryptionKeys, "decryptionKeys");
+        this.nativePropagation = nativePropagation;
+        this.nativeContinuation = nativeContinuation;
         if (!supports(fallback.id())) throw new IllegalArgumentException("No SLO oracle for " + fallback.id());
+    }
+
+    /** Adds the original-backed native processing observer without changing the browser contract. */
+    LogoutBrowserEvidenceTestCase withNativePropagation(
+            java.nio.file.Path directory, Function<String, byte[]> metadata) {
+        return withNativePropagation(directory, metadata, false);
+    }
+
+    /** Permits isolated control originals to enter the same continuation predicate. */
+    LogoutBrowserEvidenceTestCase withNativePropagation(
+            java.nio.file.Path directory, Function<String, byte[]> metadata, boolean diagnosticPermission) {
+        if (ShibbolethNativeSloPropagationEvidence.CASE.equals(id()))
+            return new LogoutBrowserEvidenceTestCase(fallback, content, targetEntityIds, signingCertificates,
+                    decryptionKeys, new ShibbolethNativeSloPropagationEvidence(directory, content, metadata, decryptionKeys),
+                    nativeContinuation);
+        if (ShibbolethNativeSloContinuationEvidence.CASE.equals(id()))
+            return new LogoutBrowserEvidenceTestCase(fallback, content, targetEntityIds, signingCertificates,
+                    decryptionKeys, nativePropagation,
+                    new ShibbolethNativeSloContinuationEvidence(directory, content, metadata, decryptionKeys,
+                            diagnosticPermission));
+        return this;
+    }
+
+    boolean nativeOwned(CaseContext context) {
+        return (nativePropagation != null && ShibbolethNativeSloPropagationEvidence.CASE.equals(id())
+                && nativePropagation.exists(context.runId()))
+                || (nativeContinuation != null && ShibbolethNativeSloContinuationEvidence.CASE.equals(id())
+                && nativeContinuation.exists(context.runId()));
     }
 
     static boolean supports(String caseId) { return RULES.containsKey(caseId); }
@@ -81,6 +124,7 @@ public final class LogoutBrowserEvidenceTestCase implements TestCase, BrowserPro
     }
 
     @Override public CaseStep resume(CaseContext context, CaseState state, CaseEvent event) {
+        if (nativeOwned(context)) return new CaseStep.Finish(observed(context).orElseThrow());
         if (event instanceof CaseEvent.Aborted aborted
                 && "target-initiated-not-issued".equals(aborted.reason())) {
             // The campaign ended without target-emitted evidence; record the rule's observation.
@@ -102,6 +146,14 @@ public final class LogoutBrowserEvidenceTestCase implements TestCase, BrowserPro
     @Override public EvidenceStatus evidenceStatus(CaseContext context) {
         var result = observed(context);
         var required = List.of("target-emitted-slo:" + id());
+        if (nativeOwned(context)) {
+            boolean ready = result.map(value -> java.util.Set.of(
+                    com.samlscope.core.evaluation.Outcome.SATISFIED,
+                    com.samlscope.core.evaluation.Outcome.SATISFIED_WITH_NOTE,
+                    com.samlscope.core.evaluation.Outcome.VIOLATED).contains(value.outcome())).orElse(false);
+            return new EvidenceStatus(ready, required, ready ? required : List.of(),
+                    result.map(com.samlscope.core.evaluation.CaseOutcome::details).orElseGet(Map::of));
+        }
         var incomplete = result.map(value -> "slo.evidence.incomplete".equals(value.reasonCode())).orElse(false);
         return new EvidenceStatus(result.isPresent(), required, result.isPresent() && !incomplete ? required : List.of(),
                 result.<Map<String, Object>>map(value -> Map.of(
@@ -124,6 +176,15 @@ public final class LogoutBrowserEvidenceTestCase implements TestCase, BrowserPro
 
     private Optional<com.samlscope.core.evaluation.CaseOutcome> observed(CaseContext context) {
         if (!context.transcriptComplete()) return Optional.of(LogoutTranscriptProfileCase.incompleteHistory());
+        if (nativeOwned(context)) {
+            if (ShibbolethNativeSloContinuationEvidence.CASE.equals(id()))
+                return Optional.of(nativeContinuation.read(context, id()).orElseGet(() ->
+                        com.samlscope.core.evaluation.CaseOutcome.notVerified(
+                                "native_soap_continuation_unproven", "slo.propagation.native-soap-evidence-incomplete")));
+            return Optional.of(nativePropagation.read(context, id()).orElseGet(() ->
+                    com.samlscope.core.evaluation.CaseOutcome.notVerified(
+                            "native_slo_originals_unproven", "slo.native-propagation.evidence-incomplete")));
+        }
         var outcome = new LogoutTranscriptProfileCase(
                 RULES.get(id()), signingCertificates.apply(context.runId()),
                 targetEntityIds.apply(context.runId()).orElse(null),

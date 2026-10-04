@@ -87,7 +87,7 @@ Suiteのローカル検証環境の再起動は1回、転送コンテナの再�
 | `IIP-SSO01-g-idp-01`, `IIP-SSO01-z-idp-01` | 3製品 / browser_sso_idp | IdP起点（unsolicited）成功Response。Suiteに入力生成経路がない |
 | `IIP-SSO01-ep-idp-01` | 3製品 / browser_sso_idp | major≠2へのVersionMismatchのSAML Response。現行経路は非SAMLエラーで終了 |
 | `IIP-SSO01-k-idp-01` | 3製品 / browser_sso_idp | 受理された2つ以上の異なるACS宛Bearer確認。KeycloakはIDP12-aがFAILでindex指定を無視 |
-| `IIP-SSO03-b-idp-01` | 3製品 / browser_sso_idp | POSTの2種類以上のエラー応答。SAMLエラーになるトリガーがis_passive 1種類のみ |
+| `IIP-SSO03-b-idp-01` | 3製品 / browser_sso_idp | 当時の判定器が独自に要求した複数種類のエラー応答が不足。後の監査で、承認済み定義にこの種類数の条件がないことを確認し撤去した。正常応答の対照と、相関した実エラーのPOST応答で再測定する。 |
 | `IIP-SSO05-a-idp-01`, `IIP-SSO05-a2-idp-01` | Keycloak以外 | persistent NameIDの要求・応答。Keycloakは既にPASS |
 | `IIP-IDP17-n-idp-01`, `IIP-IDP17-u-idp-01` | 3製品 / single_logout_idp | 対象IdPが発行するLogoutRequest。target-initiated logoutの入力経路がない |
 

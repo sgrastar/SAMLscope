@@ -20,6 +20,9 @@ public final class MetadataRejectionConfigurationTestCase implements TestCase, C
             "IIP-MD03-a-idp-01", "IIP-MD04-a-idp-01", "IIP-MD04-b-idp-01", "IIP-MD04-c-idp-01",
             // MUST_NOT: a document the target refuses to load cannot have its endpoints or keys used.
             "IIP-MD05-as-idp-01",
+            // Native refusal of a schema-valid positive fixture is a product violation when the
+            // baseline and every other schema-family fixture were consumed in the same Run.
+            "IIP-MD05-b-idp-01",
             // Duplicate entityIDs with conflicting endpoints: the target refused to use the conflicting
             // entry, which is how it rejects such a conflict.
             "IIP-MD05-a2-idp-01");
@@ -28,6 +31,7 @@ public final class MetadataRejectionConfigurationTestCase implements TestCase, C
     private final TranscriptContentReader content;
     private final Function<String, byte[]> metadata;
     private final MetadataRejectionEvidenceFile evidence;
+    private final MetadataSignatureVerificationEvidenceFile signatureVerification;
 
     public MetadataRejectionConfigurationTestCase(TestCase fallback, TranscriptContentReader content,
             Function<String, byte[]> metadata, Path directory) {
@@ -38,7 +42,24 @@ public final class MetadataRejectionConfigurationTestCase implements TestCase, C
         this.content = Objects.requireNonNull(content);
         this.metadata = Objects.requireNonNull(metadata);
         this.evidence = new MetadataRejectionEvidenceFile(directory);
+        this.signatureVerification = new MetadataSignatureVerificationEvidenceFile(directory);
         if (!supports(fallback.id())) throw new IllegalArgumentException("Unsupported metadata rejection case");
+    }
+
+    /** Only the signature-rejection case depends on the target verifying the document signature. */
+    private static final Set<String> SIGNATURE_CASES = Set.of("IIP-MD03-a-idp-01");
+
+    private boolean signatureVerificationRequired() { return SIGNATURE_CASES.contains(id()); }
+
+    /** A rejected document is only meaningful when the target actually verifies document signatures. */
+    private boolean signatureVerificationProven(CaseContext context) {
+        if (!signatureVerificationRequired()) return true;
+        try {
+            signatureVerification.verify(context, metadata.apply(context.runId()), content, evidenceCampaignId());
+            return true;
+        } catch (Exception unproven) {
+            return false;
+        }
     }
 
     public static boolean supports(String id) { return CASES.contains(id); }
@@ -51,8 +72,26 @@ public final class MetadataRejectionConfigurationTestCase implements TestCase, C
     @Override public CaseStep resume(CaseContext context, CaseState state, CaseEvent event) {
         var step = fallback.resume(context, state, event);
         if (!(event instanceof CaseEvent.ConfigConfirmed) || !(step instanceof CaseStep.Finish finish)) return step;
+        // Only the fixture-probe decisions depend on whether the target verifies document
+        // signatures. Approved configuration-failure outcomes (an absent normative capability, an
+        // unavailable probe) must pass unchanged.
+        if (!signatureRelevant(finish.outcome())) return step;
+        if (!signatureVerificationProven(context)) return new CaseStep.Finish(unproven(finish.outcome()));
         return concludeFromReceipt(context, finish.outcome())
                 .<CaseStep>map(CaseStep.Finish::new).orElse(step);
+    }
+
+    /** Only the fixture-probe decisions depend on whether the target verifies document signatures. */
+    private static boolean signatureRelevant(CaseOutcome outcome) {
+        return "metadata.fixture-probe.incomplete".equals(outcome.reasonCode())
+                || "metadata.fixture-probe.satisfied".equals(outcome.reasonCode())
+                || "metadata.fixture-probe.violated".equals(outcome.reasonCode());
+    }
+
+    private static CaseOutcome unproven(CaseOutcome outcome) {
+        return new CaseOutcome(Outcome.NOT_VERIFIED, "metadata_signature_verification_unproven",
+                "metadata.signature-verification.unproven", "metadata.signature-verification.unproven",
+                outcome.evidence(), outcome.details());
     }
 
     @Override public boolean supportsRecordedEvidenceReevaluation(CaseOutcome previous) {
@@ -63,6 +102,9 @@ public final class MetadataRejectionConfigurationTestCase implements TestCase, C
     @Override public Optional<CaseOutcome> reevaluateRecordedEvidence(CaseContext context, CaseOutcome previous) {
         if (!supportsRecordedEvidenceReevaluation(previous) || !context.transcriptComplete())
             return Optional.empty();
+        // The signature-rejection case must not conclude through the re-evaluation path either: a
+        // refusal is only meaningful once the target is proven to verify document signatures.
+        if (!signatureVerificationProven(context)) return Optional.empty();
         return concludeFromReceipt(context, previous);
     }
 
@@ -75,12 +117,27 @@ public final class MetadataRejectionConfigurationTestCase implements TestCase, C
             var missingFetches = stringList(details.get("missing_fetches"));
             var missingAcceptance = stringList(details.get("missing_acceptance"));
             var unresolved = stringList(details.get("unresolved_rejection"));
+            if ("IIP-MD05-b-idp-01".equals(id()) && unresolved.isEmpty()
+                    && missingAcceptance.contains("schema-global-element-families")
+                    && proven.equals(Map.of("schema-global-element-families", "simplesamlphp-native-mdq-positive"))
+                    && stringList(details.get("used_variants")).contains("control")) {
+                var verified = new LinkedHashMap<String, Object>(details);
+                verified.put("native_positive_refusal", new LinkedHashMap<>(proven));
+                verified.put("evidence_source", "local-native-adapter");
+                return Optional.of(new CaseOutcome(Outcome.VIOLATED, null,
+                        "metadata.fixture-probe.violated", "metadata.fixture-probe.violated",
+                        outcome.evidence(), verified));
+            }
             if (!missingFetches.isEmpty() || !missingAcceptance.isEmpty() || unresolved.isEmpty()) return Optional.empty();
-            if (proven.size() != unresolved.size() || !proven.keySet().containsAll(unresolved)) return Optional.empty();
+            if (!proven.keySet().containsAll(unresolved)) return Optional.empty();
+            // A shared campaign can prove refusals for several cases. Every receipt record was
+            // validated above; this conclusion uses only this case's complete required subset.
+            var applicable = new LinkedHashMap<String, String>();
+            for (var variant : unresolved) applicable.put(variant, proven.get(variant));
             var verified = new LinkedHashMap<String, Object>(details);
-            verified.put("native_rejections", new LinkedHashMap<>(proven));
+            verified.put("native_rejections", applicable);
             verified.put("evidence_source", "local-native-adapter");
-            verified.put("rejected_variants", new ArrayList<>(proven.keySet()));
+            verified.put("rejected_variants", new ArrayList<>(applicable.keySet()));
             return Optional.of(new CaseOutcome(Outcome.SATISFIED, null,
                     "metadata.fixture-probe.satisfied", "metadata.fixture-probe.satisfied",
                     outcome.evidence(), verified));
@@ -90,6 +147,17 @@ public final class MetadataRejectionConfigurationTestCase implements TestCase, C
     }
 
     @Override public EvidenceStatus evidenceStatus(CaseContext context) {
+        return requireSignatureVerification(context, rejectionStatus(context));
+    }
+
+    private EvidenceStatus requireSignatureVerification(CaseContext context, EvidenceStatus status) {
+        if (signatureVerificationProven(context)) return status;
+        var required = new ArrayList<>(status.requiredObservations());
+        required.add("signature-verification:out-of-band-anchor");
+        return new EvidenceStatus(false, required, status.completedObservations(), status.details());
+    }
+
+    private EvidenceStatus rejectionStatus(CaseContext context) {
         var base = observer.evidenceStatus(context);
         if (!evidence.exists(context.runId())) return base;
         try {
@@ -102,7 +170,14 @@ public final class MetadataRejectionConfigurationTestCase implements TestCase, C
             }
             var details = new LinkedHashMap<String, Object>(base.details());
             details.put("native_rejections", new LinkedHashMap<>(proven));
-            return new EvidenceStatus(base.requiredObservations().stream().allMatch(completed::contains),
+            boolean positiveRefusal = "IIP-MD05-b-idp-01".equals(id())
+                    && proven.equals(Map.of("schema-global-element-families", "simplesamlphp-native-mdq-positive"))
+                    && stringList(base.details().get("missing_acceptance")).contains("schema-global-element-families")
+                    && stringList(base.details().get("used_variants")).contains("control")
+                    && base.requiredObservations().stream().anyMatch("fetched:schema-global-element-families"::equals)
+                    && completed.contains("fetched:schema-global-element-families");
+            if (positiveRefusal) completed.add("positive-refusal:schema-global-element-families");
+            return new EvidenceStatus(positiveRefusal || base.requiredObservations().stream().allMatch(completed::contains),
                     base.requiredObservations(), completed, details);
         } catch (Exception unproven) {
             return base;

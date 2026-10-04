@@ -15,6 +15,7 @@ import com.samlscope.runner.BrowserFrontChannelScenario;
 import com.samlscope.runner.scenario.FixtureObservation;
 import com.samlscope.runner.scenario.FixtureScenarioTestCase;
 import com.samlscope.runner.scenario.ScenarioFixture;
+import com.samlscope.runner.scenario.TargetHttpObservation;
 import com.samlscope.saml.crypto.PlanCredentials;
 import com.samlscope.saml.normal.SamlException;
 import com.samlscope.saml.normal.SamlSignedRequestFactory;
@@ -212,6 +213,19 @@ public final class IdpSignedRequestScenarioTestCase
             }
         }
 
+        @Override public FixtureObservation observeBrowser(
+                String requestId, int httpStatus, String url, String body) {
+            if (!TargetHttpObservation.isSameOriginError(
+                    configuration.ssoEndpoint(), httpStatus, url)) {
+                return FixtureObservation.NOT_VERIFIED;
+            }
+            if (fixture == Fixture.VALID) return FixtureObservation.CONTROL_FAILED;
+            // IIP-SSO01.ak explicitly requires a SAML error Response. A local HTTP error does
+            // not satisfy the SHOULD. Other signed-request cases remain inconclusive here.
+            return ERROR_CASE.equals(caseId)
+                    ? FixtureObservation.VIOLATED : FixtureObservation.NOT_VERIFIED;
+        }
+
         @Override public FixtureObservation observeUnavailable(String reason) {
             // Absence of a callback does not establish algorithm verification. A native
             // rejection may be used only by a request-bound evidence adapter, not this event.
@@ -240,7 +254,8 @@ public final class IdpSignedRequestScenarioTestCase
             var certificate = credentials == null ? "missing" : credentials.certificate().getSerialNumber().toString(16);
             return String.join("|", caseId, fixture.name(), configuration.ssoEndpoint().toString(),
                     configuration.registeredAcs().toString(), certificate,
-                    NativeSignedRequestEvidence.supports(caseId)?"signed-request-algorithm-v2":"signed-request-v1");
+                    NativeSignedRequestEvidence.supports(caseId)
+                            ? "signed-request-algorithm-v2" : "signed-request-recorder-terminal-http-v2");
         }
     }
 }

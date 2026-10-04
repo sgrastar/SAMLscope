@@ -45,6 +45,9 @@ public final class MetadataService {
     public static final String SOAP = "urn:oasis:names:tc:SAML:2.0:bindings:SOAP";
     public static final String PAOS = "urn:oasis:names:tc:SAML:2.0:bindings:PAOS";
     private static final List<Variant> PRELOADED_CAMPAIGN_VARIANTS = List.of(
+            Variant.UI_SAFETY_LOGO_DATA,
+            Variant.UI_SAFETY_INFORMATION_JAVASCRIPT,
+            Variant.UI_SAFETY_PRIVACY_JAVASCRIPT,
             Variant.UI_URL_LOGO_HTTP, Variant.UI_URL_LOGO_HTTPS, Variant.UI_URL_LOGO_DATA,
             Variant.UI_URL_LOGO_JAVASCRIPT, Variant.UI_URL_LOGO_FILE,
             Variant.UI_URL_INFORMATION_HTTP, Variant.UI_URL_INFORMATION_HTTPS, Variant.UI_URL_INFORMATION_DATA,
@@ -239,9 +242,15 @@ public final class MetadataService {
         return endpoint(plan, "/metadata-peer/" + variant.id());
     }
 
+    /** Request-signing credentials advertised for signing by the ordinary fixture. */
     public PlanCredentials credentialsForVariant(TestPlan plan, Variant variant) {
         var primary = keyStore.getOrCreate(plan.id());
-        return probeCredentials(plan, primary, variant);
+        return requestSigningCredentials(plan, primary, variant);
+    }
+
+    /** Receiver credentials retain the last advertised encryption key when testing multiple keys. */
+    public PlanCredentials decryptionCredentialsForVariant(TestPlan plan, Variant variant) {
+        return probeCredentials(plan, keyStore.getOrCreate(plan.id()), variant);
     }
 
     /**
@@ -256,10 +265,15 @@ public final class MetadataService {
         return generate(plan, variant, runId, pollingBaseCredentials(plan, variant));
     }
 
-    /** Credentials matching the role key in {@link #generatePolling}. */
+    /** Request-signing credentials advertised for signing by {@link #generatePolling}. */
     public PlanCredentials credentialsForPollingVariant(TestPlan plan, Variant variant) {
         var primary = pollingBaseCredentials(plan, variant);
-        return probeCredentials(plan, primary, variant);
+        return requestSigningCredentials(plan, primary, variant);
+    }
+
+    /** Receiver credentials for polling; multiple encryption keys retain the last key. */
+    public PlanCredentials decryptionCredentialsForPollingVariant(TestPlan plan, Variant variant) {
+        return probeCredentials(plan, pollingBaseCredentials(plan, variant), variant);
     }
 
     public byte[] generate(TestPlan plan, Variant variant, String runId) {
@@ -283,6 +297,11 @@ public final class MetadataService {
     private byte[] generate(
             TestPlan plan, Variant variant, String runId, PlanCredentials primary, boolean correlateEndpoints) {
         var endpointVariant = correlateEndpoints ? variant : Variant.BASELINE;
+        // The structural contrast changes EndpointType extension support only; its signed
+        // public metadata retains the exact key material and endpoint URLs of the test input.
+        if (endpointVariant == Variant.SCHEMA_SSO_ENDPOINT_WITHOUT_FOREIGN
+                || endpointVariant == Variant.SCHEMA_INVALID_ENDPOINT_LOCATION)
+            endpointVariant = Variant.SCHEMA_SSO_ENDPOINT_SET;
         var signingCredentials = signingCredentials(plan, primary, variant);
         var roleCredentials = roleCredentials(plan, primary, variant);
         var document = SecureXml.newDocument();
@@ -327,6 +346,10 @@ public final class MetadataService {
         service(document, idp, "SingleSignOnService", POST, endpoint(plan, "/idp/sso", endpointVariant, runId), null, false);
         root.appendChild(idp);
 
+        if (variant.roleKeyProbe()) {
+            root = MetadataRoleKeyFixtures.apply(document, root, primary,
+                    rolloverCredentials(plan, primary, 2), rolloverCredentials(plan, primary, 3), variant);
+        }
         addExtensionFixture(document, root, variant);
         root = applyStructureFixture(document, root, plan, variant, runId);
         addEntityAttributesFixture(document, root, variant, signingCredentials);
@@ -337,9 +360,13 @@ public final class MetadataService {
         if (variant == Variant.FULL_UI_INFO) root = MetadataUiConsumerFixtures.applyFullUi(document, root);
         root = MetadataSchemaCoverageFixtures.apply(document, root, variant);
         root = MetadataUiUrlFixtures.apply(document, root, variant, uiAssets);
+        root = MetadataUiSafetyFixtures.apply(document, root, variant);
         root = MetadataAlgorithmFixtures.apply(document, root, variant);
         root = MetadataEncryptionAlgorithmFixtures.apply(document, root, variant);
+        root = MetadataRevocationFixtures.apply(document, root, primary, variant, clock.instant());
         applyValidityFixture(root, variant);
+        root = MetadataLiveValidityFixtures.apply(document, root, variant, clock.instant(),
+                plan.parameters().metadataRefreshWaitSeconds());
         if (variant != Variant.UNSIGNED) {
             signer.sign(root, signingCredentials, root.getFirstChild() instanceof Element e ? e : null,
                     signatureOptions(variant));
@@ -358,11 +385,16 @@ public final class MetadataService {
             // The negative request changes the signature, not the target's trusted EC key.
             var keyVariant = switch (variant) {
                 case ECDSA_SHA256_INVALID_SIGNATURE -> Variant.ECDSA_SHA256;
-                case KEYVALUE_ONLY, CERT_RUNTIME_SAME_KEY, CERT_RUNTIME_OTHER_KEY -> Variant.ENTITY_ROOT;
+                case SCHEMA_SSO_ENDPOINT_WITHOUT_FOREIGN, SCHEMA_INVALID_ENDPOINT_LOCATION -> Variant.SCHEMA_SSO_ENDPOINT_SET;
+                case KEYVALUE_ONLY, KEYVALUE_AND_X509, CERT_RUNTIME_SAME_KEY, CERT_RUNTIME_OTHER_KEY -> Variant.ENTITY_ROOT;
                 // Compare signer selection against one unchanged advertised key set.
                 case MULTIPLE_SIGNING_KEYS, MULTIPLE_SIGNING_KEYS_UNADVERTISED -> Variant.MULTIPLE_SIGNING_KEYS_FIRST;
                 case MULTIPLE_OMITTED_KEYS_SECOND -> Variant.MULTIPLE_OMITTED_KEYS_FIRST;
                 case THREE_SIGNING_KEYS_SECOND, THREE_SIGNING_KEYS -> Variant.THREE_SIGNING_KEYS_FIRST;
+                // Keep the same three keys while changing only role, use and role order.
+                case ROLE_KEYS_SP_FIRST_EXPLICIT_A, ROLE_KEYS_IDP_FIRST_EXPLICIT_B,
+                        ROLE_KEYS_SP_FIRST_OMITTED_A, ROLE_KEYS_IDP_FIRST_OMITTED_B ->
+                        Variant.THREE_SIGNING_KEYS_FIRST;
                 // Display precedence changes only the advertised name candidates. Rotating the
                 // trusted key between those conditions confounds the native UI comparison.
                 case UI_CONSUMER_DISPLAY_SERVICE, UI_CONSUMER_DISPLAY_ENTITY -> Variant.UI_CONSUMER_DISPLAY_ALL;
@@ -370,7 +402,9 @@ public final class MetadataService {
             };
             // URL consumption comparisons vary the UI URL, not the trust anchor. Their
             // native adapters explicitly reload metadata; key rotation is not their trigger.
-            if (variant.id().startsWith("ui-url-")) keyVariant = Variant.UI_URL_LOGO_HTTP;
+            if (variant.id().startsWith("ui-url-") || variant.id().startsWith("ui-safety-")) {
+                keyVariant = Variant.UI_URL_LOGO_HTTP;
+            }
             var digest = MessageDigest.getInstance("SHA-256")
                     .digest(keyVariant.id().getBytes(StandardCharsets.UTF_8));
             var alias = "poll-" + java.util.HexFormat.of().formatHex(digest, 0, 8);
@@ -380,15 +414,29 @@ public final class MetadataService {
         }
     }
 
+    private PlanCredentials requestSigningCredentials(TestPlan plan, PlanCredentials primary, Variant variant) {
+        if (variant.roleKeyProbe()) {
+            return variant == Variant.ROLE_KEYS_IDP_FIRST_EXPLICIT_B
+                    || variant == Variant.ROLE_KEYS_IDP_FIRST_OMITTED_B
+                    ? rolloverCredentials(plan, primary, 2) : primary;
+        }
+        // The second encryption-only key is not a signing credential. Keep the metadata
+        // representation unchanged and retain that receiver through the separate accessors.
+        return variant == Variant.MULTIPLE_ENCRYPTION_KEYS ? primary : probeCredentials(plan, primary, variant);
+    }
+
     // Probe with the last advertised key, so a consumer that only reads the first key
     // cannot satisfy a multi-key fixture. Certificate fixtures deliberately use the
     // original certificate at runtime: only the public key must agree with metadata.
     private PlanCredentials probeCredentials(TestPlan plan, PlanCredentials primary, Variant variant) {
         return switch (variant) {
+            case ROLE_KEYS_SP_FIRST_EXPLICIT_A, ROLE_KEYS_IDP_FIRST_EXPLICIT_B ->
+                    rolloverCredentials(plan, primary, 3);
+            case ROLE_KEYS_IDP_FIRST_OMITTED_B -> rolloverCredentials(plan, primary, 2);
             case CERT_RUNTIME_SAME_KEY -> runtimeCertificate(primary, primary);
             case CERT_RUNTIME_OTHER_KEY -> runtimeCertificate(primary, rolloverCredentials(plan, primary, 2));
             case ECDSA_SHA256, ECDSA_SHA256_INVALID_SIGNATURE -> ecCredentials(plan, primary);
-            case MULTIPLE_SIGNING_KEYS, MULTIPLE_OMITTED_KEYS_SECOND, THREE_SIGNING_KEYS_SECOND ->
+            case MULTIPLE_SIGNING_KEYS, MULTIPLE_ENCRYPTION_KEYS, MULTIPLE_OMITTED_KEYS_SECOND, THREE_SIGNING_KEYS_SECOND ->
                     rolloverCredentials(plan, primary, 2);
             case THREE_SIGNING_KEYS, MULTIPLE_SIGNING_KEYS_UNADVERTISED -> rolloverCredentials(plan, primary, 3);
             default -> primary;
@@ -491,6 +539,9 @@ public final class MetadataService {
 
     private java.security.cert.X509Certificate certificateVariant(PlanCredentials primary, Variant variant) {
         if (!variant.certificateVariant()) return primary.certificate();
+        if (MetadataRevocationFixtures.supports(variant)) {
+            return MetadataRevocationFixtures.certificate(primary, variant, clock.instant());
+        }
         try {
             var now = clock.instant();
             var subject = variant == Variant.CERT_EMPTY_SUBJECT
@@ -552,8 +603,19 @@ public final class MetadataService {
             keyDescriptor(document, role, credentials.certificate(), "encryption");
             return;
         }
-        if (variant == Variant.KEYVALUE_ONLY) {
+        if (variant == Variant.KEYVALUE_ONLY || variant == Variant.KEYVALUE_AND_X509) {
             keyValueDescriptor(document, role, credentials.certificate().getPublicKey(), null);
+            if (variant == Variant.KEYVALUE_AND_X509) {
+                var keyInfo = (Element) role.getLastChild().getFirstChild();
+                var x509 = element(document, DS, "ds:X509Data");
+                var certificate = element(document, DS, "ds:X509Certificate");
+                try {
+                    certificate.setTextContent(Base64.getEncoder().encodeToString(credentials.certificate().getEncoded()));
+                } catch (java.security.cert.CertificateEncodingException invalid) {
+                    throw new IllegalStateException("Could not encode mixed KeyInfo certificate", invalid);
+                }
+                x509.appendChild(certificate); keyInfo.appendChild(x509);
+            }
             return;
         }
         var signingUse = variant == Variant.KEY_USE_OMITTED
@@ -561,6 +623,9 @@ public final class MetadataService {
                 || variant == Variant.MULTIPLE_OMITTED_KEYS_SECOND ? null : "signing";
         keyDescriptor(document, role, credentials.certificate(), signingUse);
         keyDescriptor(document, role, credentials.certificate(), "encryption");
+        if (variant == Variant.MULTIPLE_ENCRYPTION_KEYS) {
+            keyDescriptor(document, role, rolloverCredentials(plan, credentials, 2).certificate(), "encryption");
+        }
         if (variant == Variant.MULTIPLE_SIGNING_KEYS || variant == Variant.MULTIPLE_SIGNING_KEYS_UNADVERTISED
                 || variant == Variant.THREE_SIGNING_KEYS
                 || variant == Variant.THREE_SIGNING_KEYS_FIRST || variant == Variant.THREE_SIGNING_KEYS_SECOND
@@ -626,11 +691,11 @@ public final class MetadataService {
                     XmlSigner.TransformSpec.xpath("true()"),
                     XmlSigner.TransformSpec.algorithm(org.apache.xml.security.transforms.Transforms.TRANSFORM_C14N_EXCL_OMIT_COMMENTS)));
             case XPATH_EXCLUDE_ROLE_DESCRIPTORS -> xpathExclusion(
-                    "not(ancestor-or-self::md:SPSSODescriptor or ancestor-or-self::md:IDPSSODescriptor)");
+                    "not(ancestor-or-self::mdx:SPSSODescriptor or ancestor-or-self::mdx:IDPSSODescriptor)");
             case XPATH_EXCLUDE_ENDPOINTS -> xpathExclusion(
-                    "not(ancestor-or-self::md:AssertionConsumerService or ancestor-or-self::md:SingleSignOnService or ancestor-or-self::md:SingleLogoutService)");
+                    "not(ancestor-or-self::mdx:AssertionConsumerService or ancestor-or-self::mdx:SingleSignOnService or ancestor-or-self::mdx:SingleLogoutService)");
             case XPATH_EXCLUDE_KEY_DESCRIPTORS -> xpathExclusion(
-                    "not(ancestor-or-self::md:KeyDescriptor)");
+                    "not(ancestor-or-self::mdx:KeyDescriptor)");
             default -> XmlSigner.SignatureOptions.standard();
         };
     }
@@ -1039,12 +1104,19 @@ public final class MetadataService {
         CONFLICTING_DUPLICATE_ENTITY_IDS("conflicting-duplicate-entity-ids"),
         NO_VALID_UNTIL("no-valid-until"),
         EXPIRED("expired"),
+        // Campaign-only live inputs preserve every existing validity fixture's bytes.
+        LIVE_VALIDITY_ROOT("live-validity-root"),
+        LIVE_VALIDITY_PARENT("live-validity-parent"),
+        LIVE_VALIDITY_CHILD("live-validity-child"),
         ENTITY_CACHE_DURATION("entity-cache-duration"),
         ENTITIES_CACHE_DURATION("entities-cache-duration"),
         ENTITIES_VALID_UNTIL("entities-valid-until"),
         VALID_UNTIL_NEAR("valid-until-near"),
         VALID_UNTIL_FAR("valid-until-far"),
         UI_URL_LOGO_HTTP("ui-url-logo-http"), UI_URL_LOGO_HTTPS("ui-url-logo-https"),
+        UI_SAFETY_LOGO_DATA("ui-safety-logo-data"),
+        UI_SAFETY_INFORMATION_JAVASCRIPT("ui-safety-information-javascript"),
+        UI_SAFETY_PRIVACY_JAVASCRIPT("ui-safety-privacy-javascript"),
         UI_URL_LOGO_DATA("ui-url-logo-data"), UI_URL_LOGO_JAVASCRIPT("ui-url-logo-javascript"), UI_URL_LOGO_FILE("ui-url-logo-file"),
         UI_URL_INFORMATION_HTTP("ui-url-information-http"), UI_URL_INFORMATION_HTTPS("ui-url-information-https"),
         UI_URL_INFORMATION_DATA("ui-url-information-data"), UI_URL_INFORMATION_JAVASCRIPT("ui-url-information-javascript"), UI_URL_INFORMATION_FILE("ui-url-information-file"),
@@ -1064,10 +1136,19 @@ public final class MetadataService {
         ATTRIBUTE_POLICY_INDEXED("attribute-policy-indexed"),
         ALGORITHM_ENTITY_SHA256("algorithm-entity-sha256"),
         ALGORITHM_ENTITY_SHA384("algorithm-entity-sha384"),
+        ALGORITHM_ENTITY_SHA512("algorithm-entity-sha512"),
         ALGORITHM_ENTITY_ORDER_256_384("algorithm-entity-order-256-384"),
         ALGORITHM_ENTITY_ORDER_384_256("algorithm-entity-order-384-256"),
+        ALGORITHM_ENTITY_ORDER_256_512("algorithm-entity-order-256-512"),
+        ALGORITHM_ENTITY_ORDER_512_256("algorithm-entity-order-512-256"),
+        ALGORITHM_ENTITY_DIGEST_ORDER_256_512("algorithm-entity-digest-order-256-512"),
+        ALGORITHM_ENTITY_DIGEST_ORDER_512_256("algorithm-entity-digest-order-512-256"),
+        ALGORITHM_ENTITY_SIGNING_ORDER_256_512("algorithm-entity-signing-order-256-512"),
+        ALGORITHM_ENTITY_SIGNING_ORDER_512_256("algorithm-entity-signing-order-512-256"),
         ALGORITHM_ROLE_ORDER_256_384("algorithm-role-order-256-384"),
         ALGORITHM_ROLE_ORDER_384_256("algorithm-role-order-384-256"),
+        ALGORITHM_ROLE_ORDER_256_512("algorithm-role-order-256-512"),
+        ALGORITHM_ROLE_ORDER_512_256("algorithm-role-order-512-256"),
         ALGORITHM_ROLE_SIGNING_384("algorithm-role-signing-384"),
         ALGORITHM_ROLE_DIGEST_384("algorithm-role-digest-384"),
         ALGORITHM_ROLE_BOTH_384("algorithm-role-both-384"),
@@ -1090,6 +1171,8 @@ public final class MetadataService {
         ALGORITHM_OAEP_11_DEFAULT_MGF("algorithm-oaep-11-default-mgf"),
         ALGORITHM_SIGNING_256_KEYSIZE_EXCLUDED("algorithm-signing-256-keysize-excluded"),
         ALGORITHM_SIGNING_384_KEYSIZE_EXCLUDED("algorithm-signing-384-keysize-excluded"),
+        ALGORITHM_SIGNING_256_512_KEYSIZE_EXCLUDED("algorithm-signing-256-512-keysize-excluded"),
+        ALGORITHM_SIGNING_512_256_KEYSIZE_EXCLUDED("algorithm-signing-512-256-keysize-excluded"),
         UNKNOWN_EXTENSION("unknown-extension"),
         UNKNOWN_ROLE_EXTENSION("unknown-role-extension"),
         UNKNOWN_ORGANIZATION_EXTENSION("unknown-organization-extension"),
@@ -1104,10 +1187,13 @@ public final class MetadataService {
         ROLES_SP_SECOND("roles-sp-second"),
         FULL_UI_INFO("full-ui-info"),
         SCHEMA_GLOBAL_ELEMENT_FAMILIES("schema-global-element-families"),
+        SCHEMA_AFFILIATION_ONLY("schema-affiliation-only"),
         SCHEMA_ADDITIONAL_METADATA_LOCATION("schema-additional-metadata-location"),
         SCHEMA_LOCALIZED_NAME_BOUNDARY("schema-localized-name-boundary"),
         SCHEMA_ATTRIBUTE_CONSUMING_SERVICE("schema-attribute-consuming-service"),
         SCHEMA_SSO_ENDPOINT_SET("schema-sso-endpoint-set"),
+        SCHEMA_SSO_ENDPOINT_WITHOUT_FOREIGN("schema-sso-endpoint-without-foreign"),
+        SCHEMA_INVALID_ENDPOINT_LOCATION("schema-invalid-endpoint-location"),
         NESTED_VALID_UNTIL_CHILD_SHORTER("nested-valid-until-child-shorter"),
         NESTED_CACHE_DURATION_PARENT_SHORTER("nested-cache-duration-parent-shorter"),
         NESTED_VALID_UNTIL_EXPIRED_PARENT("nested-valid-until-expired-parent"),
@@ -1128,6 +1214,8 @@ public final class MetadataService {
         UNSIGNED("unsigned"),
         KEY_USE_OMITTED("key-use-omitted"),
         KEYVALUE_ONLY("keyvalue-only"),
+        KEYVALUE_AND_X509("keyvalue-and-x509"),
+        MULTIPLE_ENCRYPTION_KEYS("multiple-encryption-keys"),
         MULTIPLE_SIGNING_KEYS_FIRST("multiple-signing-keys-first"),
         MULTIPLE_SIGNING_KEYS("multiple-signing-keys"),
         MULTIPLE_SIGNING_KEYS_UNADVERTISED("multiple-signing-keys-unadvertised"),
@@ -1138,6 +1226,10 @@ public final class MetadataService {
         THREE_SIGNING_KEYS_FIRST("three-signing-keys-first"),
         THREE_SIGNING_KEYS_SECOND("three-signing-keys-second"),
         THREE_SIGNING_KEYS("three-signing-keys"),
+        ROLE_KEYS_SP_FIRST_EXPLICIT_A("role-keys-sp-first-explicit-a"),
+        ROLE_KEYS_IDP_FIRST_EXPLICIT_B("role-keys-idp-first-explicit-b"),
+        ROLE_KEYS_SP_FIRST_OMITTED_A("role-keys-sp-first-omitted-a"),
+        ROLE_KEYS_IDP_FIRST_OMITTED_B("role-keys-idp-first-omitted-b"),
         CERT_EXPIRED("certificate-expired"),
         CERT_NOT_YET_VALID("certificate-not-yet-valid"),
         CERT_NO_DIGITAL_SIGNATURE("certificate-no-digital-signature"),
@@ -1148,11 +1240,18 @@ public final class MetadataService {
         CERT_SHA512("certificate-sha512"),
         CERT_EMPTY_SUBJECT("certificate-empty-subject"),
         CERT_LONG_VALIDITY("certificate-long-validity"),
-        CERT_UNKNOWN_CA("certificate-unknown-ca");
+        CERT_UNKNOWN_CA("certificate-unknown-ca"),
+        CERT_REVOKED("certificate-revoked"),
+        CERT_REVOCATION_UNREACHABLE("certificate-revocation-unreachable");
 
         private final String id;
         Variant(String id) { this.id = id; }
         public String id() { return id; }
+
+        public boolean roleKeyProbe() {
+            return this == ROLE_KEYS_SP_FIRST_EXPLICIT_A || this == ROLE_KEYS_IDP_FIRST_EXPLICIT_B
+                    || this == ROLE_KEYS_SP_FIRST_OMITTED_A || this == ROLE_KEYS_IDP_FIRST_OMITTED_B;
+        }
 
         public boolean defaultAcsProbe() {
             return this == DEFAULT_ACS_FIRST || this == DEFAULT_ACS_SECOND || this == DEFAULT_ACS_IMPLICIT
@@ -1173,7 +1272,7 @@ public final class MetadataService {
                 case CERT_EXPIRED, CERT_NOT_YET_VALID, CERT_NO_DIGITAL_SIGNATURE,
                         CERT_CRITICAL_EXTENSION, CERT_NONCRITICAL_EXTENSION,
                         CERT_UNRELATED_EKU, CERT_SHA1, CERT_SHA512, CERT_EMPTY_SUBJECT,
-                        CERT_LONG_VALIDITY, CERT_UNKNOWN_CA -> true;
+                        CERT_LONG_VALIDITY, CERT_UNKNOWN_CA, CERT_REVOKED, CERT_REVOCATION_UNREACHABLE -> true;
                 default -> false;
             };
         }

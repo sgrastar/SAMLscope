@@ -42,6 +42,12 @@ class MetadataUiUrlFixturesTest {
                 assertEquals("SPSSODescriptor", element.getParentNode().getParentNode().getParentNode().getLocalName());
                 var uri = URI.create(element.getTextContent());
                 assertEquals(tokens[3], uri.getScheme());
+                if (name.equals("Logo") && tokens[3].equals("javascript")) {
+                    // Still exercise the forbidden scheme after an absolute-URL parser.
+                    assertFalse(uri.isOpaque());
+                    assertNotNull(uri.getRawAuthority());
+                    assertEquals("/\nvoid(0)", uri.getPath());
+                }
                 if (Set.of("http", "https").contains(tokens[3])) {
                     assertEquals("suite.example", uri.getHost());
                     assertEquals(MetadataUiFixtureAsset.PATH, uri.getPath());

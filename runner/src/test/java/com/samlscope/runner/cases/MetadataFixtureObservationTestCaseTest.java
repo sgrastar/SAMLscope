@@ -25,6 +25,18 @@ class MetadataFixtureObservationTestCaseTest {
     private static final Instant NOW = Instant.parse("2026-08-30T00:00:00Z");
 
     @Test
+    void legacyConfigurationStateCanExpireWithoutBeingConfirmed() {
+        var legacy = new com.samlscope.core.caseexec.CaseState("await-configuration", Map.of());
+        var testCase = testCase();
+        for (var event : List.<CaseEvent>of(new CaseEvent.TimedOut(java.time.Duration.ofDays(7)), new CaseEvent.Aborted("skip"))) {
+            var terminal = (CaseStep.Finish) testCase.resume(context(List.of()), legacy, event);
+            assertEquals(Outcome.NOT_VERIFIED, terminal.outcome().outcome());
+        }
+        org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class,
+                () -> testCase.resume(context(List.of()), legacy, new CaseEvent.ConfigConfirmed()));
+    }
+
+    @Test
     void acceptingSuiteInvalidExtensionDoesNotProveTargetNamespaceViolation() {
         var testCase = new MetadataFixtureObservationTestCase("IIP-MD05-a3-idp-01", TargetRole.IDP,
                 List.of(new MetadataFixtureObservationTestCase.Fixture("invalid-organization-saml-extension",
@@ -114,6 +126,32 @@ class MetadataFixtureObservationTestCaseTest {
     }
 
     @Test
+    void anotherRunOrDuplicateRecorderIdentityCannotCompleteMetadataAcceptance() {
+        var acceptOnly = new MetadataFixtureObservationTestCase("accept-only", TargetRole.IDP,
+                List.of(new MetadataFixtureObservationTestCase.Fixture("accepted",
+                        MetadataFixtureObservationTestCase.Behavior.ACCEPT, "positive")),
+                ConfigurationFailureSemantics.TEST_PRECONDITION);
+        var valid = List.of(fetch("control", 1), use("control", 2),
+                fetch("accepted", 3), use("accepted", 4));
+        assertEquals(Outcome.SATISFIED, evaluate(acceptOnly, valid));
+        for (var position : List.of(2, 3)) {
+            var mixed = new java.util.ArrayList<>(valid);
+            var original = mixed.get(position);
+            mixed.set(position, new TranscriptEntry(original.id(), "run_FOREIGN",
+                    original.direction(), original.timestamp(), original.correlationId(),
+                    original.method(), original.url(), original.status(), original.headers(),
+                    original.bodyRef(), original.bodyBytes(), original.decodedSamlRef(),
+                    original.decodedSamlBytes(), original.contentType(), original.rawQuery(), original.samlSummary()));
+            assertEquals(Outcome.NOT_VERIFIED, evaluate(acceptOnly, mixed));
+            assertEquals(false, acceptOnly.evidenceStatus(context(mixed)).ready());
+        }
+        var duplicate = new java.util.ArrayList<>(valid);
+        duplicate.add(valid.get(0));
+        assertEquals(Outcome.NOT_VERIFIED, evaluate(acceptOnly, duplicate));
+        assertEquals(false, acceptOnly.evidenceStatus(context(duplicate)).ready());
+    }
+
+    @Test
     void preservesTheApprovedConfigurationFailureSemantics() {
         var context = context(List.of());
         var normative = testCase(ConfigurationFailureSemantics.NORMATIVE_CAPABILITY);
@@ -141,7 +179,7 @@ class MetadataFixtureObservationTestCaseTest {
         var aggregate = entry(3, "/metadata/preloaded", 0,
                 Map.of("type", "MetadataFetch", "variant", "preloaded-aggregate",
                         "variants", List.of("accepted"), "feed", "preloaded"));
-        var operatorDownload = entry(2, "/metadata/preloaded/download", 0,
+        var operatorDownload = entry(5, "/metadata/preloaded/download", 0,
                 Map.of("type", "MetadataExport", "variant", "preloaded-aggregate",
                         "variants", List.of("accepted"), "feed", "preloaded-download"));
 

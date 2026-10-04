@@ -24,6 +24,8 @@ public final class SamlEncryptionFixtureFactory {
         public String uri(){return uri;}
     }
     public enum Transport {
+        /** Explicit legacy transport for prevention-control fixtures; omitted from {@link #matrix()}. */
+        RSA_1_5(XMLCipher.RSA_v1dot5),
         RSA_OAEP(XMLCipher.RSA_OAEP), RSA_OAEP_11(XMLCipher.RSA_OAEP_11);
         private final String uri; Transport(String uri){this.uri=uri;}
         public String uri(){return uri;}
@@ -42,6 +44,8 @@ public final class SamlEncryptionFixtureFactory {
         public Algorithms {
             Objects.requireNonNull(content);Objects.requireNonNull(transport);
             Objects.requireNonNull(digest);Objects.requireNonNull(mgf);
+            if(transport==Transport.RSA_1_5 && (digest!=Digest.DEFAULT || mgf!=Mgf.DEFAULT))
+                throw new IllegalArgumentException("RSA v1.5 has no OAEP digest or MGF parameters");
             if(transport==Transport.RSA_OAEP && mgf!=Mgf.DEFAULT)
                 throw new IllegalArgumentException("XML Encryption 1.0 OAEP uses its fixed MGF without an XML Encryption 1.1 MGF parameter");
         }
@@ -50,7 +54,7 @@ public final class SamlEncryptionFixtureFactory {
     /** Explicit and omitted parameter forms remain distinct inputs. No combination implies a verdict. */
     public static List<Algorithms> matrix() {
         var rows=new ArrayList<Algorithms>();
-        for(var content:Content.values())for(var transport:Transport.values())for(var digest:Digest.values())for(var mgf:Mgf.values()) {
+        for(var content:Content.values())for(var transport:List.of(Transport.RSA_OAEP,Transport.RSA_OAEP_11))for(var digest:Digest.values())for(var mgf:Mgf.values()) {
             if(transport==Transport.RSA_OAEP && mgf!=Mgf.DEFAULT)continue;
             rows.add(new Algorithms(content,transport,digest,mgf));
         }

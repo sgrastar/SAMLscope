@@ -25,7 +25,7 @@ public final class IdpBasicLogoutScenarioTestCase implements TestCase, BrowserFr
     private static final String P = SamlLogoutRequestFactory.PROTOCOL;
     private static final String A = SamlLogoutRequestFactory.ASSERTION;
     private static final String SUCCESS = "urn:oasis:names:tc:SAML:2.0:status:Success";
-    private static final String VERSION = "slo-basic-v5";
+    private static final String VERSION = "slo-basic-v6";
     public record Configuration(IdpErrorProbeConfiguration login, URI logoutEndpoint, URI suiteLogoutEndpoint,
             String targetIssuer, PlanCredentials suiteCredentials, List<X509Certificate> targetSigningCertificates, Binding logoutBinding, java.security.PublicKey targetEncryptionKey, List<java.security.PublicKey> targetEncryptionKeys, List<java.security.PublicKey> publishedEncryptionKeys) {
         public Configuration(IdpErrorProbeConfiguration login, URI logoutEndpoint, URI suiteLogoutEndpoint,
@@ -51,6 +51,9 @@ public final class IdpBasicLogoutScenarioTestCase implements TestCase, BrowserFr
         public Configuration { Objects.requireNonNull(login); Objects.requireNonNull(logoutBinding); targetSigningCertificates = List.copyOf(targetSigningCertificates); targetEncryptionKeys = List.copyOf(targetEncryptionKeys); publishedEncryptionKeys = List.copyOf(publishedEncryptionKeys); }
     }
     private final Function<String, Configuration> configurations;
+    private final com.samlscope.core.transcript.TranscriptContentReader directContent;
+    private final boolean soapPropagation;
+    private final String soapTrial;
     private final SamlLogoutRequestFactory logout = new SamlLogoutRequestFactory();
     private final XmlSignatureVerifier signatures = new XmlSignatureVerifier();
     private final SamlXmlDecrypter decrypter = new SamlXmlDecrypter();
@@ -58,11 +61,27 @@ public final class IdpBasicLogoutScenarioTestCase implements TestCase, BrowserFr
         this(ID, configurations);
     }
     public IdpBasicLogoutScenarioTestCase(String caseId, Function<String, Configuration> configurations) {
+        this(caseId, configurations, null, false, "failure");
+    }
+    /** Explicit collection mode for the approved propagation case; ordinary front channels are unchanged. */
+    public static IdpBasicLogoutScenarioTestCase soapPropagation(Function<String, Configuration> configurations,
+            com.samlscope.core.transcript.TranscriptContentReader content) {
+        return soapPropagation(configurations, content, "failure");
+    }
+    public static IdpBasicLogoutScenarioTestCase soapPropagation(Function<String, Configuration> configurations,
+            com.samlscope.core.transcript.TranscriptContentReader content, String trial) {
+        if (!trial.matches("(failure|all-success)(-(fail|remain|remain2))?")) throw new IllegalArgumentException("Unknown SOAP trial");
+        return new IdpBasicLogoutScenarioTestCase("IIP-IDP17-r-idp-01", configurations, Objects.requireNonNull(content), true, trial);
+    }
+    private IdpBasicLogoutScenarioTestCase(String caseId, Function<String, Configuration> configurations,
+            com.samlscope.core.transcript.TranscriptContentReader content, boolean soap, String trial) {
         if (!List.of(ID, REDIRECT_ID, REDIRECT_RESPONSE_ID, ENCRYPTED_ID, MULTI_KEY_ID).contains(caseId))
-            throw new IllegalArgumentException("Unsupported logout scenario");
+            if (!(soap && "IIP-IDP17-r-idp-01".equals(caseId))) throw new IllegalArgumentException("Unsupported logout scenario");
         this.caseId = caseId;
         this.configurations = Objects.requireNonNull(configurations);
+        this.directContent = content; this.soapPropagation = soap; this.soapTrial = trial;
     }
+    private String version() { return soapPropagation ? VERSION + "-soap-propagation-" + soapTrial : VERSION; }
     private boolean encryptedScenario() { return ENCRYPTED_ID.equals(caseId) || MULTI_KEY_ID.equals(caseId); }
     private String encryptionReason(String suffix) { return (MULTI_KEY_ID.equals(caseId) ? "slo.encrypted-id.multiple-keys." : "slo.encrypted-id.") + suffix; }
     @Override public String id() { return caseId; }
@@ -78,7 +97,8 @@ public final class IdpBasicLogoutScenarioTestCase implements TestCase, BrowserFr
                 + "then starts a fresh login and encrypts the identifier with the second distinct registered encryption key. "
                 + "Both correlated signed responses are required; do not enter a verdict.";
         if (encryptedScenario()) return "Log in using a fresh browser session. SAMLscope first sends an encrypted identifier "
-                + "using an unregistered key. After a verified rejection, log in with a fresh session again to test the registered key. "
+                + "using an unregistered key, then logs in with a fresh session to test the registered key. "
+                + "A failure to establish the rejection keeps the result unverified. "
                 + "The Suite checks signed protocol responses; do not enter a verdict.";
         return "Start with a fresh browser session and log in. SAMLscope sends a signed synchronous LogoutRequest "
                 + "using the issued identifier and SessionIndex, then checks the correlated LogoutResponse. Do not enter a verdict.";
@@ -111,7 +131,7 @@ public final class IdpBasicLogoutScenarioTestCase implements TestCase, BrowserFr
                 .filter(key -> !Arrays.equals(key.getEncoded(), suite.getEncoded())).toList();
     }
     private CaseStep beginLogin(CaseContext context, Configuration c, String stage, List<EvidenceRef> evidence) {
-        var action = ActionIds.derive(context.runId(), caseId, VERSION + "-"+stage, 0);
+        var action = ActionIds.derive(context.runId(), caseId, version() + "-"+stage, 0);
         var xml = new SamlErrorProbeRequestFactory().build(SamlErrorProbeRequestFactory.Probe.BASELINE_SUCCESS,
                 "_"+action, c.login().ssoEndpoint(), c.login().suiteIssuer(), c.login().registeredAcs(), context.clock().instant());
         var document = SecureXml.parse(xml); var root = document.getDocumentElement();
@@ -119,7 +139,7 @@ public final class IdpBasicLogoutScenarioTestCase implements TestCase, BrowserFr
         return await(context, c, stage, action, OutboundKind.AUTHN_REQUEST, SecureXml.serialize(document), c.login().ssoEndpoint(), evidence);
     }
     @Override public CaseStep resume(CaseContext context, CaseState state, CaseEvent event) {
-        if (!caseId.equals(state.data().get("case_id")) || !VERSION.equals(state.data().get("definition")) || !List.of("login","logout","login-control","logout-control").contains(state.data().get("stage")))
+        if (!caseId.equals(state.data().get("case_id")) || !version().equals(state.data().get("definition")) || !List.of("login","logout","login-control","logout-control").contains(state.data().get("stage")))
             return finish(Outcome.NOT_VERIFIED,"slo.basic.scenario-changed",List.of());
         var evidence = new ArrayList<EvidenceRef>();
         if (state.data().get("evidence") instanceof List<?> refs)
@@ -133,24 +153,35 @@ public final class IdpBasicLogoutScenarioTestCase implements TestCase, BrowserFr
         if (!context.transcriptComplete()) return finish(Outcome.NOT_VERIFIED,"slo.basic.history-incomplete",evidence);
         var c = configurations.apply(context.runId());
         try {
-            var root = SecureXml.parse(inbound.decodedSaml()).getDocumentElement();
+            var decoded = soapPropagation && !login ? directSoapResponse(context, c, state, inbound) : inbound.decodedSaml();
+            var root = SecureXml.parse(decoded).getDocumentElement();
             if (login) return afterLogin(context, c, state, root, evidence);
             if (!is(root,P,"LogoutResponse") || !(trusted(root,c) || trustedRedirect(context,c,inbound)) || children(root,A,"Issuer").size()!=1
                     || !c.targetIssuer().equals(children(root,A,"Issuer").getFirst().getTextContent()))
                 return finish(Outcome.NOT_VERIFIED,"slo.basic.response-unverifiable",evidence);
             if (!Objects.equals(state.data().get("request_id"),root.getAttribute("InResponseTo"))
-                    || !c.suiteLogoutEndpoint().toString().equals(root.getAttribute("Destination")))
-                return finish(encryptedScenario()?Outcome.NOT_VERIFIED:Outcome.VIOLATED,"slo.basic.original-requester-mismatch",evidence);
+                    || (!(soapPropagation && root.getAttribute("Destination").isEmpty())
+                        && !c.suiteLogoutEndpoint().toString().equals(root.getAttribute("Destination"))))
+                return finish(encryptedScenario() || soapPropagation ? Outcome.NOT_VERIFIED:Outcome.VIOLATED,"slo.basic.original-requester-mismatch",evidence);
             if (!SamlSchemaValidation.isValid(root,SamlSchemaValidation.SchemaKind.PROTOCOL))
                 return finish(Outcome.NOT_VERIFIED,"slo.basic.response-structure-unverified",evidence);
             if (encryptedScenario()) {
                 if ("logout-control".equals(state.data().get("stage"))) {
-                    if (SUCCESS.equals(status(root))) return finish(Outcome.NOT_VERIFIED,encryptionReason("negative-control-failed"),evidence);
+                    if (SUCCESS.equals(status(root))) {
+                        // Collect the registered-key operation too, while retaining the failed
+                        // control. This continuation cannot produce a conclusive generic result.
+                        return retainFailedControl(beginLogin(context,c,"login",evidence));
+                    }
                     return beginLogin(context,c,"login",evidence);
                 }
                 var source=state.data().get("decryption_key_source");
                 var details=(source instanceof String value && List.of("published-metadata","supplemental-input").contains(value))
                         ? Map.<String,Object>of("decryption_key_source",List.of(value)) : Map.<String,Object>of();
+                if (Boolean.TRUE.equals(state.data().get("negative_control_failed"))) {
+                    var failed = new LinkedHashMap<String,Object>(details);
+                    failed.put("negative_control_failed",true);
+                    return finish(Outcome.NOT_VERIFIED,encryptionReason("negative-control-failed"),evidence,failed);
+                }
                 return SUCCESS.equals(status(root))
                         ? finish(Outcome.SATISFIED,encryptionReason("decryption-observed"),evidence,details)
                         : finish(Outcome.VIOLATED,encryptionReason("rejected"),evidence,details);
@@ -169,6 +200,7 @@ public final class IdpBasicLogoutScenarioTestCase implements TestCase, BrowserFr
                         ? finish(Outcome.SATISFIED,"slo.redirect-response.observed",evidence)
                         : finish(Outcome.VIOLATED,"slo.redirect-response.rejected",evidence);
             }
+            if (soapPropagation) return finish(Outcome.NOT_VERIFIED, "slo.propagation.native-chain-pending", evidence);
             // G1 explicitly assigns session termination and status branching to IDP17.e/o/q.
             return finish(Outcome.SATISFIED,"slo.basic.synchronous-response-observed",evidence);
         } catch (RuntimeException invalid) {
@@ -217,10 +249,19 @@ public final class IdpBasicLogoutScenarioTestCase implements TestCase, BrowserFr
                     SamlEncryptionFixtureFactory.Content.AES128_GCM,SamlEncryptionFixtureFactory.Transport.RSA_OAEP,
                     SamlEncryptionFixtureFactory.Digest.DEFAULT,SamlEncryptionFixtureFactory.Mgf.DEFAULT));
         }
-        var action=ActionIds.derive(context.runId(),caseId,VERSION+"-"+stage,0);
+        var action=ActionIds.derive(context.runId(),caseId,version()+"-"+stage,0);
         var payload=logout.sign(logout.build("_"+action,c.logoutEndpoint(),c.login().suiteIssuer(),identifier,indexes,
                 context.clock().instant(),null,false),c.suiteCredentials());
-        return await(context,c,stage,action,OutboundKind.LOGOUT_REQUEST,payload,c.logoutEndpoint(),evidence,keySource);
+        if (soapPropagation) payload = soapEnvelope(payload);
+        var next = await(context,c,stage,action,soapPropagation ? OutboundKind.LOGOUT_PROBE : OutboundKind.LOGOUT_REQUEST,payload,c.logoutEndpoint(),evidence,keySource);
+        return Boolean.TRUE.equals(state.data().get("negative_control_failed")) ? retainFailedControl(next) : next;
+    }
+    private static CaseStep retainFailedControl(CaseStep step) {
+        if (!(step instanceof CaseStep.AwaitInbound waiting)) throw new IllegalArgumentException("Expected protocol continuation");
+        var data = new LinkedHashMap<String,Object>(waiting.next().data());
+        data.put("negative_control_failed",true);
+        return new CaseStep.AwaitInbound(new CaseState(waiting.next().phase(),Map.copyOf(data)),
+                waiting.actions(),waiting.matcher(),waiting.ttl());
     }
     private CaseStep await(CaseContext context, Configuration c, String stage, String action, OutboundKind kind,
             byte[] payload, URI target, List<EvidenceRef> evidence) {
@@ -229,14 +270,39 @@ public final class IdpBasicLogoutScenarioTestCase implements TestCase, BrowserFr
     private CaseStep await(CaseContext context, Configuration c, String stage, String action, OutboundKind kind,
             byte[] payload, URI target, List<EvidenceRef> evidence, String keySource) {
         var data=new java.util.LinkedHashMap<String,Object>();
-        data.put("definition",VERSION);data.put("stage",stage);data.put("case_id",caseId);
+        data.put("definition",version());data.put("stage",stage);data.put("case_id",caseId);
         data.put("request_id","_"+action);data.put("fixture_id","slo-basic-"+stage);
         data.put("outbound_binding",(stage.startsWith("logout") ? c.logoutBinding() : Binding.HTTP_POST).name());
         data.put("evidence",evidence.stream().map(EvidenceRef::reference).toList());
         if(keySource!=null)data.put("decryption_key_source",keySource);
-        return new CaseStep.AwaitInbound(new CaseState(VERSION+"-"+stage,Map.copyOf(data)),
+        return new CaseStep.AwaitInbound(new CaseState(version()+"-"+stage,Map.copyOf(data)),
                 List.of(new OutboundAction(action,kind,payload,target,false)),
                 new InboundMatcher("saml-response",Map.of("ScenarioActionId",action)),c.login().responseTimeout());
+    }
+    private byte[] directSoapResponse(CaseContext context, Configuration c, CaseState state, CaseEvent.InboundMessage inbound) {
+        var entries = context.transcript().list(context.runId()).stream()
+                .filter(e -> inbound.evidence().reference().equals(e.id())).toList();
+        if (entries.size() != 1) throw new IllegalArgumentException("SOAP response original is not unique");
+        var entry = entries.getFirst();
+        var action = ((String) state.data().get("request_id")).substring(1);
+        if (!context.runId().equals(entry.runId()) || entry.direction() != com.samlscope.core.transcript.Direction.INBOUND
+                || !action.equals(entry.correlationId()) || !"POST".equals(entry.method())
+                || !c.logoutEndpoint().toString().equals(entry.url()) || !Integer.valueOf(200).equals(entry.status())
+                || !"direct-soap".equals(entry.samlSummary().get("probe_transport"))
+                || !"LogoutResponse".equals(entry.samlSummary().get("saml_message"))
+                || !Arrays.equals(entry.id().getBytes(java.nio.charset.StandardCharsets.UTF_8), inbound.decodedSaml()))
+            throw new IllegalArgumentException("SOAP response delivery is unbound");
+        var decoded = directContent.readDecodedSaml(entry);
+        if (decoded.length == 0 || decoded.length != entry.decodedSamlBytes())
+            throw new IllegalArgumentException("SOAP decoded response original is unavailable");
+        return decoded;
+    }
+    static byte[] soapEnvelope(byte[] message) {
+        var source = SecureXml.parse(message).getDocumentElement();
+        if (!is(source, P, "LogoutRequest")) throw new IllegalArgumentException("SOAP origin must wrap LogoutRequest");
+        var document = SecureXml.parse("<S:Envelope xmlns:S='http://schemas.xmlsoap.org/soap/envelope/'><S:Body/></S:Envelope>".getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        document.getDocumentElement().getFirstChild().appendChild(document.importNode(source, true));
+        return SecureXml.serialize(document);
     }
     private String inboundMethod(CaseContext context, CaseEvent.InboundMessage inbound) {
         return context.transcript().list(context.runId()).stream()

@@ -100,6 +100,8 @@ public final class HttpOutboundSender implements OutboundSender {
     private SendResult sendLogoutProbe(String runId, OutboundAction action) throws Exception {
         var requestXml = action.payload();
         if (requestXml.length == 0) throw new IllegalArgumentException("Logout probe payload is empty");
+        var soapRequest = soapLogoutMessage(requestXml, "LogoutRequest");
+        if (soapRequest != null) return sendSoapLogoutProbe(runId, action, soapRequest);
         var contentType = "application/x-www-form-urlencoded";
         var body = ("SAMLRequest=" + URLEncoder.encode(
                 Base64.getEncoder().encodeToString(requestXml), StandardCharsets.UTF_8))
@@ -143,6 +145,70 @@ public final class HttpOutboundSender implements OutboundSender {
         details.put("tls_observation", summary.get("tls_observation"));
         details.put("saml_message", summary.getOrDefault("saml_message", ""));
         return new SendResult(false, Map.copyOf(details), inbound.id());
+    }
+
+    /** A persisted SOAP SLO intent uses the same dispatcher; no browser or Basic credential. */
+    private SendResult sendSoapLogoutProbe(String runId, OutboundAction action, byte[] requestXml) throws Exception {
+        var requestRoot = com.samlscope.saml.normal.SecureXml.parse(requestXml).getDocumentElement();
+        if (requestRoot.getAttribute("ID").isBlank()
+                || !action.target().toString().equals(requestRoot.getAttribute("Destination")))
+            throw new IllegalArgumentException("SOAP logout outbox target/request mismatch");
+        var contentType = "text/xml; charset=utf-8";
+        var outbound = transcript.record(new TranscriptInput(runId, Direction.OUTBOUND, clock.instant(),
+                action.actionId(), "POST", action.target().toString(), null,
+                Map.of("Content-Type", List.of(contentType)), action.payload(), contentType, null, requestXml,
+                Map.of("type", "LogoutRequest", "kind", action.kind().name(),
+                        "probe_transport", "direct-soap", "action_id", action.actionId())));
+        var request = HttpRequest.newBuilder(action.target()).timeout(PROBE_TIMEOUT)
+                .header("Content-Type", contentType).header("Accept", "text/xml")
+                .POST(HttpRequest.BodyPublishers.ofByteArray(action.payload())).build();
+        var response = client.send(request, HttpResponse.BodyHandlers.ofInputStream());
+        byte[] body;
+        try (var stream = response.body()) { body = stream.readNBytes(MAX_RESPONSE_BYTES + 1); }
+        if (body.length > MAX_RESPONSE_BYTES) throw new java.io.IOException("SOAP SLO response exceeds 1 MiB");
+        var headers = new LinkedHashMap<String, List<String>>();
+        response.headers().map().forEach((name, values) -> {
+            if (!credentialHeader(name)) headers.put(name, List.copyOf(values));
+        });
+        byte[] decoded = new byte[0];
+        var summary = new LinkedHashMap<String, Object>();
+        summary.put("type", "SloProbeHttpResponse"); summary.put("probe_transport", "direct-soap");
+        summary.put("request_transcript", outbound.id());
+        try {
+            var message = soapLogoutMessage(body, "LogoutResponse");
+            if (message != null) {
+                decoded = message;
+                var root = com.samlscope.saml.normal.SecureXml.parse(decoded).getDocumentElement();
+                summary.put("saml_message", root.getLocalName()); summary.put("in_response_to", root.getAttribute("InResponseTo"));
+            }
+        } catch (RuntimeException malformed) {
+            summary.put("parse_status", "soap-response-unavailable");
+        }
+        var inbound = transcript.record(new TranscriptInput(runId, Direction.INBOUND, clock.instant(),
+                action.actionId(), "POST", action.target().toString(), response.statusCode(), headers, body,
+                response.headers().firstValue("content-type").orElse(null), null, decoded, Map.copyOf(summary)));
+        return new SendResult(false, Map.of("http_status", response.statusCode(), "response_bytes", body.length,
+                "request_transcript", outbound.id(), "saml_message", summary.getOrDefault("saml_message", "")), inbound.id());
+    }
+
+    static byte[] soapLogoutMessage(byte[] raw, String expected) {
+        var root = com.samlscope.saml.normal.SecureXml.parse(raw).getDocumentElement();
+        if (!"Envelope".equals(root.getLocalName())) return null;
+        var soap = "http://schemas.xmlsoap.org/soap/envelope/";
+        if (!soap.equals(root.getNamespaceURI())) throw new IllegalArgumentException("SOAP 1.1 Envelope required");
+        var bodies = new java.util.ArrayList<org.w3c.dom.Element>();
+        for (var n = root.getFirstChild(); n != null; n = n.getNextSibling())
+            if (n instanceof org.w3c.dom.Element e && soap.equals(e.getNamespaceURI()) && "Body".equals(e.getLocalName())) bodies.add(e);
+        if (bodies.size() != 1) throw new IllegalArgumentException("One direct SOAP Body required");
+        var messages = new java.util.ArrayList<org.w3c.dom.Element>();
+        for (var n = bodies.getFirst().getFirstChild(); n != null; n = n.getNextSibling())
+            if (n instanceof org.w3c.dom.Element e) messages.add(e);
+        if (messages.size() != 1 || !"urn:oasis:names:tc:SAML:2.0:protocol".equals(messages.getFirst().getNamespaceURI())
+                || !expected.equals(messages.getFirst().getLocalName()))
+            throw new IllegalArgumentException("One direct SAML logout message required");
+        var document = com.samlscope.saml.normal.SecureXml.newDocument();
+        document.appendChild(document.importNode(messages.getFirst(), true));
+        return com.samlscope.saml.normal.SecureXml.serialize(document);
     }
 
     private static boolean credentialHeader(String name) {

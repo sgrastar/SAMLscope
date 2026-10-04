@@ -1,6 +1,9 @@
 package com.samlscope.runner.cases;
 
 import static org.junit.jupiter.api.Assertions.*;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.util.HexFormat;
 import java.time.*;
 import java.util.*;
 import org.junit.jupiter.api.Test;
@@ -16,6 +19,62 @@ class EcSignatureSupportTestCaseTest {
     private static final String VALID = "ecdsa-sha256";
     private static final String INVALID = "ecdsa-sha256-invalid-signature";
     private static final Instant NOW = Instant.parse("2026-09-14T00:00:00Z");
+    @Test void nativeUnsupportedVerifierRequiresItsOriginalSource() throws Exception {
+        var source=("public static function checkSign($srcMetadata, $element) {\n"
+                + "$keys = $srcMetadata->getPublicKeys('signing');\n"
+                + "foreach ($pemKeys as $i => $pem) {\n"
+                + "$key = new XMLSecurityKey(XMLSecurityKey::RSA_SHA256, ['type' => 'public']);\n}\n"
+                + "$element->validate($key);\nErrorCodes::NOTVALIDCERTSIGNATURE;\n}\n"
+                + "public static function validateMessage($srcMetadata, $dstMetadata, $message) {\n"
+                + "if ($message instanceof AuthnRequest) { $enabled = $srcMetadata->getOptionalBoolean('validate.authnrequest', null); }\n"
+                + "if (($message->isMessageConstructedWithSignature() === true) && ($enabled !== false)) {\n"
+                + "} elseif (!self::checkSign($srcMetadata, $message)) { throw new SSP_Error\\Exception(); }\n}\n").getBytes(StandardCharsets.UTF_8);
+        var mapper=new com.fasterxml.jackson.databind.ObjectMapper();
+        var record=mapper.createObjectNode();
+        record.put("containerPath","/var/simplesamlphp/modules/saml/src/Message.php");
+        record.put("imageId","sha256:"+"a".repeat(64));
+        record.put("containerName","samlscope-reference-ssp");
+        record.put("containerId","b".repeat(64));
+        record.put("containerStartedAt","2026-09-14T00:00:00Z");
+        record.put("base64",Base64.getEncoder().encodeToString(source));
+        record.put("sha256",HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(source)));
+        assertTrue(NativeEcSignatureEvidence.provesRsaOnlyVerifier(record));
+        record.put("sha256","0".repeat(64));
+        assertThrows(IllegalArgumentException.class,()->NativeEcSignatureEvidence.provesRsaOnlyVerifier(record));
+        record.put("sha256",HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(source)));
+        var ecSource=new String(source,StandardCharsets.UTF_8)
+                .replace("XMLSecurityKey::RSA_SHA256","XMLSecurityKey::ECDSA_SHA256").getBytes(StandardCharsets.UTF_8);
+        record.put("base64",Base64.getEncoder().encodeToString(ecSource));
+        record.put("sha256",HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(ecSource)));
+        assertThrows(IllegalArgumentException.class,()->NativeEcSignatureEvidence.provesRsaOnlyVerifier(record));
+    }
+    @Test void decoyCheckSignOutsideValidateMessageCannotProveNativeViolation() throws Exception {
+        var source=("public static function checkSign($srcMetadata, $element) {\n"
+                + "$keys = $srcMetadata->getPublicKeys('signing');\n"
+                + "$key = new XMLSecurityKey(XMLSecurityKey::RSA_SHA256, ['type' => 'public']);\n"
+                + "$element->validate($key); ErrorCodes::NOTVALIDCERTSIGNATURE;\n}\n"
+                + "public static function validateMessage($srcMetadata, $dstMetadata, $message) {\n"
+                + "$enabled = $srcMetadata->getOptionalBoolean('validate.authnrequest', null);\n"
+                + "if ($message instanceof AuthnRequest && $message->isMessageConstructedWithSignature() === true && ($enabled !== false)) { return true; }\n}\n"
+                + "public static function unrelated() { self::checkSign($srcMetadata, $message); }\n").getBytes(StandardCharsets.UTF_8);
+        var mapper=new com.fasterxml.jackson.databind.ObjectMapper();var record=mapper.createObjectNode();
+        record.put("containerPath","/var/simplesamlphp/modules/saml/src/Message.php");record.put("imageId","sha256:"+"a".repeat(64));
+        record.put("containerName","samlscope-reference-ssp");record.put("containerId","b".repeat(64));
+        record.put("containerStartedAt","2026-09-14T00:00:00Z");record.put("base64",Base64.getEncoder().encodeToString(source));
+        record.put("sha256",HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(source)));
+        assertThrows(IllegalArgumentException.class,()->NativeEcSignatureEvidence.provesRsaOnlyVerifier(record));
+    }
+    @Test void provenNativeViolationIsPreservedByTheCase() {
+        var proof=new CaseOutcome(Outcome.VIOLATED,null,
+                "ec-signature.native-unsupported-verifier","ec-signature.native-unsupported-verifier",
+                List.of(new EvidenceRef("transcript","tx-proof")),Map.of("rsa_only_verifier_proven",true));
+        var test=new EcSignatureSupportTestCase(ignored->Optional.of(proof));
+        var context=context(List.of(),true);
+        var state=((CaseStep.AwaitConfig)test.start(context)).next();
+        assertEquals(Outcome.VIOLATED,
+                ((CaseStep.Finish)test.resume(context,state,new CaseEvent.ConfigConfirmed())).outcome().outcome());
+        assertTrue(test.evidenceStatus(context).ready());
+    }
     @Test void separateSignatureControlCannotSupplyTheNormalEcSuccess() {
         var entries = new ArrayList<TranscriptEntry>();
         append(entries,"control",1);append(entries,VALID,1);append(entries,INVALID,2);

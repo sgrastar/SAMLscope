@@ -58,6 +58,16 @@ public final class SamlProtocolService {
                 plan.parameters().requestSigningMode() == TestPlan.RequestSigningMode.REQUIRED);
     }
 
+    /** Prepares all metadata ECP controls before the caller creates an outbox intent. */
+    public java.util.List<com.samlscope.saml.ecp.MetadataApplicationEcpProbeFactory.Prepared>
+            buildMetadataApplicationEcpProbes(TestPlan plan, String runId,
+                    MetadataService.Variant selectedVariant, URI destination, java.time.Instant selectedAt) {
+        var metadata = new MetadataService(peerBase, keyStore, signer, clock);
+        return new com.samlscope.saml.ecp.MetadataApplicationEcpProbeFactory().prepare(
+                plan, runId, selectedVariant, metadata.generatePolling(plan, selectedVariant, runId),
+                destination, selectedAt, variant -> metadata.credentialsForPollingVariant(plan, variant));
+    }
+
     public AuthnRequestMessage buildEcpChannelBindingAuthnRequest(
             TestPlan plan, URI destination, URI responseConsumer, String relayState,
             String channelBindingType, String channelBindingValue, boolean signed) {
@@ -256,6 +266,47 @@ public final class SamlProtocolService {
     }
 
     public ResponseMessage buildLogoutResponse(TestPlan plan, DecodedMessage request, URI destination) {
+        return buildLogoutResponse(plan, request, destination, peerEndpoint(plan, ""), SUCCESS);
+    }
+
+    public byte[] prepareSloPropagationMetadata(TestPlan plan, String runId, String trial, java.time.Instant preparedAt) {
+        return com.samlscope.saml.logout.SloPropagationFixtures.prepare(peerBase, keyStore, signer, plan, runId, trial, preparedAt);
+    }
+
+    public boolean matchesSloPropagationMetadata(byte[] original, TestPlan plan, String runId, String trial,
+            java.time.Instant preparedAt) {
+        return com.samlscope.saml.logout.SloPropagationFixtures.matches(original, peerBase, keyStore, signer,
+                plan, runId, trial, preparedAt);
+    }
+
+    public URI sloPropagationEndpoint(TestPlan plan, String runId, String trial, String participant) {
+        return com.samlscope.saml.logout.SloPropagationFixtures.participantEndpoint(
+                com.samlscope.saml.logout.SloPropagationFixtures.configuredBackchannelBase(peerBase), plan, runId, trial, participant);
+    }
+
+    /** Legacy all-Success construction; selecting an error requires the peer's atomic first-arrival decision. */
+    public ResponseMessage buildSloPropagationResponse(TestPlan plan, DecodedMessage request, URI destination,
+            String trial, String participant) {
+        if ("failure".equals(trial)) throw new SamlException("Failure propagation needs a verified first-arrival selection");
+        return buildSloPropagationResponse(plan, request, destination, trial, participant, false);
+    }
+
+    /** The prepared peer atomically selects the first authenticated request before choosing its status. */
+    public ResponseMessage buildSloPropagationResponse(TestPlan plan, DecodedMessage request, URI destination,
+            String trial, String participant, boolean firstArrivalError) {
+        if (plan.profile() != com.samlscope.core.profile.FunctionalProfile.SINGLE_LOGOUT_IDP)
+            throw new SamlException("Propagation reply belongs to the single logout IdP profile");
+        com.samlscope.saml.logout.SloPropagationFixtures.variant(trial);
+        var issuer = com.samlscope.saml.logout.SloPropagationFixtures.participantEntity(peerBase, plan, participant);
+        if (firstArrivalError && !"failure".equals(trial))
+            throw new SamlException("An all-Success propagation trial cannot select an error reply");
+        var status = firstArrivalError
+                ? "urn:oasis:names:tc:SAML:2.0:status:Responder" : SUCCESS;
+        return buildLogoutResponse(plan, request, destination, issuer.toString(), status);
+    }
+
+    private ResponseMessage buildLogoutResponse(TestPlan plan, DecodedMessage request, URI destination,
+            String responseIssuer, String responseStatus) {
         var requestRoot = request.parsed().document().getDocumentElement();
         if (!PROTOCOL.equals(requestRoot.getNamespaceURI()) || !"LogoutRequest".equals(requestRoot.getLocalName())) {
             throw new SamlException("A LogoutResponse requires a LogoutRequest");
@@ -270,11 +321,11 @@ public final class SamlProtocolService {
         if (destination != null) response.setAttribute("Destination", destination.toString());
         document.appendChild(response);
         var issuer = element(document, ASSERTION, "saml:Issuer");
-        issuer.setTextContent(peerEndpoint(plan, ""));
+        issuer.setTextContent(responseIssuer);
         response.appendChild(issuer);
         var status = element(document, PROTOCOL, "samlp:Status");
         var statusCode = element(document, PROTOCOL, "samlp:StatusCode");
-        statusCode.setAttribute("Value", SUCCESS);
+        statusCode.setAttribute("Value", responseStatus);
         status.appendChild(statusCode);
         response.appendChild(status);
         signer.sign(response, keyStore.getOrCreate(plan.id()), issuer);

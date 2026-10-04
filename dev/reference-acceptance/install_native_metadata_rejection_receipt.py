@@ -10,7 +10,10 @@ import urllib.request
 BASE = 'http://localhost:18080'
 CONTAINER = 'samlscope-reference-suite'
 DESTINATION = '/data/metadata-rejection-evidence'
-ADAPTERS = {'shibboleth-resolver', 'simplesamlphp-parser', 'keycloak-import', 'shibboleth-idp'}
+ADAPTERS = {'shibboleth-resolver', 'simplesamlphp-parser', 'simplesamlphp-native-mdq',
+            'simplesamlphp-native-mdq-positive',
+            'simplesamlphp-native-mdq-signature',
+            'keycloak-import', 'shibboleth-idp'}
 SHA = lambda raw: hashlib.sha256(raw).hexdigest()
 
 
@@ -64,9 +67,11 @@ def main():
     case = next((row for row in api('/api/runs/' + run + '/protocol-evidence')['cases']
                  if row.get('caseId') == args.case), None)
     save(out / 'case-status.json', case)
-    if case is None or not case.get('ready'):
-        raise RuntimeError(f'{args.case} is not ready after receipt installation: {case}')
-    print('Receipt installed;', args.case, 'ready for', run)
+    completed = next((row for row in json.loads((out / 'evaluation.json').read_text())['completed']
+                      if row.get('caseId') == args.case), None)
+    if completed is None and (case is None or not case.get('ready')):
+        raise RuntimeError(f'{args.case} was neither completed nor ready: {case}')
+    print('Receipt installed;', args.case, 'completed' if completed else 'ready', 'for', run)
 
 
 if __name__ == '__main__':

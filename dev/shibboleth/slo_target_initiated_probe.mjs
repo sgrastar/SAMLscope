@@ -52,7 +52,10 @@ try {
   await api(`/api/runs/${run}/preflight`, true);
   execFileSync('python3', [path.join(repoRoot, 'dev/shibboleth/setup_slo_participants.py'), run], { cwd: repoRoot, stdio: 'pipe' });
 
-  browser = await chromium.launch({ channel: 'chrome', headless: true });
+  browser = await chromium.launch({ headless: true,
+    ...(process.env.SAML_SCOPE_CHROMIUM_EXECUTABLE
+      ? { executablePath: process.env.SAML_SCOPE_CHROMIUM_EXECUTABLE }
+      : { channel: 'chrome' }) });
   const context = await browser.newContext();
   const page = await context.newPage();
   await page.goto(`${base}/p/${plan}/start/m0-roundtrip?run=${run}`, { waitUntil: 'networkidle' });

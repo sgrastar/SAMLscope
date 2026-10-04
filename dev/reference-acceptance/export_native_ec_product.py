@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Bind native product imports and request-specific signature errors to the EC originals."""
 import argparse
+import base64
 import datetime
 import hashlib
 import json
@@ -32,7 +33,8 @@ def export(folder,output,product):
         restored=json.loads((folder.parent/'restoration.json').read_text())
         assert restored['restored'] and restored['original_sha256']==restored['final_sha256']
         collected=(folder/'native-http-observations.json').stat().st_mtime
-    observations=read('native-http-observations.json');assert observations['run']==run and observations['product_verdict_assigned'] is False
+    observations_raw=(folder/'native-http-observations.json').read_bytes()
+    observations=json.loads(observations_raw);assert observations['run']==run and observations['product_verdict_assigned'] is False
     entries={entry['id']:entry for entry in read('transcript.json')};originals={}
     for item in read('decoded-manifest.json'):
         path=(folder/item['file']).resolve();assert path.parent==(folder/'decoded').resolve()
@@ -84,8 +86,50 @@ def export(folder,output,product):
         evidenceAdapter='keycloak-native-event' if product=='keycloak' else 'simplesamlphp-native-http',
         targetMetadataSha256=SHA((folder/'target-metadata.xml').read_bytes()),normalLoginEvidence=baseline,
         collectedAt=datetime.datetime.fromtimestamp(collected,datetime.timezone.utc).isoformat(),
-        nativeHttpObservationsSha256=SHA((folder/'native-http-observations.json').read_bytes()),
-        exchanges=exchanges,rawEvidence=[dict(reference=item['id'],sha256=item['sha256']) for item in read('decoded-manifest.json')])
+        nativeHttpObservationsSha256=SHA(observations_raw))
+    if product=='simplesamlphp':
+        receipt['nativeHttpObservationsBase64']=base64.b64encode(observations_raw).decode('ascii')
+    receipt['exchanges']=exchanges
+    receipt['rawEvidence']=[dict(reference=item['id'],sha256=item['sha256']) for item in read('decoded-manifest.json')]
+    if product=='simplesamlphp' and (folder.parent/'native-verifier-source.php').is_file():
+        source=(folder.parent/'native-verifier-source.php').read_bytes()
+        source_record=json.loads((folder.parent/'native-verifier-source.json').read_text())
+        counts=json.loads((folder.parent/'operation-counts.json').read_text())
+        call_path=json.loads((folder.parent/'native-call-path-sources.json').read_text())
+        start=json.loads((folder.parent/call_path['start_original']).read_text())
+        end=json.loads((folder.parent/call_path['end_original']).read_text())
+        assert source_record['container_path']=='/var/simplesamlphp/modules/saml/src/Message.php'
+        assert source_record['sha256']==counts['native_verifier_sha256']==SHA(source)
+        assert counts['native_verifier_read_back'] is True and source_record['image_id'].startswith('sha256:')
+        binding=observations['product_binding']
+        assert observations['native_verifier_sha256']==SHA(source)
+        assert binding['container_name']=='samlscope-reference-ssp' and len(binding['container_id'])==64
+        assert binding['image_id']==source_record['image_id'] and binding['container_id']==source_record['container_id']
+        assert binding['container_started_at']==source_record['container_started_at'] and binding['running_at_capture'] is True
+        assert call_path['binding']==binding==start['binding']==end['binding']
+        assert counts['native_call_path_sources_read_back']==5 and counts['runtime_identity_read_backs']==2
+        assert start['sources']==call_path['sources']==end['sources']
+        runtime_sources=[]
+        for name in ['module','routes','web-browser-sso','idp-saml2']:
+            entry=start['sources'][name];raw=(folder.parent/entry['file']).read_bytes()
+            assert entry['sha256']==SHA(raw) and entry['container_path'].startswith('/var/simplesamlphp/')
+            runtime_sources.append(dict(name=name,containerPath=entry['container_path'],sha256=SHA(raw),
+                base64=base64.b64encode(raw).decode('ascii')))
+        start_inspect=(folder.parent/start['inspect_file']).read_bytes();end_inspect=(folder.parent/end['inspect_file']).read_bytes()
+        assert json.loads(start_inspect)[0]['Id']==binding['container_id']==json.loads(end_inspect)[0]['Id']
+        text=source.decode('utf-8')
+        check=text.split('public static function checkSign(',1)[1].split('public static function validateMessage(',1)[0]
+        validate=text.split('public static function validateMessage(',1)[1].split('public static function getDecryptionKeys(',1)[0]
+        assert "$srcMetadata->getPublicKeys('signing')" in check
+        assert "new XMLSecurityKey(XMLSecurityKey::RSA_SHA256, ['type' => 'public'])" in check
+        assert check.count('new XMLSecurityKey(')==1 and 'ECDSA' not in check
+        assert 'self::checkSign($srcMetadata, $message)' in validate
+        receipt['nativeVerifierSource']=dict(sha256=SHA(source),imageId=source_record['image_id'],
+            containerId=source_record['container_id'],containerName=source_record['container_name'],
+            containerStartedAt=source_record['container_started_at'],containerPath=source_record['container_path'],
+            base64=base64.b64encode(source).decode('ascii'))
+        receipt['nativeRuntime']=dict(startInspectSha256=SHA(start_inspect),startInspectBase64=base64.b64encode(start_inspect).decode('ascii'),
+            endInspectSha256=SHA(end_inspect),endInspectBase64=base64.b64encode(end_inspect).decode('ascii'),sources=runtime_sources)
     raw=(json.dumps(receipt,indent=2)+'\n').encode();output.parent.mkdir(parents=True,exist_ok=True)
     if output.exists():assert not output.is_symlink() and output.read_bytes()==raw
     else:

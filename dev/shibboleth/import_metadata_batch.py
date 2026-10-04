@@ -5,6 +5,7 @@ import base64
 import hashlib
 import json
 from pathlib import Path
+import re
 import subprocess
 import sys
 import urllib.request
@@ -18,6 +19,7 @@ CONTAINER = 'samlscope-reference-shibboleth'
 CONFIG = '/opt/reference-idp/conf/metadata-providers.xml'
 SUITE = 'samlscope-reference-suite'
 SIGNING_CERT = '/opt/reference-idp/credentials/suite-metadata-signing.pem'
+RUN_RE = re.compile(r'run_[0-9A-HJKMNP-TV-Z]{26}')
 
 
 def docker(*args, data=None):
@@ -52,8 +54,11 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--variants', required=True)
+    parser.add_argument('--run', help='Append the metadata campaign to an existing reference Run')
     parser.add_argument('--profile', choices=['metadata_idp', 'browser_sso_idp', 'ecp_idp', 'single_logout_idp'], default='metadata_idp')
     parser.add_argument('--continue-inconclusive', action='store_true', help='Continue after a non-baseline protocol attempt; never infer a verdict')
+    parser.add_argument('--capture-native-originals', action='store_true',
+                        help='Capture native effective metadata and direct request-bound HTTP observations without credentials')
     parser.add_argument('--metadata-signature-filter', action='store_true',
                         help='After the control load, trust the polling key and require a valid document signature')
     parser.add_argument('--trust-alias',
@@ -74,18 +79,31 @@ def main():
         raise ValueError('Start with control')
     original = docker('cat', CONFIG)
     (out / 'original-providers.xml').write_bytes(original)
-    created = api('/api/plans', dict(name='Shibboleth native filesystem metadata batch',
-        profile=args.profile, targetKind='IDP', targetEntityId='http://localhost:18280/idp/shibboleth',
-        metadataSourceKind='URL', metadataSourceLocation='http://samlscope-reference-shibboleth:8080/idp/shibboleth',
-        suiteMetadataDelivery='HTTP_URL', declaredFeatures={},
-        parameters=dict(clockSkewToleranceSeconds=180, metadataRefreshWaitSeconds=300,
-                        testUserHint='samlscope-m0-user', requestSigningMode='REQUIRED'),
-        interaction=dict(allowBrowserSteps=True, allowAttestation=False, preset='quick'), authorizedTarget=True))
-    save(out / 'plan.json', created)
-    plan = created['plan']['plan']['id']
-    created = api('/api/plans/' + plan + '/runs', {})
-    save(out / 'created.json', created)
-    run = created['run']['id']
+    if args.capture_native_originals:
+        sys.path.insert(0,str(REPO/'dev/reference-acceptance'))
+        from capture_terminal_http_runtime import capture_target
+        capture_target(out,'shibboleth','start')
+    if args.run:
+        if RUN_RE.fullmatch(args.run) is None:
+            raise ValueError('Invalid existing Run identifier')
+        run = args.run
+        existing = api('/api/runs/' + run)
+        plan = existing['planId']
+        save(out / 'created.json', dict(run=dict(
+            id=run, planId=plan, createdAt=existing['createdAt']), reused=True))
+    else:
+        created = api('/api/plans', dict(name='Shibboleth native filesystem metadata batch',
+            profile=args.profile, targetKind='IDP', targetEntityId='http://localhost:18280/idp/shibboleth',
+            metadataSourceKind='URL', metadataSourceLocation='http://samlscope-reference-shibboleth:8080/idp/shibboleth',
+            suiteMetadataDelivery='HTTP_URL', declaredFeatures={},
+            parameters=dict(clockSkewToleranceSeconds=180, metadataRefreshWaitSeconds=300,
+                            testUserHint='samlscope-m0-user', requestSigningMode='REQUIRED'),
+            interaction=dict(allowBrowserSteps=True, allowAttestation=False, preset='quick'), authorizedTarget=True))
+        save(out / 'plan.json', created)
+        plan = created['plan']['plan']['id']
+        created = api('/api/plans/' + plan + '/runs', {})
+        save(out / 'created.json', created)
+        run = created['run']['id']
     path = '/opt/reference-idp/metadata/algorithm-' + run + '.xml'
     if docker('sh', '-c', 'if test -e ' + path + '; then echo exists; fi').strip():
         raise ValueError('Refusing to overwrite existing provider file')
@@ -111,8 +129,33 @@ def main():
     configured = ET.tostring(providers)
     (out / 'configured-providers.xml').write_bytes(configured)
     operations = []
+    native_operations = []
     config_changed = False
     signature_filter_written = False
+
+    def native_write(target, raw, label, readback_path=None):
+        record = dict(operation='write', label=label, path=target,
+                      sha256=hashlib.sha256(raw).hexdigest(), bytes=len(raw), read_back=False)
+        native_operations.append(record)
+        save(out / 'native-operations.json', native_operations)
+        write(target, raw)
+        readback = docker('cat', target)
+        if readback != raw:
+            raise RuntimeError('Native write read-back mismatch: ' + label)
+        record['read_back'] = True
+        record['read_back_sha256'] = hashlib.sha256(readback).hexdigest()
+        if readback_path is not None:
+            readback_path.write_bytes(readback)
+            record['read_back_file'] = str(readback_path.relative_to(out))
+        save(out / 'native-operations.json', native_operations)
+
+    def native_reload(folder, name):
+        record = dict(operation='reload', label=name, completed=False)
+        native_operations.append(record)
+        save(out / 'native-operations.json', native_operations)
+        reload(folder, name)
+        record['completed'] = True
+        save(out / 'native-operations.json', native_operations)
 
     def install_signature_filter(folder, alias, reload_service=True):
         # Trust one Suite key out of band, then require a signed root. Added after a successful
@@ -124,13 +167,15 @@ def main():
         signer = ET.SubElement(provider, '{' + ns + '}MetadataFilter',
             {'{' + xsi + '}type': 'SignatureValidation', 'requireSignedRoot': 'true',
              'certificateFile': SIGNING_CERT})
-        write(SIGNING_CERT, certificate)
+        native_write(SIGNING_CERT, certificate, 'signature-certificate',
+                     out / 'signing-certificate-readback.pem')
         (out / 'signing-certificate.pem').write_bytes(certificate)
         (out / 'signing-filter.xml').write_bytes(ET.tostring(signer))
         (out / 'configured-providers.xml').write_bytes(ET.tostring(providers))
-        write(CONFIG, ET.tostring(providers))
+        native_write(CONFIG, ET.tostring(providers), 'signature-filter-provider',
+                     out / 'configured-providers-signature-readback.xml')
         if reload_service:
-            reload(folder, 'import-filter')
+            native_reload(folder, 'import-filter')
         return True
 
     try:
@@ -142,6 +187,7 @@ def main():
             folder.mkdir()
             record = dict(product='shibboleth', import_path='native-filesystem-provider', variant=variant,
                           run=run, status='incomplete', entity_id='http://localhost:18080/p/' + plan)
+            native_observations=[]
             operations.append(record)
             try:
                 with urllib.request.urlopen(state['automaticStartUrl'], timeout=30) as response:
@@ -150,24 +196,37 @@ def main():
                     fixture = response.read()
                 (folder / 'fixture.xml').write_bytes(fixture)
                 record['fixture_sha256'] = hashlib.sha256(fixture).hexdigest()
-                write(path, fixture)
+                native_write(path, fixture, 'fixture-' + variant, folder / 'fixture-readback.xml')
                 record['configuration_read_back'] = True
                 if not config_changed:
                     config_changed = True
-                    write(CONFIG, configured)
+                    native_write(CONFIG, configured, 'provider-apply',
+                                 out / 'configured-providers-readback.xml')
                 if args.trust_variant_poll and variant != 'control':
                     alias = 'poll-' + hashlib.sha256(variant.encode()).hexdigest()[:16]
                     signature_filter_written = install_signature_filter(folder, alias, reload_service=False)
                     record['signature_trust_alias'] = alias
                     config_changed = True
-                reload(folder, 'import')
+                native_reload(folder, 'import-' + variant)
                 record['provider_reloaded'] = True
+                if args.capture_native_originals:
+                    from datetime import datetime,timezone
+                    command=['/opt/reference-idp/bin/mdquery.sh','-u','http://localhost:8080/idp','-e',record['entity_id']]
+                    effective=docker(*command)
+                    (folder/'native-effective-sp-metadata.xml').write_bytes(effective)
+                    save(folder/'native-effective-sp-metadata-read.json',dict(container=CONTAINER,command=command,
+                        runId=run,variant=variant,entityId=record['entity_id'],exitCode=0,
+                        recordedAt=datetime.now(timezone.utc).isoformat(),sha256=hashlib.sha256(effective).hexdigest()))
                 if args.trust_alias and variant != 'control' and not signature_filter_written:
                     signature_filter_written = install_signature_filter(folder, args.trust_alias)
                     record['signature_trust_alias'] = args.trust_alias
                 try:
+                    factory=None
+                    if args.capture_native_originals:
+                        from metadata_native_observation import MetadataNativeClient
+                        factory=lambda:MetadataNativeClient(native_observations,folder)
                     flow(run, folder / 'flow.json',
-                         suite_signature_control=variant != 'ecdsa-sha256-invalid-signature')
+                         suite_signature_control=variant != 'ecdsa-sha256-invalid-signature',client_factory=factory)
                     record['status'] = 'success'
                     print(variant, 'verified', flush=True)
                 except RuntimeError as error:
@@ -187,12 +246,15 @@ def main():
                         alias = 'poll-' + hashlib.sha256(b'control').hexdigest()[:16]
                         signature_filter_written = install_signature_filter(folder, alias)
             finally:
+                if args.capture_native_originals:
+                    save(folder/'native-http-observations.json',dict(runId=run,variant=variant,
+                        records=native_observations,verdictAssigned=False))
                 save(folder / 'import.json', record)
                 save(out / 'operations.json', operations)
     finally:
         if config_changed:
-            write(CONFIG, original)
-            reload(out, 'restore')
+            native_write(CONFIG, original, 'restore-provider', out / 'final-providers.xml')
+            native_reload(out, 'restore')
         docker('rm', '-f', path)
         if signature_filter_written:
             docker('rm', '-f', SIGNING_CERT)
@@ -208,11 +270,30 @@ def main():
             record['restored'] = restored and removed
             save(out / record['variant'] / 'import.json', record)
         save(out / 'operations.json', operations)
+        save(out / 'native-operations.json', native_operations)
+        save(out / 'operation-counts.json', dict(
+            restored=restored and removed and certificate_removed,
+            human_operations=0,
+            product_restarts=0,
+            metadata_fixture_writes=len([item for item in native_operations
+                                         if item.get('label', '').startswith('fixture-')]),
+            provider_apply_writes=len([item for item in native_operations
+                                       if item.get('label') == 'provider-apply']),
+            restoration_writes=len([item for item in native_operations
+                                     if item.get('label') == 'restore-provider']),
+            reloads=len([item for item in native_operations if item.get('operation') == 'reload']),
+            protocol_roundtrips=len([item for item in operations if item.get('status') == 'success']),
+            verdict_adopted=False))
         for name in ['result.json', 'transcript', 'protocol-evidence']:
             try:
                 save(out / (name if '.' in name else name + '.json'), api('/api/runs/' + run + '/' + name))
             except Exception as error:
                 save(out / (name.replace('.', '-') + '-unavailable.json'), dict(reason=str(error)))
+        if args.capture_native_originals:
+            from capture_run_originals import capture
+            entries=api('/api/runs/'+run+'/transcript')
+            capture(out,run,entries)
+            capture_target(out,'shibboleth','end')
         print('Run', run, 'restored', restored and removed, flush=True)
 
 

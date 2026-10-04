@@ -77,13 +77,31 @@ class IdpPartialBrowserObservationTest {
                 boolean accepted = index != rejected;
                 step = reply(test, wait, accepted, accepted ? "<saml:Assertion/>" : "");
             }
+            for (var fixture : nameIdStringFixtures()) {
+                var wait = assertInstanceOf(CaseStep.AwaitInbound.class, step);
+                var root = SecureXml.parse(wait.actions().getFirst().payload()).getDocumentElement();
+                var nameId = assertInstanceOf(org.w3c.dom.Element.class,
+                        root.getElementsByTagNameNS(SAML, "NameID").item(0));
+                assertEquals(fixture.placement() == com.samlscope.saml.normal.SamlTypedStringFixtures.Placement.PERSISTENT_NAMEID
+                        ? "urn:oasis:names:tc:SAML:2.0:nameid-format:persistent"
+                        : "urn:oasis:names:tc:SAML:2.0:nameid-format:transient", nameId.getAttribute("Format"));
+                assertEquals(256, nameId.getTextContent().codePointCount(0, nameId.getTextContent().length()));
+                assertEquals(java.util.Optional.empty(),
+                        com.samlscope.saml.normal.SamlSchemaValidation.stringFixtureValidationFailure(root));
+                step = reply(test, wait, true, "<saml:Assertion/>");
+            }
             for (int index = 0; index < 16; index++) {
                 step = reply(test, assertInstanceOf(CaseStep.AwaitInbound.class, step), true, "<saml:Assertion/>");
             }
+            for (int index = 0; index < userDefinedValueFixtures().size(); index++) {
+                step = reply(test, assertInstanceOf(CaseStep.AwaitInbound.class, step), true, "<saml:Assertion/>");
+            }
             var result = assertInstanceOf(CaseStep.Finish.class, step).outcome();
-            assertEquals(rejected < 0 ? Outcome.NOT_VERIFIED : Outcome.VIOLATED, result.outcome());
+            assertEquals(rejected < 0 ? Outcome.SATISFIED : Outcome.VIOLATED, result.outcome());
             assertEquals(rejected < 0 ? 20 : 19, ((java.util.List<?>) result.details().get("confirmed_character_fixtures")).size());
-            assertTrue(((java.util.List<?>) result.details().get("remaining_conditions")).contains("persistent-nameid"));
+            assertFalse(((java.util.List<?>) result.details().get("remaining_conditions")).contains("persistent-nameid"));
+            assertFalse(((java.util.List<?>) result.details().get("remaining_conditions")).contains("transient-nameid"));
+            assertEquals(2, ((java.util.List<?>) result.details().get("responded_nameid_string_fixtures")).size());
         }
     }
     @Test void runsEveryTypedExtensionInputAndJudgesErrorFreeProcessingWithoutDemandingPreservation() {
@@ -96,6 +114,20 @@ class IdpPartialBrowserObservationTest {
                 CaseStep step = controlled(test);
                 for (int index = 0; index < 20; index++)
                     step = reply(test, assertInstanceOf(CaseStep.AwaitInbound.class, step), true, "<saml:Assertion/>");
+                for (var fixture : nameIdStringFixtures()) {
+                    var wait = assertInstanceOf(CaseStep.AwaitInbound.class, step);
+                    var root = SecureXml.parse(wait.actions().getFirst().payload()).getDocumentElement();
+                    var nameIds = root.getElementsByTagNameNS(SAML, "NameID");
+                    assertEquals(1, nameIds.getLength());
+                    var nameId = (org.w3c.dom.Element) nameIds.item(0);
+                    assertEquals(256, nameId.getTextContent().codePointCount(0, nameId.getTextContent().length()));
+                    assertEquals(fixture.placement() == com.samlscope.saml.normal.SamlTypedStringFixtures.Placement.PERSISTENT_NAMEID
+                            ? "urn:oasis:names:tc:SAML:2.0:nameid-format:persistent"
+                            : "urn:oasis:names:tc:SAML:2.0:nameid-format:transient", nameId.getAttribute("Format"));
+                    assertEquals(java.util.Optional.empty(),
+                            com.samlscope.saml.normal.SamlSchemaValidation.stringFixtureValidationFailure(root));
+                    step = reply(test, wait, true, "<saml:Assertion/>");
+                }
                 for (int index = 0; index < inputs.size(); index++) {
                     var wait = assertInstanceOf(CaseStep.AwaitInbound.class, step);
                     var xml = SecureXml.parse(wait.actions().getFirst().payload()).getDocumentElement();
@@ -105,29 +137,90 @@ class IdpPartialBrowserObservationTest {
                     assertEquals(1, extension.getLength());
                     assertEquals(inputs.get(index).value(), ((org.w3c.dom.Element)extension.item(0)).getAttribute("value"));
                     boolean selected = index == missing;
-                    step = reply(test, wait, !selected || !errorResponse, selected ? "" : "<saml:Assertion/>");
+                    boolean accepted = !selected || !errorResponse;
+                    step = reply(test, wait, accepted, accepted ? "<saml:Assertion/>" : "");
                 }
+                for (int index = 0; index < userDefinedValueFixtures().size(); index++)
+                    step = reply(test, assertInstanceOf(CaseStep.AwaitInbound.class, step), true, "<saml:Assertion/>");
                 var result = assertInstanceOf(CaseStep.Finish.class, step).outcome();
-                assertEquals(missing >= 0 && errorResponse ? Outcome.VIOLATED : Outcome.NOT_VERIFIED, result.outcome());
+                assertEquals(missing >= 0 && errorResponse ? Outcome.VIOLATED : Outcome.SATISFIED, result.outcome(),
+                        "missing=" + missing + " errorResponse=" + errorResponse + " details=" + result.details());
                 var observed = (java.util.List<?>) result.details().get("responded_extension_string_fixtures");
-                assertEquals(missing < 0 ? 16 : 15, observed.size());
-                if (missing >= 0) assertFalse(observed.contains(inputs.get(missing).id().replace(':', '-')));
-                assertEquals(missing >= 0, ((java.util.List<?>) result.details().get("remaining_conditions"))
+                boolean failedInput = missing >= 0 && errorResponse;
+                assertEquals(failedInput ? 15 : 16, observed.size());
+                if (failedInput) assertFalse(observed.contains(inputs.get(missing).id().replace(':', '-')));
+                assertEquals(failedInput, ((java.util.List<?>) result.details().get("remaining_conditions"))
                         .contains("user-defined-extension-string-attribute"));
-                assertEquals(missing < 0 ? java.util.List.of("user-defined-extension-string-attribute") : null,
+                assertEquals(failedInput
+                                ? java.util.List.of("persistent-nameid", "transient-nameid", "user-defined-advice-string",
+                                        "user-defined-attribute-value-string")
+                                : java.util.List.of("persistent-nameid", "transient-nameid", "user-defined-extension-string-attribute",
+                                        "user-defined-advice-string", "user-defined-attribute-value-string"),
                         result.details().get("confirmed_type_conditions"));
+            }
+        }
+    }
+
+    @Test void sendsSchemaValidAdviceAndCustomAttributeValueAtBothBoundaryLengths() {
+        var fixtures = userDefinedValueFixtures();
+        assertEquals(4, fixtures.size());
+        for (int missing = -1; missing < fixtures.size(); missing++) {
+            var test = scenario("IIP-G02-a-idp-01");
+            CaseStep step = controlled(test);
+            for (int index = 0; index < 20; index++)
+                step = reply(test, assertInstanceOf(CaseStep.AwaitInbound.class, step), true, "<saml:Assertion/>");
+            for (var ignored : nameIdStringFixtures())
+                step = reply(test, assertInstanceOf(CaseStep.AwaitInbound.class, step), true, "<saml:Assertion/>");
+            for (int index = 0; index < 16; index++)
+                step = reply(test, assertInstanceOf(CaseStep.AwaitInbound.class, step), true, "<saml:Assertion/>");
+            for (int index = 0; index < fixtures.size(); index++) {
+                var wait = assertInstanceOf(CaseStep.AwaitInbound.class, step);
+                var request = SecureXml.parse(wait.actions().getFirst().payload()).getDocumentElement();
+                assertEquals(java.util.Optional.empty(), com.samlscope.saml.normal.SamlSchemaValidation
+                        .stringFixtureValidationFailure(request));
+                assertFalse(request.hasAttribute("ProviderName"));
+                var assertions = request.getElementsByTagNameNS(SAML, "Assertion");
+                assertEquals(1, assertions.getLength());
+                var assertion = (org.w3c.dom.Element) assertions.item(0);
+                var fixture = fixtures.get(index);
+                if (fixture.placement() == com.samlscope.saml.normal.SamlTypedStringFixtures.Placement.ADVICE_STRING) {
+                    var values = request.getElementsByTagNameNS(
+                            com.samlscope.saml.normal.SamlTypedStringFixtures.NAMESPACE, "AdviceString");
+                    assertEquals(1, values.getLength());
+                    assertEquals(fixture.value(), values.item(0).getTextContent());
+                } else {
+                    var values = assertion.getElementsByTagNameNS(SAML, "AttributeValue");
+                    assertEquals(1, values.getLength());
+                    var value = (org.w3c.dom.Element) values.item(0);
+                    assertEquals(fixture.value(), value.getTextContent());
+                    assertEquals("MyStringType", value.getAttributeNS(
+                            javax.xml.XMLConstants.W3C_XML_SCHEMA_INSTANCE_NS_URI, "type").split(":", 2)[1]);
+                }
+                var reject = index == missing;
+                step = reply(test, wait, !reject, reject ? "" : "<saml:Assertion/>");
+            }
+            var outcome = assertInstanceOf(CaseStep.Finish.class, step).outcome();
+            assertEquals(missing < 0 ? Outcome.SATISFIED : Outcome.NOT_VERIFIED, outcome.outcome());
+            assertEquals(missing < 0 ? 4 : 3,
+                    ((java.util.List<?>) outcome.details().get("responded_user_defined_value_fixtures")).size());
+            if (missing >= 0) {
+                var condition = fixtures.get(missing).placement()
+                        == com.samlscope.saml.normal.SamlTypedStringFixtures.Placement.ADVICE_STRING
+                        ? "user-defined-advice-string" : "user-defined-attribute-value-string";
+                assertTrue(((java.util.List<?>) outcome.details().get("remaining_conditions")).contains(condition));
             }
         }
     }
 
     @Test void unknownOrMissingStatusAtEveryStringInputCannotBecomeAStringViolation() {
         int standard = com.samlscope.saml.normal.SamlErrorProbeRequestFactory.stringProbes().size();
-        int inputs = standard + 16;
+        int nameIds = nameIdStringFixtures().size();
+        int inputs = standard + nameIds + 16 + userDefinedValueFixtures().size();
         for (int unknown = 0; unknown < inputs; unknown++) {
             for (var code : new String[]{"urn:example:unknown-status", ""}) {
                 var test = scenario("IIP-G02-a-idp-01");
                 CaseStep step = controlled(test);
-                for (int index = 0; index < inputs; index++) {
+                for (int index = 0; index < standard; index++) {
                     var wait = assertInstanceOf(CaseStep.AwaitInbound.class, step);
                     if (index != unknown) {
                         step = reply(test, wait, true, "<saml:Assertion/>");
@@ -140,11 +233,51 @@ class IdpPartialBrowserObservationTest {
                     step = test.resume(context(), wait.next(), new CaseEvent.InboundMessage(
                             xml.getBytes(StandardCharsets.UTF_8),new EvidenceRef("transcript","unknown-status")));
                 }
+                for (int index = 0; index < nameIds; index++) {
+                    var wait = assertInstanceOf(CaseStep.AwaitInbound.class, step,
+                            "expected next fixture after standard=" + standard + " nameIds=" + nameIds
+                                    + " unknown=" + unknown + " status=" + code + " step=" + step);
+                    if (standard + index != unknown) {
+                        step = reply(test, wait, true, "<saml:Assertion/>");
+                        continue;
+                    }
+                    var xml = "<samlp:Response xmlns:samlp='" + PROTOCOL + "' xmlns:saml='" + SAML
+                            + "' InResponseTo='" + wait.next().data().get("expected_response_correlation")
+                            + "'><samlp:Status><samlp:StatusCode Value='" + code
+                            + "'/></samlp:Status><saml:Assertion/></samlp:Response>";
+                    step = test.resume(context(), wait.next(), new CaseEvent.InboundMessage(
+                            xml.getBytes(StandardCharsets.UTF_8), new EvidenceRef("transcript", "unknown-nameid-status")));
+                }
+                for (int index = 0; index < 16; index++) {
+                    var wait = assertInstanceOf(CaseStep.AwaitInbound.class, step);
+                    if (standard + nameIds + index != unknown) {
+                        step = reply(test, wait, true, "<saml:Assertion/>");
+                        continue;
+                    }
+                    var xml = "<samlp:Response xmlns:samlp='" + PROTOCOL + "' xmlns:saml='" + SAML
+                            + "' InResponseTo='" + wait.next().data().get("expected_response_correlation")
+                            + "'><samlp:Status><samlp:StatusCode Value='" + code
+                            + "'/></samlp:Status><saml:Assertion/></samlp:Response>";
+                    step = test.resume(context(), wait.next(), new CaseEvent.InboundMessage(
+                            xml.getBytes(StandardCharsets.UTF_8), new EvidenceRef("transcript", "unknown-extension-status")));
+                }
+                for (int index = 0; index < userDefinedValueFixtures().size(); index++) {
+                    var wait = assertInstanceOf(CaseStep.AwaitInbound.class, step);
+                    if (standard + nameIds + 16 + index != unknown) {
+                        step = reply(test, wait, true, "<saml:Assertion/>");
+                        continue;
+                    }
+                    var xml = "<samlp:Response xmlns:samlp='" + PROTOCOL + "' xmlns:saml='" + SAML
+                            + "' InResponseTo='" + wait.next().data().get("expected_response_correlation")
+                            + "'><samlp:Status><samlp:StatusCode Value='" + code
+                            + "'/></samlp:Status><saml:Assertion/></samlp:Response>";
+                    step = test.resume(context(), wait.next(), new CaseEvent.InboundMessage(
+                            xml.getBytes(StandardCharsets.UTF_8), new EvidenceRef("transcript", "unknown-user-defined-type-status")));
+                }
                 var result = assertInstanceOf(CaseStep.Finish.class,step).outcome();
                 assertEquals(Outcome.NOT_VERIFIED,result.outcome());
                 assertEquals(1,((java.util.List<?>)result.details().get("unverifiable_fixtures")).size());
-                assertEquals(unknown < standard,
-                        result.details().containsKey("confirmed_type_conditions"));
+                assertTrue(result.details().containsKey("confirmed_type_conditions"));
                 boolean whitespaceUnknown = unknown < standard &&
                         (com.samlscope.saml.normal.SamlErrorProbeRequestFactory.stringProbes().get(unknown).name().contains("_TAB_")
                         || com.samlscope.saml.normal.SamlErrorProbeRequestFactory.stringProbes().get(unknown).name().contains("_LF_"));
@@ -152,6 +285,31 @@ class IdpPartialBrowserObservationTest {
                         .contains("literal-tab-and-lf-on-wire"));
             }
         }
+    }
+
+    @Test void anUnknownPrincipalErrorForLongNameIdIsNotMisattributedToStringLength() {
+        var test = scenario("IIP-G02-a-idp-01");
+        CaseStep step = controlled(test);
+        for (int index = 0; index < 20; index++)
+            step = reply(test, assertInstanceOf(CaseStep.AwaitInbound.class, step), true, "<saml:Assertion/>");
+        var persistent = assertInstanceOf(CaseStep.AwaitInbound.class, step);
+        step = reply(test, persistent, false, "");
+        step = reply(test, assertInstanceOf(CaseStep.AwaitInbound.class, step), true, "<saml:Assertion/>");
+        for (int index = 0; index < 16 + userDefinedValueFixtures().size(); index++)
+            step = reply(test, assertInstanceOf(CaseStep.AwaitInbound.class, step), true, "<saml:Assertion/>");
+        var outcome = assertInstanceOf(CaseStep.Finish.class, step).outcome();
+        assertEquals(Outcome.NOT_VERIFIED, outcome.outcome());
+        assertEquals(java.util.List.of("persistent-nameid-ascii-256"), outcome.details().get("unverifiable_fixtures"));
+        assertFalse(outcome.details().containsKey("violating_fixtures"));
+    }
+
+    private static java.util.List<com.samlscope.saml.normal.SamlTypedStringFixtures.Fixture> userDefinedValueFixtures() {
+        return com.samlscope.saml.normal.SamlTypedStringFixtures.matrix().stream()
+                .filter(f -> (f.placement() == com.samlscope.saml.normal.SamlTypedStringFixtures.Placement.ADVICE_STRING
+                        || f.placement() == com.samlscope.saml.normal.SamlTypedStringFixtures.Placement.ATTRIBUTE_VALUE_STRING)
+                        && (f.characters() == com.samlscope.saml.normal.SamlErrorProbeRequestFactory.Probe.STRING_ASCII_255
+                        || f.characters() == com.samlscope.saml.normal.SamlErrorProbeRequestFactory.Probe.STRING_ASCII_256))
+                .toList();
     }
 
     @Test void detectsAMismatchingSubjectEvenWhenAnotherAssertionMatches() {
@@ -183,7 +341,57 @@ class IdpPartialBrowserObservationTest {
             assertEquals(Outcome.NOT_VERIFIED, result.outcome().outcome());
         }
     }
-    @Test void supplementalMetadataObservationsRetainTheirEvidenceWithoutCompletingProtocolCoverage() {
+    @Test void extensionElementMatrixRequiresEveryCorrelatedSuccessAndRejectsTerminalOnlyEvidence() {
+        for (int unavailable = -1; unavailable < 4; unavailable++) {
+            var test = scenario("IIP-EXT01-b-idp-01");
+            CaseStep step = test.start(context());
+            for (int index = 0; index < 4; index++) {
+                var wait = assertInstanceOf(CaseStep.AwaitInbound.class, step);
+                if (index == unavailable) {
+                    step = test.resume(context(), wait.next(), new CaseEvent.BrowserObservation(
+                            400, "https://idp.example/error", "local error",
+                            new EvidenceRef("transcript", "terminal-" + index)));
+                } else {
+                    step = reply(test, wait, true, "<saml:Assertion/>");
+                }
+            }
+            var outcome = assertInstanceOf(CaseStep.Finish.class, step).outcome();
+            assertEquals(unavailable < 0 ? Outcome.SATISFIED : Outcome.NOT_VERIFIED, outcome.outcome());
+            if (unavailable >= 0) assertEquals(
+                    java.util.List.of(new String[]{"baseline-success", "unknown-extension",
+                            "unknown-advice-extension", "unknown-metadata-extension"}[unavailable]),
+                    outcome.details().get("unverifiable_fixtures"));
+        }
+    }
+
+    @Test void extensionElementAndAttributeErrorsOrUnknownDeliveryRemainNotVerified() {
+        for (String id : java.util.List.of("IIP-EXT01-b-idp-01", "IIP-EXT01-c-idp-01")) {
+            var test = scenario(id);
+            var baseline = assertInstanceOf(CaseStep.AwaitInbound.class, test.start(context()));
+            assertEquals("control_failed", assertInstanceOf(CaseStep.Finish.class,
+                    reply(test, baseline, false, "")).outcome().reasonCode());
+
+            test = scenario(id);
+            baseline = assertInstanceOf(CaseStep.AwaitInbound.class, test.start(context()));
+            var next = assertInstanceOf(CaseStep.AwaitInbound.class,
+                    reply(test, baseline, true, "<saml:Assertion/>"));
+            var timedOut = assertInstanceOf(CaseStep.Finish.class,
+                    test.resume(context(), next.next(), new CaseEvent.TimedOut(Duration.ofMinutes(2)))).outcome();
+            assertEquals(Outcome.NOT_VERIFIED, timedOut.outcome());
+
+            test = scenario(id);
+            CaseStep step = test.start(context());
+            var total = id.contains("-b-") ? 4 : 3;
+            for (int index = 0; index < total; index++) {
+                var wait = assertInstanceOf(CaseStep.AwaitInbound.class, step);
+                step = reply(test, wait, index != 1, index == 1 ? "" : "<saml:Assertion/>");
+            }
+            assertEquals(Outcome.NOT_VERIFIED,
+                    assertInstanceOf(CaseStep.Finish.class, step).outcome().outcome());
+        }
+    }
+
+    @Test void supplementalMetadataObservationsCompleteOnlyWithBothProtocolElements() {
         var entries = new java.util.ArrayList<com.samlscope.core.transcript.TranscriptEntry>();
         var variants = new java.util.ArrayList<String>();
         variants.add("control");
@@ -217,16 +425,35 @@ class IdpPartialBrowserObservationTest {
             if (!complete) entries.removeLast();
             var test = scenario("IIP-EXT01-c-idp-01");
             var ctx = context(recorder);
-            var wait = assertInstanceOf(CaseStep.AwaitInbound.class, test.start(ctx));
-            var result = assertInstanceOf(CaseStep.Finish.class,
-                    reply(test, wait, true, "<saml:Assertion/>", ctx)).outcome();
-            assertEquals(Outcome.NOT_VERIFIED, result.outcome());
+            CaseStep step = test.start(ctx);
+            for (int index = 0; index < 3; index++) {
+                step = reply(test, assertInstanceOf(CaseStep.AwaitInbound.class, step),
+                        true, "<saml:Assertion/>", ctx);
+            }
+            var result = assertInstanceOf(CaseStep.Finish.class, step).outcome();
+            assertEquals(complete ? Outcome.SATISFIED : Outcome.NOT_VERIFIED, result.outcome());
             assertEquals(complete, result.details().get("metadata_attribute_matrix_complete"));
             for (var entry : entries) {
                 assertTrue(result.evidence().contains(new EvidenceRef("transcript", "transcript:" + entry.id())));
             }
-            assertEquals(entries.size() + 1, result.evidence().size());
-            assertEquals(java.util.List.of("SubjectConfirmationData", "Attribute"), result.details().get("remaining_protocol_elements"));
+            assertEquals(entries.size() + 3, result.evidence().size());
+            assertEquals(java.util.List.of("SubjectConfirmationData", "Attribute"), result.details().get("completed_protocol_elements"));
+            assertEquals(java.util.List.of(), result.details().get("remaining_protocol_elements"));
+            if (complete) {
+                var replay = scenario("IIP-EXT01-c-idp-01");
+                CaseStep replayStep = replay.start(context());
+                for (int index = 0; index < 3; index++) {
+                    replayStep = reply(replay, assertInstanceOf(CaseStep.AwaitInbound.class, replayStep),
+                            true, "<saml:Assertion/>");
+                }
+                var previous = assertInstanceOf(CaseStep.Finish.class, replayStep).outcome();
+                assertEquals(Outcome.NOT_VERIFIED, previous.outcome());
+                assertTrue(replay.supportsRecordedEvidenceReevaluation(previous));
+                var reevaluated = replay.reevaluateRecordedEvidence(ctx, previous).orElseThrow();
+                assertEquals(Outcome.SATISFIED, reevaluated.outcome());
+                assertEquals(true, reevaluated.details().get("metadata_attribute_matrix_complete"));
+                assertEquals(entries.size() + 3, reevaluated.evidence().size());
+            }
         }
     }
     @Test void encryptedSubjectMatrixUsesTargetKeysAndDetectsMismatchesWithPlainOrEncryptedReplies() throws Exception {
@@ -300,5 +527,13 @@ class IdpPartialBrowserObservationTest {
     private static String assertion(String value, String format) {
         return "<saml:Assertion><saml:Subject><saml:NameID Format='" + format + "'>" + value
                 + "</saml:NameID></saml:Subject></saml:Assertion>";
+    }
+
+    private static java.util.List<com.samlscope.saml.normal.SamlTypedStringFixtures.Fixture> nameIdStringFixtures() {
+        return com.samlscope.saml.normal.SamlTypedStringFixtures.matrix().stream()
+                .filter(f -> (f.placement() == com.samlscope.saml.normal.SamlTypedStringFixtures.Placement.PERSISTENT_NAMEID
+                        || f.placement() == com.samlscope.saml.normal.SamlTypedStringFixtures.Placement.TRANSIENT_NAMEID)
+                        && f.characters() == com.samlscope.saml.normal.SamlErrorProbeRequestFactory.Probe.STRING_ASCII_256)
+                .toList();
     }
 }

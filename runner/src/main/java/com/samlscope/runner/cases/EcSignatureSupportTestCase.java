@@ -54,10 +54,12 @@ public final class EcSignatureSupportTestCase implements TestCase, Configuration
     }
     @Override public EvidenceStatus evidenceStatus(CaseContext context) {
         var observation = observe(context);
-        if (Set.of("ec-signature.native-support-observed","ec-signature.native-valid-request-rejected").contains(observation.reasonCode())) {
+        if (Set.of("ec-signature.native-support-observed","ec-signature.native-valid-request-rejected",
+                "ec-signature.native-unsupported-verifier").contains(observation.reasonCode())) {
             var nativeObservations = List.of("verified-rsa-control", "verified-ec-request",
                     "same-ec-key-negative-control", "request-bound-native-authentication-error");
-            return new EvidenceStatus(true, nativeObservations, nativeObservations, observation.details());
+            return new EvidenceStatus(observation.outcome()!=Outcome.NOT_VERIFIED,
+                    nativeObservations, nativeObservations, observation.details());
         }
         var complete = observation.details().get("completed_observations") instanceof List<?> list
                 ? list.stream().map(String::valueOf).toList() : List.<String>of();
@@ -76,6 +78,7 @@ public final class EcSignatureSupportTestCase implements TestCase, Configuration
     private CaseOutcome observe(CaseContext context) {
         var nativeOutcome=nativeEvidence.apply(context);
         if(nativeOutcome.isPresent() && (nativeOutcome.orElseThrow().outcome()==Outcome.SATISFIED
+                || nativeOutcome.orElseThrow().outcome()==Outcome.VIOLATED
                 || "ec-signature.native-valid-request-rejected".equals(nativeOutcome.orElseThrow().reasonCode())))return nativeOutcome.orElseThrow();
         var fetched = new LinkedHashSet<String>();
         var success = new LinkedHashSet<String>();

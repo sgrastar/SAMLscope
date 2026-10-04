@@ -105,6 +105,12 @@ export function RunManagement({ runId, csrfToken, focusCaseId, navigateTo }: {
     : undefined
   const selectedCaseCampaign = campaigns?.campaigns.find(value => value.id === selectedCase?.campaignId)
   const selectedInteraction = interactions.find(value => value.caseId === selectedCase?.caseId)
+  const selectedCaseActions = selectedCaseCampaign?.actions?.filter(action =>
+    action.caseIds.includes(selectedCase?.caseId ?? '')) ?? []
+  const selectedCaseHasNoQueuedAction = !selectedInteraction && !!selectedCase && !!selectedCaseCampaign
+    && (selectedCase.actionKind === 'NONE' || selectedCaseCampaign.remainingUserActions === 0
+      || (selectedCaseActions.length > 0 && selectedCaseActions.every(action =>
+        !action.remainingCaseIds.includes(selectedCase.caseId))))
   const hasActiveProbe = activeProbe?.state === 'READY' || activeProbe?.state === 'AWAITING_RESPONSE'
 
   const refresh = async () => {
@@ -684,7 +690,7 @@ export function RunManagement({ runId, csrfToken, focusCaseId, navigateTo }: {
       <button type="button" className={`plan-progress-card plan-${value.plan.toLowerCase()}${planFilter === value.plan ? ' selected' : ''}`}
         aria-pressed={planFilter === value.plan} onClick={() => setPlanFilter(value.plan)} key={value.plan}>
         <span>{assistanceLabel(value.plan)}</span><strong>{value.remainingUserActions}</strong>
-        <small>actions remaining · {value.estimatedMinutesMin}-{value.estimatedMinutesMax} min</small>
+        <small>planned steps remaining · {value.estimatedMinutesMin}-{value.estimatedMinutesMax} min</small>
         <progress max={Math.max(value.deliberateUserActions, 1)}
           value={Math.max(value.deliberateUserActions - value.remainingUserActions, 0)} />
       </button>)}</nav>}
@@ -858,24 +864,26 @@ export function RunManagement({ runId, csrfToken, focusCaseId, navigateTo }: {
     {!focusCaseId && campaigns && <section className="campaign-overview">
       <p className="eyebrow">Run plans</p>
       <h2>Choose evidence depth, not individual cases</h2>
-      <p>Cases share Transcripts, metadata fetches, and configuration campaigns. Counts below are deliberate user actions, not case counts.</p>
+      <p>Related cases share campaigns. Follow each queued step once. Counts are planned campaign steps, not measured sign-ins or configuration changes.</p>
       <div className="contract-list">{campaigns.plans.map(value => <article className="contract" key={value.plan}>
         <header><div><strong>{assistanceLabel(value.plan)}</strong><p>{planDescription(value.plan)}</p></div>
           <span>{value.budgetMet ? 'WITHIN BUDGET' : 'OVER BUDGET'}</span></header>
         <dl>
           <dt>Cases</dt><dd>{value.cases}</dd>
-          <dt>Actions</dt><dd>{value.deliberateUserActions} total / {value.remainingUserActions} remaining (budget {value.actionBudget})</dd>
+          <dt>Planned steps</dt><dd>{value.deliberateUserActions} total / {value.remainingUserActions} remaining (budget {value.actionBudget})</dd>
           <dt>Estimated time</dt><dd>{value.estimatedMinutesMin}-{value.estimatedMinutesMax} minutes</dd>
-          <dt>Action mix</dt><dd>{value.loginActions} browser campaign, {value.configurationActions} configuration, {value.metadataRefreshActions} metadata refresh</dd>
+          <dt>Test-user browser steps</dt><dd>{value.loginActions}</dd>
+          <dt>Administrator setup</dt><dd>{value.configurationActions} configuration, {value.metadataRefreshActions} metadata refresh</dd>
           {value.plan === 'FULL' && <><dt>Self-check sections</dt><dd>{value.selfAttestationSections}</dd></>}
         </dl>
       </article>)}</div>
+      <p>The test user performs browser steps. Target configuration and metadata refresh require the target administrator. Actual sign-ins and time spent preparing evidence are not measured here.</p>
       <p><strong>Externally verified:</strong> {campaigns.externallyVerifiedCases} · <strong>Self-attested:</strong> {campaigns.selfAttestedCases} · <strong>Not verified:</strong> {campaigns.notVerifiedCases}</p>
       <details><summary>Evidence campaigns and shared cases</summary>
         <div className="contract-list">{campaigns.campaigns.map(campaign => <article
           className={`contract evidence-panel evidence-${campaign.evidenceClass.toLowerCase()}`} key={campaign.id}>
-          <header><div><strong>{campaign.title}</strong><p>{humanize(campaign.evidenceClass)}</p></div><span>{campaign.remainingUserActions} action{campaign.remainingUserActions === 1 ? '' : 's'} remaining</span></header>
-          {campaign.freshSessionRequired && <p>A fresh target session is required at the campaign boundary.</p>}
+          <header><div><strong>{campaign.title}</strong><p>{humanize(campaign.evidenceClass)}</p></div><span>{campaign.remainingUserActions} planned step{campaign.remainingUserActions === 1 ? '' : 's'} remaining</span></header>
+          {campaign.freshSessionRequired && campaign.remainingUserActions > 0 && <p>A fresh target session is required at the campaign boundary.</p>}
           {campaign.expectedTranscriptEvidence.length > 0 && <p>Expected evidence: {campaign.expectedTranscriptEvidence.join(', ')}</p>}
           <p>{campaign.caseIds.length} cases share this campaign; {campaign.remainingCaseIds.length} remain unresolved.</p>
         </article>)}</div>
@@ -939,12 +947,17 @@ export function RunManagement({ runId, csrfToken, focusCaseId, navigateTo }: {
           <dt>Evidence</dt><dd><span className={`evidence-label evidence-${selectedCase.evidenceClass.toLowerCase()}`}>
             {humanize(selectedCase.evidenceClass)}</span></dd>
           <dt>Outcome</dt><dd>{selectedCase.outcome ? humanize(selectedCase.outcome) : selectedCase.resolved ? 'Resolved' : 'Pending evidence'}</dd>
-          <dt>User action</dt><dd>{humanize(selectedCase.actionKind)}</dd>
-          <dt>Fresh session</dt><dd>{selectedCase.freshSessionRequired ? 'Required' : 'Not required'}</dd></dl>
+          <dt>Next step</dt><dd>{selectedCaseHasNoQueuedAction ? 'No browser action queued' : humanize(selectedCase.actionKind)}</dd>
+          <dt>Fresh session</dt><dd>{selectedCaseHasNoQueuedAction ? 'Not requested'
+            : selectedCase.freshSessionRequired ? 'Required' : 'Not required'}</dd></dl>
         {selectedCase.expectedTranscriptEvidence.length > 0 && <><h3>Expected Transcript evidence</h3>
           <ul>{selectedCase.expectedTranscriptEvidence.map(value => <li key={value}><code>{value}</code></li>)}</ul></>}
         {selectedInteraction ? <div className="case-drawer-interaction">{interactionCard(selectedInteraction)}</div>
           : selectedCase.resolved ? <p className="quiet-success">This case already has a recorded outcome.</p>
+            : selectedCaseHasNoQueuedAction ? <div className="notice"><strong>No further browser step is requested</strong>
+              <p>There is no queued input for this case. Repeating login or setup is not requested. Required evidence is still missing, so the unresolved outcome is retained.</p>
+              {selectedCase.evidenceClass !== 'PROTOCOL_OBSERVED' && <p>Ask the target administrator or evidence reviewer to check the required evidence. Additional logins cannot replace that evidence.</p>}
+              <a href={`/reports/${runId}`}>View recorded result</a></div>
             : <div className="notice"><strong>No direct input is requested</strong>
               <p>Continue its campaign or protocol fixture from the Run workspace. A missing observation remains not verified.</p>
               <a className="button button-secondary" href={`/browser/${runId}/${selectedCase.caseId}`}>Open focused case</a></div>}

@@ -6,6 +6,8 @@ import base64
 import hashlib
 import html
 import http.cookiejar
+import os
+import re
 import urllib.request as u
 import urllib.parse as p
 import urllib.error
@@ -78,9 +80,13 @@ class Client:
     page=r.read().decode();url=r.geturl();code=r.status
   except urllib.error.HTTPError as e:
    page=e.read().decode(errors='replace');url=e.geturl();code=e.code
+  if os.environ.get('SAML_SCOPE_FLOW_DIAGNOSTIC') == '1':
+   title=re.search(r'<title[^>]*>(.*?)</title>',page,re.I|re.S)
+   label=' '.join(html.unescape(title.group(1)).split())[:100] if title else ''
+   print('flow-page',p.urlparse(url).path,'status',code,'title',label,flush=True)
   smoke.permit_localhost_http_cookies(self.jar,url)
   return url,page,code
- def flow(self,url,fields,user,password):
+ def flow(self,url,fields,user,password,terminal_observer=None):
   passive=False
   for i in range(20):
    url,page,code=self.request(url,fields)
@@ -118,8 +124,12 @@ class Client:
     url=p.urljoin(url,login.action);continue
    if 'Check recorded' in page or 'Response recorded' in page:return 'recorded'
    for label in ['Invalid redirect uri','Unsupported NameIDFormat','RequestDenied','NoPassive','Invalid requester','Invalid Request','Message Security Error','Stale Request']:
-    if label in page:return 'no-response:'+label
-   if code>=400 and p.urlparse(url).port in {18180,18280,18380} and 'cookie not found' not in page.lower():return 'no-response:HTTP-'+str(code)
+    if label in page:
+     if terminal_observer is not None: terminal_observer(url,page,code,label)
+     return 'no-response:'+label
+   if code>=400 and p.urlparse(url).port in {18180,18280,18380} and 'cookie not found' not in page.lower():
+    if terminal_observer is not None: terminal_observer(url,page,code,'HTTP-'+str(code))
+    return 'no-response:HTTP-'+str(code)
    print('unhandled location',p.urlparse(url).path,'status',code,flush=True)
    return 'unhandled-page-http-'+str(code)
   raise RuntimeError('Form hop limit')

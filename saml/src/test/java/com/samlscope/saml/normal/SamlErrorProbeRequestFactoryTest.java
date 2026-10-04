@@ -105,6 +105,36 @@ class SamlErrorProbeRequestFactoryTest {
                 request(Probe.SUBMILLISECOND_ISSUE_INSTANT).getDocumentElement().getAttribute("IssueInstant"));
     }
 
+    @Test
+    void extensionAndAnyAttributeProbesCoverEveryApprovedPlacement() {
+        var protocol = request(Probe.UNKNOWN_EXTENSION);
+        var advice = request(Probe.UNKNOWN_ADVICE_EXTENSION);
+        var metadata = request(Probe.UNKNOWN_METADATA_EXTENSION);
+        var confirmation = request(Probe.UNKNOWN_ANY_ATTRIBUTE);
+        var attribute = request(Probe.UNKNOWN_ATTRIBUTE_ANY_ATTRIBUTE);
+
+        assertEquals("protocol-extensions", onlyUnknown(protocol).getAttribute("placement"));
+        assertEquals(1, advice.getElementsByTagNameNS(assertion(), "Advice").getLength());
+        assertEquals("assertion-advice", onlyUnknown(advice).getAttribute("placement"));
+        assertEquals(1, metadata.getElementsByTagNameNS(metadata(), "Extensions").getLength());
+        assertEquals("metadata-extensions", onlyUnknown(metadata).getAttribute("placement"));
+        assertEquals(1, confirmation.getElementsByTagNameNS(assertion(), "SubjectConfirmationData").getLength());
+        assertTrue(((org.w3c.dom.Element) confirmation.getElementsByTagNameNS(
+                assertion(), "SubjectConfirmationData").item(0)).hasAttributeNS(
+                        "urn:samlscope:probe:unknown-attribute", "fixture"));
+        assertEquals(1, attribute.getElementsByTagNameNS(assertion(), "Attribute").getLength());
+        assertTrue(((org.w3c.dom.Element) attribute.getElementsByTagNameNS(
+                assertion(), "Attribute").item(0)).hasAttributeNS(
+                        "urn:samlscope:probe:unknown-attribute", "fixture"));
+    }
+
+    private org.w3c.dom.Element onlyUnknown(org.w3c.dom.Document document) {
+        var values = document.getElementsByTagNameNS(
+                "urn:samlscope:probe:unknown-extension", "UnknownExtension");
+        assertEquals(1, values.getLength());
+        return (org.w3c.dom.Element) values.item(0);
+    }
+
     private org.w3c.dom.Document request(Probe probe) {
         return SecureXml.parse(factory.build(
                 probe, "_request", URI.create("https://idp.example/sso"), "https://suite.example/sp",
@@ -112,4 +142,6 @@ class SamlErrorProbeRequestFactoryTest {
     }
 
     private String protocol() { return "urn:oasis:names:tc:SAML:2.0:protocol"; }
+    private String assertion() { return "urn:oasis:names:tc:SAML:2.0:assertion"; }
+    private String metadata() { return "urn:oasis:names:tc:SAML:2.0:metadata"; }
 }

@@ -15,7 +15,7 @@ import com.samlscope.store.*;
 
 class RecordedEvidenceReevaluationTest {
     @TempDir java.nio.file.Path directory;
-    private static final String RUN = "run_evidence";
+    private static final String RUN = "run_0123456789ABCDEFGHJKMNPQRS";
     private static final Instant NOW = Instant.parse("2026-09-14T00:00:00Z");
 
     @Test void lateEvidenceUpdatesTheResultOnceAndArchivesTheOriginalWithoutSending() {
@@ -84,10 +84,14 @@ class RecordedEvidenceReevaluationTest {
         }
     }
 
-    @Test void metadataConsumerReevaluationAlsoRequiresFreshConclusiveEvidence() {
+    @Test void metadataConsumerReevaluationAlsoRequiresFreshConclusiveEvidence() throws Exception {
+        MetadataSignatureVerificationTestSupport.writeReceipt(directory, RUN, receipt -> receipt);
         var test = new MetadataConsumerObservationTestCase("consumer", TargetRole.IDP,
-                MetadataConsumerObservationTestCase.Rule.OMITTED_KEY_INFO);
-        var entries = new ArrayList<>(List.of(fetch("control", 1), use("control", 2), fetch("no-key-info", 3)));
+                MetadataConsumerObservationTestCase.Rule.OMITTED_KEY_INFO,
+                MetadataSignatureVerificationTestSupport.content(),
+                runId -> MetadataSignatureVerificationTestSupport.TARGET, directory);
+        var entries = new ArrayList<>(MetadataSignatureVerificationTestSupport.withCorrelation(
+                List.of(fetch("control", 1), use("control", 2), fetch("no-key-info", 3)), RUN));
         var context = context(entries, true);
         var state = ((CaseStep.AwaitConfig) test.start(context)).next();
         var previous = ((CaseStep.Finish) test.resume(context, state, new CaseEvent.ConfigConfirmed())).outcome();

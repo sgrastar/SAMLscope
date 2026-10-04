@@ -220,6 +220,43 @@ class LogoutTranscriptProfileCaseTest {
                 LogoutTranscriptProfileCase.Rule.REDIRECT_LOGOUT_REQUEST_ACCEPTED));
     }
 
+    @Test
+    void suiteSelectedResponseBindingCannotViolateTheTargetsRedirectSupport() {
+        for (var requestMethod : List.of("POST", "GET")) {
+            var requestXml = request("_target-request", "2.0", "");
+            var test = fixture(new Entry("target-request", Direction.INBOUND, requestMethod, requestXml,
+                            requestMethod.equals("GET") ? redirectQuery(requestXml) : null,
+                            Map.of("type", "LogoutRequest")),
+                    new Entry("suite-response", Direction.OUTBOUND, "POST",
+                            response("_suite-response", "2.0", "_target-request", success()), null,
+                            Map.of("type", "LogoutResponse",
+                                    "binding", "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST")));
+            var outcome = test.result(LogoutTranscriptProfileCase.Rule.TARGET_REDIRECT_RESPONSE_CONSUMED, null);
+            assertEquals(Outcome.NOT_VERIFIED, outcome.outcome(), requestMethod);
+            assertEquals("slo.redirect-response.fixture-binding-unavailable", outcome.reasonCode());
+        }
+    }
+
+    @Test
+    void laterBrowserFailureDoesNotProveRefusalOfTheRedirectLogoutResponse() {
+        for (var landing : List.of("https://unrelated.example/error", "https://target.example/logout")) {
+            var test = fixture(new Entry("target-request", Direction.INBOUND, "POST",
+                            request("_target-request", "2.0", ""), null, Map.of("type", "LogoutRequest")),
+                    new Entry("suite-response", Direction.OUTBOUND, "POST",
+                            response("_suite-response", "2.0", "_target-request", success()), null,
+                            Map.of("type", "LogoutResponse",
+                                    "binding", "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect")),
+                    new Entry("failed-page", Direction.INBOUND, "BROWSER", null, null,
+                            Map.of("type", "BrowserResponseObservation", "http_status", 500,
+                                    "failure_indicated", true), landing));
+            var outcome = test.result(LogoutTranscriptProfileCase.Rule.TARGET_REDIRECT_RESPONSE_CONSUMED, null);
+            assertEquals(Outcome.NOT_VERIFIED, outcome.outcome(), landing);
+            assertEquals("slo.redirect-response.consumption-unobserved", outcome.reasonCode());
+            org.junit.jupiter.api.Assertions.assertFalse(outcome.evidence().stream()
+                    .anyMatch(ref -> ref.reference().equals("transcript:failed-page")));
+        }
+    }
+
     private String redirectQuery(String xml) {
         try {
             var output = new java.io.ByteArrayOutputStream();
@@ -331,19 +368,7 @@ class LogoutTranscriptProfileCaseTest {
 
     @Test
     void propagationContinuesOnlyWithinOneCorrelatedLogoutProcessing() {
-        var continued = fixture(
-                new Entry("initiator", Direction.OUTBOUND, "POST",
-                        request("_init", "2.0", ""), null, Map.of("type", "LogoutRequest")),
-                new Entry("fail", Direction.INBOUND, "POST",
-                        request("_fail", "2.0", ""), null,
-                        Map.of("type", "SloFailParticipant", "http_status", 500), "https://suite.example/sp/slo-fail"),
-                new Entry("remain", Direction.INBOUND, "POST",
-                        request("_remain", "2.0", "<samlp:SessionIndex>other-sp-index</samlp:SessionIndex>"), null,
-                        Map.of("type", "LogoutRequest"), "https://suite.example/sp/slo"),
-                new Entry("answered", Direction.OUTBOUND, "POST",
-                        response("_answer", "2.0", "_remain", success()), null, Map.of("type", "LogoutResponse")),
-                new Entry("final", Direction.INBOUND, "POST",
-                        response("_final", "2.0", "_init", success()), null, Map.of("type", "LogoutResponse")));
+        var continued = fixture(propagationChain().toArray(Entry[]::new));
         assertEquals(Outcome.SATISFIED,
                 continued.evaluate(LogoutTranscriptProfileCase.Rule.TARGET_PROPAGATION_CONTINUE));
         // evidence after the correlated final response is outside the processing window
@@ -492,6 +517,129 @@ class LogoutTranscriptProfileCaseTest {
                 straggler.evaluate(LogoutTranscriptProfileCase.Rule.TARGET_PROPAGATION_CONTINUE));
     }
 
+    @Test
+    void continuationRequiresItsOwnResponseAndRecordedEndpoints() {
+        for (var fault : List.of("unrelated-response", "wrong-response-endpoint",
+                "wrong-request-endpoint", "duplicate-request-id", "false-http-status")) {
+            var chain = new ArrayList<>(propagationChain());
+            if (fault.equals("unrelated-response")) {
+                var entry = chain.get(3);
+                chain.set(3, new Entry(entry.id(), entry.direction(), entry.method(),
+                        entry.xml().replace("InResponseTo=\"_remain\"", "InResponseTo=\"_other\""),
+                        entry.rawQuery(), entry.samlSummary(), entry.url()));
+            } else if (fault.equals("wrong-response-endpoint")) {
+                var entry = chain.get(3);
+                chain.set(3, new Entry(entry.id(), entry.direction(), entry.method(), entry.xml(),
+                        entry.rawQuery(), entry.samlSummary(), "https://other.example/logout"));
+            } else if (fault.equals("wrong-request-endpoint")) {
+                var entry = chain.get(2);
+                chain.set(2, new Entry(entry.id(), entry.direction(), entry.method(), entry.xml(),
+                        entry.rawQuery(), entry.samlSummary(), "https://suite.example/other-participant"));
+            } else if (fault.equals("duplicate-request-id")) {
+                var entry = chain.get(2);
+                chain.add(3, new Entry("duplicate", entry.direction(), entry.method(), entry.xml(),
+                        entry.rawQuery(), entry.samlSummary(), entry.url()));
+            }
+            var test = fixture(chain.toArray(Entry[]::new));
+            if (fault.equals("false-http-status")) {
+                var entry = test.entries.get(1);
+                test.entries.set(1, new TranscriptEntry(entry.id(), entry.runId(), entry.direction(),
+                        entry.timestamp(), entry.correlationId(), entry.method(), entry.url(), 200,
+                        entry.headers(), entry.bodyRef(), entry.bodyBytes(), entry.decodedSamlRef(),
+                        entry.decodedSamlBytes(), entry.contentType(), entry.rawQuery(), entry.samlSummary()));
+            }
+            assertEquals(Outcome.NOT_VERIFIED,
+                    test.evaluate(LogoutTranscriptProfileCase.Rule.TARGET_PROPAGATION_CONTINUE), fault);
+        }
+        var result = fixture(propagationChain().toArray(Entry[]::new)).result(
+                LogoutTranscriptProfileCase.Rule.TARGET_PROPAGATION_CONTINUE, null);
+        assertEquals(Outcome.SATISFIED, result.outcome());
+        org.junit.jupiter.api.Assertions.assertTrue(result.evidence().stream()
+                .anyMatch(ref -> ref.reference().equals("transcript:answered")));
+    }
+
+    @Test
+    void separateCompleteProcessingsWithTheirOwnParticipantsCanBeBatched() {
+        var first = propagationChain();
+        var batch = new ArrayList<>(first);
+        for (var entry : first) {
+            batch.add(new Entry(entry.id() + "2", entry.direction(), entry.method(),
+                    entry.xml().replace("_init", "_init2").replace("_fail", "_fail2")
+                            .replace("_remain", "_remain2").replace("_answer", "_answer2")
+                            .replace("_final", "_final2").replace("suite.example/sp/", "suite.example/second/"),
+                    entry.rawQuery(), entry.samlSummary(), entry.url() == null ? null
+                            : entry.url().replace("suite.example/sp/", "suite.example/second/")));
+        }
+        assertEquals(Outcome.SATISFIED, fixture(batch.toArray(Entry[]::new))
+                .evaluate(LogoutTranscriptProfileCase.Rule.TARGET_PROPAGATION_CONTINUE));
+    }
+
+    @Test
+    void endpointsSharedAcrossLogoutProcessingsRemainAmbiguous() {
+        var first = propagationChain();
+        var batch = new ArrayList<>(first);
+        for (var entry : first) {
+            batch.add(new Entry(entry.id() + "2", entry.direction(), entry.method(),
+                    entry.xml().replace("_init", "_init2").replace("_fail", "_fail2")
+                            .replace("_remain", "_remain2").replace("_answer", "_answer2")
+                            .replace("_final", "_final2").replace("other-sp-index", "another-session"),
+                    entry.rawQuery(), entry.samlSummary(), entry.url()));
+        }
+        assertEquals(Outcome.NOT_VERIFIED, fixture(batch.toArray(Entry[]::new))
+                .evaluate(LogoutTranscriptProfileCase.Rule.TARGET_PROPAGATION_CONTINUE));
+    }
+
+    @Test
+    void unrelatedCompletedNormalLogoutDoesNotRequireFailureInduction() {
+        var batch = new ArrayList<Entry>();
+        batch.add(new Entry("normal-request", Direction.OUTBOUND, "POST", request("_normal", "2.0", ""),
+                null, Map.of("type", "LogoutRequest")));
+        batch.add(new Entry("normal-response", Direction.INBOUND, "POST",
+                response("_normal-final", "2.0", "_normal", success()), null, Map.of("type", "LogoutResponse")));
+        batch.addAll(propagationChain());
+        assertEquals(Outcome.SATISFIED, fixture(batch.toArray(Entry[]::new))
+                .evaluate(LogoutTranscriptProfileCase.Rule.TARGET_PROPAGATION_CONTINUE));
+    }
+
+    @Test
+    void targetLocalActivityWithoutProcessingBoundaryStaysUnverified() {
+        var chain = new ArrayList<>(propagationChain());
+        chain.removeLast();
+        chain.removeFirst();
+        assertEquals(Outcome.NOT_VERIFIED, fixture(chain.toArray(Entry[]::new))
+                .evaluate(LogoutTranscriptProfileCase.Rule.TARGET_PROPAGATION_CONTINUE));
+    }
+
+    @Test
+    void uncompletedOlderInitiatorCannotBeMixedWithLaterProcessing() {
+        var chain = new ArrayList<>(propagationChain());
+        chain.addFirst(new Entry("older", Direction.OUTBOUND, "POST", request("_older", "2.0", ""),
+                null, Map.of("type", "LogoutRequest"), "https://target.example/logout"));
+        assertEquals(Outcome.NOT_VERIFIED, fixture(chain.toArray(Entry[]::new))
+                .evaluate(LogoutTranscriptProfileCase.Rule.TARGET_PROPAGATION_CONTINUE));
+    }
+
+    private List<Entry> propagationChain() {
+        return List.of(
+                new Entry("initiator", Direction.OUTBOUND, "POST", request("_init", "2.0", ""),
+                        null, Map.of("type", "LogoutRequest"), "https://target.example/logout"),
+                new Entry("fail", Direction.INBOUND, "POST", withDestination(request("_fail", "2.0", ""),
+                        "https://suite.example/sp/slo-fail"), null,
+                        Map.of("type", "SloFailParticipant", "http_status", 500), "https://suite.example/sp/slo-fail"),
+                new Entry("remain", Direction.INBOUND, "POST", withDestination(request("_remain", "2.0",
+                        "<samlp:SessionIndex>other-sp-index</samlp:SessionIndex>"), "https://suite.example/sp/slo"),
+                        null, Map.of("type", "LogoutRequest"), "https://suite.example/sp/slo"),
+                new Entry("answered", Direction.OUTBOUND, "POST", withDestination(
+                        response("_answer", "2.0", "_remain", success()), "https://target.example/logout"),
+                        null, Map.of("type", "LogoutResponse"), "https://target.example/logout"),
+                new Entry("final", Direction.INBOUND, "POST", response("_final", "2.0", "_init", success()),
+                        null, Map.of("type", "LogoutResponse")));
+    }
+
+    private String withDestination(String xml, String destination) {
+        return xml.replace(" IssueInstant=", " Destination=\"" + destination + "\" IssueInstant=");
+    }
+
     private TranscriptEntry altered(TranscriptEntry e, String run, String decodedRef, int bytes, Map<String, Object> summary) {
         return new TranscriptEntry(e.id(), run, e.direction(), e.timestamp(), e.correlationId(), e.method(), e.url(),
                 e.status(), e.headers(), e.bodyRef(), e.bodyBytes(), decodedRef, bytes, e.contentType(), e.rawQuery(), summary);
@@ -555,7 +703,8 @@ class LogoutTranscriptProfileCaseTest {
                         value.id(), RUN, value.direction(), Instant.parse("2026-08-29T00:00:00Z").plusSeconds(sequence++),
                         "corr", value.method(),
                         value.url() == null ? "https://suite.example/slo" : value.url(),
-                        200, Map.of(), null, 0,
+                        Integer.valueOf(500).equals(value.samlSummary().get("http_status")) ? 500 : 200,
+                        Map.of(), null, 0,
                         reference, bytes.length, "application/xml", value.rawQuery(), value.samlSummary()));
                 content.put(reference, bytes);
             }

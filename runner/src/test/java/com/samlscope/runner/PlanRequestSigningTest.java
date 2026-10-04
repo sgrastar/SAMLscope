@@ -27,6 +27,76 @@ class PlanRequestSigningTest {
                 TestPlan.Interaction.defaults(), NOW, NOW);
     }
 
+    @Test void perActionDirectiveSignsAndOmitsOnlyTheApprovedComparisonFixtures() {
+        var target = URI.create("https://idp.example/sso");
+        var xml = new SamlNameIdPolicyRequestFactory().build("_request", target,
+                "https://suite.example/sp", URI.create("https://suite.example/acs"), NOW,
+                new SamlNameIdPolicyRequestFactory.Policy(
+                        true, SamlNameIdPolicyRequestFactory.PERSISTENT, "qualifier", true));
+
+        var optionalDb = new SqliteDatabase(directory.resolve("force-sign"));
+        var optionalJson = new JsonCodec();
+        var optionalPlans = new SqlitePlanRepository(optionalDb, optionalJson);
+        var optionalRuns = new SqliteRunRepository(optionalDb, optionalJson);
+        var optionalPlan = plan(TestPlan.RequestSigningMode.OPTIONAL);
+        optionalPlans.save(optionalPlan);
+        optionalRuns.save(new TestRun(RUN, optionalPlan.id(), RunStatus.RUNNING,
+                Reachability.UNKNOWN, Map.of(), NOW, NOW));
+        var optionalKeys = new FilePlanKeyStore(directory.resolve("force-sign-keys"), Clock.fixed(NOW, ZoneOffset.UTC));
+        var require = new OutboundAction(
+                "action-require", OutboundKind.AUTHN_REQUEST, xml, target, false,
+                OutboundAction.RequestSigning.REQUIRE);
+        var required = new PlanRequestSigning(optionalPlans, optionalRuns, optionalKeys).apply(RUN, require);
+        assertTrue(new XmlSignatureVerifier().hasValidEnvelopedSignature(
+                SecureXml.parse(required.payload()).getDocumentElement(),
+                optionalKeys.getOrCreate(optionalPlan.id()).certificate()));
+        assertEquals(OutboundAction.RequestSigning.REQUIRE, required.requestSigning());
+
+        var requiredDb = new SqliteDatabase(directory.resolve("omit-idp12b"));
+        var requiredJson = new JsonCodec();
+        var requiredPlans = new SqlitePlanRepository(requiredDb, requiredJson);
+        var requiredRuns = new SqliteRunRepository(requiredDb, requiredJson);
+        var requiredPlan = plan(TestPlan.RequestSigningMode.REQUIRED);
+        requiredPlans.save(requiredPlan);
+        requiredRuns.save(new TestRun(RUN, requiredPlan.id(), RunStatus.RUNNING,
+                Reachability.UNKNOWN, Map.of(), NOW, NOW));
+        var omit = new OutboundAction(
+                "action-omit", OutboundKind.AUTHN_REQUEST, xml, target, false,
+                OutboundAction.RequestSigning.OMIT_FOR_IDP12_B);
+        var omitted = new PlanRequestSigning(
+                requiredPlans, requiredRuns,
+                new FilePlanKeyStore(directory.resolve("omit-idp12b-keys"), Clock.fixed(NOW, ZoneOffset.UTC)))
+                .apply(RUN, omit);
+        assertArrayEquals(xml, omitted.payload());
+        assertEquals(OutboundAction.RequestSigning.OMIT_FOR_IDP12_B, omitted.requestSigning());
+        assertThrows(IllegalArgumentException.class, () -> new OutboundAction(
+                "wrong-kind", OutboundKind.LOGOUT_REQUEST, xml, target, false,
+                OutboundAction.RequestSigning.OMIT_FOR_IDP12_B));
+    }
+
+    @Test void actionSigningDirectiveRoundTripsAndLegacyJsonDefaultsToPlanPolicy() {
+        var json = new JsonCodec();
+        var action = new OutboundAction(
+                "action", OutboundKind.AUTHN_REQUEST, new byte[] {1, 2, 3},
+                URI.create("https://idp.example/sso"), false,
+                OutboundAction.RequestSigning.REQUIRE);
+        assertEquals(OutboundAction.RequestSigning.REQUIRE,
+                json.read(json.write(action), OutboundAction.class).requestSigning());
+
+        var defaultAction = new OutboundAction(
+                "legacy", OutboundKind.AUTHN_REQUEST, new byte[] {4},
+                URI.create("https://idp.example/sso"), false);
+        var legacyJson = json.write(defaultAction)
+                .replace(",\"requestSigning\":\"PLAN_DEFAULT\"", "");
+        assertFalse(legacyJson.contains("requestSigning"));
+        assertEquals(OutboundAction.RequestSigning.PLAN_DEFAULT,
+                json.read(legacyJson, OutboundAction.class).requestSigning());
+        var nullDirectiveJson = json.write(defaultAction)
+                .replace("\"requestSigning\":\"PLAN_DEFAULT\"", "\"requestSigning\":null");
+        assertEquals(OutboundAction.RequestSigning.PLAN_DEFAULT,
+                json.read(nullDirectiveJson, OutboundAction.class).requestSigning());
+    }
+
     @Test void signsNormalRequestsAndPreservesBrokenSignaturesInThePersistedOutbox() {
         var clock = Clock.fixed(NOW, ZoneOffset.UTC);
         var db = new SqliteDatabase(directory);
@@ -115,6 +185,38 @@ class PlanRequestSigningTest {
             assertTrue(new XmlSignatureVerifier().hasValidEnvelopedSignature(storedRoot,keys.getOrCreate(plan.id()).certificate()));
             if (probe.name().contains("_LITERAL_")) assertTrue(new String(saved,java.nio.charset.StandardCharsets.UTF_8)
                     .contains(probe.name().contains("TAB") ? "a\tb" : "a\nb"));
+        }
+    }
+
+    @Test void requiredSigningKeepsApprovedDtdOnWireWithoutParsingIt() {
+        var clock = Clock.fixed(NOW, ZoneOffset.UTC);
+        var db = new SqliteDatabase(directory);
+        var json = new JsonCodec();
+        var plans = new SqlitePlanRepository(db, json);
+        var runs = new SqliteRunRepository(db, json);
+        var plan = plan(TestPlan.RequestSigningMode.REQUIRED);
+        plans.save(plan);
+        runs.save(new TestRun(RUN, plan.id(), RunStatus.RUNNING, Reachability.UNKNOWN, Map.of(), NOW, NOW));
+        var keys = new FilePlanKeyStore(directory, clock);
+        var signing = new PlanRequestSigning(plans, runs, keys);
+        var destination = URI.create("https://idp.example/sso");
+        for (var probe : List.of(SamlErrorProbeRequestFactory.Probe.DTD_AUTHN_REQUEST,
+                SamlErrorProbeRequestFactory.Probe.DTD_EXTERNAL_ENTITY_AUTHN_REQUEST)) {
+            var original = new SamlErrorProbeRequestFactory().build(probe, "_request", destination,
+                    "https://suite.example/sp", URI.create("https://suite.example/acs"), NOW);
+            var action = new OutboundAction("action", OutboundKind.AUTHN_REQUEST, original, destination, false);
+            var signed = signing.apply(RUN, action);
+            var wire = new String(signed.payload(), java.nio.charset.StandardCharsets.UTF_8);
+            assertTrue(wire.contains("<!DOCTYPE samlp:AuthnRequest"));
+            if (probe == SamlErrorProbeRequestFactory.Probe.DTD_EXTERNAL_ENTITY_AUTHN_REQUEST) {
+                assertTrue(wire.contains("<!ENTITY % samlscope SYSTEM"));
+                assertTrue(wire.contains("%samlscope;"));
+            }
+            var parsed = SecureXml.parse(wire.replaceFirst("<!DOCTYPE samlp:AuthnRequest(?: \\[.*?\\])?>", "")
+                    .getBytes(java.nio.charset.StandardCharsets.UTF_8)).getDocumentElement();
+            assertTrue(new XmlSignatureVerifier().hasValidEnvelopedSignature(
+                    parsed, keys.getOrCreate(plan.id()).certificate()));
+            assertEquals("_request", parsed.getAttribute("ID"));
         }
     }
 

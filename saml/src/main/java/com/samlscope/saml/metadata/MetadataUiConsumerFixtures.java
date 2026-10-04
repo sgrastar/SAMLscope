@@ -77,6 +77,9 @@ final class MetadataUiConsumerFixtures {
         info.appendChild(unknown);
 
         var hints = ui(doc, "DiscoHints");
+        // This sibling is outside UIInfo's namespace scope. Bind its prefix before
+        // signing so serialization does not add a declaration after the digest.
+        hints.setAttributeNS(XMLConstants.XMLNS_ATTRIBUTE_NS_URI, "xmlns:mdui", UI);
         for (var hint : java.util.List.of("2001:db8::/32", "192.0.2.0/24")) {
             var ipHint = ui(doc, "IPHint");
             ipHint.setTextContent(hint);
@@ -92,7 +95,9 @@ final class MetadataUiConsumerFixtures {
         hintsUnknown.setAttributeNS(XMLConstants.XMLNS_ATTRIBUTE_NS_URI, "xmlns:geotest", "urn:samlscope:test:geo-extension");
         hintsUnknown.setTextContent("disco-hints-extension");
         hints.appendChild(hintsUnknown);
-        info.appendChild(hints);
+        // DiscoHints belongs to role/Extensions, alongside UIInfo (MetaUI §2.2).
+        // UIInfo only permits its declared elements and extensions from other namespaces.
+        info.getParentNode().appendChild(hints);
         return entity;
     }
 

@@ -25,10 +25,43 @@ public final class ApprovedBrowserCaseRegistry {
     public static TestCaseRegistry withNativeEcSignature(TestCaseRegistry registry, TranscriptContentReader content,
             java.util.function.Function<String, byte[]> metadata, java.nio.file.Path directory) {
         var nativeEvidence=new NativeEcSignatureEvidence(directory,content,metadata);
-        return new TestCaseRegistry(registry.all().stream().map(testCase ->
+        var cases = new ArrayList<com.samlscope.core.caseexec.TestCase>(registry.all().stream().map(testCase ->
                 EcSignatureSupportTestCase.ID.equals(testCase.id())
                         ? (com.samlscope.core.caseexec.TestCase)new EcSignatureSupportTestCase(nativeEvidence)
+                        : testCase instanceof IdpVersionMismatchScenarioTestCase versionMismatch
+                        ? versionMismatch.withNativeEvidence(directory.getParent().resolve("version-mismatch-evidence"),
+                                content, metadata)
+                        : testCase instanceof IdpExecutableBrowserFixtureScenarioTestCase scenario
+                            && IdpExecutableBrowserFixtureScenarioTestCase.G03_CASE.equals(testCase.id())
+                        ? scenario.withNativeDtdEvidence(directory.getParent().resolve("dtd-rejection-evidence"),
+                                content, metadata)
+                        : testCase instanceof IdpExecutableBrowserFixtureScenarioTestCase scenario
+                            && PersistentPairwiseNameIdEvidence.CASE.equals(testCase.id())
+                        ? new PersistentPairwiseQueuedTestCase(scenario.withPersistentPairwiseEvidence(
+                                directory.getParent().resolve("persistent-nameid-evidence"), content, metadata))
+                        : testCase instanceof IdpExecutableBrowserFixtureScenarioTestCase scenario
+                            && RequestedSubjectMatchTestCase.CASE.equals(testCase.id())
+                        ? scenario.withRequestedSubjectMatchEvidence(directory.getParent().resolve("subject-match-evidence"),
+                                content, metadata)
+                        : testCase instanceof TransientAllowCreateScenarioTestCase scenario
+                        ? scenario.withNativeEvidence(directory.getParent().resolve("transient-allow-create-evidence"),
+                                content, metadata)
+                        : testCase instanceof SamlSubjectPrincipalTranscriptTestCase
+                            && SamlSubjectPrincipalTranscriptTestCase.CASE_ID.equals(testCase.id())
+                        ? new NativeSubjectPrincipalTestCase(testCase,
+                                directory.getParent().resolve("subject-principal-evidence"), content, metadata)
                         : testCase).toList());
+        // M1 passive cases are created by QuickCheckService, outside this runtime registry.
+        // Register the original-backed observer here so an existing FINISHED, unresolved
+        // principal case can be re-evaluated through the same auditable evidence service.
+        // Starting is idempotent for that existing execution and emits no outbox action.
+        if (cases.stream().noneMatch(testCase -> SamlSubjectPrincipalTranscriptTestCase.CASE_ID.equals(testCase.id()))) {
+            var fallback = new SamlSubjectPrincipalTranscriptTestCase(content,
+                    (run, identifier) -> PrincipalIdentityResolver.Resolution.unknown());
+            cases.add(new NativeSubjectPrincipalTestCase(fallback,
+                    directory.getParent().resolve("subject-principal-evidence"), content, metadata));
+        }
+        return new TestCaseRegistry(cases);
     }
 
     public static TestCaseRegistry withNativeSignedRequests(TestCaseRegistry registry,TranscriptContentReader content,
@@ -56,17 +89,37 @@ public final class ApprovedBrowserCaseRegistry {
 
     public static TestCaseRegistry withNativeUiDisplay(TestCaseRegistry registry, TranscriptContentReader content,
             java.util.function.Function<String, byte[]> metadata, java.nio.file.Path directory) {
+        var nativeAbsence = new NativeUiFeatureAbsenceEvidence(
+                directory.getParent().resolve("ui-native-feature-absence"), content);
         return new TestCaseRegistry(registry.all().stream().map(testCase ->
                 UiDisplayComparison.CASE_ID.equals(testCase.id())
-                        ? (com.samlscope.core.caseexec.TestCase)new UiDisplayBrowserEvidenceTestCase(content, metadata, directory)
+                        ? (com.samlscope.core.caseexec.TestCase)new NativeUiFeatureAbsenceTestCase(
+                                new UiDisplayBrowserEvidenceTestCase(content, metadata, directory),
+                                metadata, nativeAbsence)
                         : testCase).toList());
     }
 
     public static TestCaseRegistry withNativeUiUrls(TestCaseRegistry registry, TranscriptContentReader content,
             java.util.function.Function<String, byte[]> metadata, java.nio.file.Path directory) {
+        var nativeAbsence = new NativeUiFeatureAbsenceEvidence(
+                directory.getParent().resolve("ui-native-feature-absence"), content);
+        var nativeShibboleth = new ShibbolethUiConsumerEvidence(directory, content);
+        var nativeSimpleSamlPhp = new SimpleSamlPhpConsentSafetyEvidence(
+                directory.resolveSibling("ui-safety-evidence"), content);
+        var nativeSimpleSamlPhpUri = new SimpleSamlPhpConsentUriEvidence(
+                directory.resolveSibling("ui-consent-uri-evidence"), content);
+        var nativeKeycloakSafety = new KeycloakUiSafetyEvidence(
+                directory.getParent().resolve("ui-native-feature-absence"), content);
         return new TestCaseRegistry(registry.all().stream().map(testCase ->
                 UiUrlComparison.CASE_ID.equals(testCase.id())
                         ? (com.samlscope.core.caseexec.TestCase)new UiUrlBrowserEvidenceTestCase(content, metadata, directory)
+                        : NativeUiFeatureAbsenceEvidence.DISCOVERY.equals(testCase.id())
+                        ? (com.samlscope.core.caseexec.TestCase)new NativeUiFeatureAbsenceTestCase(
+                                testCase, metadata, nativeAbsence, nativeShibboleth, nativeSimpleSamlPhpUri)
+                        : NativeUiSafetyTestCase.CASE.equals(testCase.id())
+                            && testCase instanceof IdpExecutableBrowserFixtureScenarioTestCase scenario
+                        ? new NativeUiSafetyTestCase(scenario, nativeShibboleth, nativeSimpleSamlPhp,
+                                nativeKeycloakSafety, metadata)
                         : testCase).toList());
     }
 
@@ -90,7 +143,29 @@ public final class ApprovedBrowserCaseRegistry {
     public static TestCaseRegistry withLogoutScenarios(TestCaseRegistry registry,
             java.util.function.BiFunction<String, String, IdpBasicLogoutScenarioTestCase.Configuration> configurations,
             TranscriptContentReader transcriptContent) {
+        return withLogoutScenarios(registry, configurations, transcriptContent,
+                SuiteRunProfileLookup.configuredDataDirectory());
+    }
+
+    static TestCaseRegistry withLogoutScenarios(TestCaseRegistry registry,
+            java.util.function.BiFunction<String, String, IdpBasicLogoutScenarioTestCase.Configuration> configurations,
+            TranscriptContentReader transcriptContent, java.nio.file.Path dataDirectory) {
+        var data = dataDirectory.toAbsolutePath().normalize();
         return new TestCaseRegistry(registry.all().stream().map(testCase -> {
+            // This seam is applied to the real M3 registry; the M1 EC seam never sees IDP17.s.
+            if (testCase instanceof LogoutBrowserEvidenceTestCase logout
+                    && ShibbolethNativeSloPropagationEvidence.CASE.equals(testCase.id())) {
+                return (com.samlscope.core.caseexec.TestCase) logout.withNativePropagation(
+                        data.resolve("slo-propagation-evidence"), run -> recordedTargetMetadata(data, run));
+            }
+            if (testCase instanceof LogoutBrowserEvidenceTestCase logout
+                    && ShibbolethNativeSloContinuationEvidence.CASE.equals(testCase.id())) {
+                var observed = logout.withNativePropagation(data.resolve("slo-soap-continuation-evidence"),
+                        run -> recordedTargetMetadata(data, run));
+                return (com.samlscope.core.caseexec.TestCase) new SoapSloPropagationTestCase(observed,
+                        run -> configurations.apply(testCase.id(), run), transcriptContent)
+                        .withTargetMetadata(run -> recordedTargetMetadata(data, run));
+            }
             if (LogoutRejectionScenarioTestCase.CASE_IDS.contains(testCase.id())) {
                 return (com.samlscope.core.caseexec.TestCase) new LogoutRejectionScenarioTestCase(
                         testCase.id(), runId -> configurations.apply(testCase.id(), runId), transcriptContent);
@@ -103,11 +178,33 @@ public final class ApprovedBrowserCaseRegistry {
                     IdpBasicLogoutScenarioTestCase.REDIRECT_RESPONSE_ID,
                     IdpBasicLogoutScenarioTestCase.ENCRYPTED_ID, IdpBasicLogoutScenarioTestCase.MULTI_KEY_ID)
                     .contains(testCase.id())) {
-                return (com.samlscope.core.caseexec.TestCase) new IdpBasicLogoutScenarioTestCase(testCase.id(),
-                        runId -> configurations.apply(testCase.id(), runId));
+                java.util.function.Function<String,IdpBasicLogoutScenarioTestCase.Configuration> configured =
+                        runId -> configurations.apply(testCase.id(), runId);
+                var scenario = new IdpBasicLogoutScenarioTestCase(testCase.id(),configured);
+                return IdpBasicLogoutScenarioTestCase.MULTI_KEY_ID.equals(testCase.id())
+                        ? (com.samlscope.core.caseexec.TestCase)new EncryptedLogoutNativeTestCase(scenario,
+                                new SimpleSamlPhpEncryptedLogoutEvidence(data.resolve("encrypted-logout-evidence"),
+                                        transcriptContent,run -> recordedTargetMetadata(data,run),configured))
+                        : scenario;
             }
             return testCase;
         }).toList());
+    }
+
+    private static byte[] recordedTargetMetadata(java.nio.file.Path data, String run) {
+        if (run == null || !run.matches("run_[0-9A-HJKMNP-TV-Z]{26}"))
+            throw new IllegalArgumentException("Invalid native target Run");
+        var file = data.resolve("target-metadata").resolve(run + ".xml");
+        try {
+            for (var path = file; path != null; path = path.getParent())
+                if (java.nio.file.Files.isSymbolicLink(path)) throw new IllegalArgumentException("Symbolic target metadata");
+            if (!java.nio.file.Files.isRegularFile(file, java.nio.file.LinkOption.NOFOLLOW_LINKS)
+                    || java.nio.file.Files.size(file) > 10_485_760)
+                throw new IllegalArgumentException("Recorded target metadata unavailable");
+            return java.nio.file.Files.readAllBytes(file);
+        } catch (java.io.IOException unavailable) {
+            throw new IllegalArgumentException("Recorded target metadata unavailable", unavailable);
+        }
     }
 
     public static TestCaseRegistry withPublishedMetadata(TestCaseRegistry registry,
@@ -289,6 +386,9 @@ public final class ApprovedBrowserCaseRegistry {
             return new IdpNameIdPolicyScenarioTestCase(
                     definition.id(), idpScenarioConfigurations, decryptionKeys);
         }
+        if (idpScenarioConfigurations != null && TransientAllowCreateScenarioTestCase.CASE.equals(definition.id())) {
+            return new TransientAllowCreateScenarioTestCase(idpScenarioConfigurations, decryptionKeys);
+        }
         if (idpScenarioConfigurations != null && List.of(
                 IdpErrorAssertionScenarioTestCase.SUBJECT_ERROR_CASE,
                 IdpErrorAssertionScenarioTestCase.ERROR_ASSERTION_CASE).contains(definition.id())) {
@@ -307,6 +407,12 @@ public final class ApprovedBrowserCaseRegistry {
         if (idpScenarioConfigurations != null
                 && IdpVersionScenarioTestCase.CASE_ID.equals(definition.id())) {
             return new IdpVersionScenarioTestCase(idpScenarioConfigurations);
+        }
+        if (idpScenarioConfigurations != null && suiteCredentials != null && transcriptContent != null
+                && definition.role() == com.samlscope.core.plan.TargetRole.IDP
+                && IdpVersionMismatchScenarioTestCase.CASE_ID.equals(definition.id())) {
+            return new IdpVersionMismatchScenarioTestCase(
+                    idpScenarioConfigurations, suiteCredentials, transcriptContent, decryptionKeys);
         }
         if (idpScenarioConfigurations != null
                 && IdpAuthnContextScenarioTestCase.CASE_ID.equals(definition.id())) {

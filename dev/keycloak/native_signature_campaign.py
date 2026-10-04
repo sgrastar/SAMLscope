@@ -25,6 +25,7 @@ def main():
     parser.add_argument('--profiles',default='browser_sso_idp,metadata_idp,ecp_idp,single_logout_idp')
     parser.add_argument('--scenario',choices=['signed-request','ec-signature','certificate-signature','metadata-key-signature'],default='signed-request')
     parser.add_argument('--playwright-modules',type=Path)
+    parser.add_argument('--verify-request-signatures',action='store_true')
     args=parser.parse_args();out=args.output.resolve();out.mkdir(parents=True,exist_ok=False)
     if args.scenario!='signed-request' and (args.playwright_modules is None or not args.playwright_modules.is_dir()):
         raise ValueError('Metadata import requires an existing --playwright-modules directory')
@@ -80,6 +81,7 @@ def main():
             if args.playwright_modules is None:raise ValueError('Metadata import requires --playwright-modules')
             arguments+=['--playwright-modules',str(args.playwright_modules.resolve()),
                         '--matrix',{'certificate-signature':'certificate','metadata-key-signature':'keys','ec-signature':'ec'}[args.scenario]]
+            if args.verify_request_signatures:arguments.append('--verify-request-signatures')
         subprocess.run(arguments,check=True,timeout=1200)
     finally:
         try:

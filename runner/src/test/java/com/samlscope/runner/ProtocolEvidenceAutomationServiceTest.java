@@ -1,6 +1,7 @@
 package com.samlscope.runner;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.time.Clock;
 import java.time.Instant;
@@ -27,23 +28,28 @@ import com.samlscope.core.transcript.TranscriptEntry;
 import com.samlscope.core.transcript.TranscriptInput;
 import com.samlscope.core.transcript.TranscriptRecorder;
 import com.samlscope.runner.cases.MetadataConsumerObservationTestCase;
+import com.samlscope.runner.cases.MetadataSignatureVerificationTestSupport;
 import com.samlscope.runner.cases.BrowserPrompt;
 import com.samlscope.runner.cases.ProtocolEvidenceCase;
 
 class ProtocolEvidenceAutomationServiceTest {
     private static final String RUN = "run_0123456789ABCDEFGHJKMNPQRS";
     private static final Instant NOW = Instant.parse("2026-08-30T00:00:00Z");
+    @org.junit.jupiter.api.io.TempDir java.nio.file.Path directory;
 
     @Test
-    void advancesOnlyAnEvidenceReadyCaseAndLetsTheCaseDeriveItsOutcome() {
+    void advancesOnlyAnEvidenceReadyCaseAndLetsTheCaseDeriveItsOutcome() throws Exception {
         var repository = new MemoryExecutions();
         var transitions = new CaseExecutionService(repository);
+        MetadataSignatureVerificationTestSupport.writeReceipt(directory, receipt -> receipt);
         var testCase = new MetadataConsumerObservationTestCase(
                 "IIP-MD05-ao-sp-01", TargetRole.SP,
-                MetadataConsumerObservationTestCase.Rule.OMITTED_KEY_INFO);
-        var entries = List.of(
+                MetadataConsumerObservationTestCase.Rule.OMITTED_KEY_INFO,
+                MetadataSignatureVerificationTestSupport.content(),
+                runId -> MetadataSignatureVerificationTestSupport.TARGET, directory);
+        var entries = MetadataSignatureVerificationTestSupport.withCorrelation(List.of(
                 fetch("control", 1), use("control", 2),
-                fetch("no-key-info", 3), use("no-key-info", 4));
+                fetch("no-key-info", 3), use("no-key-info", 4)));
         var context = context(entries);
         transitions.start(RUN, testCase, context);
         var service = new ProtocolEvidenceAutomationService(
@@ -183,6 +189,226 @@ class ProtocolEvidenceAutomationServiceTest {
         assertEquals(true,CaseExecutionService.isQueuedFrontChannel(repository.find(RUN,testCase.id()).orElseThrow()));
     }
 
+    @Test
+    void statusProjectsLegacyInteractionFreeWaitsWithoutChangingThem() {
+        for (var status : legacyStatuses()) {
+            var repository = new MemoryExecutions();
+            var testCase = new InteractionFreeCase(false);
+            var original = legacyExecution(testCase.id(), status, false);
+            repository.values.put(RUN + "|" + testCase.id(), original);
+            var service = new ProtocolEvidenceAutomationService(repository,
+                    new TestCaseRegistry(List.of(testCase)), new CaseExecutionService(repository),
+                    ignored -> context(List.of(), TargetRole.IDP));
+
+            var projection = service.status(RUN);
+
+            assertEquals(1, projection.eligibleCases());
+            assertEquals(0, projection.readyCases(), "absence is not evidence readiness");
+            assertEquals(List.of("native-mechanism-trace"),
+                    projection.cases().getFirst().requiredObservations());
+            assertEquals(original, repository.find(RUN, testCase.id()).orElseThrow());
+            assertEquals(0, repository.outboundActions);
+            assertEquals(0, testCase.outcomeCalls);
+        }
+    }
+
+    @Test
+    void concludesObsoleteWaitsAsNotVerifiedWithoutAdditionalOperations() {
+        for (var status : legacyStatuses()) {
+            for (var attemptsConfirmed : List.of(false, true)) {
+                var repository = new MemoryExecutions();
+                var testCase = new InteractionFreeCase(false);
+                var original = legacyExecution(testCase.id(), status, false);
+                repository.values.put(RUN + "|" + testCase.id(), original);
+                var oldAction = oldOutbox(testCase.id());
+                repository.outbox.add(oldAction);
+                var service = new ProtocolEvidenceAutomationService(repository,
+                        new TestCaseRegistry(List.of(testCase)), new CaseExecutionService(repository),
+                        ignored -> context(List.of(), TargetRole.IDP));
+
+                var evaluation = attemptsConfirmed ? service.evaluateAttempted(RUN) : service.evaluateReady(RUN);
+
+                assertEquals(List.of(new ProtocolEvidenceAutomationService.CompletedCase(
+                        testCase.id(), Outcome.NOT_VERIFIED)), evaluation.completed());
+                var finished = repository.find(RUN, testCase.id()).orElseThrow();
+                assertEquals(CaseExecutionStatus.FINISHED, finished.status());
+                assertEquals(original.revision() + 1, finished.revision());
+                assertEquals(original.state(), finished.state());
+                assertEquals(null, finished.waitCondition());
+                assertEquals("native-mechanism.unproven", finished.outcome().reasonCode());
+                assertEquals(0, repository.outboundActions);
+                assertEquals(List.of(oldAction), repository.listOutbox(RUN));
+                assertEquals(List.of(), service.evaluateReady(RUN).completed());
+                assertEquals(finished, repository.find(RUN, testCase.id()).orElseThrow());
+            }
+        }
+    }
+
+    @Test
+    void expiredObsoleteWaitsFinishFromEvidenceWithoutRequiringUserRecovery() {
+        for (var status : List.of(CaseExecutionStatus.WAITING_BROWSER, CaseExecutionStatus.WAITING_INBOUND)) {
+            var repository = new MemoryExecutions();
+            var testCase = new InteractionFreeCase(false);
+            repository.values.put(RUN + "|" + testCase.id(), legacyExecution(testCase.id(), status, true));
+            var service = new ProtocolEvidenceAutomationService(repository,
+                    new TestCaseRegistry(List.of(testCase)), new CaseExecutionService(repository),
+                    ignored -> context(List.of(), TargetRole.IDP));
+
+            assertEquals(List.of(new ProtocolEvidenceAutomationService.CompletedCase(
+                    testCase.id(), Outcome.NOT_VERIFIED)), service.evaluateReady(RUN).completed());
+            assertEquals(0, repository.outboundActions);
+        }
+    }
+
+    @Test
+    void validInteractionFreeEvidenceFinishesLegacyWaitsAndMissingEvidenceRemainsReevaluatable() {
+        for (var status : legacyStatuses()) {
+            var repository = new MemoryExecutions();
+            var testCase = new InteractionFreeCase(true);
+            repository.values.put(RUN + "|" + testCase.id(), legacyExecution(testCase.id(), status, false));
+            var service = new ProtocolEvidenceAutomationService(repository,
+                    new TestCaseRegistry(List.of(testCase)), new CaseExecutionService(repository),
+                    ignored -> context(List.of(), TargetRole.IDP));
+            assertEquals(List.of(new ProtocolEvidenceAutomationService.CompletedCase(
+                    testCase.id(), Outcome.SATISFIED)), service.evaluateReady(RUN).completed());
+            assertEquals(0, repository.outboundActions);
+        }
+
+        var repository = new MemoryExecutions();
+        var testCase = new InteractionFreeCase(false);
+        repository.values.put(RUN + "|" + testCase.id(),
+                legacyExecution(testCase.id(), CaseExecutionStatus.WAITING_BROWSER, false));
+        var service = new ProtocolEvidenceAutomationService(repository,
+                new TestCaseRegistry(List.of(testCase)), new CaseExecutionService(repository),
+                ignored -> context(List.of(), TargetRole.IDP));
+        service.evaluateReady(RUN);
+        var missing = repository.find(RUN, testCase.id()).orElseThrow();
+        testCase.proven = true;
+
+        assertEquals(List.of(new ProtocolEvidenceAutomationService.CompletedCase(
+                testCase.id(), Outcome.SATISFIED)), service.evaluateReady(RUN).completed());
+        var revised = repository.find(RUN, testCase.id()).orElseThrow();
+        assertEquals(missing.revision() + 1, revised.revision());
+        assertEquals("NOT_VERIFIED", ((Map<?, ?>) revised.outcome().details()
+                .get("previous_recorded_evidence_result")).get("outcome"));
+        assertEquals(0, repository.outboundActions);
+    }
+
+    @Test
+    void interactionFreeCompletionCannotUseAnotherRunOrIncompleteTranscript() {
+        var repository = new MemoryExecutions();
+        var testCase = new InteractionFreeCase(true);
+        var original = legacyExecution(testCase.id(), CaseExecutionStatus.WAITING_BROWSER, false);
+        repository.values.put(RUN + "|" + testCase.id(), original);
+        var wrongContext = new DefaultCaseContext("another-run", TargetRole.IDP,
+                Clock.fixed(NOW, ZoneOffset.UTC), TestPlan.Parameters.defaults(),
+                TestPlan.Interaction.defaults(), Reachability.CONFIRMED, new MemoryTranscript(List.of()), true);
+        var wrongService = new ProtocolEvidenceAutomationService(repository,
+                new TestCaseRegistry(List.of(testCase)), new CaseExecutionService(repository), ignored -> wrongContext);
+        assertThrows(IllegalArgumentException.class, () -> wrongService.status(RUN));
+        assertThrows(IllegalArgumentException.class, () -> wrongService.evaluateReady(RUN));
+        assertEquals(original, repository.find(RUN, testCase.id()).orElseThrow());
+
+        var incompleteContext = new DefaultCaseContext(RUN, TargetRole.IDP,
+                Clock.fixed(NOW, ZoneOffset.UTC), TestPlan.Parameters.defaults(),
+                TestPlan.Interaction.defaults(), Reachability.CONFIRMED, new MemoryTranscript(List.of()), false);
+        var service = new ProtocolEvidenceAutomationService(repository,
+                new TestCaseRegistry(List.of(testCase)), new CaseExecutionService(repository), ignored -> incompleteContext);
+        assertEquals(List.of(new ProtocolEvidenceAutomationService.CompletedCase(testCase.id(), Outcome.NOT_VERIFIED)),
+                service.evaluateReady(RUN).completed());
+        assertEquals(0, repository.outboundActions);
+    }
+
+    @Test
+    void unreadyOrdinaryBrowserAndInboundCasesAndConclusiveResultsAreUnchanged() {
+        for (var status : List.of(CaseExecutionStatus.WAITING_BROWSER, CaseExecutionStatus.WAITING_INBOUND)) {
+            var repository = new MemoryExecutions();
+            var testCase = new ReadyQueuedCase(false, Outcome.SATISFIED);
+            var original = legacyExecution(testCase.id(), status, false);
+            repository.values.put(RUN + "|" + testCase.id(), original);
+            var service = new ProtocolEvidenceAutomationService(repository,
+                    new TestCaseRegistry(List.of(testCase)), new CaseExecutionService(repository),
+                    ignored -> context(List.of(), TargetRole.IDP));
+            assertEquals(List.of(), service.evaluateReady(RUN).completed());
+            assertEquals(List.of(), service.evaluateAttempted(RUN).completed());
+            assertEquals(original, repository.find(RUN, testCase.id()).orElseThrow());
+        }
+        for (var outcome : List.of(Outcome.SATISFIED, Outcome.SATISFIED_WITH_NOTE, Outcome.VIOLATED)) {
+            var repository = new MemoryExecutions();
+            var testCase = new InteractionFreeCase(false);
+            var original = new CaseExecution(RUN, testCase.id(), 3, CaseExecutionStatus.FINISHED,
+                    com.samlscope.core.caseexec.CaseState.initial(), null,
+                    com.samlscope.core.evaluation.CaseOutcome.of(outcome, "existing", List.of()), NOW);
+            repository.values.put(RUN + "|" + testCase.id(), original);
+            var service = new ProtocolEvidenceAutomationService(repository,
+                    new TestCaseRegistry(List.of(testCase)), new CaseExecutionService(repository),
+                    ignored -> context(List.of(), TargetRole.IDP));
+            assertEquals(List.of(), service.evaluateReady(RUN).completed());
+            assertEquals(List.of(), service.evaluateAttempted(RUN).completed());
+            assertEquals(original, repository.find(RUN, testCase.id()).orElseThrow());
+            assertEquals(0, testCase.outcomeCalls);
+            assertEquals(0, repository.outboundActions);
+        }
+    }
+
+    private static List<CaseExecutionStatus> legacyStatuses() {
+        return List.of(CaseExecutionStatus.RUNNING,
+                CaseExecutionStatus.WAITING_BROWSER, CaseExecutionStatus.WAITING_INBOUND);
+    }
+
+    private static CaseExecution legacyExecution(String caseId, CaseExecutionStatus status, boolean expired) {
+        var wait = status == CaseExecutionStatus.WAITING_BROWSER
+                ? new com.samlscope.core.caseexec.WaitCondition(com.samlscope.core.caseexec.WaitCondition.Kind.BROWSER,
+                        null, java.net.URI.create("https://suite.example/obsolete-start"), null,
+                        expired ? NOW.minusSeconds(60) : NOW.plusSeconds(60))
+                : status == CaseExecutionStatus.WAITING_INBOUND
+                        ? new com.samlscope.core.caseexec.WaitCondition(com.samlscope.core.caseexec.WaitCondition.Kind.INBOUND,
+                                null, null, new com.samlscope.core.caseexec.InboundMatcher(
+                                        "saml-response", Map.of("ScenarioActionId", "obsolete-action")),
+                                expired ? NOW.minusSeconds(60) : NOW.plusSeconds(60))
+                        : null;
+        return new CaseExecution(RUN, caseId, 3, status,
+                new com.samlscope.core.caseexec.CaseState(status == CaseExecutionStatus.RUNNING
+                        ? "runner-queued-front-channel" : "legacy-force-authn", Map.of()), wait, null,
+                NOW.minusSeconds(120));
+    }
+
+    private static OutboxEntry oldOutbox(String caseId) {
+        return new OutboxEntry(RUN, caseId, new OutboundAction("old-action",
+                com.samlscope.core.caseexec.OutboundKind.AUTHN_REQUEST, new byte[] {1, 2, 3},
+                java.net.URI.create("https://target.example/sso"), false), OutboxStatus.PENDING,
+                Map.of(), null, NOW.minusSeconds(120), NOW.minusSeconds(120));
+    }
+
+    private static final class InteractionFreeCase implements com.samlscope.runner.cases.InteractionFreeEvidenceCase,
+            RecordedEvidenceReevaluation {
+        private boolean proven;
+        private int outcomeCalls;
+        private InteractionFreeCase(boolean proven) { this.proven = proven; }
+        @Override public String id() { return "IIP-IDP06-b-idp-01"; }
+        @Override public TargetRole role() { return TargetRole.IDP; }
+        @Override public EvidenceStatus evidenceStatus(CaseContext context) {
+            boolean ready = proven && context.transcriptComplete() && RUN.equals(context.runId());
+            return new EvidenceStatus(ready, List.of("native-mechanism-trace"),
+                    ready ? List.of("native-mechanism-trace") : List.of(), Map.of());
+        }
+        @Override public com.samlscope.core.evaluation.CaseOutcome queuedEvidenceOutcome(CaseContext context) {
+            outcomeCalls++;
+            return evidenceStatus(context).ready()
+                    ? com.samlscope.core.evaluation.CaseOutcome.of(Outcome.SATISFIED, "native-mechanism.proven",
+                            List.of(new com.samlscope.core.evaluation.EvidenceRef("transcript", "tx_" + RUN)))
+                    : com.samlscope.core.evaluation.CaseOutcome.notVerified("native evidence unavailable",
+                            "native-mechanism.unproven");
+        }
+        @Override public boolean supportsRecordedEvidenceReevaluation(com.samlscope.core.evaluation.CaseOutcome previous) {
+            return previous != null && previous.outcome() == Outcome.NOT_VERIFIED;
+        }
+        @Override public Optional<com.samlscope.core.evaluation.CaseOutcome> reevaluateRecordedEvidence(
+                CaseContext context, com.samlscope.core.evaluation.CaseOutcome previous) {
+            return evidenceStatus(context).ready() ? Optional.of(queuedEvidenceOutcome(context)) : Optional.empty();
+        }
+    }
+
     private record ReadyQueuedCase(boolean ready, Outcome outcome) implements com.samlscope.core.caseexec.TestCase,
             BrowserFrontChannelScenario, com.samlscope.runner.cases.QueuedProtocolEvidenceCase {
         @Override public String id() { return "IIP-SSO04-a-idp-01"; }
@@ -238,6 +464,7 @@ class ProtocolEvidenceAutomationServiceTest {
 
     private static final class MemoryExecutions implements CaseExecutionRepository {
         private final Map<String, CaseExecution> values = new LinkedHashMap<>();
+        private final List<OutboxEntry> outbox = new ArrayList<>();
         private int outboundActions;
 
         @Override public Optional<CaseExecution> find(String runId, String caseId) {
@@ -255,7 +482,9 @@ class ProtocolEvidenceAutomationServiceTest {
             outboundActions += actions.size();
             return true;
         }
-        @Override public List<OutboxEntry> listOutbox(String runId) { return List.of(); }
+        @Override public List<OutboxEntry> listOutbox(String runId) {
+            return outbox.stream().filter(entry -> runId.equals(entry.runId())).toList();
+        }
         @Override public Optional<OutboxEntry> findOutbox(String actionId) { return Optional.empty(); }
         @Override public boolean transitionOutbox(
                 String actionId, OutboxStatus expected, OutboxStatus next, Map<String, Object> sendResult,

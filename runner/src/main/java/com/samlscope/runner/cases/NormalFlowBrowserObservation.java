@@ -852,11 +852,33 @@ final class NormalFlowBrowserObservation {
     private static Optional<CaseOutcome> errorResponsesUsePost(List<Parsed> messages) {
         var requests = requestsById(messages);
         if (requests.isEmpty()) return Optional.empty();
+        // A reject-everything target cannot prove binding support. Keep the approved
+        // normal-success positive control and correlate it to an issued request.
+        var controls = successfulResponses(messages).stream().filter(response -> {
+            var root = response.document().getDocumentElement();
+            return requests.containsKey(root.getAttribute("InResponseTo"))
+                    && "POST".equalsIgnoreCase(response.message().method())
+                    && (elements(root, ASSERTION, "Assertion").size()
+                        + elements(root, ASSERTION, "EncryptedAssertion").size()) > 0;
+        }).limit(1).toList();
+        if (controls.isEmpty()) return Optional.empty();
         var evidence = new ArrayList<EvidenceRef>();
+        for (var control : controls) {
+            evidence.add(requests.get(control.document().getDocumentElement()
+                    .getAttribute("InResponseTo")).evidence());
+            evidence.add(control.evidence());
+        }
         var errorKinds = new java.util.LinkedHashSet<String>();
         for (var response : responses(messages)) {
-            if (SUCCESS.equals(firstAttribute(response.document(), PROTOCOL, "StatusCode", "Value"))) continue;
-            var request = requests.get(response.document().getDocumentElement().getAttribute("InResponseTo"));
+            var root = response.document().getDocumentElement();
+            var status = direct(root, PROTOCOL, "Status");
+            var code = status == null ? null : direct(status, PROTOCOL, "StatusCode");
+            if (code == null || !java.util.Set.of(
+                    "urn:oasis:names:tc:SAML:2.0:status:Requester",
+                    "urn:oasis:names:tc:SAML:2.0:status:Responder",
+                    "urn:oasis:names:tc:SAML:2.0:status:VersionMismatch")
+                    .contains(code.getAttribute("Value"))) continue;
+            var request = requests.get(root.getAttribute("InResponseTo"));
             if (request == null) continue;
             var kind = errorTriggerKind(request.document());
             if (kind == null) continue;
@@ -865,14 +887,18 @@ final class NormalFlowBrowserObservation {
             if (!"POST".equalsIgnoreCase(response.message().method())) {
                 return Optional.of(outcome(
                         Outcome.VIOLATED, "browser.normal-flow.error-response-not-post",
-                        evidence, Map.of("error_kind", kind, "method", response.message().method())));
+                        evidence.stream().distinct().toList(),
+                        Map.of("error_kind", kind, "method", response.message().method())));
             }
             errorKinds.add(kind);
         }
-        // Exercise more than one error path so a path-specific POST implementation cannot pass.
-        return errorKinds.size() < 2 ? Optional.empty() : Optional.of(outcome(
+        // The approved IdP variant requires an unsatisfiable request with a POST
+        // error Response; it does not prescribe two distinct error-trigger kinds.
+        return errorKinds.isEmpty() ? Optional.empty() : Optional.of(outcome(
                 Outcome.SATISFIED, "browser.normal-flow.error-responses-use-post",
-                evidence.stream().distinct().toList(), Map.of("error_kinds", List.copyOf(errorKinds))));
+                evidence.stream().distinct().toList(), Map.of(
+                        "error_kinds", List.copyOf(errorKinds),
+                        "successful_control_responses", controls.size())));
     }
 
     private static String errorTriggerKind(Document request) {

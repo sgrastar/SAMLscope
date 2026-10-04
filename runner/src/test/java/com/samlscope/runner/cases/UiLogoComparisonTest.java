@@ -19,11 +19,11 @@ class UiLogoComparisonTest {
                         new EvidenceRef("transcript", "request-" + offset), new EvidenceRef("browser-observation", "view-" + offset)));
     }
 
-    @Test void bothDifferentialConditionsAreRequired() {
+    @Test void bothConditionsAreRequiredButPreferredLanguageSelectionIsOptional() {
         for (var first : Selection.values()) for (var second : Selection.values()) {
             var outcome = UiLogoComparison.evaluate(List.of(sample(Condition.PREFERRED_AVAILABLE, first),
                     sample(Condition.PREFERRED_UNAVAILABLE, second)), List.of());
-            assertEquals(first == Selection.LOCALIZED && second == Selection.DEFAULT
+            assertEquals(first != Selection.UNOBSERVED && second == Selection.DEFAULT
                     ? Outcome.SATISFIED : Outcome.NOT_VERIFIED, outcome.outcome());
         }
         var control = sample(Condition.PREFERRED_AVAILABLE, Selection.LOCALIZED);

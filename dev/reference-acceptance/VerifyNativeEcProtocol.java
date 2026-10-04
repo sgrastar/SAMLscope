@@ -35,6 +35,8 @@ public final class VerifyNativeEcProtocol {
         var target=Files.readAllBytes(folder.resolve("target-metadata.xml"));
         var outcome=new NativeEcSignatureEvidence(receipts,e->originals.get(e.id()),ignored->target).apply(context).orElseThrow();
         if(outcome.outcome()!=com.samlscope.core.evaluation.Outcome.SATISFIED
+                && !(outcome.outcome()==com.samlscope.core.evaluation.Outcome.VIOLATED
+                    && "ec-signature.native-unsupported-verifier".equals(outcome.reasonCode()))
                 && !(outcome.outcome()==com.samlscope.core.evaluation.Outcome.NOT_VERIFIED
                     && "ec-signature.native-valid-request-rejected".equals(outcome.reasonCode())))
             throw new IllegalStateException("Native signature evidence incomplete");
@@ -45,6 +47,12 @@ public final class VerifyNativeEcProtocol {
         var mutations=new ArrayList<>(List.of("wrong-run","wrong-request","wrong-event","wrong-metadata","missing-condition"));
         if(nativeHttp || keycloak)mutations.addAll(List.of("wrong-http-status","wrong-http-hash","wrong-http-endpoint","wrong-request-original","wrong-control-response"));
         if(keycloak)mutations.addAll(List.of("wrong-native-hash","wrong-native-issuer","wrong-native-time","indirect-http-response"));
+        boolean simpleNativeHttp="simplesamlphp-native-http".equals(originalReceipt.path("evidenceAdapter").asText());
+        if(simpleNativeHttp && originalReceipt.has("nativeVerifierSource"))
+            mutations.addAll(List.of("wrong-source-hash","wrong-source-path","wrong-source-algorithm",
+                    "wrong-image-id","wrong-container-id","wrong-native-observations-hash","wrong-call-path"));
+        if(simpleNativeHttp && originalReceipt.has("nativeRuntime"))
+            mutations.addAll(List.of("wrong-runtime-inspect-hash","wrong-runtime-source-mount","wrong-runtime-route"));
         var negative=new ArrayList<String>();var temporary=Files.createTempDirectory("native-ec-controls-");
         try {
             for(var mutation:mutations) {
@@ -65,6 +73,55 @@ public final class VerifyNativeEcProtocol {
                     case "wrong-native-issuer" -> ((com.fasterxml.jackson.databind.node.ObjectNode)exchanges.get(2).path("nativeEvent")).put("issuer","other-client");
                     case "wrong-native-time" -> ((com.fasterxml.jackson.databind.node.ObjectNode)exchanges.get(2).path("nativeEvent")).put("event_time",0);
                     case "indirect-http-response" -> ((com.fasterxml.jackson.databind.node.ObjectNode)exchanges.get(2).path("nativeHttp")).put("response_url_exact_match",false);
+                    case "wrong-source-hash" -> ((com.fasterxml.jackson.databind.node.ObjectNode)changed.path("nativeVerifierSource")).put("sha256","0".repeat(64));
+                    case "wrong-source-path" -> ((com.fasterxml.jackson.databind.node.ObjectNode)changed.path("nativeVerifierSource")).put("containerPath","/other/Message.php");
+                    case "wrong-source-algorithm" -> {
+                        var node=(com.fasterxml.jackson.databind.node.ObjectNode)changed.path("nativeVerifierSource");
+                        var originalSource=new String(Base64.getDecoder().decode(node.path("base64").asText()),java.nio.charset.StandardCharsets.UTF_8);
+                        var changedSource=originalSource.replace("new XMLSecurityKey(XMLSecurityKey::RSA_SHA256, ['type' => 'public'])",
+                                "new XMLSecurityKey(XMLSecurityKey::ECDSA_SHA256, ['type' => 'public'])")
+                                .getBytes(java.nio.charset.StandardCharsets.UTF_8);
+                        if(java.util.Arrays.equals(changedSource,originalSource.getBytes(java.nio.charset.StandardCharsets.UTF_8)))
+                            throw new IllegalStateException("Source mutation did not change the verifier");
+                        node.put("base64",Base64.getEncoder().encodeToString(changedSource));node.put("sha256",hash(changedSource));
+                    }
+                    case "wrong-image-id" -> ((com.fasterxml.jackson.databind.node.ObjectNode)changed.path("nativeVerifierSource"))
+                            .put("imageId","sha256:"+"0".repeat(64));
+                    case "wrong-container-id" -> ((com.fasterxml.jackson.databind.node.ObjectNode)changed.path("nativeVerifierSource"))
+                            .put("containerId","0".repeat(64));
+                    case "wrong-native-observations-hash" -> changed.put("nativeHttpObservationsSha256","0".repeat(64));
+                    case "wrong-call-path" -> {
+                        var node=(com.fasterxml.jackson.databind.node.ObjectNode)changed.path("nativeVerifierSource");
+                        var originalSource=new String(Base64.getDecoder().decode(node.path("base64").asText()),java.nio.charset.StandardCharsets.UTF_8);
+                        var changedSource=originalSource.replace("} elseif (!self::checkSign($srcMetadata, $message)) {",
+                                "} elseif (false) {").getBytes(java.nio.charset.StandardCharsets.UTF_8);
+                        if(java.util.Arrays.equals(changedSource,originalSource.getBytes(java.nio.charset.StandardCharsets.UTF_8)))
+                            throw new IllegalStateException("Call-path mutation did not change the verifier");
+                        node.put("base64",Base64.getEncoder().encodeToString(changedSource));node.put("sha256",hash(changedSource));
+                    }
+                    case "wrong-runtime-inspect-hash" -> ((com.fasterxml.jackson.databind.node.ObjectNode)changed.path("nativeRuntime"))
+                            .put("startInspectSha256","0".repeat(64));
+                    case "wrong-runtime-source-mount" -> {
+                        var runtime=(com.fasterxml.jackson.databind.node.ObjectNode)changed.path("nativeRuntime");
+                        var raw=Base64.getDecoder().decode(runtime.path("startInspectBase64").asText());
+                        var inspect=(com.fasterxml.jackson.databind.node.ArrayNode)json.readTree(raw);
+                        var mounts=((com.fasterxml.jackson.databind.node.ObjectNode)inspect.get(0)).withArray("Mounts");
+                        var mount=json.createObjectNode();mount.put("Destination","/var/simplesamlphp/modules/saml/src");mounts.add(mount);
+                        var changedRaw=json.writeValueAsBytes(inspect);
+                        runtime.put("startInspectBase64",Base64.getEncoder().encodeToString(changedRaw));runtime.put("startInspectSha256",hash(changedRaw));
+                    }
+                    case "wrong-runtime-route" -> {
+                        var runtime=(com.fasterxml.jackson.databind.node.ObjectNode)changed.path("nativeRuntime");
+                        com.fasterxml.jackson.databind.node.ObjectNode route=null;
+                        for(var source:runtime.withArray("sources")) if("routes".equals(source.path("name").asText()))route=(com.fasterxml.jackson.databind.node.ObjectNode)source;
+                        if(route==null)throw new IllegalStateException("Route source unavailable");
+                        var originalSource=new String(Base64.getDecoder().decode(route.path("base64").asText()),java.nio.charset.StandardCharsets.UTF_8);
+                        var changedSource=originalSource.replace("WebBrowserSingleSignOn::singleSignOnService","Other::handler")
+                                .getBytes(java.nio.charset.StandardCharsets.UTF_8);
+                        if(java.util.Arrays.equals(changedSource,originalSource.getBytes(java.nio.charset.StandardCharsets.UTF_8)))
+                            throw new IllegalStateException("Route mutation did not change the source");
+                        route.put("base64",Base64.getEncoder().encodeToString(changedSource));route.put("sha256",hash(changedSource));
+                    }
                 }
                 Files.write(temporary.resolve(run+".json"),json.writeValueAsBytes(changed));
                 var rejected=new NativeEcSignatureEvidence(temporary,e->originals.get(e.id()),ignored->target).apply(context).orElseThrow();

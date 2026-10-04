@@ -14,6 +14,15 @@ public interface ScenarioFixture {
     FixtureObservation observe(String expectedResponseCorrelation, byte[] decodedMessage);
 
     /**
+     * Interprets a Recorder-backed terminal browser landing for the current action. The default
+     * is deliberately inconclusive; protocol fixtures must opt in with fixture-specific rules.
+     */
+    default FixtureObservation observeBrowser(
+            String expectedResponseCorrelation, int httpStatus, String url, String body) {
+        return FixtureObservation.NOT_VERIFIED;
+    }
+
+    /**
      * Interprets an explicit operator report that browser navigation terminated without a SAML
      * callback. Negative protocol fixtures may treat that as evidence that the request was
      * discarded; positive controls should return {@link FixtureObservation#CONTROL_FAILED}.

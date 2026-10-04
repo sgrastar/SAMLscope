@@ -140,18 +140,170 @@ public final class NativeEcSignatureEvidence implements Function<CaseContext, Op
                 }
                 for(var entry:List.of(fetch,prepared,sent))evidence.add(new EvidenceRef("transcript",entry.id()));
             }
-            // Rejecting a valid request is an observation, not proof that no configuration supports EC.
-            return Optional.of(new CaseOutcome(validEcRejected?Outcome.NOT_VERIFIED:Outcome.SATISFIED,
-                validEcRejected?"valid_ec_request_rejected_support_unproven":null,
-                validEcRejected?"ec-signature.native-valid-request-rejected":"ec-signature.native-support-observed",
-                validEcRejected?"ec-signature.incomplete":"ec-signature.support-observed",
+            // The pinned SimpleSAMLphp path can establish non-support only when the same
+            // native verifier source was read back and it hardcodes RSA for every signing key.
+            // A rejected valid EC request by itself remains inconclusive.
+            boolean nativeHttpBound="simplesamlphp-native-http".equals(adapter)
+                    && bindsNativeHttpObservations(receipt,context.runId(),receipt.path("nativeVerifierSource"));
+            boolean nativeRuntimeBound="simplesamlphp-native-http".equals(adapter)
+                    && bindsNativeRuntime(receipt,receipt.path("nativeVerifierSource"));
+            boolean rsaOnlyVerifier=validEcRejected && nativeHttpBound && nativeRuntimeBound
+                    && provesRsaOnlyVerifier(receipt.path("nativeVerifierSource"));
+            var outcome=validEcRejected?(rsaOnlyVerifier?Outcome.VIOLATED:Outcome.NOT_VERIFIED):Outcome.SATISFIED;
+            var reason=validEcRejected?(rsaOnlyVerifier?"ec-signature.native-unsupported-verifier"
+                    :"ec-signature.native-valid-request-rejected"):"ec-signature.native-support-observed";
+            var message=validEcRejected?(rsaOnlyVerifier?"ec-signature.native-unsupported-verifier":"ec-signature.incomplete")
+                    :"ec-signature.support-observed";
+            return Optional.of(new CaseOutcome(outcome,
+                validEcRejected && !rsaOnlyVerifier?"valid_ec_request_rejected_support_unproven":null,
+                reason,message,
                 List.copyOf(evidence),Map.of("preparation_source","local-native-adapter","native_receipt_sha256",hash(Files.readAllBytes(file)),
                     "negative_control","request-bound-native-authentication-error","original_signatures_verified",true,
-                    "evidence_adapter",adapter,"valid_ec_request_rejected",validEcRejected)));
+                    "evidence_adapter",adapter,"valid_ec_request_rejected",validEcRejected,
+                    "rsa_only_verifier_proven",rsaOnlyVerifier)));
         } catch(Exception unproven) {
             return Optional.of(CaseOutcome.notVerified("native_ec_signature_evidence_unproven","ec-signature.native-incomplete"));
         }
     }
     private static String hash(byte[] raw)throws Exception{return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(raw));}
+    /**
+     * Bind the adapter's HTTP observations to the same live container and exact source read-back.
+     * The byte-for-byte observation file prevents a receipt from mixing an otherwise valid source
+     * snapshot with independently fabricated selected exchange rows.
+     */
+    static boolean bindsNativeHttpObservations(com.fasterxml.jackson.databind.JsonNode receipt,String runId,
+            com.fasterxml.jackson.databind.JsonNode source) throws Exception {
+        require(!source.isMissingNode()&&!source.isNull());
+        var encoded=receipt.path("nativeHttpObservationsBase64").asText();require(!encoded.isBlank());
+        var raw=Base64.getDecoder().decode(encoded);require(raw.length>0&&raw.length<=1048576);
+        require(hash(raw).equals(receipt.path("nativeHttpObservationsSha256").asText()));
+        var observations=new JsonCodec().mapper().readTree(raw);
+        require(runId.equals(observations.path("run").asText())&&!observations.path("product_verdict_assigned").asBoolean(true));
+        var binding=observations.path("product_binding");
+        require("samlscope-reference-ssp".equals(binding.path("container_name").asText())
+                && binding.path("container_id").asText().matches("[0-9a-f]{64}")
+                && binding.path("image_id").asText().matches("sha256:[0-9a-f]{64}")
+                && binding.path("running_at_capture").asBoolean(false));
+        Instant.parse(binding.path("container_started_at").asText());
+        require(binding.path("container_name").asText().equals(source.path("containerName").asText())
+                && binding.path("container_id").asText().equals(source.path("containerId").asText())
+                && binding.path("image_id").asText().equals(source.path("imageId").asText())
+                && binding.path("container_started_at").asText().equals(source.path("containerStartedAt").asText())
+                && observations.path("native_verifier_sha256").asText().equals(source.path("sha256").asText()));
+        require(observations.path("records").isArray());
+        var records=new HashMap<String,com.fasterxml.jackson.databind.JsonNode>();
+        for(var record:observations.path("records")) {
+            var requestId=record.path("request_id").asText();require(!requestId.isBlank()&&records.put(requestId,record)==null);
+        }
+        for(var exchange:receipt.path("exchanges")) {
+            var requestId=exchange.path("nativeHttp").path("request_id").asText();
+            require(!requestId.isBlank()&&exchange.path("nativeHttp").equals(records.get(requestId)));
+            var requestUrl=java.net.URI.create(exchange.path("nativeHttp").path("request_url").asText());
+            require("http".equals(requestUrl.getScheme())&&"localhost".equals(requestUrl.getHost())&&requestUrl.getPort()==18380);
+        }
+        return true;
+    }
+    /** Require the running container identity, unmounted source tree and complete static SSO call path. */
+    static boolean bindsNativeRuntime(com.fasterxml.jackson.databind.JsonNode receipt,
+            com.fasterxml.jackson.databind.JsonNode verifier) throws Exception {
+        var runtime=receipt.path("nativeRuntime");require(!runtime.isMissingNode()&&!runtime.isNull());
+        var start=readInspect(runtime,"start");var end=readInspect(runtime,"end");
+        requireSameRuntime(start,end,verifier);
+        require(runtime.path("sources").isArray()&&runtime.path("sources").size()==4);
+        var sources=new HashMap<String,String>();var paths=new HashMap<String,String>();
+        for(var item:runtime.path("sources")) {
+            var name=item.path("name").asText();require(Set.of("module","routes","web-browser-sso","idp-saml2").contains(name)&&!sources.containsKey(name));
+            var raw=Base64.getDecoder().decode(item.path("base64").asText());require(raw.length>0&&raw.length<=1048576);
+            require(hash(raw).equals(item.path("sha256").asText()));sources.put(name,new String(raw,java.nio.charset.StandardCharsets.UTF_8));
+            paths.put(name,item.path("containerPath").asText());
+        }
+        require("/var/simplesamlphp/public/module.php".equals(paths.get("module"))
+                && "/var/simplesamlphp/modules/saml/routing/routes/routes.yml".equals(paths.get("routes"))
+                && "/var/simplesamlphp/modules/saml/src/Controller/WebBrowserSingleSignOn.php".equals(paths.get("web-browser-sso"))
+                && "/var/simplesamlphp/modules/saml/src/IdP/SAML2.php".equals(paths.get("idp-saml2")));
+        require(sources.get("module").contains("Module::process();")
+                && sources.get("routes").contains("path: /idp/singleSignOnService")
+                && sources.get("routes").contains("WebBrowserSingleSignOn::singleSignOnService"));
+        var browser=phpFunctionBody(sources.get("web-browser-sso"),"public function singleSignOnService(");
+        var idp=phpFunctionBody(sources.get("idp-saml2"),"public static function receiveAuthnRequest(");
+        require(browser.contains("Module\\saml\\IdP\\SAML2::class, 'receiveAuthnRequest'")
+                && idp.contains("Message::validateMessage($spMetadata, $idpMetadata, $request)"));
+        return true;
+    }
+    private static com.fasterxml.jackson.databind.JsonNode readInspect(com.fasterxml.jackson.databind.JsonNode runtime,String phase)
+            throws Exception {
+        var raw=Base64.getDecoder().decode(runtime.path(phase+"InspectBase64").asText());require(raw.length>0&&raw.length<=1048576);
+        require(hash(raw).equals(runtime.path(phase+"InspectSha256").asText()));
+        var parsed=new JsonCodec().mapper().readTree(raw);require(parsed.isArray()&&parsed.size()==1);return parsed.get(0);
+    }
+    private static void requireSameRuntime(com.fasterxml.jackson.databind.JsonNode start,com.fasterxml.jackson.databind.JsonNode end,
+            com.fasterxml.jackson.databind.JsonNode verifier) {
+        for(var inspect:List.of(start,end)) {
+            require(verifier.path("containerId").asText().equals(inspect.path("Id").asText())
+                    && verifier.path("imageId").asText().equals(inspect.path("Image").asText())
+                    && verifier.path("containerStartedAt").asText().equals(inspect.path("State").path("StartedAt").asText())
+                    && inspect.path("State").path("Running").asBoolean(false));
+            for(var mount:inspect.path("Mounts")) {
+                var destination=mount.path("Destination").asText();
+                require(!destination.equals("/var/simplesamlphp/modules/saml/src")
+                        && !destination.startsWith("/var/simplesamlphp/modules/saml/src/")
+                        && !destination.equals("/var/simplesamlphp/public/module.php"));
+            }
+            boolean writableConfiguration=false;for(var mount:inspect.path("Mounts"))
+                if("/var/simplesamlphp/metadata/saml20-sp-remote.php".equals(mount.path("Destination").asText())
+                        && mount.path("RW").asBoolean(false))writableConfiguration=true;
+            require(writableConfiguration);
+            boolean port=false;for(var mapping:inspect.path("NetworkSettings").path("Ports").path("80/tcp"))
+                if("127.0.0.1".equals(mapping.path("HostIp").asText())&&"18380".equals(mapping.path("HostPort").asText()))port=true;
+            require(port);
+        }
+    }
+    static boolean provesRsaOnlyVerifier(com.fasterxml.jackson.databind.JsonNode record) throws Exception {
+        if (record.isMissingNode() || record.isNull()) return false;
+        require("/var/simplesamlphp/modules/saml/src/Message.php".equals(record.path("containerPath").asText()));
+        require(record.path("imageId").asText().matches("sha256:[0-9a-f]{64}"));
+        require("samlscope-reference-ssp".equals(record.path("containerName").asText())
+                && record.path("containerId").asText().matches("[0-9a-f]{64}"));
+        Instant.parse(record.path("containerStartedAt").asText());
+        var raw=Base64.getDecoder().decode(record.path("base64").asText());
+        require(raw.length>0 && raw.length<=65536 && hash(raw).equals(record.path("sha256").asText()));
+        var source=new String(raw,java.nio.charset.StandardCharsets.UTF_8);
+        var check=phpFunctionBody(source,"public static function checkSign(");
+        require(check.contains("$srcMetadata->getPublicKeys('signing')")
+                && check.contains("new XMLSecurityKey(XMLSecurityKey::RSA_SHA256, ['type' => 'public'])")
+                && check.indexOf("new XMLSecurityKey(")==check.lastIndexOf("new XMLSecurityKey(")
+                && check.contains("$element->validate($key)") && check.contains("ErrorCodes::NOTVALIDCERTSIGNATURE")
+                && !check.contains("ECDSA"));
+        var validate=phpFunctionBody(source,"public static function validateMessage(");
+        require(validate.contains("$message instanceof AuthnRequest")
+                && validate.contains("$srcMetadata->getOptionalBoolean('validate.authnrequest', null)")
+                && validate.contains("$message->isMessageConstructedWithSignature() === true")
+                && validate.contains("&& ($enabled !== false)")
+                && validate.contains("} elseif (!self::checkSign($srcMetadata, $message)) {")
+                && count(validate,"self::checkSign($srcMetadata, $message)")==1
+                && validate.contains("throw new SSP_Error\\Exception("));
+        return true;
+    }
+    private static String phpFunctionBody(String source,String marker) {
+        require(count(source,marker)==1);
+        var start=source.indexOf(marker);var open=source.indexOf('{',start+marker.length());require(open>=0);
+        int depth=0;char quote=0;boolean lineComment=false,blockComment=false;
+        for(int index=open;index<source.length();index++) {
+            char current=source.charAt(index),next=index+1<source.length()?source.charAt(index+1):0;
+            if(lineComment) {if(current=='\n')lineComment=false;continue;}
+            if(blockComment) {if(current=='*'&&next=='/') {blockComment=false;index++;}continue;}
+            if(quote!=0) {if(current=='\\') {index++;continue;}if(current==quote)quote=0;continue;}
+            if(current=='/'&&next=='/') {lineComment=true;index++;continue;}
+            if(current=='/'&&next=='*') {blockComment=true;index++;continue;}
+            if(current=='#') {lineComment=true;continue;}
+            if(current=='\''||current=='\"') {quote=current;continue;}
+            if(current=='{')depth++;
+            else if(current=='}'&&--depth==0)return source.substring(open+1,index);
+        }
+        throw new IllegalArgumentException("Unclosed PHP function body");
+    }
+    private static int count(String text,String needle) {
+        int found=0,position=0;while((position=text.indexOf(needle,position))>=0){found++;position+=needle.length();}return found;
+    }
     private static void require(boolean value){if(!value)throw new IllegalArgumentException("Unproven native EC signature evidence");}
 }

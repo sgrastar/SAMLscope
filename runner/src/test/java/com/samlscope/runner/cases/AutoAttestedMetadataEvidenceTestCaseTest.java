@@ -26,6 +26,7 @@ class AutoAttestedMetadataEvidenceTestCaseTest {
         var finish = assertInstanceOf(CaseStep.Finish.class, testCase.start(context()));
         assertEquals(Outcome.SATISFIED, finish.outcome().outcome());
         assertEquals("target-metadata", finish.outcome().evidence().getFirst().kind());
+        assertEquals(com.samlscope.runner.RunCampaignQuery.ActionKind.NONE, testCase.evidenceActionKind());
     }
 
     @Test
@@ -50,11 +51,14 @@ class AutoAttestedMetadataEvidenceTestCaseTest {
                   entityID="https://idp.example/entity">
                   <md:Extensions>
                     <alg:SigningMethod Algorithm="urn:example:signature"/>
-                    %s
                   </md:Extensions>
+                  <md:IDPSSODescriptor protocolSupportEnumeration="urn:oasis:names:tc:SAML:2.0:protocol">
+                    %s
+                  </md:IDPSSODescriptor>
                 </md:EntityDescriptor>
                 """).formatted(includeEncryption
-                        ? "<alg:EncryptionMethod Algorithm=\"urn:example:encryption\"/>" : "")
+                        ? "<md:KeyDescriptor use=\"encryption\"><ds:KeyInfo xmlns:ds=\"http://www.w3.org/2000/09/xmldsig#\"/>"
+                                + "<md:EncryptionMethod Algorithm=\"urn:example:encryption\"/></md:KeyDescriptor>" : "")
                 .getBytes(StandardCharsets.UTF_8);
     }
 

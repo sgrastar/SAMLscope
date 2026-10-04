@@ -17,9 +17,53 @@ spec=importlib.util.spec_from_file_location('ssp_signature_observer',Path(__file
 observer=importlib.util.module_from_spec(spec);spec.loader.exec_module(observer)
 SHA=lambda raw:hashlib.sha256(raw).hexdigest()
 VARIANTS=['control','ecdsa-sha256','ecdsa-sha256-invalid-signature']
+VERIFIER_SOURCE='/var/simplesamlphp/modules/saml/src/Message.php'
+CONTAINER='samlscope-reference-ssp'
+SOURCE_FILES={
+    'message':VERIFIER_SOURCE,
+    'module':'/var/simplesamlphp/public/module.php',
+    'routes':'/var/simplesamlphp/modules/saml/routing/routes/routes.yml',
+    'web-browser-sso':'/var/simplesamlphp/modules/saml/src/Controller/WebBrowserSingleSignOn.php',
+    'idp-saml2':'/var/simplesamlphp/modules/saml/src/IdP/SAML2.php',
+}
 
 class NativeImportUnavailable(RuntimeError):
     pass
+
+
+def running_product_binding(data):
+    """Return the live container identity and prove its native source tree is image-backed."""
+    state=data['State']
+    if state['Running'] is not True:raise RuntimeError('SimpleSAMLphp container is not running')
+    container_id=data['Id'];image_id=data['Image'];started_at=state['StartedAt']
+    if len(container_id)!=64 or not image_id.startswith('sha256:') or not started_at:raise RuntimeError('Incomplete product identity')
+    source_root='/var/simplesamlphp/modules/saml/src'
+    if any(mount.get('Destination','')==source_root or mount.get('Destination','').startswith(source_root+'/')
+           or mount.get('Destination','')=='/var/simplesamlphp/public/module.php' for mount in data['Mounts']):
+        raise RuntimeError('Native SAML source tree is covered by a mount')
+    if not any(mount.get('Destination')=='/var/simplesamlphp/metadata/saml20-sp-remote.php' and mount.get('RW') is True
+               for mount in data['Mounts']):
+        raise RuntimeError('Expected writable SP metadata configuration mount is absent')
+    mappings=data['NetworkSettings']['Ports'].get('80/tcp') or []
+    if not any(item.get('HostIp')=='127.0.0.1' and item.get('HostPort')=='18380' for item in mappings):
+        raise RuntimeError('Expected localhost SimpleSAMLphp port mapping is absent')
+    return dict(container_name=CONTAINER,container_id=container_id,image_id=image_id,
+        container_started_at=started_at,running_at_capture=True,container_port='80/tcp',host_ip='127.0.0.1',host_port=18380,
+        source_tree_mounted=False)
+
+
+def capture_runtime_originals(out,label):
+    raw=subprocess.check_output(['docker','inspect',CONTAINER],timeout=30)
+    data=json.loads(raw)[0];binding=running_product_binding(data)
+    inspect=out/f'native-runtime-inspect-{label}.json';inspect.write_bytes(raw)
+    sources={}
+    for name,path in SOURCE_FILES.items():
+        content=subprocess.check_output(['docker','exec',CONTAINER,'cat',path],timeout=30)
+        filename='native-verifier-source.php' if name=='message' else f'native-{name}-source.php'
+        (out/filename).write_bytes(content)
+        sources[name]=dict(container_path=path,sha256=SHA(content),file=filename)
+    save(out/f'native-call-path-sources-{label}.json',dict(binding=binding,inspect_file=inspect.name,sources=sources))
+    return binding,sources
 
 
 def main(default_matrix="ec"):
@@ -38,6 +82,12 @@ def main(default_matrix="ec"):
         raise ValueError('Invalid profiles')
     configuration=ConfigurationBatch(REPO/'build/acceptance/reference-20260914/ssp-config/saml20-sp-remote.php')
     if b'?>' in configuration.original:raise ValueError('Ambiguous configuration overlay')
+    binding,sources=capture_runtime_originals(out,'start')
+    verifier_source=(out/sources['message']['file']).read_bytes()
+    save(out/'native-verifier-source.json',dict(container_path=VERIFIER_SOURCE,
+        sha256=SHA(verifier_source),**binding))
+    save(out/'native-call-path-sources.json',dict(binding=binding,sources=sources,
+        start_original='native-call-path-sources-start.json'))
     credentials=(os.environ.get('REFERENCE_USERNAME','samlscope-m0-user'),os.environ.get('REFERENCE_PASSWORD','samlscope-m0-password'))
     operations=[]
     try:
@@ -109,15 +159,25 @@ def main(default_matrix="ec"):
                 save(baseline/'flow.json',receipt)
                 if receipt!='recorded':raise RuntimeError('Normal login not recorded')
             finally:
-                save(folder/'native-http-observations.json',dict(run=run,records=records,product_verdict_assigned=False))
+                save(folder/'native-http-observations.json',dict(run=run,records=records,
+                    product_verdict_assigned=False,product_binding=binding,
+                    native_verifier_sha256=SHA(verifier_source)))
                 for name in ['result.json','transcript','protocol-evidence']:
                     save(folder/(name if '.' in name else name+'.json'),api('/api/runs/'+run+'/'+name))
             print(profile,'collected',run,flush=True)
     finally:
         restored=configuration.restore();save(out/'restoration.json',restored)
+        final_binding,final_sources=capture_runtime_originals(out,'end')
+        if final_binding!=binding:raise RuntimeError('SimpleSAMLphp container identity changed during campaign')
+        if {name:value['sha256'] for name,value in final_sources.items()}!={name:value['sha256'] for name,value in sources.items()}:
+            raise RuntimeError('Native SAML call-path source changed during campaign')
+        save(out/'native-call-path-sources.json',dict(binding=binding,sources=sources,
+            start_original='native-call-path-sources-start.json',end_original='native-call-path-sources-end.json'))
         save(out/'operations.json',operations)
         save(out/'operation-counts.json',dict(configuration_write_attempts=configuration.write_count,
-            matrix=args.matrix,applied_conditions=configuration.applied_count,human_operations=0,product_restarts=0,restored=restored['restored']))
+            matrix=args.matrix,applied_conditions=configuration.applied_count,human_operations=0,product_restarts=0,
+            native_verifier_sha256=SHA(verifier_source),native_verifier_read_back=True,
+            native_call_path_sources_read_back=len(sources),runtime_identity_read_backs=2,restored=restored['restored']))
     if args.matrix=='keys':
         from capture_run_originals import capture
         captured=[]

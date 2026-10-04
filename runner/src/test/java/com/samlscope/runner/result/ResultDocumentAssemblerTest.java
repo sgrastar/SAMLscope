@@ -105,6 +105,44 @@ class ResultDocumentAssemblerTest {
     }
 
     @Test
+    void externallyObservedAttestedModeKeepsItsModeWithoutAFalseAttestationBadge() throws Exception {
+        var fixture = fixture();
+        for (var evidenceClass : List.of("PROTOCOL_OBSERVED", "OPERATOR_ASSISTED")) {
+            var original = context();
+            var observed = new ResultDocumentContext(original.suite(), original.evaluationComponents(),
+                    original.profileSpec(), original.target(), original.requirementSpecUrls(),
+                    original.caseDefinitionUrls(), Map.of("REQ-b-idp-01", evidenceClass), original.advisories());
+            var document = ResultDocumentAssembler.assemble(fixture.catalog(), fixture.plan(), fixture.run(),
+                    fixture.evaluation(), fixture.cases(), observed);
+            var caseView = document.requirements().getFirst().cases().get(1);
+            assertEquals("ATTESTED", caseView.mode());
+            assertEquals(evidenceClass, caseView.evidenceClass());
+            assertFalse(caseView.attested());
+            assertEquals(2, document.evidenceSummary().externallyVerified());
+            assertEquals(0, document.evidenceSummary().selfAttested());
+            assertEquals(fixture.evaluation().conformance(), document.run().conformance());
+            var tree = new ResultJsonWriter().mapper().readTree(new ResultJsonWriter().write(document));
+            assertFalse(tree.at("/requirements/0/cases/1/attested").asBoolean());
+        }
+    }
+
+    @Test
+    void selfAttestedEvidenceRetainsItsBadgeEvenWhenTheDefaultModeIsAutomatic() {
+        var fixture = fixture();
+        var original = context();
+        var attested = new ResultDocumentContext(original.suite(), original.evaluationComponents(),
+                original.profileSpec(), original.target(), original.requirementSpecUrls(),
+                original.caseDefinitionUrls(), Map.of("REQ-a-idp-01", "SELF_ATTESTED"), original.advisories());
+        var document = ResultDocumentAssembler.assemble(fixture.catalog(), fixture.plan(), fixture.run(),
+                fixture.evaluation(), fixture.cases(), attested);
+        var caseView = document.requirements().getFirst().cases().getFirst();
+        assertEquals("AUTOMATED", caseView.mode());
+        assertTrue(caseView.attested());
+        assertEquals(2, document.evidenceSummary().selfAttested());
+        assertEquals(0, document.evidenceSummary().externallyVerified());
+    }
+
+    @Test
     void compositeDigestChangesForEveryEvaluationComponent() {
         var source = context().evaluationComponents();
         var changed = new ResultDocumentContext.EvaluationComponents(

@@ -17,6 +17,7 @@ def main():
     parser.add_argument('--profiles',default='browser_sso_idp,metadata_idp,ecp_idp,single_logout_idp')
     parser.add_argument('--playwright-modules',type=Path,required=True)
     parser.add_argument('--matrix',choices=['ec','certificate','keys'],default='ec')
+    parser.add_argument('--verify-request-signatures',action='store_true')
     args=parser.parse_args();out=args.output.resolve();out.mkdir(parents=True,exist_ok=False)
     variants=(['control','ecdsa-sha256','ecdsa-sha256-invalid-signature'] if args.matrix=='ec' else
         ['control','certificate-expired','certificate-not-yet-valid','certificate-critical-extension',
@@ -52,10 +53,12 @@ def main():
         if event_configuration(admin('/events/config'))!=event_configuration(configured):raise RuntimeError('Observer configuration differs')
         for profile in profiles:
             folder=out/profile;began=datetime.datetime.now(datetime.timezone.utc).isoformat()
-            child=subprocess.run([sys.executable,str(Path(__file__).with_name('import_metadata_batch.py')),
+            arguments=[sys.executable,str(Path(__file__).with_name('import_metadata_batch.py')),
                 '--output',str(folder),'--profile',profile,'--playwright-modules',str(args.playwright_modules.resolve()),
                 '--variants',','.join(variants),
-                '--suite-signature-control','--native-signature-observations'],check=False,timeout=900)
+                '--suite-signature-control','--native-signature-observations']
+            if args.verify_request_signatures:arguments.append('--verify-request-signatures')
+            child=subprocess.run(arguments,check=False,timeout=900)
             if not (folder/'created.json').exists():raise RuntimeError('Metadata campaign did not create a Run')
             run=json.loads((folder/'created.json').read_text())['run']['id'];plans.append(dict(profile=profile,run=run,exit_code=child.returncode))
             try:

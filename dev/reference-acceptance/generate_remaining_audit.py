@@ -4,6 +4,12 @@ from collections import Counter, defaultdict
 import hashlib
 import json
 from pathlib import Path
+
+# This generator adopts only independently replayed evidence.  Python removes
+# assertions under -O, so fail before reading any evidence in that mode.
+if not __debug__:
+    raise RuntimeError('remaining-audit generation must not run with Python optimization')
+
 import yaml
 
 GROUPS = {
@@ -210,11 +216,28 @@ def classify(row):
     raise ValueError(f'Unclassified interaction: {row}')
 
 def render(root,definitions,output):
+    # Adopted campaign originals are immutable. Reuse their complete verification only within
+    # this generation; a later invocation must re-read and verify the originals again.
+    campaign_checks = {}
+
+    def check_once(verifier, *args, **kwargs):
+        def freeze(value):
+            if isinstance(value, dict):
+                return tuple(sorted((key, freeze(item)) for key, item in value.items()))
+            if isinstance(value, (tuple, list)):
+                return tuple(freeze(item) for item in value)
+            return value
+        key = (verifier, freeze(args), freeze(kwargs))
+        if key not in campaign_checks:
+            campaign_checks[key] = verifier(*args, **kwargs)
+        return campaign_checks[key]
+
     implementations=implementation_audit()
     rows=json.loads((root/'baseline.json').read_text())
     catalog={c['id']:c for c in yaml.safe_load(definitions.read_text())['cases']}
     baseline_count=len(rows)
     refreshed=[]; transitions=[]
+    qualified_full_ui = set()
     for row in rows:
         if classify(row)=='pending_no_action':
             path=root/row['product']/'fresh_common/result.json'
@@ -225,7 +248,7 @@ def render(root,definitions,output):
                        result_sha256=hashlib.sha256(raw).hexdigest(),evidence_folder=str(path.parent),interaction=None)
             row['verdict']=case['verdict']; row['evidence']=case['evidence']
             transitions.append(dict(row))
-        additional = {'browser_sso_idp': {'IIP-G02-a-idp-01', 'IIP-G03-b-idp-01', 'IIP-SSO07-b-idp-01'},
+        additional = {'browser_sso_idp': {'IIP-G03-b-idp-01', 'IIP-SSO07-b-idp-01'},
                       'metadata_idp': {'IIP-MD05-fi-idp-01'}}
         if row['case'] in additional.get(row['profile'], set()):
             batch = ('literal-integrated-implementation' if row['case']=='IIP-G02-a-idp-01' else 'crypto-integrated-implementation' if row['case']=='IIP-SSO07-b-idp-01' else 'additional-implementation')
@@ -266,13 +289,14 @@ def render(root,definitions,output):
         if row['product']=='shibboleth' and row['profile']=='metadata_idp' \
                 and row['case'] in shib_import_evidence and row.get('verdict','NOT_VERIFIED')=='NOT_VERIFIED':
             folder,variants=shib_import_evidence[row['case']]
-            path, imported_cases = verify_shib_import(root.parent.parent/'reference-20260918',
+            path, imported_cases = check_once(verify_shib_import, root.parent.parent/'reference-20260918',
                     folder=folder, adopted={row['case']:variants})
             raw=path.read_bytes(); result=json.loads(raw); case=imported_cases[row['case']]
             row['baseline']={k:row.get(k) for k in ('run','reason_code','result_sha256','evidence_folder','interaction')}
             row.update(run=result['run']['id'],reason_code=case['reason_code'],
                        result_sha256=hashlib.sha256(raw).hexdigest(),
                        evidence_folder=str(path.parent.relative_to(root.parents[3])),
+                       result_file=path.name,
                        interaction=None,verdict=case['verdict'],evidence=case['evidence'],
                        diagnostics=case.get('diagnostics',{}))
             transitions.append(dict(row))
@@ -291,13 +315,14 @@ def render(root,definitions,output):
         if row['product']=='simplesamlphp' and row['profile']=='metadata_idp' \
                 and row['case'] in ssp_import_evidence and row.get('verdict','NOT_VERIFIED')=='NOT_VERIFIED':
             folder,variants=ssp_import_evidence[row['case']]
-            path, imported_cases = verify_ssp_import2(
+            path, imported_cases = check_once(verify_ssp_import2, 
                 root.parent.parent/'reference-20260918', folder=folder, adopted={row['case']: variants})
             raw=path.read_bytes(); result=json.loads(raw); case=imported_cases[row['case']]
             row['baseline']={k:row.get(k) for k in ('run','reason_code','result_sha256','evidence_folder','interaction')}
             row.update(run=result['run']['id'],reason_code=case['reason_code'],
                        result_sha256=hashlib.sha256(raw).hexdigest(),
                        evidence_folder=str(path.parent.relative_to(root.parents[3])),
+                       result_file=path.name,
                        interaction=None,verdict=case['verdict'],evidence=case['evidence'],
                        diagnostics=case.get('diagnostics',{}))
             transitions.append(dict(row))
@@ -312,13 +337,14 @@ def render(root,definitions,output):
         if row['product']=='keycloak' and row['profile']=='metadata_idp' \
                 and row['case'] in kc_import_evidence and row.get('verdict','NOT_VERIFIED')=='NOT_VERIFIED':
             folder,variants=kc_import_evidence[row['case']]
-            path, imported_cases = verify_kc_import2(root.parent.parent/'reference-20260918',
+            path, imported_cases = check_once(verify_kc_import2, root.parent.parent/'reference-20260918',
                     folder=folder, adopted={row['case']:variants})
             raw=path.read_bytes(); result=json.loads(raw); case=imported_cases[row['case']]
             row['baseline']={k:row.get(k) for k in ('run','reason_code','result_sha256','evidence_folder','interaction')}
             row.update(run=result['run']['id'],reason_code=case['reason_code'],
                        result_sha256=hashlib.sha256(raw).hexdigest(),
                        evidence_folder=str(path.parent.relative_to(root.parents[3])),
+                       result_file=path.name,
                        interaction=None,verdict=case['verdict'],evidence=case['evidence'],
                        diagnostics=case.get('diagnostics',{}))
             transitions.append(dict(row))
@@ -592,7 +618,7 @@ def render(root,definitions,output):
         from verify_slo_participant_capture import ADOPTED as SLO_PARTICIPANT_ADOPTED, verify as verify_slo_participant
         if row['profile']=='single_logout_idp' and row['product']=='shibboleth' \
                 and row['case'] in SLO_PARTICIPANT_ADOPTED and row.get('verdict','NOT_VERIFIED')=='NOT_VERIFIED':
-            path, verified_cases = verify_slo_participant(root.parent.parent/'reference-20260918')
+            path, verified_cases = check_once(verify_slo_participant, root.parent.parent/'reference-20260918')
             raw=path.read_bytes(); result=json.loads(raw); case=verified_cases[row['case']]
             row['baseline']={k:row.get(k) for k in ('run','reason_code','result_sha256','evidence_folder','interaction')}
             row.update(run=result['run']['id'],reason_code=case['reason_code'],
@@ -601,21 +627,97 @@ def render(root,definitions,output):
                        interaction=None,verdict=case['verdict'],evidence=case['evidence'],
                        diagnostics=case.get('diagnostics',{}))
             transitions.append(dict(row))
-        # A target-initiated-only logout run (no Suite-initiated LogoutRequest) lets the
-        # propagation rule observe the target continuing to the remaining participant after an
-        # induced participant failure.
-        from verify_slo_target_initiated_propagation import ADOPTED as SLO_PROPAGATION_ADOPTED, verify as verify_slo_propagation
+        # Suite participant sessions established through SimpleSAMLphp's unsolicited SSO profile
+        # let the product's own logout propagate LogoutRequests to the participants, recording the
+        # informational propagation and the HTTP-Redirect LogoutRequest binding. IIP-IDP18.c's
+        # variant additionally requires the participant SLO endpoint to be Redirect-only.
+        from verify_slo_ssp_propagation import ADOPTED as SSP_SLO_ADOPTED, verify as verify_ssp_slo
+        if row['profile']=='single_logout_idp' and row['product']=='simplesamlphp' \
+                and row['case'] in SSP_SLO_ADOPTED and row.get('verdict','NOT_VERIFIED')=='NOT_VERIFIED':
+            path, verified_cases = check_once(verify_ssp_slo, root.parent.parent/'reference-20260918')
+            raw=path.read_bytes(); result=json.loads(raw); case=verified_cases[row['case']]
+            row['baseline']={k:row.get(k) for k in ('run','reason_code','result_sha256','evidence_folder','interaction')}
+            row.update(run=result['run']['id'],reason_code=case['reason_code'],
+                       result_sha256=hashlib.sha256(raw).hexdigest(),
+                       evidence_folder=str(path.parent.relative_to(root.parents[3])),
+                       interaction=None,verdict=case['verdict'],evidence=case['evidence'],
+                       diagnostics=case.get('diagnostics',{}))
+            transitions.append(dict(row))
+        # The reference IdP's own iframe logout presents an explicit Continue button after an
+        # induced participant failure. The one-click repeat proves the final PartialLogout,
+        # but not continuation to another participant; IIP-IDP17.r remains NOT_VERIFIED.
+        from verify_ssp_iframe_partial_logout import ADOPTED as SSP_PARTIAL_ADOPTED, verify as verify_ssp_partial
+        if row['profile']=='single_logout_idp' and row['product']=='simplesamlphp' \
+                and row['case'] in SSP_PARTIAL_ADOPTED and row.get('verdict','NOT_VERIFIED')=='NOT_VERIFIED':
+            path, verified_cases = check_once(verify_ssp_partial, root.parent.parent/'reference-20260930')
+            raw=path.read_bytes(); result=json.loads(raw); case=verified_cases[row['case']]
+            row['baseline']={k:row.get(k) for k in ('run','reason_code','result_sha256','evidence_folder','interaction')}
+            row.update(run=result['run']['id'],reason_code=case['reason_code'],
+                       result_sha256=hashlib.sha256(raw).hexdigest(),
+                       evidence_folder=str(path.parent.relative_to(root.parents[3])),
+                       interaction=None,verdict=case['verdict'],evidence=case['evidence'],
+                       diagnostics=case.get('diagnostics',{}))
+            transitions.append(dict(row))
+        # An exact RequestedAuthnContext yielded a correlated encrypted Success whose
+        # decrypted class differs. The read-only in-container audit is bound to the
+        # exported request/response originals and the Run's existing plan key.
+        if row['product']=='keycloak' and row['profile']=='browser_sso_idp' \
+                and row['case']=='IIP-IDP05-a-idp-01' and row.get('verdict','NOT_VERIFIED')=='NOT_VERIFIED':
+            from verify_keycloak_idp_error_response import verify as verify_idp_error_response
+            path, verified_cases = check_once(verify_idp_error_response, root)
+            raw=path.read_bytes(); result=json.loads(raw); case=verified_cases[row['case']]
+            row['baseline']={k:row.get(k) for k in ('run','reason_code','result_sha256','evidence_folder','interaction')}
+            row.update(run=result['run']['id'],reason_code=case['reason_code'],
+                       result_sha256=hashlib.sha256(raw).hexdigest(),
+                       evidence_folder=str(path.parent.relative_to(root.parents[3])),
+                       interaction=None,verdict=case['verdict'],evidence=case['evidence'],
+                       diagnostics=case.get('diagnostics',{}))
+            transitions.append(dict(row))
+        # Product parsers explicitly rejected both approved DTD variants, while the
+        # same Run retained a correlated baseline SSO success and restored config.
+        if row['product'] in ('keycloak','simplesamlphp','shibboleth') and row['profile']=='browser_sso_idp' \
+                and row['case']=='IIP-G03-b-idp-01' and row.get('verdict','NOT_VERIFIED')=='NOT_VERIFIED':
+            from verify_keycloak_dtd_acceptance import verify as verify_keycloak_dtd
+            path, verified_cases = check_once(verify_keycloak_dtd, 
+                root, 'ssp' if row['product']=='simplesamlphp' else row['product'])
+            raw=path.read_bytes(); result=json.loads(raw); case=verified_cases[row['case']]
+            row['baseline']={k:row.get(k) for k in ('run','reason_code','result_sha256','evidence_folder','interaction')}
+            row.update(run=result['run']['id'],reason_code=case['reason_code'],
+                       result_sha256=hashlib.sha256(raw).hexdigest(),
+                       evidence_folder=str(path.parent.relative_to(root.parents[3])),
+                       interaction=None,verdict=case['verdict'],evidence=case['evidence'],
+                       diagnostics=case.get('diagnostics',{}))
+            transitions.append(dict(row))
+        # The SimpleSAMLphp browser chain adds an IdP-initiated (unsolicited) success to the
+        # SP-initiated success, so IIP-SSO01.g sees both success paths with an Assertion and
+        # IIP-SSO01.z records the unsolicited success.
+        from verify_ssp_browser_chain import ADOPTED as SSP_BROWSER_ADOPTED, verify as verify_ssp_browser
+        if row['profile']=='browser_sso_idp' and row['product']=='simplesamlphp' \
+                and row['case'] in SSP_BROWSER_ADOPTED and row.get('verdict','NOT_VERIFIED')=='NOT_VERIFIED':
+            path, verified_cases = check_once(verify_ssp_browser, root.parent.parent/'reference-20260918')
+            raw=path.read_bytes(); result=json.loads(raw); case=verified_cases[row['case']]
+            row['baseline']={k:row.get(k) for k in ('run','reason_code','result_sha256','evidence_folder','interaction')}
+            row.update(run=result['run']['id'],reason_code=case['reason_code'],
+                       result_sha256=hashlib.sha256(raw).hexdigest(),
+                       evidence_folder=str(path.parent.relative_to(root.parents[3])),
+                       interaction=None,verdict=case['verdict'],evidence=case['evidence'],
+                       diagnostics=case.get('diagnostics',{}))
+            transitions.append(dict(row))
+        # A native target-initiated logout proves continuation through the product's SAML
+        # originals, the Suite's correlated response, and byte-exact metadata restoration.
+        from verify_shibboleth_target_slo_continue import CASE as SLO_PROPAGATION_CASE, verify as verify_slo_propagation
         if row['profile']=='single_logout_idp' and row['product']=='shibboleth' \
-                and row['case'] in SLO_PROPAGATION_ADOPTED and row.get('verdict','NOT_VERIFIED')=='NOT_VERIFIED':
-            path, verified_cases = verify_slo_propagation(root.parent.parent/'reference-20260918')
-            raw=path.read_bytes(); result=json.loads(raw); case=verified_cases[row['case']]
-            row['baseline']={k:row.get(k) for k in ('run','reason_code','result_sha256','evidence_folder','interaction')}
-            row.update(run=result['run']['id'],reason_code=case['reason_code'],
-                       result_sha256=hashlib.sha256(raw).hexdigest(),
-                       evidence_folder=str(path.parent.relative_to(root.parents[3])),
-                       interaction=None,verdict=case['verdict'],evidence=case['evidence'],
-                       diagnostics=case.get('diagnostics',{}))
-            transitions.append(dict(row))
+                and row['case']==SLO_PROPAGATION_CASE and row.get('verdict','NOT_VERIFIED')=='NOT_VERIFIED':
+            path, verified_cases = check_once(verify_slo_propagation, root.parent.parent/'reference-20260930')
+            if row['case'] in verified_cases:
+                raw=path.read_bytes(); result=json.loads(raw); case=verified_cases[row['case']]
+                row['baseline']={k:row.get(k) for k in ('run','reason_code','result_sha256','evidence_folder','interaction')}
+                row.update(run=result['run']['id'],reason_code=case['reason_code'],
+                           result_sha256=hashlib.sha256(raw).hexdigest(),
+                           evidence_folder=str(path.parent.relative_to(root.parents[3])),
+                           interaction=None,verdict=case['verdict'],evidence=case['evidence'],
+                           diagnostics=case.get('diagnostics',{}))
+                transitions.append(dict(row))
         # Do not adopt the older slo_target_logout_18cd/rs result for IIP-IDP18-d: its
         # 'SATISFIED slo.redirect-response.consumed' outcome predates the current
         # LogoutTranscriptProfileCase.TARGET_REDIRECT_RESPONSE_CONSUMED oracle, which has no
@@ -624,7 +726,7 @@ def render(root,definitions,output):
         # Native console import followed by signed SSO, with per-fixture cleanup evidence.
         from verify_keycloak_import_batch import ADOPTED, verify as verify_import_batch
         if row['product']=='keycloak' and row['profile']=='metadata_idp' and row['case'] in ADOPTED:
-            path, imported_cases = verify_import_batch(root.parent.parent/'reference-20260917')
+            path, imported_cases = check_once(verify_import_batch, root.parent.parent/'reference-20260917')
             raw=path.read_bytes(); result=json.loads(raw); case=imported_cases[row['case']]
             row['baseline']={k:row.get(k) for k in ('run','reason_code','result_sha256','evidence_folder','interaction')}
             row.update(run=result['run']['id'],reason_code=case['reason_code'],
@@ -635,7 +737,7 @@ def render(root,definitions,output):
             transitions.append(dict(row))
         from verify_simplesamlphp_import_batch import ADOPTED as SSP_ADOPTED, verify as verify_ssp_import
         if row['product']=='simplesamlphp' and row['profile']=='metadata_idp' and row['case'] in SSP_ADOPTED:
-            path, imported_cases = verify_ssp_import(root.parent.parent/'reference-20260917')
+            path, imported_cases = check_once(verify_ssp_import, root.parent.parent/'reference-20260917')
             raw=path.read_bytes(); result=json.loads(raw); case=imported_cases[row['case']]
             row['baseline']={k:row.get(k) for k in ('run','reason_code','result_sha256','evidence_folder','interaction')}
             row.update(run=result['run']['id'],reason_code=case['reason_code'],
@@ -647,35 +749,226 @@ def render(root,definitions,output):
         # Adopt only explicit absence notes and the tested aggregate child-count obligation.
         from verify_publisher_ui_batch import ADOPTED as UI_ADOPTED, verify as verify_ui
         selected = None
+        # The native-console ACS URL campaign retains the complete imported-client
+        # read-back, deterministic temporary redirect-URI mutation, restored/deleted
+        # state, request/response originals, and runtime bindings.  Its verifier is
+        # fail-closed and accepts only the two correlated IDP12.e fixtures.
+        if row['product']=='keycloak' and row['profile']=='browser_sso_idp' \
+                and row['case']=='IIP-IDP12-e-idp-01':
+            from verify_keycloak_idp12e_acceptance import verify as verify_keycloak_idp12e
+            selected = check_once(verify_keycloak_idp12e, 
+                root.parent.parent/'reference-20260930'/'keycloak-idp12e-v145')
+        # Recorder-backed target-local terminal errors can now conclude exactly three approved
+        # SSO scenarios.  The adoption gate independently replays every request/response/body
+        # original, the positive controls and signed mutants, target/Suite runtime identity,
+        # byte-exact restoration, formal re-evaluation, and nine evidence tamper mutations.
+        if row['profile']=='browser_sso_idp' and row['product'] in {
+                'keycloak','shibboleth','simplesamlphp'} and row['case'] in {
+                'IIP-SSO01-d-idp-01','IIP-SSO01-ak-idp-01','IIP-SSO01-em-idp-01'}:
+            from verify_terminal_http_acceptance import PRODUCT_CASES as TERMINAL_HTTP_CASES
+            from verify_terminal_http_acceptance import verify as verify_terminal_http
+            if row['case'] in TERMINAL_HTTP_CASES[row['product']]:
+                selected = check_once(verify_terminal_http, root.parent.parent/'reference-20260930', row['product'])
+        # The IDP12.b adoption gate replays the eight approved fixtures, wire XML
+        # signatures, native other-entity registration, target runtime identity,
+        # browser originals, hostile-ACS non-arrival, and exact restoration before
+        # returning this single result.  Merely finding result.json is insufficient.
+        if row['product'] in {'keycloak','shibboleth'} and row['profile']=='browser_sso_idp' \
+                and row['case']=='IIP-IDP12-b-idp-01':
+            from verify_idp12b_acceptance import verify as verify_idp12b
+            selected = check_once(verify_idp12b, root.parent.parent/'reference-20260930', row['product'])
+        # Reuse the sealed Keycloak EXT01.b browser Run for SSO01.k only after its dedicated
+        # gate has bound the approved definition, exact five Recorder references, normal-flow
+        # and alternate-ACS controls, wire signatures, encrypted Assertions, pinned runtimes,
+        # and complete native restoration.  The gate is read-only and rejects evidence
+        # mutation; locating the EXT01.b result alone is not sufficient for adoption.
+        if row['product']=='keycloak' and row['profile']=='browser_sso_idp' \
+                and row['case']=='IIP-SSO01-k-idp-01':
+            from verify_sso01k_keycloak_acceptance import verify_adoption as verify_sso01k_keycloak
+            ext_root = root.parent.parent/'reference-20260930'/'ext01b-keycloak-v158'
+            selected = check_once(verify_sso01k_keycloak, ext_root)
+        # EXT01.b is an all-of check over the three approved extension placements plus the
+        # successful baseline.  Adopt only independently Run-bound four-profile batches after
+        # the gate has replayed every Recorder request/response original, exact formal evidence
+        # set, target/Suite runtime identity, native restoration, and tamper controls.
+        ext01b_roots = {
+            'keycloak': 'ext01b-keycloak-v158',
+            'shibboleth': 'ext01b-shibboleth-v155',
+            'simplesamlphp': 'ext01b-simplesamlphp-v158',
+        }
+        if row['product'] in ext01b_roots and row['profile'] in {
+                'browser_sso_idp','ecp_idp','metadata_idp','single_logout_idp'} \
+                and row['case']=='IIP-EXT01-b-idp-01':
+            from verify_ext01b_acceptance import verify_batch as verify_ext01b
+            ext_root = root.parent.parent/'reference-20260930'/ext01b_roots[row['product']]
+            accepted = check_once(verify_ext01b, ext_root, row['product'])
+            accepted_runs = {value['profile']: value['run'] for value in accepted['observations']}
+            path = ext_root/row['profile']/'evaluation-terminal-http-v1'/'result.json'
+            result = json.loads(path.read_text())
+            cases = {case['id']: case for requirement in result['requirements']
+                     for case in requirement['cases']}
+            if result['run']['id'] != accepted_runs.get(row['profile']):
+                raise ValueError('EXT01.b accepted Run/profile binding mismatch')
+            selected = (path, cases)
+        # EXT01.c is likewise an all-of observation: three active-protocol placements plus
+        # the control and all thirteen metadata attribute placements must succeed in the
+        # same Run.  The Shibboleth gate replays every original, the native filesystem
+        # provider reads, the resolver reloads, the formal evidence set, and byte-exact
+        # restoration before any of the four profile observations can leave the ledger.
+        if row['product']=='shibboleth' and row['profile'] in {
+                'browser_sso_idp','ecp_idp','metadata_idp','single_logout_idp'} \
+                and row['case']=='IIP-EXT01-c-idp-01':
+            from verify_ext01c_shibboleth_acceptance import verify_batch as verify_ext01c_shibboleth
+            ext_root = root.parent.parent/'reference-20260930'/'ext01c-shibboleth-v158'
+            accepted = check_once(verify_ext01c_shibboleth, ext_root)
+            accepted_runs = {value['profile']: value['run'] for value in accepted['observations']}
+            path = ext_root/row['profile']/'metadata'/'evaluation-terminal-http-v1'/'result.json'
+            result = json.loads(path.read_text())
+            cases = {case['id']: case for requirement in result['requirements']
+                     for case in requirement['cases']}
+            if result['run']['id'] != accepted_runs.get(row['profile']):
+                raise ValueError('EXT01.c accepted Run/profile binding mismatch')
+            selected = (path, cases)
+        # Keycloak target-initiated logout is driven through the native browser endpoint.
+        # The gate requires an authenticated product session, the emitted LogoutRequest and
+        # correlated Suite response originals, completed session removal, exact client cleanup,
+        # pinned runtimes, formal transcript evidence, and tamper rejection.  A confirmation
+        # page or session deletion alone is intentionally insufficient.
+        if row['product']=='keycloak' and row['profile']=='single_logout_idp' \
+                and row['case'] in {'IIP-IDP17-n-idp-01','IIP-IDP17-u-idp-01'}:
+            from verify_keycloak_target_logout_absence import verify as verify_keycloak_target_logout
+            selected = check_once(verify_keycloak_target_logout, root.parent.parent/'reference-20260930')
+        # MD06.b requires one native metadata source to serve two distinct Suite peers
+        # without a second target-side configuration.  The gate replays both correlated
+        # Success responses and their XML originals, verifies the unchanged configured
+        # source between peers, exact restoration, pinned runtimes, formal result, and
+        # ten evidence mutations before allowing either product row out of the ledger.
+        md06b_roots = {
+            'shibboleth': 'md06b-shibboleth-v158-r3',
+            'simplesamlphp': 'md06b-simplesamlphp-v158',
+        }
+        if row['product'] in md06b_roots and row['profile']=='metadata_idp' \
+                and row['case']=='IIP-MD06-b-idp-01':
+            from verify_md06b_multi_peer_acceptance import verify as verify_md06b
+            md06b_root = root.parent.parent/'reference-20260930'/md06b_roots[row['product']]
+            check_once(verify_md06b, md06b_root)
+            path = md06b_root/'result.json'
+            result = json.loads(path.read_text())
+            cases = {case['id']: case for requirement in result['requirements']
+                     for case in requirement['cases']}
+            receipt = json.loads((md06b_root/'receipt.json').read_text())
+            if result['run']['id'] != receipt['primaryRun']:
+                raise ValueError('MD06.b accepted Run/result binding mismatch')
+            selected = (path, cases)
+        # MD03.d is a two-source all-of observation.  Both products consumed metadata
+        # signed by K from source A while rejecting the same K-signed document from source B,
+        # whose native source configuration trusted only K2.  The gate verifies both signed
+        # originals, native acceptance/rejection, absence of a contradictory Success,
+        # unchanged source configuration, exact restoration, runtimes, and tamper controls.
+        md03d_roots = {
+            'shibboleth': 'md03d-shibboleth-v158',
+            'simplesamlphp': 'md03d-simplesamlphp-v158',
+        }
+        if row['product'] in md03d_roots and row['profile']=='metadata_idp' \
+                and row['case']=='IIP-MD03-d-idp-01':
+            from verify_md03d_source_scoped_trust_acceptance import verify as verify_md03d
+            md03d_root = root.parent.parent/'reference-20260930'/md03d_roots[row['product']]
+            check_once(verify_md03d, md03d_root)
+            path = md03d_root/'result.json'
+            result = json.loads(path.read_text())
+            cases = {case['id']: case for requirement in result['requirements']
+                     for case in requirement['cases']}
+            receipt = json.loads((md03d_root/'receipt.json').read_text())
+            if result['run']['id'] != receipt['primaryRun']:
+                raise ValueError('MD03.d accepted Run/result binding mismatch')
+            selected = (path, cases)
+        # Keycloak exposes the same approved obligations through a different native model.
+        # The fail-closed gate proves, from all 348 runtime JARs and every installed provider,
+        # that both native metadata import entry points converge on the single-entity converter
+        # and expose no source-scoped trust input.  Two independent clients and correlated
+        # Success responses are required as controls, followed by exact deletion read-back.
+        # The adoption verifier also replays eighteen evidence mutations before returning either
+        # formal capability_absent result.
+        if row['product']=='keycloak' and row['profile']=='metadata_idp' \
+                and row['case'] in {'IIP-MD06-b-idp-01','IIP-MD03-d-idp-01'}:
+            from verify_keycloak_metadata_source_capability_absence import \
+                verify_adoption as verify_keycloak_metadata_source_absence
+            metadata_source_path, metadata_source_cases = check_once(verify_keycloak_metadata_source_absence, 
+                root.parent.parent/'reference-20260930')
+            if metadata_source_path.is_absolute():
+                metadata_source_path = metadata_source_path.relative_to(Path.cwd())
+            selected = (metadata_source_path, metadata_source_cases)
+        # MD03.a/b/c have normative-capability semantics.  Adopt Keycloak's product failure
+        # only after the dedicated gate independently verifies the valid/unsigned/bad-signature
+        # controls, the out-of-band signer/embedded-KeyInfo split, all certificate variants,
+        # native UI/API read-back, full runtime/provider scan, exact restoration, and tamper set.
+        # The expired/not-yet-valid follow-up SSO rejections are retained as separate runtime
+        # observations and are not used as the MD03.c conclusion.
+        if row['product']=='keycloak' and row['profile']=='metadata_idp' \
+                and row['case'] in {'IIP-MD03-a-idp-01','IIP-MD03-b-idp-01',
+                                    'IIP-MD03-c-idp-01'}:
+            from verify_keycloak_metadata_signature_capability_absence import \
+                verify_adoption as verify_keycloak_metadata_signature_absence
+            signature_path, signature_cases = check_once(verify_keycloak_metadata_signature_absence, 
+                root.parent.parent/'reference-20260930')
+            if signature_path.is_absolute():
+                signature_path = signature_path.relative_to(Path.cwd())
+            selected = (signature_path, signature_cases)
+        # Keycloak's native metadata-URL converter and correlated SSO flows consumed the
+        # no-validUntil and expired documents.  The adoption gate pins the running product,
+        # all 348 JARs, the Suite Run/runtime, fetched originals, request/response signatures,
+        # same-variant invalid-signature controls, and exact temporary-client cleanup.
+        # MD05.as is adopted only from the expired document's unique signing key plus its
+        # control chain; configuration unavailability remains a test precondition.  MD04.c uses
+        # a separate minimal Run whose formal configuration conclusion is capability_absent.
+        if row['product']=='keycloak' and row['profile']=='metadata_idp' \
+                and row['case'] in {'IIP-MD04-a-idp-01','IIP-MD04-b-idp-01',
+                                    'IIP-MD04-c-idp-01','IIP-MD05-as-idp-01'}:
+            from verify_keycloak_validity_capability_absence import verify as verify_keycloak_validity
+            selected = check_once(verify_keycloak_validity, root.parent.parent/'reference-20260930', row['case'])
+        # Keycloak's native metadata-URL campaigns prove both the MDQ acquisition path and
+        # a second fetch with a changed document, correlated key use, invalid/old-key controls,
+        # exact client deletion, receipt read-back, pinned runtimes/classes, and tamper mutations.
+        if row['product']=='keycloak' and row['profile']=='metadata_idp' \
+                and row['case'] in {'IIP-MD01-a-idp-01','IIP-MD02-a-idp-01'}:
+            from verify_keycloak_metadata_url_acceptance import verify as verify_keycloak_metadata_url
+            selected = check_once(verify_keycloak_metadata_url, root.parent.parent/'reference-20260930', row['case'])
+        if row['profile']=='browser_sso_idp' and row['case']=='IIP-G02-a-idp-01':
+            from verify_g02_browser_chain import verify as verify_g02_browser
+            selected = check_once(verify_g02_browser, root.parent.parent/'reference-20260928', row['product'])
         if row['profile']=='metadata_idp' and row['case'] in UI_ADOPTED:
-            selected = verify_ui(root.parent.parent/'reference-20260918', row['product'])
+            selected = check_once(verify_ui, root.parent.parent/'reference-20260918', row['product'])
         if row['product']=='simplesamlphp' and row['profile']=='metadata_idp' and row['case']=='IIP-MD02-d-idp-01':
-            selected = verify_ssp_import(root.parent.parent/'reference-20260918',
+            selected = check_once(verify_ssp_import, root.parent.parent/'reference-20260918',
                 folder='simplesamlphp-aggregate-import', adopted={
                     'IIP-MD02-d-idp-01': ['entities-root-one','entities-root-two','entities-root-fifty']})
         if row['product']=='simplesamlphp' and row['profile']=='metadata_idp' and row['case']=='IIP-MD06-a1-idp-01':
-            selected = verify_ssp_import(root.parent.parent/'reference-20260918',
+            selected = check_once(verify_ssp_import, root.parent.parent/'reference-20260918',
                 folder='simplesamlphp-metadata-fixture-v67', adopted={
                     'IIP-MD06-a1-idp-01': ['entity-root','entities-root-one','nested-entities']})
         if row['product']=='simplesamlphp' and row['profile']=='browser_sso_idp' and row['case']=='IIP-IDP12-c-idp-01':
             from verify_default_acs_batch import verify as verify_default_acs
-            selected = verify_default_acs(root.parent.parent/'reference-20260918')
+            selected = check_once(verify_default_acs, root.parent.parent/'reference-20260918')
         if row['product']=='simplesamlphp' and row['profile']=='browser_sso_idp' and row['case'] in {
                 'IIP-SSO01-an-idp-01','IIP-SSO01-gi-idp-01'}:
             from verify_invalid_request_acceptance import verify as verify_invalid_request
-            selected = verify_invalid_request(root.parent.parent/'reference-20260918','simplesamlphp')
+            selected = check_once(verify_invalid_request, root.parent.parent/'reference-20260918','simplesamlphp')
         if row['product']=='keycloak' and row['profile']=='browser_sso_idp' and row['case'] in {
                 'IIP-SSO01-an-idp-01','IIP-SSO01-gi-idp-01'}:
             from verify_invalid_request_acceptance import verify as verify_invalid_request
-            selected = verify_invalid_request(root.parent.parent/'reference-20260918','keycloak')
+            selected = check_once(verify_invalid_request, root.parent.parent/'reference-20260918','keycloak')
         if row['product'] in {'shibboleth','keycloak'} and row['profile']=='browser_sso_idp' \
                 and row['case']=='IIP-IDP06-a-idp-01':
             from verify_force_authn_acceptance import verify as verify_force_authn
-            selected = verify_force_authn(root.parent.parent/'reference-20260918', row['product'])
+            selected = check_once(verify_force_authn, root.parent.parent/'reference-20260918', row['product'])
         if row['product']=='keycloak' and row['profile']=='browser_sso_idp' \
                 and row['case']=='IIP-IDP08-a-idp-01':
             from verify_authn_context_exact_acceptance import verify as verify_authn_context_exact
-            selected = verify_authn_context_exact(root.parent.parent/'reference-20260918')
+            selected = check_once(verify_authn_context_exact, root.parent.parent/'reference-20260918')
+        if row['product']=='shibboleth' and row['profile']=='browser_sso_idp' \
+                and row['case']=='IIP-IDP08-a-idp-01':
+            from verify_shibboleth_exact_authn_context_acceptance import verify as verify_shibboleth_exact
+            selected = check_once(verify_shibboleth_exact, root.parent.parent/'reference-20261002')
         if row['product']=='simplesamlphp' and row['profile']=='metadata_idp' and row['case']=='IIP-MD05-a3-idp-01':
             path=root.parent.parent/'reference-20260918/simplesamlphp-extension-points-corrected/result.json'
             result=json.loads(path.read_text())
@@ -689,10 +982,10 @@ def render(root,definitions,output):
             selected=(path,cases)
         if row['profile']=='metadata_idp' and row['case']=='IIP-MD05-ae-idp-01':
             from verify_single_signing_key_batch import verify as verify_single_key
-            selected=verify_single_key(root.parent.parent/'reference-20260918',row['product'])
+            selected=check_once(verify_single_key, root.parent.parent/'reference-20260918',row['product'])
         if row['product']=='keycloak' and row['profile']=='browser_sso_idp' and row['case']=='IIP-IDP12-c-idp-01':
             from audit_keycloak_default_acs import verify as verify_keycloak_acs
-            selected=verify_keycloak_acs(root.parent.parent/'reference-20260918')
+            selected=check_once(verify_keycloak_acs, root.parent.parent/'reference-20260918')
         if row['product']=='simplesamlphp' and row['profile']=='browser_sso_idp' and row['case']=='IIP-SSO01-cz-idp-01':
             path=root.parent.parent/'reference-20260918/simplesamlphp-opaque-principal-control/result.json'
             result=json.loads(path.read_text())
@@ -704,107 +997,591 @@ def render(root,definitions,output):
         if row['product']=='simplesamlphp' and row['profile']=='browser_sso_idp' and row['case'] in {
                 'IIP-ALG04-a-idp-01','IIP-ALG04-b-idp-01'}:
             from verify_shared_gcm_batch import verify as verify_shared_gcm
-            selected=verify_shared_gcm(root.parent.parent/'reference-20260918',
+            selected=check_once(verify_shared_gcm, root.parent.parent/'reference-20260918',
                 128 if row['case']=='IIP-ALG04-a-idp-01' else 256)
+        if row['product']=='simplesamlphp' and row['profile']=='ecp_idp' and row['case'] in {
+                'IIP-ALG04-a-idp-01','IIP-ALG04-b-idp-01'}:
+            from verify_shared_gcm_batch import verify as verify_shared_gcm
+            selected=check_once(verify_shared_gcm, root.parent.parent/'reference-20260929',
+                128 if row['case']=='IIP-ALG04-a-idp-01' else 256, 'ecp_idp')
         if row['product'] in {'simplesamlphp','keycloak','shibboleth'} and row['profile']=='metadata_idp' and row['case'] in {
                 'IIP-MD05-ea-idp-01','IIP-MD05-eb-idp-01'}:
             from verify_metadata_algorithm_outcomes import verify as verify_algorithm_outcomes
-            selected=verify_algorithm_outcomes(root.parent.parent/'reference-20260918',row['product'])
+            selected=check_once(verify_algorithm_outcomes, root.parent.parent/'reference-20260918',row['product'])
         if row['product'] in {'simplesamlphp','keycloak','shibboleth'} and row['profile']=='metadata_idp' and row['case'] in {
                 'IIP-MD05-e5-idp-01','IIP-MD05-e9-idp-01'}:
             from verify_algorithm_followup import verify as verify_algorithm_followup
-            selected=verify_algorithm_followup(root.parent.parent/'reference-20260918',row['product'])
+            selected=check_once(verify_algorithm_followup, root.parent.parent/'reference-20260918',row['product'])
         if row['product']=='shibboleth' and row['profile']=='metadata_idp' and row['case']=='IIP-MD05-e8-idp-01':
             from verify_metadata_intersection import verify as verify_intersection
-            selected=verify_intersection(root.parent.parent/'reference-20260918')
+            selected=check_once(verify_intersection, root.parent.parent/'reference-20260918')
         if row['product']=='shibboleth' and row['profile'] in {'browser_sso_idp','ecp_idp'} and row['case'] in {
                 'IIP-ALG04-b-idp-01','IIP-ALG06-b-idp-01','IIP-ALG06-c-idp-01'}:
             from verify_producer_algorithms import verify as verify_producer
-            selected=verify_producer(root.parent.parent/'reference-20260918',row['profile'])
+            selected=check_once(verify_producer, root.parent.parent/'reference-20260918',row['profile'])
+        if row['product']=='shibboleth' and row['profile'] in {'browser_sso_idp','ecp_idp'} and row['case'] in {
+                'IIP-ALG08-a-idp-01','IIP-ALG08-b-idp-01'}:
+            if row['profile']=='browser_sso_idp':
+                from verify_algorithm_prevention_acceptance import verify_adoption as verify_prevention
+            else:
+                from verify_algorithm_prevention_ecp_acceptance import verify_adoption as verify_prevention
+            selected=check_once(verify_prevention, root.parent.parent/'reference-20260930')
         if row['product']=='keycloak' and row['profile']=='metadata_idp' and row['case'] in {
                 'IIP-MD12-b-idp-01','IIP-MD12-d-idp-01'}:
             from verify_native_certificate_acceptance import verify as verify_native_certificates
-            selected=verify_native_certificates(root.parent.parent/'reference-20260918')
+            selected=check_once(verify_native_certificates, root.parent.parent/'reference-20260918')
         if row['product']=='keycloak' and row['profile']=='metadata_idp' and row['case'] in {
                 'IIP-MD06-a8-idp-01','IIP-MD07-a-idp-01'}:
             from verify_metadata_key_acceptance import verify as verify_metadata_keys
-            selected=verify_metadata_keys(root.parent.parent/'reference-20260918')
+            selected=check_once(verify_metadata_keys, root.parent.parent/'reference-20260918')
         if row['product']=='simplesamlphp' and row['profile']=='metadata_idp' and row['case'] in {
                 'IIP-MD06-a8-idp-01','IIP-MD07-b-idp-01'}:
             from verify_metadata_key_acceptance import verify as verify_metadata_keys
-            selected=verify_metadata_keys(root.parent.parent/'reference-20260918','simplesamlphp')
+            selected=check_once(verify_metadata_keys, root.parent.parent/'reference-20260918','simplesamlphp')
         if row['product']=='shibboleth' and row['profile']=='metadata_idp' and row['case'] in {
                 'IIP-MD06-a8-idp-01','IIP-MD07-b-idp-01'}:
             from verify_metadata_key_acceptance import verify as verify_metadata_keys
-            selected=verify_metadata_keys(root.parent.parent/'reference-20260918','shibboleth')
+            selected=check_once(verify_metadata_keys, root.parent.parent/'reference-20260918','shibboleth')
         if row['product']=='shibboleth' and row['profile']=='metadata_idp' and row['case'] in {
                 'IIP-MD03-a-idp-01','IIP-MD04-a-idp-01','IIP-MD04-b-idp-01','IIP-MD04-c-idp-01',
                 'IIP-MD05-a2-idp-01','IIP-MD05-as-idp-01','IIP-MD05-an-idp-01','IIP-MD05-am-idp-01'}:
             from verify_native_metadata_rejection_acceptance import verify as verify_native_rejection
-            selected=verify_native_rejection(root.parent.parent/'reference-20260918','shibboleth',row['case'])
+            selected=check_once(verify_native_rejection, root.parent.parent/'reference-20260918','shibboleth',row['case'])
         if row['product']=='shibboleth' and row['profile']=='metadata_idp' and row['case']=='IIP-MD05-e7-idp-01':
             from verify_metadata_algorithm_preference import verify as verify_algorithm_preference
-            selected=verify_algorithm_preference(root.parent.parent/'reference-20260918','shibboleth')
+            selected=check_once(verify_algorithm_preference, root.parent.parent/'reference-20260918','shibboleth')
         if row['product']=='shibboleth' and row['profile']=='metadata_idp' and row['case']=='IIP-MD05-c-idp-01':
             from verify_mdiop_acceptance import verify as verify_mdiop
-            selected=verify_mdiop(root.parent.parent/'reference-20260918','shibboleth')
+            selected=check_once(verify_mdiop, root.parent.parent/'reference-20260918','shibboleth')
         if row['product']=='shibboleth' and row['profile']=='metadata_idp' and row['case']=='IIP-MD03-b-idp-01':
             from verify_native_signature_key_acceptance import verify as verify_native_signature_key
-            selected=verify_native_signature_key(root.parent.parent/'reference-20260918','shibboleth')
+            selected=check_once(verify_native_signature_key, root.parent.parent/'reference-20260918','shibboleth')
+        if row['product']=='shibboleth' and row['profile']=='metadata_idp' and row['case']=='IIP-MD01-a-idp-01':
+            from verify_shibboleth_mdq_acceptance import verify as verify_native_mdq
+            selected=check_once(verify_native_mdq, root.parent.parent/'reference-20260930')
+        if row['product']=='simplesamlphp' and row['profile']=='metadata_idp' and row['case']=='IIP-MD01-a-idp-01':
+            from verify_ssp_mdq_acceptance import verify as verify_ssp_mdq
+            selected=check_once(verify_ssp_mdq, root.parent.parent/'reference-20260930')
+        # Product-native signature verification accepts the document signed by the configured
+        # out-of-band key and rejects bad-signature and embedded-anchor controls.  The adoption
+        # verifier regenerates the 29-control production-reader replay from the pinned Runner JAR
+        # before either case can leave the inventory.
+        if row['product']=='simplesamlphp' and row['profile']=='metadata_idp' and row['case'] in {
+                'IIP-MD03-b-idp-01', 'IIP-MD03-c-idp-01'}:
+            from verify_ssp_metadata_signature_acceptance import verify as verify_ssp_metadata_signature
+            selected=check_once(verify_ssp_metadata_signature, root.parent.parent/'reference-20260930')
+        # One restored native signature campaign supplies the refusal, XPath and KeyInfo
+        # obligations. Replay the pinned gate, rejection reader and case implementations;
+        # the earlier malformed XPath attempt is not adopted.
+        if row['product']=='simplesamlphp' and row['profile']=='metadata_idp' and row['case'] in {
+                'IIP-MD03-a-idp-01', 'IIP-MD05-am-idp-01', 'IIP-MD05-an-idp-01', 'IIP-MD05-ao-idp-01'}:
+            from verify_ssp_metadata_signature_consumer_acceptance import verify as verify_ssp_signature_consumers
+            selected=check_once(verify_ssp_signature_consumers,
+                root.parent.parent/'reference-20260930')
+        # MD02.a requires a real A-to-B recurring fetch, not the existing one-shot MDQ proof.
+        # The adoption gate pins the running Suite/JARs and target runtime, independently verifies
+        # the disjoint A/B signing keys, requires the B invalid-signature rejection plus correlated
+        # B success, checks the approved wait and exact restoration, and runs tamper controls.
+        if row['product']=='simplesamlphp' and row['profile']=='metadata_idp' \
+                and row['case']=='IIP-MD02-a-idp-01':
+            from verify_metadata_refresh_acceptance import verify as verify_metadata_refresh
+            refresh_path, refresh_cases, _ = check_once(verify_metadata_refresh, 
+                root.parent.parent/'reference-20260930'/'ssp-metadata-refresh-v153')
+            selected = (refresh_path, refresh_cases)
+        if row['product']=='simplesamlphp' and row['profile']=='metadata_idp' and row['case'] in {
+                'IIP-MD04-b-idp-01', 'IIP-MD05-as-idp-01'}:
+            from verify_ssp_native_mdq_rejection import verify as verify_ssp_native_rejection
+            selected=check_once(verify_ssp_native_rejection, root.parent.parent/'reference-20260930', row['case'])
+        if row['product']=='simplesamlphp' and row['profile']=='metadata_idp' and row['case'] in {
+                'IIP-MD04-a-idp-01', 'IIP-MD04-c-idp-01'}:
+            from verify_ssp_validity_capability_absence import verify as verify_ssp_validity
+            selected=check_once(verify_ssp_validity, root.parent.parent/'reference-20260930')
+        if row['product']=='simplesamlphp' and row['profile']=='metadata_idp' and row['case']=='IIP-MD05-b-idp-01':
+            from verify_ssp_schema_positive_rejection import verify as verify_ssp_schema_refusal
+            selected=check_once(verify_ssp_schema_refusal, root.parent.parent/'reference-20260930')
+        if row['product']=='simplesamlphp' and row['profile']=='metadata_idp' and row['case']=='IIP-MD05-av-idp-01':
+            from verify_ssp_default_acs_acceptance import verify as verify_ssp_default_acs
+            selected=check_once(verify_ssp_default_acs, root.parent.parent/'reference-20260930')
+        # MD05.ah is an all-of capability: the target must both publish metadata signed with
+        # RSA-SHA1 and natively verify RSA-SHA1 signatures.  The independent verifier replays
+        # the signed original, product-native positive/three negative controls, pinned runtime
+        # sources, receipt/run/hash bindings, and byte-exact configuration restoration.  An
+        # algorithm URI in metadata alone is intentionally insufficient for adoption.
+        if row['product']=='simplesamlphp' and row['profile']=='metadata_idp' \
+                and row['case']=='IIP-MD05-ah-idp-01':
+            from verify_ssp_rsa_sha1_metadata_acceptance import verify as verify_ssp_rsa_sha1
+            selected=check_once(verify_ssp_rsa_sha1, root.parent.parent/'reference-20260930')
+        if row['product']=='keycloak' and row['profile']=='metadata_idp' \
+                and row['case']=='IIP-MD05-ah-idp-01':
+            from verify_keycloak_rsa_sha1_metadata_acceptance import verify as verify_keycloak_rsa_sha1
+            selected=check_once(verify_keycloak_rsa_sha1, root.parent.parent/'reference-20260930')
+        if row['product']=='keycloak' and row['profile']=='metadata_idp' and row['case']=='IIP-MD05-av-idp-01':
+            from verify_keycloak_default_acs_acceptance import verify as verify_keycloak_default_acs
+            selected=check_once(verify_keycloak_default_acs, root.parent.parent/'reference-20260930')
+        if row['product']=='shibboleth' and row['profile']=='metadata_idp' and row['case']=='IIP-MD05-av-idp-01':
+            from verify_shibboleth_default_acs_acceptance import verify as verify_shibboleth_default_acs
+            selected=check_once(verify_shibboleth_default_acs, root.parent.parent/'reference-20260930')
+        if row['product'] in {'keycloak','shibboleth','simplesamlphp'} and row['profile']=='metadata_idp' \
+                and row['case']=='IIP-MD05-af-idp-01':
+            from verify_publisher_root_signature_acceptance import verify as verify_publisher_root
+            selected=check_once(verify_publisher_root, root.parent.parent/'reference-20260930', row['product'])
         if row['product']=='shibboleth' and row['profile']=='metadata_idp' and row['case']=='IIP-MD05-ao-idp-01':
             from verify_native_keyinfo_omission_acceptance import verify as verify_keyinfo_omission
-            selected=verify_keyinfo_omission(root.parent.parent/'reference-20260918','shibboleth')
+            selected=check_once(verify_keyinfo_omission, root.parent.parent/'reference-20260918','shibboleth')
         if row['product']=='keycloak' and row['profile']=='metadata_idp' and row['case']=='IIP-MD06-a9-idp-01':
             from verify_native_certificate_acceptance import verify as verify_native_certificates
-            selected=verify_native_certificates(root.parent.parent/'reference-20260918',runtime=True)
+            selected=check_once(verify_native_certificates, root.parent.parent/'reference-20260918',runtime=True)
         if row['product'] in {'keycloak','shibboleth','simplesamlphp'} and row['profile']=='browser_sso_idp' and row['case']=='IIP-SSO04-a-idp-01':
             from verify_signature_modes_acceptance import verify as verify_signature_modes
-            selected=verify_signature_modes(root.parent.parent/'reference-20260918',row['product'])
+            selected=check_once(verify_signature_modes, root.parent.parent/'reference-20260918',row['product'])
         if row['product']=='keycloak' and row['profile']=='ecp_idp' and row['case']=='IIP-ALG06-c-idp-01':
             from verify_native_producer_acceptance import verify as verify_native_producer
-            selected=verify_native_producer(root.parent.parent/'reference-20260918')
+            selected=check_once(verify_native_producer, root.parent.parent/'reference-20260918')
         if row['product']=='keycloak' and row['profile']=='browser_sso_idp' and row['case']=='IIP-ALG06-d-idp-01':
             from verify_producer_algorithms import verify_default_mgf_withdrawal
-            row['audit_withdrawal']=verify_default_mgf_withdrawal(root.parent.parent/'reference-20260918')
+            row['audit_withdrawal']=check_once(verify_default_mgf_withdrawal, root.parent.parent/'reference-20260918')
             assert row.get('verdict','NOT_VERIFIED')=='NOT_VERIFIED'
         if row['product']=='simplesamlphp' and row['profile']=='metadata_idp' and row['case']=='IIP-MD05-e8-idp-01':
-            from verify_simplesamlphp_intersection import verify as verify_ssp_intersection
-            selected=verify_ssp_intersection(root.parent.parent/'reference-20260918')
+            # Preserve the complete original matrix and additionally require native
+            # SHA256/SHA384 capability controls with the same actual signing key.
+            from verify_ssp_intersection_capability_acceptance import verify as verify_ssp_intersection
+            selected=check_once(verify_ssp_intersection, root.parent.parent/'reference-20260930')
         if row['product'] in {'simplesamlphp','shibboleth'} and row['profile']=='browser_sso_idp' and row['case']=='IIP-IDP01-a-idp-01':
             from verify_attribute_name_capability import verify as verify_attribute_names
-            selected=verify_attribute_names(root.parent.parent/'reference-20260918',row['product'])
+            selected=check_once(verify_attribute_names, root.parent.parent/'reference-20260918',row['product'])
         if row['product']=='shibboleth' and row['profile']=='browser_sso_idp' and row['case'] in {'IIP-IDP03-a-idp-01','IIP-IDP04-a-idp-01','IIP-IDP04-b-idp-01'}:
             from verify_attribute_policy_acceptance import verify as verify_attribute_policy
-            selected=verify_attribute_policy(root.parent.parent/'reference-20260918')
+            selected=check_once(verify_attribute_policy, root.parent.parent/'reference-20260918')
+        if row['product']=='simplesamlphp' and row['profile']=='browser_sso_idp' \
+                and row['case'] in {'IIP-IDP03-a-idp-01','IIP-IDP04-a-idp-01'}:
+            from verify_ssp_attribute_policy_acceptance import verify as verify_ssp_attribute_policy
+            selected=check_once(verify_ssp_attribute_policy, root.parent.parent/'reference-20260930')
         if row['product']=='shibboleth' and row['profile']=='metadata_idp' and row['case']=='IIP-MD05-f9-idp-01':
             from verify_ui_logo_acceptance import verify as verify_ui_logo
-            selected=verify_ui_logo(root.parent.parent/'reference-20260918')
+            selected=check_once(verify_ui_logo, root.parent.parent/'reference-20260918')
+        # Native policy set/add/remove controls prove prevention, separately from selecting an
+        # encryption algorithm. Replay the archived production reader; browser evidence is not
+        # reused for an ECP observation.
+        if row['product']=='keycloak' and row['profile']=='browser_sso_idp' and row['case'] in {
+                'IIP-ALG08-a-idp-01', 'IIP-ALG08-b-idp-01'}:
+            from verify_keycloak_algorithm_policy_acceptance import verify_adoption as verify_keycloak_algorithm_policy
+            selected=check_once(verify_keycloak_algorithm_policy,
+                root.parent.parent/'reference-20260930', live=False)
+        if row['product']=='keycloak' and row['profile']=='ecp_idp' and row['case'] in {
+                'IIP-ALG08-a-idp-01', 'IIP-ALG08-b-idp-01'}:
+            from verify_keycloak_ecp_algorithm_policy_acceptance import verify_adoption as verify_keycloak_ecp_algorithm_policy
+            selected=check_once(verify_keycloak_ecp_algorithm_policy,
+                root.parent.parent/'reference-20260930', live=False)
+        if row['product']=='shibboleth' and row['profile']=='metadata_idp' \
+                and row['case']=='IIP-MD02-a-idp-01':
+            from verify_shibboleth_metadata_refresh_acceptance import verify as verify_shibboleth_metadata_refresh
+            selected=check_once(verify_shibboleth_metadata_refresh,
+                root.parent.parent/'reference-20260930')
+        # Replay the native short-flow positive and separate 257-character producer
+        # control, including signed originals and exact restoration. ECP has no a2 case.
+        if row['product']=='simplesamlphp' and row['profile']=='browser_sso_idp' \
+                and row['case']=='IIP-SSO05-a2-idp-01':
+            from verify_ssp_persistent_length_acceptance import verify as verify_ssp_persistent_length
+            selected=check_once(verify_ssp_persistent_length,
+                root.parent.parent/'reference-20260930')
+        # Native imports preserve every imported key and apply the same signature policy
+        # before the twelve-condition matrix. Re-run the pinned reader and its 121 controls;
+        # the first-key control for MD07.b remains deliberately unqualified.
+        if row['product']=='keycloak' and row['profile']=='metadata_idp' and row['case'] in {
+                'IIP-MD05-ad-idp-01', 'IIP-MD05-cd-idp-01', 'IIP-MD06-a5-idp-01',
+                'IIP-MD06-a7-idp-01', 'IIP-MD06-a3-idp-01'}:
+            from verify_keycloak_native_key_policy_acceptance import verify_adoption as verify_keycloak_native_key_policy
+            selected=check_once(verify_keycloak_native_key_policy,
+                root.parent.parent/'reference-20260930', live=False)
+        if row['product']=='shibboleth' and row['profile']=='browser_sso_idp' and row['case'] in {
+                'IIP-SSO05-a-idp-01', 'IIP-SSO05-a2-idp-01', 'IIP-SSO05-a3-idp-01'}:
+            from verify_shibboleth_persistent_pairwise_acceptance import verify as verify_shibboleth_persistent
+            selected=check_once(verify_shibboleth_persistent,
+                root.parent.parent/'reference-20260930')
+        if row['product']=='simplesamlphp' and row['profile']=='browser_sso_idp' \
+                and row['case']=='IIP-SSO05-a3-idp-01':
+            from verify_ssp_persistent_pairwise_acceptance import verify as verify_ssp_pairwise
+            selected=check_once(verify_ssp_pairwise,
+                root.parent.parent/'reference-20261001', live=False)
+        if row['product']=='simplesamlphp' and row['profile']=='browser_sso_idp' \
+                and row['case']=='IIP-SSO01-cz-idp-01':
+            from verify_ssp_subject_principal_acceptance import verify as verify_ssp_subject_principal
+            selected=check_once(verify_ssp_subject_principal,
+                root.parent.parent/'reference-20261001', live=False)
+        if row['product']=='simplesamlphp' and row['profile']=='metadata_idp' \
+                and row['case'] in {'IIP-MD05-cd-idp-01', 'IIP-MD06-a5-idp-01', 'IIP-MD06-a7-idp-01'}:
+            from verify_ssp_keyvalue_runtime_acceptance import verify as verify_ssp_keyvalue_runtime
+            selected=check_once(verify_ssp_keyvalue_runtime,
+                root.parent.parent/'reference-20261001', live=False)
+        if row['product']=='shibboleth' and row['profile']=='metadata_idp' \
+                and row['case']=='IIP-MD05-ah-idp-01':
+            from verify_shibboleth_rsa_sha1_metadata_acceptance import verify as verify_shibboleth_rsa_sha1
+            selected=check_once(verify_shibboleth_rsa_sha1,
+                root.parent.parent/'reference-20261001', live=False)
+        if row['product']=='shibboleth' and row['profile']=='browser_sso_idp' \
+                and row['case']=='IIP-SSO01-ae-idp-01':
+            from verify_shibboleth_authentication_identity_acceptance import verify as verify_shibboleth_identity
+            selected=check_once(verify_shibboleth_identity,
+                root.parent.parent/'reference-20260930')
+        if row['product']=='simplesamlphp' and row['profile']=='browser_sso_idp' \
+                and row['case']=='IIP-SSO01-ae-idp-01':
+            from verify_ssp_authentication_identity_acceptance import verify as verify_ssp_authentication_identity
+            selected=check_once(verify_ssp_authentication_identity,
+                root.parent.parent/'reference-20261001', live=False)
+        if row['product']=='keycloak' and row['profile']=='browser_sso_idp' \
+                and row['case']=='IIP-SSO01-ae-idp-01':
+            from verify_keycloak_authentication_identity_acceptance import verify_adoption as verify_keycloak_identity
+            selected=check_once(verify_keycloak_identity,
+                root.parent.parent/'reference-20261002', live=False)
+        # Reuse one restored native campaign for all three effective-expiry variants.
+        # The native readers require before-expiry use, explicit native invalidation,
+        # original clocks/configuration, controls and exact restoration. Their adopters
+        # replay the deployed classes and the central stored outcome without more logins.
+        if row['product']=='shibboleth' and row['profile']=='metadata_idp' \
+                and row['case']=='IIP-MD05-ar-idp-01':
+            from verify_shibboleth_metadata_validity_acceptance import verify as verify_shibboleth_validity
+            selected=check_once(verify_shibboleth_validity,
+                root.parent.parent/'reference-20261002')
+        if row['product']=='simplesamlphp' and row['profile']=='metadata_idp' \
+                and row['case']=='IIP-MD05-ar-idp-01':
+            from verify_ssp_metadata_validity_acceptance import verify_adoption as verify_ssp_native_validity
+            selected=check_once(verify_ssp_native_validity,
+                root.parent.parent/'reference-20261002', live=False)
+        # Two identity obligations share the same native import, two authenticated
+        # peer flows and exact cleanup. Replay their recorded runtime once; adopting
+        # another applicable case must not repeat the operator's login or setup.
+        if row['product']=='keycloak' and row['profile']=='metadata_idp' \
+                and row['case'] in {'IIP-MD05-a1-idp-01', 'IIP-MD05-a2-idp-01'}:
+            from verify_keycloak_metadata_entity_identity_acceptance import verify_adoption as verify_keycloak_entity_identity
+            selected=check_once(verify_keycloak_entity_identity,
+                root.parent.parent/'reference-20261002', live=False)
+        if row['product']=='shibboleth' and row['profile']=='metadata_idp' \
+                and row['case']=='IIP-MD06-a2-idp-01':
+            from verify_metadata_role_key_acceptance import verify as verify_native_role_keys
+            selected=check_once(verify_native_role_keys,
+                root.parent.parent/'reference-20261002')
+        if row['product']=='simplesamlphp' and row['profile']=='metadata_idp' \
+                and row['case']=='IIP-MD06-a2-idp-01':
+            from verify_native_metadata_role_key_acceptance import verify as verify_ssp_native_role_keys
+            selected=check_once(verify_ssp_native_role_keys,
+                root.parent.parent/'reference-20261002', product='simplesamlphp')
+        # Each native campaign supplies one correlated operation transcript and
+        # exact restored state. Formal acceptance replays those originals rather
+        # than requesting another login for the same observation.
+        if row['product']=='keycloak' and row['profile']=='browser_sso_idp' \
+                and row['case']=='IIP-SSO01-al-idp-01':
+            from verify_keycloak_registered_signer_acceptance import verify_adoption as verify_keycloak_registered_signer
+            selected=check_once(verify_keycloak_registered_signer,
+                root.parent.parent/'reference-20261002', live=False)
+        if row['product']=='simplesamlphp' and row['profile']=='browser_sso_idp' \
+                and row['case']=='IIP-SSO01-al-idp-01':
+            from verify_ssp_registered_signer_acceptance import verify_adoption as verify_ssp_registered_signer
+            selected=check_once(verify_ssp_registered_signer,
+                root.parent.parent/'reference-20261002', live=False)
+        if row['product']=='shibboleth' and row['profile']=='browser_sso_idp' \
+                and row['case']=='IIP-SSO01-al-idp-01':
+            from verify_shibboleth_registered_signer_acceptance import verify_adoption as verify_shib_registered_signer
+            selected=check_once(verify_shib_registered_signer,
+                root.parent.parent/'reference-20261003', live=False)
+        if row['product']=='shibboleth' and row['profile']=='metadata_idp' \
+                and row['case']=='IIP-MD06-a6-idp-01':
+            from verify_metadata_certificate_runtime_acceptance import verify as verify_certificate_runtime
+            selected=check_once(verify_certificate_runtime,
+                root.parent.parent/'reference-20261002')
+        if row['product']=='simplesamlphp' and row['profile']=='metadata_idp' \
+                and row['case']=='IIP-MD06-a6-idp-01':
+            from verify_ssp_certificate_runtime_acceptance import verify_adoption as verify_ssp_certificate_runtime
+            selected=check_once(verify_ssp_certificate_runtime,
+                root.parent.parent/'reference-20261002', live=False)
+        if row['product']=='shibboleth' and row['profile']=='browser_sso_idp' \
+                and row['case']=='IIP-IDP06-b-idp-01':
+            from verify_shibboleth_forceauthn_mechanism_acceptance import verify as verify_shibboleth_forceauthn_mechanism
+            selected=check_once(verify_shibboleth_forceauthn_mechanism,
+                root.parent.parent/'reference-20261001')
+        if row['product']=='keycloak' and row['profile']=='metadata_idp' \
+                and row['case']=='IIP-MD05-c-idp-01':
+            from verify_keycloak_mdiop_representation_acceptance import verify_adoption as verify_keycloak_mdiop
+            selected=check_once(verify_keycloak_mdiop,
+                root.parent.parent/'reference-20260930', live=False)
+        if row['product']=='shibboleth' and row['profile']=='metadata_idp' \
+                and row['case']=='IIP-MD05-c-idp-01':
+            from verify_shibboleth_mdiop_full_acceptance import verify as verify_shibboleth_mdiop_full
+            selected=check_once(verify_shibboleth_mdiop_full,
+                root.parent.parent/'reference-20260930')
+        if row['product']=='shibboleth' and row['profile']=='metadata_idp' \
+                and row['case']=='IIP-MD05-cd-idp-01':
+            from verify_shibboleth_hintfree_key_acceptance import verify as verify_shibboleth_hintfree
+            selected=check_once(verify_shibboleth_hintfree,
+                root.parent.parent/'reference-20260930')
+        if row['product'] in {'keycloak','simplesamlphp'} and row['profile']=='browser_sso_idp' \
+                and row['case']=='IIP-SSO03-b-idp-01':
+            from verify_post_error_binding_acceptance import verify_adoption as verify_post_error_binding
+            selected=check_once(verify_post_error_binding,
+                root.parent.parent/'reference-20260930', row['product'], live=False)
+        if row['product']=='shibboleth' and row['profile']=='browser_sso_idp' \
+                and row['case']=='IIP-SSO03-b-idp-01':
+            from verify_shibboleth_post_error_binding_acceptance import verify as verify_shibboleth_post_error
+            selected=check_once(verify_shibboleth_post_error,
+                root.parent.parent/'reference-20261001')
+        if row['product']=='shibboleth' and row['profile']=='browser_sso_idp' \
+                and row['case']=='IIP-G02-a-idp-01':
+            from verify_shibboleth_g02_known_subject_acceptance import verify as verify_shibboleth_g02_known_subject
+            selected=check_once(verify_shibboleth_g02_known_subject,
+                root.parent.parent/'reference-20261001')
+        if row['product']=='shibboleth' and row['profile']=='browser_sso_idp' \
+                and row['case']=='IIP-SSO07-b-idp-01':
+            from verify_shibboleth_requested_subject_match_acceptance import verify as verify_shibboleth_requested_subject
+            selected=check_once(verify_shibboleth_requested_subject,
+                root.parent.parent/'reference-20261001')
+        if row['product']=='simplesamlphp' and row['profile']=='browser_sso_idp' \
+                and row['case']=='IIP-SSO01-fp-idp-01':
+            from verify_ssp_transient_allow_create_acceptance import verify as verify_ssp_transient_allow_create
+            selected=check_once(verify_ssp_transient_allow_create,
+                root.parent.parent/'reference-20261001', live=False)
+        if row['product']=='keycloak' and row['profile']=='browser_sso_idp' \
+                and row['case']=='IIP-SSO01-fp-idp-01':
+            from verify_keycloak_transient_allow_create_acceptance import verify_adoption as verify_keycloak_transient_allow_create
+            selected=check_once(verify_keycloak_transient_allow_create,
+                root.parent.parent/'reference-20261001', live=False)
+        if row['product']=='shibboleth' and row['profile']=='browser_sso_idp' \
+                and row['case']=='IIP-SSO01-fp-idp-01':
+            from verify_shibboleth_transient_allow_create_acceptance import verify as verify_shibboleth_transient_allow_create
+            selected=check_once(verify_shibboleth_transient_allow_create,
+                root.parent.parent/'reference-20261001')
+        if row['product']=='keycloak' and row['profile']=='metadata_idp' \
+                and row['case']=='IIP-MD05-b-idp-01':
+            from verify_keycloak_native_schema_admission_acceptance import verify_adoption as verify_keycloak_native_schema
+            selected=check_once(verify_keycloak_native_schema,
+                root.parent.parent/'reference-20261001', live=False)
+        if row['product']=='simplesamlphp' and row['profile']=='browser_sso_idp' \
+                and row['case'] in {'IIP-SSO01-fr-idp-01','IIP-SSO01-gd-idp-01'}:
+            from verify_ssp_subject_confirmation_acceptance import verify as verify_ssp_subject_confirmation
+            selected=check_once(verify_ssp_subject_confirmation,
+                root.parent.parent/'reference-20261001', live=False)
+        if row['product']=='keycloak' and row['profile']=='browser_sso_idp' \
+                and row['case'] in {'IIP-SSO01-fr-idp-01','IIP-SSO01-gd-idp-01'}:
+            from verify_keycloak_subject_confirmation_acceptance import verify_adoption as verify_keycloak_subject_confirmation
+            selected=check_once(verify_keycloak_subject_confirmation,
+                root.parent.parent/'reference-20261001', live=False)
+        if row['product']=='shibboleth' and row['profile']=='browser_sso_idp' \
+                and row['case'] in {'IIP-SSO01-fr-idp-01','IIP-SSO01-gd-idp-01'}:
+            from verify_shibboleth_subject_confirmation_acceptance import verify as verify_shibboleth_subject_confirmation
+            selected=check_once(verify_shibboleth_subject_confirmation,
+                root.parent.parent/'reference-20261001')
+        if row['product']=='simplesamlphp' and row['profile']=='browser_sso_idp' \
+                and row['case']=='IIP-IDP04-b-idp-01':
+            from verify_ssp_attribute_service_index_acceptance import verify as verify_ssp_attribute_service_index
+            selected=check_once(verify_ssp_attribute_service_index,
+                root.parent.parent/'reference-20261001', live=False)
+        if row['product']=='keycloak' and row['profile']=='metadata_idp' \
+                and row['case']=='IIP-MD06-ab-idp-01':
+            from verify_keycloak_supersession_counterexample_acceptance import verify_adoption as verify_keycloak_supersession_counterexample
+            selected=check_once(verify_keycloak_supersession_counterexample,
+                root.parent.parent/'reference-20261001', live=False)
+        if row['product']=='simplesamlphp' and row['profile']=='single_logout_idp' \
+                and row['case']=='IIP-IDP19-c-idp-01':
+            from verify_ssp_encrypted_logout_acceptance import verify as verify_ssp_native_encrypted_logout
+            selected=check_once(verify_ssp_native_encrypted_logout,
+                root.parent.parent/'reference-20261001', live=False)
+        if row['product']=='keycloak' and row['profile']=='browser_sso_idp' \
+                and row['case']=='IIP-SSO05-a3-idp-01':
+            from verify_keycloak_persistent_pairwise_acceptance import verify_adoption as verify_keycloak_pairwise
+            selected=check_once(verify_keycloak_pairwise,
+                root.parent.parent/'reference-20261001', live=False)
+        if row['product']=='shibboleth' and row['profile']=='single_logout_idp' \
+                and row['case']=='IIP-IDP17-s-idp-01':
+            from verify_shibboleth_native_slo_acceptance import verify as verify_shibboleth_native_slo
+            selected=check_once(verify_shibboleth_native_slo,
+                root.parent.parent/'reference-20261001')
+        if row['product']=='shibboleth' and row['profile']=='metadata_idp' \
+                and row['case']=='IIP-MD05-a1-idp-01':
+            from verify_shibboleth_entityid_uniqueness_acceptance import verify as verify_shibboleth_entityid_uniqueness
+            selected=check_once(verify_shibboleth_entityid_uniqueness,
+                root.parent.parent/'reference-20261001')
+        if row['product']=='simplesamlphp' and row['profile']=='metadata_idp' \
+                and row['case']=='IIP-MD05-fj-idp-01':
+            from verify_ssp_consent_ui_acceptance import verify as verify_ssp_consent_ui
+            selected=check_once(verify_ssp_consent_ui,
+                root.parent.parent/'reference-20261001', live=False)
+        if row['product']=='simplesamlphp' and row['profile']=='metadata_idp' \
+                and row['case']=='IIP-MD05-f9-idp-01':
+            from verify_ssp_consent_logo_acceptance import verify as verify_ssp_consent_logo
+            selected=check_once(verify_ssp_consent_logo,
+                root.parent.parent/'reference-20261001', live=False)
+        if row['product']=='simplesamlphp' and row['profile']=='metadata_idp' \
+                and row['case'] in {'IIP-MD05-fb-idp-01','IIP-MD05-fh-idp-01'}:
+            from verify_ssp_consent_uri_acceptance import verify as verify_ssp_consent_uri
+            selected=check_once(verify_ssp_consent_uri,
+                root.parent.parent/'reference-20261001', live=False)
+        if row['product']=='simplesamlphp' and row['profile']=='metadata_idp' \
+                and row['case']=='IIP-MD05-fg-idp-01':
+            from verify_ssp_consent_safety_acceptance import verify as verify_ssp_consent_safety
+            selected=check_once(verify_ssp_consent_safety,
+                root.parent.parent/'reference-20261001', live=False)
+        if row['product']=='simplesamlphp' and row['profile']=='metadata_idp' \
+                and row['case']=='IIP-MD05-c-idp-01':
+            from verify_ssp_mdiop_admission_acceptance import verify as verify_ssp_mdiop
+            selected=check_once(verify_ssp_mdiop,
+                root.parent.parent/'reference-20261001', live=False)
+        if row['product']=='shibboleth' and row['profile']=='metadata_idp' \
+                and row['case'] in {'IIP-MD05-fb-idp-01','IIP-MD05-fg-idp-01',
+                                    'IIP-MD05-fh-idp-01','IIP-MD05-fj-idp-01'}:
+            from verify_shibboleth_native_ui_acceptance import verify as verify_shibboleth_native_ui
+            selected=check_once(verify_shibboleth_native_ui,
+                root.parent.parent/'reference-20261001')
+        if row['product']=='keycloak' and row['profile']=='metadata_idp' \
+                and row['case']=='IIP-MD06-a-idp-01':
+            from verify_keycloak_metadata_supersession_acceptance import verify_adoption as verify_keycloak_application
+            selected=check_once(verify_keycloak_application,
+                root.parent.parent/'reference-20261001', live=False)
+        if row['product']=='keycloak' and row['profile']=='metadata_idp' \
+                and row['case']=='IIP-MD06-c-idp-01':
+            from verify_keycloak_self_contained_trust_acceptance import verify_adoption as verify_keycloak_self_contained_trust
+            selected=check_once(verify_keycloak_self_contained_trust,
+                root.parent.parent/'reference-20261001', live=False)
+        if row['product']=='simplesamlphp' and row['profile']=='metadata_idp' \
+                and row['case']=='IIP-MD06-c-idp-01':
+            from verify_simplesamlphp_self_contained_trust_acceptance import verify as verify_ssp_self_contained_trust
+            selected=check_once(verify_ssp_self_contained_trust,
+                root.parent.parent/'reference-20261002')
+        # One native role-key campaign supplies the complete self-contained trust
+        # proof. Its adopter checks the deployed reader, exact restoration and
+        # unchanged transcript; diagnostic controls never become product results.
+        if row['product']=='shibboleth' and row['profile']=='metadata_idp' \
+                and row['case']=='IIP-MD06-c-idp-01':
+            from verify_shibboleth_self_contained_trust_acceptance import verify_adoption as verify_shib_self_contained_trust
+            selected=check_once(verify_shib_self_contained_trust,
+                root.parent.parent/'reference-20261003', live=False)
+        if row['product']=='shibboleth' and row['profile']=='metadata_idp' \
+                and row['case'] in {'IIP-MD06-a-idp-01','IIP-MD06-ab-idp-01'}:
+            from verify_shibboleth_metadata_application_acceptance import verify_adoption as verify_shib_metadata_application
+            selected=check_once(verify_shib_metadata_application,
+                root.parent.parent/'reference-20261003', live=False)
+        # Reuse the completed native XML-signature controls and restored state.
+        # The approved case permits a note when no incoming LogoutResponse was
+        # observed; its central WARNING remains distinct from product failure.
+        if row['product'] in {'keycloak','shibboleth','simplesamlphp'} and row['profile']=='single_logout_idp' \
+                and row['case']=='IIP-IDP17-ab-idp-01':
+            from verify_slo_registered_signer_acceptance import verify_adoption as verify_slo_registered_signer
+            selected=check_once(verify_slo_registered_signer,
+                root.parent.parent/'reference-20261004', row['product'], live=False)
+        # The selected browser Run includes both terminal variants and its normal
+        # control. The adopter partitions actual target sends from Suite-only
+        # aborted requests and preserves the centrally evaluated note/Warning.
+        if row['product']=='simplesamlphp' and row['profile']=='browser_sso_idp' \
+                and row['case']=='IIP-SSO01-ep-idp-01':
+            from verify_version_mismatch_acceptance import verify as verify_version_mismatch
+            path, verified_ids=check_once(verify_version_mismatch,
+                root.parent.parent/'reference-20261004', live=False)
+            result=json.loads(path.read_bytes())
+            cases=[case for requirement in result['requirements']
+                   for case in requirement['cases'] if case['id'] in verified_ids]
+            if verified_ids!={row['case']} or len(cases)!=1:
+                raise ValueError('Version mismatch adoption has an unexpected case scope')
+            selected=(path,{cases[0]['id']:cases[0]})
+        # Adopt the stock native Run only after its full SOAP trials and the
+        # separately executed approved mutant pass the same archived predicate.
+        if row['product']=='shibboleth' and row['profile']=='single_logout_idp' \
+                and row['case']=='IIP-IDP17-r-idp-01':
+            native_root=root.parent.parent/'reference-20261004'
+            native_result=native_root/'shibboleth-soap-slo-continuation-r5/evaluation-actual/result.json'
+            if native_result.is_file():
+                from verify_slo_soap_continuation_acceptance import verify as verify_soap_continuation
+                path,verified_ids=check_once(verify_soap_continuation,native_root,live=False)
+                result=json.loads(path.read_bytes())
+                cases=[case for requirement in result['requirements']
+                       for case in requirement['cases'] if case['id'] in verified_ids]
+                if verified_ids!={row['case']} or len(cases)!=1:
+                    raise ValueError('SOAP continuation adoption has an unexpected case scope')
+                selected=(path,{cases[0]['id']:cases[0]})
+        # The unchanged default policy and all native algorithm controls belong
+        # to this browser Run. Do not reuse it for another profile's obligation.
+        if row['product']=='shibboleth' and row['profile']=='browser_sso_idp' \
+                and row['case']=='IIP-ALG08-c-idp-01':
+            from verify_shibboleth_default_algorithm_acceptance import verify as verify_shib_default_algorithms
+            selected=check_once(verify_shib_default_algorithms,
+                root.parent.parent/'reference-20261004')
+        if row['product']=='keycloak' and row['profile']=='metadata_idp' \
+                and row['case']=='IIP-MD05-fg-idp-01':
+            from verify_keycloak_ui_safety_acceptance import verify_adoption as verify_keycloak_ui_safety
+            selected=check_once(verify_keycloak_ui_safety,
+                root.parent.parent/'reference-20261003', live=False)
+        if row['product']=='keycloak' and row['profile']=='metadata_idp' \
+                and row['case'] in {'IIP-MD05-f9-idp-01','IIP-MD05-fh-idp-01'}:
+            from verify_keycloak_native_ui_consumer_acceptance import verify_adoption as verify_keycloak_native_ui
+            selected=check_once(verify_keycloak_native_ui,
+                root.parent.parent/'reference-20261001', live=False)
+        if row['product']=='keycloak' and row['profile']=='metadata_idp' \
+                and row['case']=='IIP-MD05-e8-idp-01':
+            from verify_keycloak_intersection_capability_acceptance import verify_adoption as verify_keycloak_intersection
+            selected=check_once(verify_keycloak_intersection,
+                root.parent.parent/'reference-20260930'/'keycloak-intersection-capability-sha512-v167', live=False)
+        if row['product']=='shibboleth' and row['profile']=='metadata_idp' \
+                and row['case']=='IIP-MD06-a3-idp-01':
+            from verify_shibboleth_role_signing_transport_acceptance import verify as verify_shibboleth_http_role
+            selected=check_once(verify_shibboleth_http_role,
+                root.parent.parent/'reference-20260930')
+        # Keycloak's product console import, full Admin API read-back, native converter,
+        # request-bound login decision, pinned runtime classes, correlated Success, and exact
+        # deletion read-back prove the approved no-feature note for these two cases only.
+        # Logo and URL cases are deliberately excluded because the native converter consumes Logo.
+        if row['product']=='keycloak' and row['profile']=='metadata_idp' \
+                and row['case'] in {'IIP-MD05-fb-idp-01','IIP-MD05-fj-idp-01'}:
+            from verify_keycloak_ui_feature_absence import verify as verify_keycloak_ui_absence
+            selected=check_once(verify_keycloak_ui_absence, root.parent.parent/'reference-20260930')
         if row['product'] in {'shibboleth','simplesamlphp','keycloak'} and row['profile']=='browser_sso_idp' and row['case']=='IIP-IDP02-a-idp-01':
             from verify_relying_party_attribute_acceptance import verify as verify_relying_party_attributes
-            selected=verify_relying_party_attributes(root.parent.parent/'reference-20260918',row['product'])
+            selected=check_once(verify_relying_party_attributes, root.parent.parent/'reference-20260918',row['product'])
         if row['product']=='shibboleth' and row['profile']=='browser_sso_idp' and row['case']=='IIP-IDP11-a-idp-01':
             from verify_nameid_omission_acceptance import verify as verify_nameid_omission
-            selected=verify_nameid_omission(root.parent.parent/'reference-20260918')
+            selected=check_once(verify_nameid_omission, root.parent.parent/'reference-20260918')
+        if row['product']=='keycloak' and row['profile']=='browser_sso_idp' and row['case']=='IIP-IDP11-a-idp-01':
+            from verify_keycloak_nameid_omission_absence import verify_adoption as verify_keycloak_nameid_absence
+            selected=check_once(verify_keycloak_nameid_absence, root.parent.parent/'reference-20260930')
         if row['product']=='shibboleth' and row['profile']=='browser_sso_idp' and row['case'] in {
                 'IIP-SSO01-ga-idp-01','IIP-SSO01-gb-idp-01','IIP-SSO01-gc-idp-01','IIP-SSO01-gj-idp-01'}:
             from verify_authn_context_acceptance import verify as verify_authn_context
-            selected=verify_authn_context(root.parent.parent/'reference-20260918')
+            selected=check_once(verify_authn_context, root.parent.parent/'reference-20260918')
         if row['product'] in {'shibboleth','keycloak','simplesamlphp'} and row['profile'] in {'browser_sso_idp','metadata_idp','ecp_idp','single_logout_idp'} and row['case']=='IIP-ALG03-a-idp-01':
             from verify_native_ec_acceptance import verify as verify_native_ec
-            selected=verify_native_ec(root.parent.parent/'reference-20260918',row['profile'],row['product'])
+            selected=check_once(verify_native_ec, root.parent.parent/'reference-20260918',row['profile'],row['product'])
         if row['product'] in {'simplesamlphp','keycloak'} and row['case'] in {'IIP-ALG01-a-idp-01','IIP-ALG02-a-idp-01'}:
             from verify_native_signed_acceptance import verify as verify_native_signed
-            selected=verify_native_signed(root.parent.parent/'reference-20260918',row['profile'],row['product'])
+            selected=check_once(verify_native_signed, root.parent.parent/'reference-20260918',row['profile'],row['product'])
         if row['product']=='keycloak' and row['profile']=='browser_sso_idp' and row['case']=='IIP-IDP01-a-idp-01':
-            from verify_keycloak_attribute_name_diagnosis import verify as verify_keycloak_attribute_names
-            selected=verify_keycloak_attribute_names(root.parent.parent/'reference-20260918')
+            from verify_keycloak_attribute_name_absence import verify as verify_keycloak_attribute_names
+            selected=check_once(verify_keycloak_attribute_names, root.parent.parent/'reference-20260930')
+        # Keycloak's two metadata-driven attribute-policy obligations have normative-capability
+        # semantics.  Adopt only the fail-closed native capability audit: both installed import
+        # paths, all installed SAML mapper providers, converter/runtime originals, a correlated
+        # signed SSO control, credential-redacted client read-back, and exact deletion restoration.
+        # IDP04.b remains excluded because its approved semantics are test_precondition.
+        if row['product']=='keycloak' and row['profile']=='browser_sso_idp' and row['case'] in {
+                'IIP-IDP03-a-idp-01','IIP-IDP04-a-idp-01'}:
+            from verify_keycloak_attribute_policy_capability_absence import verify as verify_keycloak_policy_absence
+            policy_path, policy_cases = check_once(verify_keycloak_policy_absence, 
+                root.parent.parent/'reference-20260930')
+            if policy_path.is_absolute():
+                policy_path = policy_path.relative_to(Path.cwd())
+            selected=(policy_path, policy_cases)
+        if row['product']=='shibboleth' and row['profile']=='metadata_idp' \
+                and row['case']=='IIP-MD05-f-idp-01':
+            native_root = root.parent.parent/'reference-20261003'
+            native_result = native_root/'shibboleth-full-ui-r2/evaluation-v206/result.json'
+            if native_result.is_file():
+                from verify_shibboleth_full_ui_acceptance import verify_adoption as verify_shib_full_ui
+                selected=check_once(verify_shib_full_ui, native_root, live=False)
+                qualified_full_ui.add((row['product'], row['profile'], row['case']))
         if selected is not None:
             path, selected_cases = selected
+            if path.is_absolute():
+                path = path.relative_to(Path.cwd())
             raw=path.read_bytes(); result=json.loads(raw); case=selected_cases[row['case']]
             row['baseline']={k:row.get(k) for k in ('run','reason_code','result_sha256','evidence_folder','interaction')}
             row.update(run=result['run']['id'],reason_code=case['reason_code'],
                        result_sha256=hashlib.sha256(raw).hexdigest(),
                        evidence_folder=str(path.parent.relative_to(root.parents[3])),
+                       result_file=path.name,
                        interaction=None,verdict=case['verdict'],evidence=case['evidence'],
                        diagnostics=case.get('diagnostics',{}))
             transitions.append(dict(row))
@@ -817,7 +1594,7 @@ def render(root,definitions,output):
     for row in withdrawn:
         if row['product'] in {'shibboleth','simplesamlphp','keycloak'}:
             from verify_native_signed_acceptance import verify as verify_native_signed
-            path,cases=verify_native_signed(root.parent.parent/'reference-20260918',row['profile'],row['product'])
+            path,cases=check_once(verify_native_signed, root.parent.parent/'reference-20260918',row['profile'],row['product'])
             raw=path.read_bytes();result=json.loads(raw);case=cases[row['case']]
             row=dict(row)
             row['previous_audit_withdrawal']=row.pop('audit_withdrawal')
@@ -829,6 +1606,30 @@ def render(root,definitions,output):
         else:
             refreshed.append(row)
     (root/'algorithm-verification-withdrawals.json').write_text(json.dumps(withdrawn,ensure_ascii=False,indent=2)+'\n')
+    from audit_force_authn_mechanism_evidence import withdrawals as force_authn_withdrawals
+    mechanism_withdrawn = force_authn_withdrawals(root.parent)
+    mechanism_keys = {(r['product'],r['profile'],r['case']) for r in mechanism_withdrawn}
+    refreshed = [r for r in refreshed if (r['product'],r['profile'],r['case']) not in mechanism_keys]
+    transitions = [r for r in transitions if (r['product'],r['profile'],r['case']) not in mechanism_keys]
+    refreshed.extend(mechanism_withdrawn)
+    (root/'force-authn-mechanism-withdrawals.json').write_text(json.dumps(mechanism_withdrawn,ensure_ascii=False,indent=2)+'\n')
+    from audit_async_feedback_failure_evidence import withdrawals as async_feedback_withdrawals
+    feedback_withdrawn = check_once(async_feedback_withdrawals, root.parent)
+    feedback_keys = {(r['product'],r['profile'],r['case']) for r in feedback_withdrawn}
+    refreshed = [r for r in refreshed if (r['product'],r['profile'],r['case']) not in feedback_keys]
+    transitions = [r for r in transitions if (r['product'],r['profile'],r['case']) not in feedback_keys]
+    refreshed.extend(feedback_withdrawn)
+    (root/'async-feedback-failure-withdrawals.json').write_text(json.dumps(feedback_withdrawn,ensure_ascii=False,indent=2)+'\n')
+    from audit_metadata_full_ui_evidence import withdrawals as metadata_full_ui_withdrawals
+    # Retain the pinned legacy withdrawal unless the independent native adopter
+    # has verified a replacement Run's complete values, controls and restoration.
+    ui_withdrawn = [r for r in check_once(metadata_full_ui_withdrawals, root.parent)
+                   if (r['product'], r['profile'], r['case']) not in qualified_full_ui]
+    ui_keys = {(r['product'], r['profile'], r['case']) for r in ui_withdrawn}
+    refreshed = [r for r in refreshed if (r['product'], r['profile'], r['case']) not in ui_keys]
+    transitions = [r for r in transitions if (r['product'], r['profile'], r['case']) not in ui_keys]
+    refreshed.extend(ui_withdrawn)
+    (root/'metadata-full-ui-withdrawals.json').write_text(json.dumps(ui_withdrawn,ensure_ascii=False,indent=2)+'\n')
     rows=refreshed
     (root/'retest-delta.json').write_text(json.dumps(transitions,ensure_ascii=False,indent=2)+'\n')
     counts=Counter(); indexed=defaultdict(list)
@@ -862,6 +1663,74 @@ def render(root,definitions,output):
                 'failFastInitialization=false 相当の構成が必要。構成できるまでNOT_VERIFIEDを維持し、'
                 '受理をVIOLATEDへ変換しない。観測は reference-20260918/shibboleth-md05-consumer-v76/finding.json に記録済み。')
             row['observation_gap']='metadata-signature-validation-not-configured'
+        if row.get('product')=='simplesamlphp' and row.get('profile')=='metadata_idp' \
+                and row['case'] in {
+                    'IIP-MD03-a-idp-01','IIP-MD03-b-idp-01','IIP-MD03-c-idp-01',
+                    'IIP-MD04-a-idp-01','IIP-MD04-b-idp-01','IIP-MD05-as-idp-01'}:
+            row['next_action']=('SimpleSAMLphpのCLIメタデータパーサ経路は文書署名の検証もvalidUntilの強制も'
+                '行わないため、reject期待のfixtureを「使用」として観測しVIOLATEDを誤って生む'
+                '（reference-20260918/simplesamlphp-md04ab-v136等）。ランタイムのメタデータソース'
+                '（HTTP取得）で署名・有効期限を強制する構成を用意するまで、CLI取込の受理を製品FAILへ'
+                '変換せずNOT_VERIFIEDを維持する。')
+            row['observation_gap']='native-cli-parser-does-not-enforce-signature-or-validity'
+        if row.get('product')=='simplesamlphp' and row.get('profile')=='metadata_idp' \
+                and row['case']=='IIP-MD05-b-idp-01':
+            row['next_action']=('SimpleSAMLphp同梱saml2-legacyのPDPDescriptor.phpはAuthzServiceが存在すると'
+                '「Must have at least one AuthzService」を投げる条件反転バグがあり、PDPDescriptorを含む'
+                'スキーマ適合メタデータを解析できない（reference-20260918/simplesamlphp-md05b-v138、'
+                '他4variantは受理済み）。ライブラリ修正版で再試験するまでNOT_VERIFIEDを維持し、'
+                '正しいfixtureの拒否を製品FAILへ変換しない。')
+            row['observation_gap']='product-library-pdpdescriptor-inverted-check'
+        if row.get('product')=='keycloak' and row.get('profile')=='metadata_idp' and row['case'] in {
+                'IIP-MD02-d-idp-01','IIP-MD05-b-idp-01','IIP-MD05-c2-idp-01',
+                'IIP-MD05-f-idp-01','IIP-MD06-a1-idp-01'}:
+            row['next_action']=('KeycloakコンソールのImport clientは単一EntityDescriptorの単純なrole記述子だけを'
+                '安定して取り込む。複数entity（entities-root-two/fifty）・入れ子（nested-entities）・複数role'
+                '記述子（schema-global-element-families）・複雑なUIInfoでは取込がtimeoutするか後続SSOが'
+                '相関しない（reference-20260918/keycloak-md05b-v140等）。取込できたfixtureのみ受理を判定し、'
+                '取込不能を製品FAILへ変換しない。')
+            row['observation_gap']='keycloak-console-import-single-entity-only'
+        if row.get('product') in {'simplesamlphp','keycloak'} and row.get('profile')=='browser_sso_idp' \
+                and row['case'] in {'IIP-IDP03-a-idp-01','IIP-IDP04-a-idp-01','IIP-IDP04-b-idp-01'}:
+            row['next_action']=('固定した属性公開ポリシーの条件別比較（baseline / entity-present / entity-absent / '
+                'requested-required / requested-optional / requested-absent / index-0 / index-1 / index-0-repeat）を'
+                '駆動し、preparation receiptをAttributePolicyPreparationFileへ登録するネイティブキャンペーンは'
+                'Shibbolethのみ実装。実機probe（reference-20260918/simplesamlphp-attrpolicy-probe-v1/v2, '
+                'run_YGKQCX7PDWHFW4XGN1RE5J5T1B）で判明: SimpleSAMLphpのネイティブパーサはSPメタデータの'
+                'AttributeConsumingServiceを`attributes`へ取り込み、requested-absentは全属性、'
+                'requested-required/optionalは要求OID名の属性が認証ソースに無いため0件を返す。'
+                'entity-present/absentは同一属性のみでEntityAttributes由来の解放は観測されない。'
+                '判定側は`urn:samlscope:test:policy:*`名のmarker解放を要求するが、SSPの解放はSPのparsed'
+                '`attributes`（urn:oid:*）に従うため名前空間が一致せず、認証ソースへの要求名marker属性追加と'
+                '条件対応の解放マッピング（authproc等）およびreceipt発行・登録が必要。'
+                '設定保存の成功を生成能力の成功にしない。')
+            row['observation_gap']='attribute-policy-conditions-campaign-not-implemented'
+        if row.get('product')=='simplesamlphp' and row.get('profile')=='browser_sso_idp' \
+                and row['case']=='IIP-IDP11-a-idp-01':
+            row['next_action']=('NameID省略の専用設定経路を確認し、同一入力の正常生成と省略生成を比較する。'
+                '実際にロードされたSAML2.phpの通常経路はbuildAssertionでNameIDを必ず付加し、'
+                'NameIDFormatが空または未知でもtransientへ戻ることを診断専用呼出しで確認した'
+                '（reference-20261004/ssp-nameid-omission-readonly-preflight）。'
+                'この診断は実SSOの能力判定ではなく、設定候補の事前確認である。'
+                '専用経路または承認済みnormative_capabilityの不在を裏付ける証拠が揃うまで未検証を維持する。')
+            row['observation_gap']='native-nameid-omission-configuration-unproven'
+        if row.get('product')=='simplesamlphp' and row.get('profile')=='browser_sso_idp' \
+                and row['case']=='IIP-IDP04-b-idp-01':
+            row['next_action']=('製品ネイティブの属性ポリシーキャンペーンは9条件を完走し、設定を原本へ復元した。'
+                'SimpleSAMLphp 2.5.0は同一メタデータの複数AttributeConsumingServiceから常に先頭を選び、'
+                'AuthnRequestのAttributeConsumingServiceIndex=1でもindex 0と同じ属性を返した。'
+                '承認済みケースは設定前提が成立しない結果を製品FAILへ変換しないためNOT_VERIFIEDを維持する。'
+                '原本と正式結果はreference-20260930/simplesamlphp-attribute-policy-v152-r2および'
+                'simplesamlphp-attribute-policy-evaluation-v153。')
+            row['observation_gap']='product-native-attribute-consuming-service-index-unavailable'
+        if row.get('product')=='keycloak' and row.get('profile')=='browser_sso_idp' \
+                and row['case'] in {'IIP-IDP03-a-idp-01','IIP-IDP04-a-idp-01','IIP-IDP04-b-idp-01'}:
+            row['next_action']=('Keycloak 26.7.2の製品ネイティブmetadata converterを原本fixtureへ直接実行した。'
+                'EntityAttributesはclient設定へ保持されず、RequestedAttributeのisRequiredはrequired/optionalで'
+                '同一mapperになり、複数AttributeConsumingServiceは索引情報なしに全mapperへ平坦化された。'
+                '承認済みケースは設定前提が成立しない結果を製品FAILへ変換しないためNOT_VERIFIEDを維持する。'
+                '監査原本はreference-20260930/keycloak-attribute-policy-native-audit。')
+            row['observation_gap']='product-native-attribute-policy-semantics-unavailable'
         if row.get('profile')=='metadata_idp' and row['case']=='IIP-MD05-a1-idp-01':
             row['next_action']=('製品は重複entityIDを検出しWARNでsurfaceしたうえで最初の記述子を使用した。義務文は'
                 '「reject or surface」のため、ログsurfaceが代替を満たすかは解釈依存。承認済みobserverは非使用のみを'
@@ -894,7 +1763,16 @@ def render(root,definitions,output):
                 'を要する。driverにSP起点・IdP起点のlogout操作を追加し、SuiteのSLOプローブを完了させる必要がある。'
                 '無応答・probe-no-responseはFAILにしない。')
             row['observation_gap']='slo-logout-action-not-driven'
-        if row.get('profile')=='metadata_idp' and row['case']=='IIP-MD05-fj-idp-01':
+        if row.get('product')=='simplesamlphp' and row.get('profile')=='single_logout_idp' \
+                and row['case'] in {'IIP-IDP17-r-idp-01','IIP-IDP17-s-idp-01'}:
+            row['next_action']=('SSPのiframe logoutは参照構成のCSP（default-src \'none\'、frame-src未指定）で'
+                '参加者フレームがブロックされることをブラウザconsoleで実測（reference-20260918/ssp-slo-iframe-v11: '
+                '"Framing http://localhost:18080/ violates ... default-src \'none\' ... blocked"）。'
+                'traditional logoutでは失敗参加者でブラウザ連鎖が途切れ、最終LogoutResponse/PartialLogoutが来ない。'
+                'frame-srcを許可する製品/運用設定とログアウト操作経路を用意するまでNOT_VERIFIEDを維持し、'
+                '無応答・unavailableを製品FAILにしない。')
+            row['observation_gap']='slo-iframe-csp-frame-src-blocks-propagation'
+        if row['product']=='shibboleth' and row.get('profile')=='metadata_idp' and row['case']=='IIP-MD05-fj-idp-01':
             row['next_action']=('campaign改修とreceipt再評価によりRunはCOMPLETED・case起動・receipt読込まで到達'
                 '（reference-20260918/shibboleth-display-precedence-v94b）。残るNOT_VERIFIEDの原因は'
                 'Shibbolethログインテンプレートのentity名抑制ガード（login.vm: '
@@ -949,7 +1827,7 @@ def render(root,definitions,output):
             row['next_action']=implementations[row['case']]['next_action']
         if row['product']=='simplesamlphp' and row['profile']=='browser_sso_idp' and row['case'] in ENCRYPTION_DIAGNOSIS_CASES:
             from verify_encrypted_sso_diagnosis import verify as verify_encryption_diagnosis
-            diagnostic_run,diagnostic_cases=verify_encryption_diagnosis(root.parent.parent/'reference-20260918')
+            diagnostic_run,diagnostic_cases=check_once(verify_encryption_diagnosis, root.parent.parent/'reference-20260918')
             row['individual_diagnosis']='reference-20260918/simplesamlphp-normal-encrypted-sso/protocol-evidence-diagnostics.json'
             row['additional_observation']={'run':diagnostic_run,'details':diagnostic_cases[row['case']]['details']}
             row['next_action']='通常SSOで暗号化生成とRun鍵での復号を実証済み。AES128-CBCとrsa-oaep-mgf1pを観測した。GCM・rsa-oaep(1.1)・要求されたDigest/MGF組合せを生成する設定または別経路が必要。既定値だけでは非対応と判定しない。'
@@ -1019,12 +1897,48 @@ def render(root,definitions,output):
             '## 今回確認した実行経路', '',
             'SLOプロファイルの3製品で既存Runの開始・再開を確認したところ、古い出力では待機中だった共通ケースがdelivery_or_response_unknownで終了していました。active-probeのFINISHEDはこの期限切れ後の状態です。新Runで正常系対照と共通試験を再実行し、追加証拠を保存しました。追加Successは5件、残りは部分実装9件と署名試験の判定保留4件でした。開始・再開APIは各製品1回、正常系・共通試験用Runは各製品1回作成しました。ここまでの製品設定変更は0回です。続けてKeycloakとSimpleSAMLphpで署名必須設定を試しましたが、正常系の開始で失敗したため採用していません。Keycloakは受信完了を確認できず、SimpleSAMLphpは補助クライアントのXML解析が失敗しました。これらを製品FAILとは判定しません。変更と復元で各製品2回の設定書き込みが発生し、復元を検証済みです。ブラウザ操作・ユーザー本人の操作は0回で、プロトコルクライアントによる実行です。', '',
             '追加実装後の再試験では、公開URL未発行の注記を3製品で自動確定（Warning）し、Subject不一致をKeycloakとSimpleSAMLphpで確認（Failed）しました。これらは製品全体の適合判定ではありません。[追加実装記録](27-additional-implementation.md)を参照してください。', '', '## 原因別の対応', '']
+    default_acs_notes=[]
+    if any(row['case'] == 'IIP-MD05-av-idp-01' and row['product'] == 'keycloak'
+           and row['profile'] == 'metadata_idp' and row['verdict'] == 'FAIL' for row in transitions):
+        default_acs_notes.append(
+            'Keycloak 26.7.2では、製品自身のImport client経路で取り込んだIIP-MD05-avのcontrol・'
+            'explicit-first・all-falseは正しいACSへ到達した一方、explicit-falseの後のomitted defaultは'
+            'ACS 1ではなくACS 0へ到達し、同一親要素内で重複するAssertionConsumerService indexを含む'
+            'metadataも取込・read-back・Success応答まで進みました。このFAILは、開始・終了時のコンテナimage・'
+            '起動時刻・実行時VERSION、各一時clientの削除read-back、原本fixture、要求・応答の相関、'
+            'Suite実行JARを同じRunで照合した限定的な実測です。')
+    if any(row['case'] == 'IIP-MD05-av-idp-01' and row['product'] == 'shibboleth'
+           and row['profile'] == 'metadata_idp' and row['verdict'] == 'FAIL' for row in transitions):
+        default_acs_notes.append(
+            'Shibboleth IdP 5.2.3では、製品自身のFilesystemMetadataProvider経路で取り込んだIIP-MD05-avの'
+            'control・explicit-first・all-falseは正しいACSへ到達した一方、explicit-falseの後のomitted defaultは'
+            'ACS 1ではなくACS 0へ到達し、同一親要素内で重複するAssertionConsumerService indexを含むmetadataも'
+            '取得・使用してSuccessを返しました。このFAILは、開始・終了時のコンテナimage・起動時刻・実行時VERSION、'
+            '設定の原本とのバイト一致による復元、原本fixture、要求・応答の相関、Suite実行JARを同じRunで照合した限定的な実測です。')
+    if any(row['case'] == 'IIP-MD05-av-idp-01' and row['product'] == 'simplesamlphp'
+           and row['profile'] == 'metadata_idp' and row['verdict'] == 'FAIL' for row in transitions):
+        default_acs_notes.append(
+            'SimpleSAMLphp 2.5.0では、IIP-MD05-avの3つのdefault選択対照は正しいACSへ到達した一方、'
+            '同一親要素内で重複するAssertionConsumerService indexを含むmetadataも取得・使用してSuccessを返しました。'
+            'このFAILは、開始・終了時のコンテナimage・起動時刻・実行時VERSION、設定の復元、native MDQ取得、'
+            '要求・応答の相関を同じRunで照合した限定的な実測です。')
+    if default_acs_notes:
+        lines[lines.index('## 原因別の対応')] = '\n\n'.join(default_acs_notes)+'\n\n## 原因別の対応'
     for k,(title,owner,action) in GROUPS.items():lines += [f'### {title}', '', action, '']
+    # Keep every historical trial in retest-delta.json, but display the final
+    # selected result for each product/profile/case. Dict insertion order keeps
+    # the existing profile preference when a case belongs to several profiles.
+    latest_transitions = {
+        (row['product'], row['profile'], row['case']): row for row in transitions
+    }
     lines += ['## 追加再試験の製品別結果', '', '| Test | Keycloak | Shibboleth | SimpleSAMLphp |', '|---|---|---|---|']
     for case_id in sorted({r['case'] for r in transitions}):
         cells=[]
         for product in ('keycloak','shibboleth','simplesamlphp'):
-            item=next((r for r in transitions if r['case']==case_id and r['product']==product), None)
+            item=next((r for r in latest_transitions.values() if r['case']==case_id and r['product']==product), None)
+            if item is None:
+                item=next((r for r in rows if r['case']==case_id and r['product']==product
+                           and r.get('audit_withdrawal')), None)
             if item is None:
                 cells.append('Not verified（今回の再試験対象外）')
                 continue
@@ -1060,4 +1974,7 @@ def render(root,definitions,output):
     output.write_text('\n'.join(lines))
 
 if __name__=='__main__':
-    p=argparse.ArgumentParser(description=__doc__);p.add_argument('--evidence-root',type=Path,required=True);p.add_argument('--definitions',type=Path,default=Path('tests/cases.yaml'));p.add_argument('--output',type=Path,default=Path('docs/26-unverified-case-inventory.md'));a=p.parse_args();render(a.evidence_root,a.definitions,a.output)
+    p=argparse.ArgumentParser(description=__doc__);p.add_argument('--evidence-root',type=Path,required=True);p.add_argument('--definitions',type=Path,default=Path('tests/cases.yaml'));p.add_argument('--output',type=Path,default=Path('docs/26-unverified-case-inventory.md'));a=p.parse_args()
+    from acceptance_dependency_discovery import dependency_discovery_scope
+    with dependency_discovery_scope():
+        render(a.evidence_root,a.definitions,a.output)

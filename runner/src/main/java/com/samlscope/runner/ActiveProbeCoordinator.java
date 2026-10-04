@@ -29,6 +29,7 @@ import com.samlscope.runner.outbox.OutboundDispatcher;
 
 /** Bridges persisted active-probe cases to a real SAML browser front channel. */
 public final class ActiveProbeCoordinator {
+    private static final int MAX_BROWSER_OBSERVATION_BODY_BYTES = 64 * 1024;
     private final URI publicBase;
     private final PlanRepository plans;
     private final RunRepository runs;
@@ -221,8 +222,13 @@ public final class ActiveProbeCoordinator {
             var fixtureId = execution.state().data().get("fixture_id");
             if (fixtureId != null) summary.put("fixture_id", fixtureId);
             if (binding == BrowserFrontChannelScenario.Binding.SIGNED_REDIRECT) {
+                var scenario = scenario(current.caseId(), requireRun(runId)).orElseThrow();
+                var signer = scenario instanceof ScenarioRedirectCredentials fixtureKeys
+                        ? fixtureKeys.redirectCredentials(runId, execution.state())
+                                .orElseGet(() -> redirectCredentials.apply(runId))
+                        : redirectCredentials.apply(runId);
                 redirect[0] = new com.samlscope.saml.binding.SignedRedirectEncoder().encode(
-                        action.target(), action.payload(), relayState, redirectCredentials.apply(runId));
+                        action.target(), action.payload(), relayState, signer);
                 return transcript.record(new TranscriptInput(
                         runId, Direction.OUTBOUND, clock.instant(), action.actionId(), "GET",
                         redirect[0].destination().toString(), null, Map.of(), new byte[0], null,
@@ -305,10 +311,14 @@ public final class ActiveProbeCoordinator {
         requireRun(runId);
         var outbox = repository.findOutbox(actionId)
                 .orElseThrow(() -> new IllegalArgumentException("Unknown active-probe action"));
+        if (!runId.equals(outbox.runId())) {
+            throw new IllegalArgumentException("Active-probe correlation belongs to another Run");
+        }
         if (outbox.status() == OutboxStatus.PENDING || outbox.status() == OutboxStatus.BLOCKED_ON_CREDENTIAL) {
             throw new IllegalStateException("Browser observation arrived before front-channel dispatch");
         }
-        var entry = recordBrowserObservation(runId, actionId, httpStatus, url, body,
+        var boundedBody = boundedBrowserBody(body);
+        var entry = recordBrowserObservation(runId, actionId, httpStatus, url, boundedBody,
                 outbox.action().target().toString());
         if (outbox.status() == OutboxStatus.UNKNOWN_DELIVERY) {
             dispatcher.confirmInboundDelivery(actionId, entry.id());
@@ -321,8 +331,24 @@ public final class ActiveProbeCoordinator {
         if (!actionId.equals(waitingAction)) return status(runId);
         var testCase = scenario(outbox.caseId(), requireRun(runId)).orElseThrow();
         executionService.resume(runId, testCase, contexts.contextFor(runId),
-                new CaseEvent.BrowserObservation(httpStatus, url, body));
+                new CaseEvent.BrowserObservation(
+                        httpStatus, url, boundedBody, new EvidenceRef("transcript", entry.id())));
         return status(runId);
+    }
+
+    private static String boundedBrowserBody(String body) {
+        if (body == null) return "";
+        var encoded = body.getBytes(StandardCharsets.UTF_8);
+        if (encoded.length <= MAX_BROWSER_OBSERVATION_BODY_BYTES) return body;
+        try {
+            return StandardCharsets.UTF_8.newDecoder()
+                    .onMalformedInput(java.nio.charset.CodingErrorAction.IGNORE)
+                    .onUnmappableCharacter(java.nio.charset.CodingErrorAction.IGNORE)
+                    .decode(java.nio.ByteBuffer.wrap(encoded, 0, MAX_BROWSER_OBSERVATION_BODY_BYTES))
+                    .toString();
+        } catch (java.nio.charset.CharacterCodingException impossible) {
+            throw new IllegalStateException("UTF-8 browser body truncation failed", impossible);
+        }
     }
 
     private static boolean parsesAsSamlMessage(byte[] xml) {
@@ -424,7 +450,15 @@ public final class ActiveProbeCoordinator {
         if (IdpErrorResponseTestCase.CASE_ID.equals(caseId)) {
             var plan = plans.find(run.planId())
                     .orElseThrow(() -> new IllegalStateException("Run has no Test Plan"));
-            return Optional.of(new IdpErrorResponseTestCase(configurations.apply(plan, run.id())));
+            java.security.PrivateKey decryptionKey;
+            try {
+                decryptionKey = redirectCredentials.apply(run.id()).privateKey();
+            } catch (IllegalStateException unavailable) {
+                // A Run without a locally available key can still execute the probe; encrypted
+                // Success remains NOT_VERIFIED until its actual AuthnContext is readable.
+                decryptionKey = null;
+            }
+            return Optional.of(new IdpErrorResponseTestCase(configurations.apply(plan, run.id()), decryptionKey));
         }
         return scenarioCases.find(caseId)
                 .filter(value -> value instanceof BrowserFrontChannelScenario);

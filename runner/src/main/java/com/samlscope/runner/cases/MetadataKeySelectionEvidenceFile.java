@@ -27,6 +27,7 @@ final class MetadataKeySelectionEvidenceFile {
         return runId != null && runId.matches("run_[0-9A-HJKMNP-TV-Z]{26}")
                 && Files.exists(directory.resolve(runId + ".json"), LinkOption.NOFOLLOW_LINKS);
     }
+    Path receipt(String runId) {require(exists(runId));return directory.resolve(runId+".json");}
     String receiptSha256(String runId) throws Exception {
         require(exists(runId));
         var file = directory.resolve(runId + ".json");
@@ -106,6 +107,13 @@ final class MetadataKeySelectionEvidenceFile {
                 var use=key.getAttribute("use");if("encryption".equals(use))continue;
                 require(condition.omittedUse()?use.isEmpty():"signing".equals(use));
                 require(children(key,DS,"KeyInfo").size()==1);
+                var keyInfo=one(key,DS,"KeyInfo");
+                require(children(keyInfo,DS,"KeyName").isEmpty());
+                for(var x509:children(keyInfo,DS,"X509Data")) {
+                    require(children(x509,DS,"X509SubjectName").isEmpty());
+                    require(children(x509,DS,"X509IssuerSerial").isEmpty());
+                    require(children(x509,DS,"X509SKI").isEmpty());
+                }
             }
             for (var certificate : certificates) require("RSA".equals(certificate.getPublicKey().getAlgorithm()));
             var keyHashes = new ArrayList<String>();
@@ -133,11 +141,12 @@ final class MetadataKeySelectionEvidenceFile {
             require(nativeClient.path("removed").asBoolean(false));var attrs=nativeClient.path("attributes");require(attrs.isObject());
             if(!"true".equals(text(attrs,"saml.client.signature")))
                 throw new UnprovenEvidence("native_signature_policy_disabled_after_import",variant);
+            require("RSA_SHA256".equals(text(attrs,"saml.signature.algorithm")));
             var nativeCertificate=text(attrs,"saml.signing.certificate");
             if(!nativeCertificate.isBlank()) {
                 var importedCertificate=certificate(nativeCertificate);
                 require(certificates.stream().anyMatch(c -> Arrays.equals(c.getPublicKey().getEncoded(),importedCertificate.getPublicKey().getEncoded())));
-            } else require("keyvalue-only".equals(variant));
+            } else require("keyvalue-only".equals(variant) || condition.omittedUse());
             // A single API attribute is not proof that all metadata keys were retained. The original
             // imported XML and the actual B/C protocol behavior decide the approved obligation.
             var currentPolicy=(com.fasterxml.jackson.databind.node.ObjectNode)attrs.deepCopy();

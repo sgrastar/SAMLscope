@@ -16,8 +16,14 @@ final class MetadataEncryptionAlgorithmFixtures {
         var sp = (Element) entity.getElementsByTagNameNS(MetadataService.MD, "SPSSODescriptor").item(0);
         if (sp == null) return entity;
         if (variant == MetadataService.Variant.ALGORITHM_SIGNING_256_KEYSIZE_EXCLUDED
-                || variant == MetadataService.Variant.ALGORITHM_SIGNING_384_KEYSIZE_EXCLUDED) {
-            signingSize(document, sp, variant == MetadataService.Variant.ALGORITHM_SIGNING_256_KEYSIZE_EXCLUDED);
+                || variant == MetadataService.Variant.ALGORITHM_SIGNING_384_KEYSIZE_EXCLUDED
+                || variant == MetadataService.Variant.ALGORITHM_SIGNING_256_512_KEYSIZE_EXCLUDED
+                || variant == MetadataService.Variant.ALGORITHM_SIGNING_512_256_KEYSIZE_EXCLUDED) {
+            boolean sha512 = variant == MetadataService.Variant.ALGORITHM_SIGNING_256_512_KEYSIZE_EXCLUDED
+                    || variant == MetadataService.Variant.ALGORITHM_SIGNING_512_256_KEYSIZE_EXCLUDED;
+            boolean exclude256 = variant == MetadataService.Variant.ALGORITHM_SIGNING_256_KEYSIZE_EXCLUDED
+                    || variant == MetadataService.Variant.ALGORITHM_SIGNING_256_512_KEYSIZE_EXCLUDED;
+            signingSize(document, sp, exclude256, sha512 ? 512 : 384);
             return entity;
         }
         var data = switch (variant) {
@@ -79,14 +85,14 @@ final class MetadataEncryptionAlgorithmFixtures {
         return method;
     }
 
-    private static void signingSize(Document document, Element role, boolean exclude256) {
+    private static void signingSize(Document document, Element role, boolean exclude256, int alternative) {
         var ext = document.createElementNS(MetadataService.MD, "md:Extensions");
         ext.setAttributeNS(XMLConstants.XMLNS_ATTRIBUTE_NS_URI, "xmlns:alg", MetadataAlgorithmFixtures.ALG);
-        for (int bits : exclude256 ? List.of(256, 384) : List.of(384, 256)) {
+        for (int bits : exclude256 ? List.of(256, alternative) : List.of(alternative, 256)) {
             var method = document.createElementNS(MetadataAlgorithmFixtures.ALG, "alg:SigningMethod");
             method.setAttribute("Algorithm", "http://www.w3.org/2001/04/xmldsig-more#rsa-sha" + bits);
             // This is a deliberate incompatible input, not a Suite security threshold.
-            if (bits == (exclude256 ? 256 : 384)) method.setAttribute("MaxKeySize", "1");
+            if (bits == (exclude256 ? 256 : alternative)) method.setAttribute("MaxKeySize", "1");
             ext.appendChild(method);
         }
         role.insertBefore(ext, role.getFirstChild());

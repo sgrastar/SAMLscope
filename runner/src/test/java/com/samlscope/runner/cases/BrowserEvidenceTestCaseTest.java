@@ -371,6 +371,49 @@ class BrowserEvidenceTestCaseTest {
         }
     }
 
+    @Test
+    void onlyPostErrorBindingCanReconsiderTimeoutFromFreshCompleteRecordedControls() {
+        var bodies = new java.util.HashMap<String, byte[]>();
+        var entries = new java.util.ArrayList<TranscriptEntry>();
+        for (var id : List.of("normal", "passive")) {
+            var request = ("<p:AuthnRequest xmlns:p=\"urn:oasis:names:tc:SAML:2.0:protocol\" ID=\"_"+id+"\" Version=\"2.0\""
+                    +(id.equals("passive")?" IsPassive=\"true\"":"")+"/>").getBytes(StandardCharsets.UTF_8);
+            var response = ("<p:Response xmlns:p=\"urn:oasis:names:tc:SAML:2.0:protocol\" xmlns:s=\"urn:oasis:names:tc:SAML:2.0:assertion\" InResponseTo=\"_"+id+"\">"
+                    +"<p:Status><p:StatusCode Value=\"urn:oasis:names:tc:SAML:2.0:status:"+(id.equals("normal")?"Success":"Responder")+"\"/></p:Status>"
+                    +(id.equals("normal")?"<s:Assertion/>":"")+"</p:Response>").getBytes(StandardCharsets.UTF_8);
+            for (var inbound : List.of(false,true)) {
+                var key=id+(inbound?"-response":"-request");var raw=inbound?response:request;bodies.put(key,raw);
+                entries.add(new TranscriptEntry(key,RUN_ID,inbound?com.samlscope.core.transcript.Direction.INBOUND:com.samlscope.core.transcript.Direction.OUTBOUND,
+                        NOW,"_"+id,"POST",inbound?"https://suite.example/acs":"https://idp.example/sso",200,Map.of(),null,0,key,raw.length,"application/xml",null,
+                        inbound?Map.of("type","Response","normalFlowAccepted",true):Map.of("type","AuthnRequest")));
+            }
+        }
+        var test = new AutoBrowserEvidenceTestCase(browserCase("IIP-SSO03-b-idp-01"),entry->bodies.get(entry.id()));
+        var complete=context(new FixedTranscript(entries));
+        var previous=com.samlscope.core.evaluation.CaseOutcome.notVerified("timeout","browser.timeout");
+        var revised=test.reevaluateRecordedEvidence(complete,previous).orElseThrow();
+        assertEquals(Outcome.SATISFIED,revised.outcome());
+        assertEquals(4,revised.evidence().size());
+        assertEquals(false,test.reevaluateRecordedEvidence(complete,revised).isPresent());
+        var oldEvidence=new com.samlscope.core.evaluation.CaseOutcome(Outcome.NOT_VERIFIED,"timeout","browser.timeout","browser.timeout",revised.evidence(),Map.of());
+        assertEquals(false,test.reevaluateRecordedEvidence(complete,oldEvidence).isPresent());
+        var incomplete=new DefaultCaseContext(complete.runId(),complete.targetRole(),complete.clock(),complete.parameters(),complete.interaction(),complete.reachability(),complete.transcript(),false);
+        assertEquals(false,test.reevaluateRecordedEvidence(incomplete,previous).isPresent());
+        assertEquals(false,test.reevaluateRecordedEvidence(context(new FixedTranscript(entries.subList(0,2))),previous).isPresent());
+        var unrelated=new AutoBrowserEvidenceTestCase(browserCase("IIP-SSO03-a-idp-01"),entry->bodies.get(entry.id()));
+        assertEquals(false,unrelated.supportsRecordedEvidenceReevaluation(previous));
+        var guarded=new AutoBrowserEvidenceTestCase(browserCase("IIP-SSO03-b-idp-01"),entry->{throw new AssertionError("Invalid history must be rejected before content reads");});
+        var duplicate=new java.util.ArrayList<>(entries);duplicate.add(entries.getFirst());
+        var duplicateContext=context(new FixedTranscript(duplicate));
+        assertInstanceOf(CaseStep.AwaitBrowser.class,guarded.start(duplicateContext));
+        assertEquals(false,guarded.reevaluateRecordedEvidence(duplicateContext,previous).isPresent());
+        var foreign=new java.util.ArrayList<>(entries);var first=entries.getFirst();
+        foreign.set(0,new TranscriptEntry(first.id(),"run_00000000000000000000000000",first.direction(),first.timestamp(),first.correlationId(),first.method(),first.url(),first.status(),first.headers(),first.bodyRef(),first.bodyBytes(),first.decodedSamlRef(),first.decodedSamlBytes(),first.contentType(),first.rawQuery(),first.samlSummary()));
+        var foreignContext=context(new FixedTranscript(foreign));
+        assertInstanceOf(CaseStep.AwaitBrowser.class,guarded.start(foreignContext));
+        assertEquals(false,guarded.reevaluateRecordedEvidence(foreignContext,previous).isPresent());
+    }
+
     private BrowserEvidenceTestCase browserCase(String id) {
         var evidence = new AttestedOutcomeTestCase(
                 id, TargetRole.IDP, "browser.evidence", "Review browser evidence.",

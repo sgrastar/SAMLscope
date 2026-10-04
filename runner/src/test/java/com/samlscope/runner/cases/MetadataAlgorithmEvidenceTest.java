@@ -103,6 +103,20 @@ class MetadataAlgorithmEvidenceTest {
         assertEquals(Outcome.SATISFIED,finished.outcome().outcome());
         assertEquals(true,finished.outcome().details().get("configuration_confirmed"));
     }
+    @Test void reconsiderationRequiresAnAlreadyConfirmedIntersectionResult() throws Exception {
+        fixture(false,true);
+        var testCase=new MetadataAlgorithmConfigurationTestCase(
+                new InformationalChoiceTestCase(MetadataIntersectionEvidence.ID,TargetRole.IDP),
+                e->bodies.get(e.decodedSamlRef()),r->target,(run,variant)->Optional.of(cryptoKey));
+        var previous=new com.samlscope.core.evaluation.CaseOutcome(Outcome.NOT_VERIFIED,"missing-capability",
+                "metadata.algorithms.intersection-evidence-incomplete","missing",List.of(),Map.of("configuration_confirmed",true));
+        assertTrue(testCase.supportsRecordedEvidenceReevaluation(previous));
+        assertEquals(true,testCase.reevaluateRecordedEvidence(context(),previous).orElseThrow().details().get("configuration_confirmed"));
+        var unconfirmed=new com.samlscope.core.evaluation.CaseOutcome(previous.outcome(),previous.notVerifiedReason(),previous.reasonCode(),
+                previous.reasonMessageKey(),previous.evidence(),Map.of("configuration_confirmed",false));
+        assertFalse(testCase.supportsRecordedEvidenceReevaluation(unconfirmed));
+        assertTrue(testCase.reevaluateRecordedEvidence(context(),unconfirmed).isEmpty());
+    }
     @Test void cryptographicMatrixDetectsRoleFallback() throws Exception {
         fixture(false);assertEquals(Outcome.SATISFIED,observe().outcome());
         entries.clear();bodies.clear();fixture(true);assertEquals(Outcome.VIOLATED,observe().outcome());

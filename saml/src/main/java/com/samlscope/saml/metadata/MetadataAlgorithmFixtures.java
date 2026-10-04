@@ -17,10 +17,19 @@ final class MetadataAlgorithmFixtures {
         switch (variant) {
             case ALGORITHM_ENTITY_SHA256 -> add(document, entity, List.of(256), List.of(256));
             case ALGORITHM_ENTITY_SHA384 -> add(document, entity, List.of(384), List.of(384));
+            case ALGORITHM_ENTITY_SHA512 -> add(document, entity, List.of(512), List.of(512));
             case ALGORITHM_ENTITY_ORDER_256_384 -> add(document, entity, List.of(256,384), List.of(256,384));
             case ALGORITHM_ENTITY_ORDER_384_256 -> add(document, entity, List.of(384,256), List.of(384,256));
+            case ALGORITHM_ENTITY_ORDER_256_512 -> add(document, entity, List.of(256,512), List.of(256,512));
+            case ALGORITHM_ENTITY_ORDER_512_256 -> add(document, entity, List.of(512,256), List.of(512,256));
+            case ALGORITHM_ENTITY_DIGEST_ORDER_256_512 -> add(document, entity, List.of(256,512), List.of());
+            case ALGORITHM_ENTITY_DIGEST_ORDER_512_256 -> add(document, entity, List.of(512,256), List.of());
+            case ALGORITHM_ENTITY_SIGNING_ORDER_256_512 -> add(document, entity, List.of(), List.of(256,512));
+            case ALGORITHM_ENTITY_SIGNING_ORDER_512_256 -> add(document, entity, List.of(), List.of(512,256));
             case ALGORITHM_ROLE_ORDER_256_384 -> add(document, sp, List.of(256,384), List.of(256,384));
             case ALGORITHM_ROLE_ORDER_384_256 -> add(document, sp, List.of(384,256), List.of(384,256));
+            case ALGORITHM_ROLE_ORDER_256_512 -> add(document, sp, List.of(256,512), List.of(256,512));
+            case ALGORITHM_ROLE_ORDER_512_256 -> add(document, sp, List.of(512,256), List.of(512,256));
             case ALGORITHM_ROLE_SIGNING_384 -> {
                 add(document, entity, List.of(256), List.of(256));
                 add(document, sp, List.of(), List.of(384));
@@ -51,7 +60,7 @@ final class MetadataAlgorithmFixtures {
         for (int bits : digests) {
             var method = document.createElementNS(ALG, "alg:DigestMethod");
             method.setAttribute("Algorithm", bits == 0 ? "urn:samlscope:test:unsupported-digest"
-                    : bits == 256 ? "http://www.w3.org/2001/04/xmlenc#sha256" : MORE + "sha384");
+                    : bits == 256 || bits == 512 ? "http://www.w3.org/2001/04/xmlenc#sha" + bits : MORE + "sha384");
             extensions.appendChild(method);
         }
         for (int bits : signatures) {

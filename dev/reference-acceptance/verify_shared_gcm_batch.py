@@ -10,8 +10,9 @@ XENC='http://www.w3.org/2001/04/xmlenc#'
 
 def load(folder,name):return json.loads((folder/name).read_text())
 
-def check(folder,bits,negative):
+def check(folder,bits,negative,profile='browser_sso_idp'):
     result=load(folder,'result.json');run=result['run']['id']
+    assert load(folder,'plan.json')['plan']['plan']['profile']==profile
     cases={c['id']:c for req in result['requirements'] for c in req['cases']}
     case_id='IIP-ALG04-'+('a' if bits==128 else 'b')+'-idp-01'
     case=cases[case_id]
@@ -65,11 +66,15 @@ def check(folder,bits,negative):
         assert {'caseId':case_id,'outcome':'SATISFIED'} in load(folder,'evaluation.json')['completed']
     return folder/'result.json',cases
 
-def verify(root,bits):
+def verify(root,bits,profile='browser_sso_idp'):
     root=Path(root)
-    positive=root/('simplesamlphp-shared-gcm'+str(bits))
-    negative=root/('simplesamlphp-shared-gcm'+str(bits)+'-wrong-key-verified')
-    result=check(positive,bits,False);check(negative,bits,True)
+    if profile=='ecp_idp':
+        positive=root/('simplesamlphp-ecp-shared-gcm'+str(bits))
+        negative=root/('simplesamlphp-ecp-shared-gcm'+str(bits)+'-wrong-key')
+    else:
+        positive=root/('simplesamlphp-shared-gcm'+str(bits))
+        negative=root/('simplesamlphp-shared-gcm'+str(bits)+'-wrong-key-verified')
+    result=check(positive,bits,False,profile);check(negative,bits,True,profile)
     assert load(positive,'result.json')['run']['id']!=load(negative,'result.json')['run']['id']
     return result
 

@@ -107,10 +107,15 @@ def main():
     parser.add_argument('--signature-control',action='store_true',help='Exercise a corrupt signature before each normal flow')
     parser.add_argument('--suite-signature-control',action='store_true',help='Use Suite-issued and recorded invalid-signature controls')
     parser.add_argument('--native-signature-observations',action='store_true',help='Record exact outgoing request hashes and direct HTTP response facts')
+    parser.add_argument('--verify-request-signatures', action='store_true',
+        help='Enable native request-signature verification after import without supplying or changing metadata keys')
+    parser.add_argument('--representation-admission-only',action='store_true',help='Disable request signature verification only after native import for structural representation admission; never key-use evidence')
     parser.add_argument('--run',help='Append a new fixture campaign to an existing reference Run')
     parser.add_argument('--profile',choices=['metadata_idp','browser_sso_idp','ecp_idp','single_logout_idp'],default='metadata_idp')
     parser.add_argument('--variants',help='Comma-separated Suite fixture IDs, beginning with control')
     args=parser.parse_args()
+    if args.representation_admission_only and (args.verify_request_signatures or args.signature_control or args.suite_signature_control):
+        parser.error('Admission-only evidence cannot use signature discrimination controls')
     if args.attribute_service_index is not None and not args.flow_run:
         parser.error('--attribute-service-index requires --flow-run')
     if args.flow_run:
@@ -171,6 +176,8 @@ def main():
             if args.native_signature_observations:follow += ' --native-signature-observations'
             command=['node',str(stage/'console_import.mjs'),'--fixture',str(folder/'fixture.xml'),
                 '--record',str(folder/'import.json'),'--entity-id',BASE+'/p/'+plan_id,'--verify-command',follow,'--delete']
+            if args.verify_request_signatures:command.append('--verify-request-signatures')
+            if args.representation_admission_only:command.append('--representation-admission-only')
             result=subprocess.run(command,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,text=True,timeout=420)
             (folder/'driver.log').write_text(result.stdout)
             operations.append(dict(variant=variant,fixture_sha256=hashlib.sha256(fixture).hexdigest(),

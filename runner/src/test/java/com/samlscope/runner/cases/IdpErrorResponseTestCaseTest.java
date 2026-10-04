@@ -110,6 +110,32 @@ class IdpErrorResponseTestCaseTest {
     }
 
     @Test
+    void decryptedWrongAuthnContextMakesEncryptedSuccessAConclusiveViolation() throws Exception {
+        var key = java.security.KeyPairGenerator.getInstance("RSA").generateKeyPair().getPrivate();
+        var readable = new IdpErrorResponseTestCase(configuration(true, true, true),
+                new com.samlscope.saml.normal.SamlErrorProbeRequestFactory(), key,
+                (wrapper, ignored) -> com.samlscope.saml.normal.SecureXml.parse(("""
+                        <saml:Assertion xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion">
+                          <saml:AuthnStatement><saml:AuthnContext>
+                            <saml:AuthnContextClassRef>urn:example:ordinary</saml:AuthnContextClassRef>
+                          </saml:AuthnContext></saml:AuthnStatement>
+                        </saml:Assertion>
+                        """).getBytes(StandardCharsets.UTF_8)).getDocumentElement());
+        var passive = (CaseStep.AwaitInbound) readable.start(context());
+        var baseline = (CaseStep.AwaitInbound) readable.resume(context(), passive.next(),
+                inbound(error(passive.next(), "Responder", null), "passive"));
+        var nameId = (CaseStep.AwaitInbound) readable.resume(context(), baseline.next(),
+                inbound(error(baseline.next(), "Success", null), "baseline"));
+        var authn = (CaseStep.AwaitInbound) readable.resume(context(), nameId.next(),
+                inbound(error(nameId.next(), "Responder", null), "nameid"));
+        var ciphertext = error(authn.next(), "Success", null).replace("<saml:Assertion/>",
+                "<saml:EncryptedAssertion/>");
+        var finish = (CaseStep.Finish) readable.resume(context(), authn.next(),
+                inbound(ciphertext, "authn-context"));
+        assertEquals(Outcome.VIOLATED, finish.outcome().outcome());
+    }
+
+    @Test
     void blanketRejectionFailsThePositiveControlInsteadOfPassingTheTarget() {
         var passive = (CaseStep.AwaitInbound) testCase.start(context());
         var baseline = (CaseStep.AwaitInbound) testCase.resume(

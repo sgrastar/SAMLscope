@@ -30,6 +30,10 @@ public final class PendingInteractionService implements InteractionQuery {
         if (runId == null || runId.isBlank()) throw new IllegalArgumentException("runId must not be blank");
         var result = new ArrayList<PendingInteraction>();
         for (var execution : executions.list(runId)) {
+            // Old Runs may retain a browser wait after the evidence-only implementation
+            // replaces its former scenario. That wait cannot collect useful user input.
+            if (registry.find(execution.caseId()).orElse(null)
+                    instanceof com.samlscope.runner.cases.InteractionFreeEvidenceCase) continue;
             var wait = execution.waitCondition();
             if (execution.status() == CaseExecutionStatus.WAITING_BROWSER) {
                 var testCase = registry.require(execution.caseId());

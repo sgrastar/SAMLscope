@@ -254,17 +254,15 @@ public final class LogoutAsyncScenarioTestCase implements TestCase, BrowserFront
         var details = new LinkedHashMap<String, Object>(observation.diagnostics());
         if (FEEDBACK_ID.equals(caseId)) {
             var failure = String.valueOf(state.data().getOrDefault("failure_page", ""));
-            var fixed = !failure.isEmpty() && failure.equals(observation.bodyHash())
-                    && Objects.equals(state.data().get("failure_status"), observation.httpStatus());
             details.put("failure_page", failure);
             details.put("success_page", observation.bodyHash());
             details.put("failure_indicated", state.data().getOrDefault("failure_indicated", false));
-            if (fixed) return finish(Outcome.VIOLATED, "slo.async.feedback.fixed-page", evidence, details);
-            var indicated = Boolean.TRUE.equals(state.data().get("failure_indicated"));
-            return finish(indicated ? Outcome.SATISFIED : Outcome.NOT_VERIFIED,
-                    indicated ? "slo.async.feedback.distinguishes-success-and-failure"
-                            : "slo.async.feedback.unrecognized",
-                    evidence, details);
+            // IDP17.b2 requires the own-session termination failure induced for IDP17.o.
+            // A rejected Destination proves request rejection, not failure to end that session;
+            // page equality, wording and HTTP status cannot establish either feedback variant.
+            // No native own-session failure evidence adapter is connected to this scenario.
+            return finish(Outcome.NOT_VERIFIED,
+                    "slo.async.feedback.own-session-failure-unproven", evidence, details);
         }
         if (observation.samlPresent())
             return finish(Outcome.VIOLATED, "slo.async.response-returned", evidence, details);
