@@ -1,28 +1,28 @@
-# 属性名・NameFormat生成能力の実証
+# Evidence of attribute Name and NameFormat generation capability
 
-承認済み`IIP-IDP01-a-idp-01`のCONFIG経路へ、製品が生成した属性を検査する判定を接続した。準備確認だけで合格にせず、同一RunのAuthnRequestと正常Responseの相関、ACS、固定した対象メタデータの証明書による署名検証、AssertionのIssuerを確認する。暗号化AssertionはRun鍵で復号し、内側に署名があれば検証する。属性値は診断へ保存しない。
+Connected evaluation of product-generated attributes to the CONFIG path of approved `IIP-IDP01-a-idp-01`. Preparation confirmation alone does not pass: evaluation checks same-Run AuthnRequest/normal Response correlation, ACS, signature verification against certificates in fixed target metadata, and Assertion Issuer. Encrypted Assertions are decrypted with Run keys, and any enclosed signature is verified. Attribute values are not saved in diagnostics.
 
-<!--g1-literal--> 必須3条件はURN形式のName、非URI文字列のName、未知のNameFormat URI。試験用の名前は`urn:samlscope:test:attribute-name`と`SAMLscope arbitrary attribute`、NameFormatは`urn:samlscope:test:attribute-name-format`とした。各条件の欠落、署名改変、要求相関不一致、ACS不一致、不完全な履歴、重複記録、準備確認のみの場合はNOT_VERIFIEDとなることをテストした。
+<!--g1-literal--> The 3 required conditions are a URN Name, a non-URI string Name, and an unknown NameFormat URI. Test names are `urn:samlscope:test:attribute-name` and `SAMLscope arbitrary attribute`; NameFormat is `urn:samlscope:test:attribute-name-format`. Tests require NOT_VERIFIED for missing conditions, modified signatures, request-correlation/ACS mismatches, incomplete history, duplicate records and preparation confirmation alone.
 
-## 実機結果
+## Product results
 
-| 製品 | 採用Run | 結果 |
+| Product | Adopted Run | Result |
 |---|---|---|
 | SimpleSAMLphp | `run_4GWY98RD670EAFJ3R8Q6V2MW52` | Success |
 | Shibboleth | `run_8S5P9BVTX8CCQ770M2KHKXG5CM` | Success |
 
-<!--g1-literal--> 両製品で、通常設定の対照では3条件が未観測、試験用SPに限定した属性設定後は全条件が観測された。原本のハッシュ、署名、復号結果、設定復元を別途照合し、正式結果を採用した。未検証は472→470観測、異なるケースIDは157のまま。Keycloakの同ケースは未検証を維持する。
+<!--g1-literal--> For both products, all 3 conditions were unobserved in the ordinary-configuration control and observed after attribute settings restricted to the test SP. Original hashes, signatures, decryption results and restored configuration were independently checked before formal-result adoption. Unverified observations decreased 472→470; distinct case IDs remain 157. The Keycloak case remains unverified.
 
-SimpleSAMLphpではネイティブメタデータパーサーによる取込と、試験用SP限定のAttributeMap／NameFormat設定を分けて記録した。Shibbolethでは一時メタデータプロバイダー、属性resolverのencoder、対象SP限定のrelease policyを使用した。各設定の元と復元後のSHA-256一致を確認した。
+SimpleSAMLphp records native metadata-parser import separately from test-SP AttributeMap/NameFormat configuration. Shibboleth uses a temporary metadata provider, attribute-resolver encoders and a target-SP-only release policy. Original/restored configuration SHA-256 equality was verified.
 
-Shibbolethの初回Run `run_GRQ3P0CQSEVDVKV84W0HTT10KE`では全条件が未観測だった。原因は属性レジストリの再読込不足で、失敗試行として保存した。inline encoderの追加・削除にはレジストリの再読込が必要であることは[公式のAttributeEncoder設定](https://shibboleth.atlassian.net/wiki/spaces/IDP5/pages/3199504645)にも記載されている。実行スクリプトへ適用時・復元時の再読込を追加し、別Runで再試験した。
+The first Shibboleth Run, `run_GRQ3P0CQSEVDVKV84W0HTT10KE`, observed none of the conditions. It is retained as a failed attempt caused by missing attribute-registry reload. The [official AttributeEncoder configuration](https://shibboleth.atlassian.net/wiki/spaces/IDP5/pages/3199504645) also documents that adding/removing inline encoders requires registry reload. Added reloads on application/restoration and retested in a separate Run.
 
-証拠は`build/acceptance/reference-20260918/`配下の`simplesamlphp-attribute-name-capability/`、`shibboleth-attribute-name-capability/`、`shibboleth-attribute-name-capability-registry/`。`VerifyAttributeCapability.java`は固定メタデータからResponse署名を再検証し、秘密鍵をコンテナ外へ出さず属性名と形式だけを抽出する。`verify_attribute_name_capability.py`が対照、原本ハッシュ、採用結果、復元記録を検査してから台帳へ反映する。
+Evidence under `build/acceptance/reference-20260918/`: `simplesamlphp-attribute-name-capability/`, `shibboleth-attribute-name-capability/`, `shibboleth-attribute-name-capability-registry/`. `VerifyAttributeCapability.java` revalidates Response signatures using fixed metadata and extracts only attribute names/formats, keeping private keys in the container. `verify_attribute_name_capability.py` checks controls, original hashes, adopted results and restoration records before updating the inventory.
 
-## 操作と検証
+## Operations and validation
 
-<!--g1-literal--> 製品設定書込等は計19回（SimpleSAMLphp 3、Shibboleth初回8、再試験8。一時ファイル削除2回を含む）。サービス再読込14回、通常SSO6回、Run作成・preflight・準備確認は各3回。Docker build1回、Suite／転送コンテナ再作成各1回、製品再起動0回、本人操作0回。初回失敗を費用から除外していない。
+<!--g1-literal--> Product configuration and related writes total 19: SimpleSAMLphp 3, initial Shibboleth attempt 8, retest 8, including 2 temporary-file deletions. Service reloads 14; ordinary SSO 6; Run creation/preflight/preparation confirmation 3 each. Docker build 1; Suite/forwarder recreations 1 each; product restarts 0; user interactions 0. Initial-failure costs are included.
 
-<!--g1-literal--> 対象Runnerテスト16件成功、API配布物ビルド成功。G1生成一致・構造46/46、台帳監査エラーなし。G2は既存の保護実装ソース署名差分G2-30により20/21で、再承認済みとは扱わない。
+<!--g1-literal--> 16 targeted Runner tests and the API distribution build passed. G1 generated-document consistency/structural checks 46/46; no inventory-audit errors. G2 remains 20/21 because of existing protected-implementation signed-source difference G2-30; this is not reapproval.
 
-稼働イメージは`samlscope:reference-attribute-name-v41`、digestは`sha256:2cd23990e237f2ff8225e36254d8b953f58e68d973771209c49cd11ca0a7045a`。前版に今回のRunner成果物だけを重ね、作業ツリーにある別件のAPI変更は含めていない。
+Running image: `samlscope:reference-attribute-name-v41`; digest: `sha256:2cd23990e237f2ff8225e36254d8b953f58e68d973771209c49cd11ca0a7045a`. Only this campaign's Runner artifact was overlaid on the preceding image; unrelated API working-tree changes were excluded.

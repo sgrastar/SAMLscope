@@ -9,9 +9,9 @@ class MetadataFullUiComparisonTest {
             <md:EntityDescriptor xmlns:md="urn:oasis:names:tc:SAML:2.0:metadata"
              xmlns:u="urn:oasis:names:tc:SAML:metadata:ui" xmlns:x="urn:test:foreign" entityID="https://suite.example/sp">
             <md:SPSSODescriptor><md:Extensions><u:UIInfo>
-             <u:DisplayName xml:lang="en">Service</u:DisplayName><u:DisplayName xml:lang="ja">サービス</u:DisplayName>
+             <u:DisplayName xml:lang="en">Service</u:DisplayName><u:DisplayName xml:lang="ja">\u30b5\u30fc\u30d3\u30b9</u:DisplayName>
              <u:Description xml:lang="en">Complete service description</u:Description>
-             <u:Description xml:lang="ja">完全な説明</u:Description>
+             <u:Description xml:lang="ja">\u5b8c\u5168\u306a\u8aac\u660e</u:Description>
              <u:Keywords xml:lang="en">saml interop</u:Keywords>
              <u:Logo xml:lang="en" width="180" height="48">https://suite.example/logo</u:Logo>
              <u:InformationURL xml:lang="en">https://suite.example/info</u:InformationURL>
@@ -36,7 +36,7 @@ class MetadataFullUiComparisonTest {
     @Test void LossOfLanguageOrLogoDimensionsDoesNotPass() throws Exception {
         var input = MetadataFullUiComparison.input(bytes(INPUT));
         assertFalse(MetadataFullUiComparison.matches(input, MetadataFullUiComparison.output(bytes(
-                INPUT.replace("<u:Description xml:lang=\"ja\">完全な説明</u:Description>", "")))));
+                INPUT.replace("<u:Description xml:lang=\"ja\">\u5b8c\u5168\u306a\u8aac\u660e</u:Description>", "")))));
         assertFalse(MetadataFullUiComparison.matches(input,
                 MetadataFullUiComparison.output(bytes(INPUT.replace("width=\"180\"", "width=\"181\"")))));
     }

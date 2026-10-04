@@ -103,8 +103,8 @@ try {
       record.completedInitiator = next.actionId !== status.actionId;
       break;
     }
-    const button = page.getByRole('button', { name: /グローバル|global|propagate|continue|proceed|confirm/i });
-    const link = page.getByRole('link', { name: /グローバル|global|propagate|continue|proceed/i });
+    const button = page.getByRole('button', { name: /\u30b0\u30ed\u30fc\u30d0\u30eb|global|propagate|continue|proceed|confirm/i });
+    const link = page.getByRole('link', { name: /\u30b0\u30ed\u30fc\u30d0\u30eb|global|propagate|continue|proceed/i });
     if (await button.count()) await button.first().click({ timeout: 2000 }).catch(() => {});
     else if (await link.count()) await link.first().click({ timeout: 2000 }).catch(() => {});
     await page.waitForTimeout(1000);

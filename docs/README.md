@@ -128,85 +128,85 @@ not by differences in reference-implementation results ([00 §5](00-concept.md))
 - [Algorithm observation operations](30-algorithm-observation-operations.md) — producer-side IIP-ALG04/06 evidence, SSO/SLO evidence-generation gaps, and operation counts (2026-09-15).
 - [Target-initiated acceptance](31-peer-intent-acceptance.md) — single-use intents for IdP-initiated SSO and target-initiated logout, reference results, and limits (2026-09-15).
 
-- [製品コンソール取込後のメタデータ挙動観測](34-native-metadata-import-acceptance.md)
-- [Suite発行の署名対照と製品ネイティブ取込](35-suite-signature-controls.md)
-- [公開UI情報の注記判定と集合メタデータの再試験](36-published-ui-acceptance.md)
-- [メタデータ拡張点・既定ACSの不足条件の補完](37-metadata-condition-completion.md)
-- [Keycloak既定ACSの実証と署名鍵の一意性判定](38-keycloak-acs-and-signing-key.md)
-- [SimpleSAMLphp暗号化SSOの実行経路と不足理由](39-encrypted-sso-execution.md)
-- [共有鍵GCM復号の基盤と不透明なAssertionの判定修正](40-shared-key-decryption-foundation.md)
+- [Metadata behavior after product console import](34-native-metadata-import-acceptance.md)
+- [Suite signature controls and product-native import](35-suite-signature-controls.md)
+- [Published UI information notes and aggregate metadata retests](36-published-ui-acceptance.md)
+- [Completing missing metadata extension and default ACS conditions](37-metadata-condition-completion.md)
+- [Keycloak default ACS verification and signing-key uniqueness](38-keycloak-acs-and-signing-key.md)
+- [SimpleSAMLphp encrypted SSO execution paths and missing evidence](39-encrypted-sso-execution.md)
+- [Shared-key GCM decryption and opaque Assertion evaluation fixes](40-shared-key-decryption-foundation.md)
 
-- [SimpleSAMLphp共有鍵GCMの実機検証](41-shared-key-gcm-acceptance.md)
+- [SimpleSAMLphp shared-key GCM product verification](41-shared-key-gcm-acceptance.md)
 
-- [メタデータのアルゴリズム順序・Role優先の実行条件](42-metadata-algorithm-fixtures.md)
+- [Metadata algorithm order and role-priority execution conditions](42-metadata-algorithm-fixtures.md)
 
-- [方式選択の署名検証付き証拠](43-verified-algorithm-evidence.md)
+- [Signature-verified evidence for algorithm selection](43-verified-algorithm-evidence.md)
 
-- [メタデータ原本のRun内記録](44-prepared-metadata-evidence.md)
+- [Recording original metadata within a Run](44-prepared-metadata-evidence.md)
 
-- [メタデータ方式選択の判定接続と実証](45-metadata-algorithm-oracle.md)
+- [Connecting and verifying metadata algorithm selection evaluation](45-metadata-algorithm-oracle.md)
 
-- [Keycloakへのアルゴリズム選択試験の展開](46-keycloak-algorithm-oracle.md)
+- [Deploying algorithm selection tests to Keycloak](46-keycloak-algorithm-oracle.md)
 
-- [Shibbolethのネイティブ読込経路と方式選択の実証](47-shibboleth-native-algorithm-batch.md)
+- [Shibboleth native loading and algorithm selection verification](47-shibboleth-native-algorithm-batch.md)
 
-- [未対応方式のスキップと暗号方式順序の条件判定](48-algorithm-order-followup.md)
+- [Skipping unsupported algorithms and evaluating encryption order conditions](48-algorithm-order-followup.md)
 
-- [暗号化方式・OAEPパラメータ・鍵サイズの入力条件](49-encryption-metadata-fixtures.md)
+- [Encryption method, OAEP parameter, and key-size input conditions](49-encryption-metadata-fixtures.md)
 
-- [暗号・署名・パラメーター共通部分の判定と実証](50-metadata-intersection-oracle.md)
+- [Evaluating and verifying shared encryption, signature, and parameter choices](50-metadata-intersection-oracle.md)
 
-- [暗号方式生成能力の条件別証拠とMGF省略の監査](51-producer-algorithm-metadata-evidence.md)
+- [Condition-specific encryption generation evidence and MGF omission audit](51-producer-algorithm-metadata-evidence.md)
 
-- [SimpleSAMLphpの共通部分選択の観測と設定復元の効率化](52-simplesamlphp-intersection-and-batch-restore.md)
+- [SimpleSAMLphp intersection selection and efficient configuration restoration](52-simplesamlphp-intersection-and-batch-restore.md)
 
-- [属性名・NameFormat生成能力の実証](53-attribute-name-capability.md)
+- [Attribute name and NameFormat generation verification](53-attribute-name-capability.md)
 
-- [属性公開ポリシーの比較入力](54-attribute-policy-fixtures.md)
+- [Attribute release policy comparison inputs](54-attribute-policy-fixtures.md)
 
-- [固定した属性公開ポリシーでの比較観測](55-fixed-attribute-policy-observations.md)
+- [Comparison under a fixed attribute release policy](55-fixed-attribute-policy-observations.md)
 
-- [属性公開ポリシー比較の正式判定接続](56-attribute-policy-acceptance.md)
+- [Connecting attribute release policy comparison to formal evaluation](56-attribute-policy-acceptance.md)
 
-- [SimpleSAMLphpの属性公開経路の事前診断](57-simplesamlphp-attribute-policy-probe.md)
+- [Preliminary diagnosis of SimpleSAMLphp attribute release paths](57-simplesamlphp-attribute-policy-probe.md)
 
-- [UIメタデータ消費の比較入力と残る観測経路](58-ui-consumer-fixtures.md)
+- [UI metadata consumption inputs and remaining observation paths](58-ui-consumer-fixtures.md)
 
-- [UIロゴ言語選択の正式判定](59-ui-logo-acceptance.md)
+- [Formal evaluation of UI logo language selection](59-ui-logo-acceptance.md)
 
-- [UI URLスキームの比較入力](60-ui-url-scheme-inputs.md)
+- [UI URL scheme comparison inputs](60-ui-url-scheme-inputs.md)
 
-- [異なるSPへの属性解放比較](61-relying-party-attribute-comparison.md) — IDP02.aの内部比較・ネイティブ設定・原本検証とShibbolethの正式採用。
+- [Attribute release comparison across SPs](61-relying-party-attribute-comparison.md) — IDP02.a internal comparison, native configuration, original-evidence verification, and formal Shibboleth adoption.
 
-- [必要なSPだけの事前取込とSimpleSAMLphp属性比較](62-scoped-preloaded-campaigns.md)
+- [Scoped SP preloading and SimpleSAMLphp attribute comparison](62-scoped-preloaded-campaigns.md)
 
-- [KeycloakのSP別属性解放の実証](63-keycloak-relying-party-attributes.md)
+- [Keycloak attribute release verification by SP](63-keycloak-relying-party-attributes.md)
 
-- [NameID省略の証拠検査と比較処理](64-nameid-omission-evidence.md)
+- [NameID omission evidence checking and comparison](64-nameid-omission-evidence.md)
 
-- [Keycloakの属性名・NameFormat生成の実測](65-keycloak-attribute-name-diagnosis.md)
+- [Measured Keycloak attribute name and NameFormat generation](65-keycloak-attribute-name-diagnosis.md)
 
-- [認証コンテキストの強度比較・優先順の共通実装](66-authn-context-comparison-inputs.md)
+- [Common authentication context strength and preference comparison](66-authn-context-comparison-inputs.md)
 
-- [認証コンテキスト比較の実機接続と正式判定](67-authn-context-native-acceptance.md)
+- [Product integration and formal authentication context comparison](67-authn-context-native-acceptance.md)
 
-- [EC署名の製品監査記録と正式評価](68-native-ec-signature-acceptance.md)
+- [EC signature product audit records and formal evaluation](68-native-ec-signature-acceptance.md)
 
-- [共通署名アルゴリズム判定の証拠監査](69-algorithm-verification-evidence-audit.md)
+- [Evidence audit for shared signature algorithm evaluation](69-algorithm-verification-evidence-audit.md)
 
-- [共通署名試験の製品監査接続](70-native-signed-request-acceptance.md)
+- [Product audit integration for shared signature tests](70-native-signed-request-acceptance.md)
 
-- [SimpleSAMLphp の共通署名試験](71-simplesamlphp-signature-acceptance.md)
+- [SimpleSAMLphp shared signature tests](71-simplesamlphp-signature-acceptance.md)
 
-- [Keycloak の署名検証イベント観測](72-keycloak-signature-observation.md)
+- [Keycloak signature verification event observations](72-keycloak-signature-observation.md)
 
-- [Keycloak・SimpleSAMLphp の EC 署名観測](73-native-ec-product-observations.md)
+- [Keycloak and SimpleSAMLphp EC signature observations](73-native-ec-product-observations.md)
 
-- [表示名の優先順位と観測条件の診断](74-display-precedence-observation.md)
+- [Display name precedence and observation-condition diagnosis](74-display-precedence-observation.md)
 
-- [TLS接続の補助観測と記録境界](75-transport-observation.md)
+- [Supplemental TLS observations and recording boundaries](75-transport-observation.md)
 
-- [証明書条件と製品側署名拒否の相関診断](76-native-certificate-diagnosis.md)
+- [Correlating certificate conditions with product signature rejection](76-native-certificate-diagnosis.md)
 - [Native signature-mode capability](77-signature-mode-capability.md) — independent Response/Assertion signing observation and native configuration campaigns.
-- [SimpleSAMLphpの暗号化応答の実測](78-simplesamlphp-native-encryption.md)
-- [メタデータ鍵選択と未掲載鍵の対照](79-metadata-key-selection.md)
+- [Measured SimpleSAMLphp encrypted responses](78-simplesamlphp-native-encryption.md)
+- [Metadata key selection and unpublished-key controls](79-metadata-key-selection.md)

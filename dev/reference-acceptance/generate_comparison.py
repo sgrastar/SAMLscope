@@ -590,7 +590,7 @@ def render(root, output):
                     _, verified = check_once(verify_native_attribute_index, root.parent / 'reference-20261001', live=False)
                     assert case == verified[case_id]
                 if verdict == "FAIL" and case_id not in CONFIRMED_FAILURES and not native_authn_failure and not native_certificate_failure and not native_key_failure and not native_default_acs_failure and not native_attribute_name_failure and not native_nameid_omission_failure and not native_ssp_validity_failure and not native_keycloak_validity_failure and not native_metadata_source_failure and not native_metadata_signature_failure and not native_metadata_application_failure and not native_metadata_supersession_failure and not native_encrypted_logout_failure and not native_schema_admission_failure and not native_attribute_index_failure:
-                    display = "**Failed (台帳採用・原因分類未確認)**"
+                    display = '**Failed (adopted in inventory; cause classification unconfirmed)**'
                 if product == 'simplesamlphp' and profile == 'browser_sso_idp' and case_id == 'IIP-IDP06-b-idp-01' and case['reason_code'] != 'audit.force-authn-mechanism-access-unproven':
                     display += " (prior run; latest precision not verified)"
                 cells.append(display + (" †" if (product == "shibboleth" and profile == "browser_sso_idp" and case_id in {'IIP-SSO01-fk-idp-01','IIP-SSO01-fu-idp-01','IIP-SSO01-gi-idp-01'}) or (product == "simplesamlphp" and profile == "browser_sso_idp" and case_id in {"IIP-IDP06-a-idp-01", "IIP-IDP06-b-idp-01"}) or (profile == "single_logout_idp" and (case_id in COMMON_RETESTS or case_id == "IIP-IDP17-a-idp-01" or case_id == "IIP-IDP18-a-idp-01" or case_id == "IIP-IDP19-a-idp-01" or case_id == "IIP-IDP19-c-idp-01" or (product == "shibboleth" and case_id == "IIP-IDP19-b-idp-01"))) or case_id in ADDITIONAL_RETESTS.get(profile, set()) or (product, profile, case_id) in alg_adopted or (product, profile, case_id) in peer_adopted or (product == "shibboleth" and ((profile == "metadata_idp" and case_id in POLLING_RETESTS) or (profile == "browser_sso_idp" and case_id == "IIP-IDP12-c-idp-01"))) else ""))
@@ -602,28 +602,28 @@ def render(root, output):
         scope = " († listed supplemental cases only)" if "cases" in m else ""
         rows.append(f"| {m['profile']}{scope} | {m['product']} | `{m['run']}` | `{m['folder']}` |")
     reason_labels = {
-        "case.pending-interaction": "設定・受信待ちに加え、判定処理未実装の経路を含む。全件台帳を参照",
-        "attestation.interaction-disallowed": "自己申告を無効にした構成。確認せずに申告を代行しない",
-        "browser_fixture_partial": "一部の試験だけ実行。残るvariantの証拠が不足",
-        "request.signing.unavailable": "署名必須構成でSuiteが当該要求を署名できない",
-        "force_authn_timestamp_precision_insufficient": "報告された時刻精度では新規認証を証明できない",
-        "audit.slo-async-session-failure-unproven": "IdP自身のセッション終了失敗を安全に誘導し、正常終了と失敗通知の両対照を観測する必要がある",
-        "audit.metadata-full-ui-controls-unproven": "正しい配置のUIInfo・DiscoHintsを取り込み、全variantの値を製品のUIまたは実効読み戻しで確認する必要がある",
-        "control_failed": "正常系対照が成立せず異常系を判定できない",
+        "case.pending-interaction": 'Includes configuration and reception waits as well as unimplemented evaluation paths. See the complete inventory',
+        "attestation.interaction-disallowed": 'Attestation is disabled. Do not submit an attestation without verification',
+        "browser_fixture_partial": 'Only some tests were executed; evidence for remaining variants is missing',
+        "request.signing.unavailable": 'The Suite cannot sign this request in a signature-required configuration',
+        "force_authn_timestamp_precision_insufficient": 'The reported timestamp precision cannot prove fresh authentication',
+        "audit.slo-async-session-failure-unproven": 'Safely induce failure to terminate the IdP session and observe both successful termination and failure-notification controls',
+        "audit.metadata-full-ui-controls-unproven": 'Import correctly placed UIInfo and DiscoHints and verify values for every variant through the product UI or effective read-back',
+        "control_failed": 'The positive control failed, so abnormal behavior cannot be evaluated',
     }
     total = sum(sum(counter.values()) for counter in unresolved.values())
-    reason_lines = ["## Not verifiedの内訳", "",
-                   f"以下は表に採用したケース結果の延べ{total}件。†のケースは新Runの追加証拠を採用し、それ以外の既存証拠は保持しています。単一Runの集計や全試験の再完走を意味しません。比較表で設定不足として扱い直した旧FAILは、このNOT_VERIFIED集計には含めません。", "",
-                   "| 理由 | Keycloak | Shibboleth IdP | SimpleSAMLphp | 解消に必要なこと |",
+    reason_lines = ['## Breakdown of Not verified observations', "",
+                   f"The table adopts {total} case-result observations. Cases marked † adopt additional evidence from new Runs; other existing evidence is retained. These counts do not represent a single Run or a complete rerun of all tests. Earlier FAIL results reclassified as configuration gaps in the comparison are excluded from this NOT_VERIFIED total.", "",
+                   '| Reason | Keycloak | Shibboleth IdP | SimpleSAMLphp | Required follow-up |',
                    "|---|---:|---:|---:|---|"]
     reasons = set().union(*(counter.keys() for counter in unresolved.values()))
     for reason in sorted(reasons, key=lambda key: (-sum(c[key] for c in unresolved.values()), key)):
         counts = " | ".join(str(unresolved[p][reason]) for p in PRODUCTS)
-        label = reason_labels.get(reason, "当該ケースの応答・対象設定・正常系対照を追加確認")
+        label = reason_labels.get(reason, 'Further inspect the case response, target configuration, and positive controls')
         reason_lines.append(f"| `{reason}` | {counts} | {label} |")
-    reason_lines += ["", "Chromeと承認のブロックを解除するだけでは解消しません。自動判定やfixtureの未実装にはSuiteの実装が必要です。設定・自己申告の経路は証拠の裏付けが必要です。[全件台帳](26-unverified-case-inventory.md)にケースごとの原因と再試験を記録しています。"]
-    template += "\n\n台帳で採用済みの追加結果は、Run・SHA-256・Verdictを照合して比較表へ反映しています。`Failed (台帳採用・原因分類未確認)`は保存済み判定の転記であり、この更新で製品への原因帰属を追加承認したものではありません。"
-    text = template + "\n\n" + "\n".join(reason_lines) + "\n\n## テスト別比較\n\n" + "\n\n".join(sections) + "\n\n## 採用した実行証拠\n\n" + "\n".join(rows) + "\n"
+    reason_lines += ["", 'Removing Chrome and approval blocks alone cannot resolve these observations. Missing automated evaluation and fixtures require Suite implementation. Configuration and attestation paths require supporting evidence. The [complete inventory](26-unverified-case-inventory.md) records causes and retests for each case.']
+    template += '\n\nAdditional results adopted in the inventory are included in the comparison after matching Run, SHA-256, and Verdict. `Failed (adopted in inventory; cause classification unconfirmed)` transcribes a saved conclusion; this update does not add approval of product cause attribution.'
+    text = template + "\n\n" + "\n".join(reason_lines) + '\n\n## Comparison by test\n\n' + "\n\n".join(sections) + '\n\n## Adopted execution evidence\n\n' + "\n".join(rows) + "\n"
     output.write_text(text)
     (root / "fix-verification/comparison-provenance.json").write_text(json.dumps(manifest, indent=2) + "\n")
 

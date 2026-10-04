@@ -142,7 +142,7 @@ class LogoutAsyncScenarioTestCaseTest {
     @Test void pageAndLocalizationDifferencesDoNotProveOwnSessionFailure() {
         var test = fixture(LogoutAsyncScenarioTestCase.FEEDBACK_ID);
         for (var pages : List.of(List.of("Logout failed", "Logout complete"),
-                List.of("ログアウトできません", "ログアウトしました"),
+                List.of("\u30ed\u30b0\u30a2\u30a6\u30c8\u3067\u304d\u307e\u305b\u3093", "\u30ed\u30b0\u30a2\u30a6\u30c8\u3057\u307e\u3057\u305f"),
                 List.of("Page A", "Page B"))) {
             var valid = feedbackValidProbe(test, 200, pages.getFirst());
             assertFeedbackUnproven(test.resume(context(), valid.next(),

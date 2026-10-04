@@ -1,33 +1,33 @@
-# SimpleSAMLphpの共通部分選択の観測と設定復元の効率化
+# SimpleSAMLphp intersection-selection observations and efficient configuration restoration
 
-## 追加観測
+## Additional observations
 
-Run `run_Z15GR24Z1AWTH8DX9ZFZYPQSEK`で、SimpleSAMLphpのネイティブメタデータパーサーへ元XMLを渡した。試験用SPだけに製品設定`assertion.encryption=true`を追加したことを、メタデータからの取込結果と分けて記録した。署名方式や暗号方式をSuite側で属性変換していない。
+Passed original XML to SimpleSAMLphp's native metadata parser in Run `run_Z15GR24Z1AWTH8DX9ZFZYPQSEK`. Adding product configuration `assertion.encryption=true` only for the test SP was recorded separately from metadata-import results. The Suite did not transform signature/encryption algorithm attributes.
 
-<!--g1-literal--> MD05.e8の必須13条件を完走し、原本メタデータ一致、署名付き正常応答、対応鍵による復号、別鍵による復号拒否、製品設定復元を確認した。条件欠落と証拠検査エラーは空で、単一キャンペーンにまとまっている。
+<!--g1-literal--> Completed all 13 required MD05.e8 conditions, checking original-metadata equality, signed normal responses, matching-key decryption, rejection of decryption with another key, and restored product configuration. Missing-condition and evidence-check error lists were empty; all conditions belong to one campaign.
 
-この経路で観測した署名はRSA-SHA256に固定されており、SHA384の広告やMaxKeySizeで候補を除外する条件へ追従しなかった。暗号化条件にも選択不一致があった。ただしRSA-SHA384の能力対照が成立していないため、共通部分選択の判定は`NOT_VERIFIED / metadata.algorithms.intersection-evidence-incomplete`を維持する。「製品全体がSHA384非対応」と断定せず、今回の経路では対照を観測できなかったと記録する。
+Signatures observed through this path remained RSA-SHA256 and did not follow SHA384 declarations or conditions excluding candidates through MaxKeySize. Encryption selections also differed. Because the RSA-SHA384 capability control was not established, intersection selection remains `NOT_VERIFIED / metadata.algorithms.intersection-evidence-incomplete`. The record states that the control could not be observed through this path, rather than asserting product-wide SHA384 non-support.
 
-新しい正式結果を台帳へ採用し、旧`case.pending-interaction`から実測に基づく理由へ更新した。設定操作だけを根拠にSuccessへ変換していない。
+Adopted new formal results into the inventory, replacing the earlier `case.pending-interaction` reason with a measured reason. Configuration operations alone were not converted into Success.
 
-<!--g1-literal--> 未検証は472観測・157ケースIDのまま。追加観測13条件を解消件数へ加算せず、新しい製品FAILも付けていない。
+<!--g1-literal--> Unverified observations remain 472, with 157 case IDs. The 13 additional conditions were not counted as resolved, and no new product FAIL was assigned.
 
-証拠は`build/acceptance/reference-20260918/simplesamlphp-intersection-metadata/`、判定前後と準備確認根拠は`simplesamlphp-intersection-evaluation/`。`verify_simplesamlphp_intersection.py`が元証拠のハッシュ、全条件、ネイティブ取込、署名、復号、能力対照不足、設定復元、正式結果を検査して台帳へ採用する。
+Evidence: `build/acceptance/reference-20260918/simplesamlphp-intersection-metadata/`; before/after evaluation and preparation evidence: `simplesamlphp-intersection-evaluation/`. `verify_simplesamlphp_intersection.py` checks original evidence hashes, all conditions, native import, signatures, decryption, missing capability controls, restoration and formal results before inventory adoption.
 
-## 設定書込の削減
+## Fewer configuration writes
 
-旧スクリプトは条件のたびに元設定を復元し、その直後に次の条件を書き込んでいた。`ConfigurationBatch`を追加し、元設定に単一の試験用SP設定を重ね、次の条件で置き換え、最後に一度だけ復元する方式に変更した。前の条件を累積せず、常に元設定から組み立てる。
+The earlier script restored original configuration after every condition and immediately wrote the next condition. Added `ConfigurationBatch` to overlay one test-SP configuration on the original, replace it for the next condition, and restore once at the end. Each condition starts from the original, without accumulating preceding conditions.
 
-参照コンテナがホストの設定ファイルをbind mountしているため、ファイルのinodeを維持する。毎回の読み戻し、元設定と最終設定のSHA-256一致は維持した。バッチ外からの変更を検知した場合は上書きや機械的な復元を行わず、結果採用を停止する。途中の操作記録には復元待ちを明示し、最後の復元確認後にのみ復元済みとする。
+The reference container bind-mounts the host configuration file, so its inode is preserved. Per-write read-back and original/final SHA-256 equality are retained. If a change outside the batch is detected, the script does not overwrite or blindly restore it; result adoption stops. Intermediate operation records explicitly state that restoration is pending, and claim restoration only after the final check.
 
-<!--g1-literal--> 新Run `run_KGH0BADKXNC77QE2SRKM43P370`の3条件では設定書込4回、うち復元1回で完了した。旧手順なら同条件で7回となる。13条件の旧実測は27回であり、新方式の計算上の回数は14回だが、13条件を新方式で再実行したとは記録しない。
+<!--g1-literal--> New Run `run_KGH0BADKXNC77QE2SRKM43P370` completed 3 conditions with 4 configuration writes, including 1 restoration. The earlier procedure would require 7 writes for those conditions. The earlier 13-condition execution measured 27 writes; the new procedure's calculated count is 14, but the record does not claim that all 13 conditions were rerun with it.
 
-実機証拠は`simplesamlphp-batched-restoration/`。`restoration.json`に書込試行数・適用条件数・復元試行数・元と最終のハッシュを保存した。正常終了以外の復元、外部変更保護、空バッチ、重複復元、条件の非累積について、一時ファイルを使う単体テストを実施した。
+Product evidence: `simplesamlphp-batched-restoration/`. `restoration.json` records write attempts, applied conditions, restoration attempts and original/final hashes. Temporary-file unit tests covered restoration after abnormal completion, protection against external changes, empty batches, duplicate restoration and non-accumulating conditions.
 
-## 操作・検証記録
+## Operations and validation
 
-<!--g1-literal--> 本作業の製品設定書込は計31回（旧方式の13条件27回、新方式の3条件4回）。正常SSO16回、無効署名対照16回、Run作成・preflight各2回、準備確認POST1回。製品再起動0、本人操作0、Suiteイメージ更新0。いずれのRunも元設定へ復元済み。
+<!--g1-literal--> Total product configuration writes for this work: 31, comprising 27 for 13 earlier-procedure conditions and 4 for 3 new-procedure conditions. Normal SSO 16; invalid-signature controls 16; Run creation/preflight 2 each; preparation-confirmation POST 1. Product restarts 0; user interactions 0; Suite image updates 0. Both Runs restored original configuration.
 
-Javaの判定ロジックは変更せず、前回の稼働イメージ`samlscope:reference-producer-metadata-v40`を使用した。今回のPython変更と実機証拠を検証し、G1生成一致・構造検証、台帳監査を実施した。G2の既存署名差分は未解消のままである。
+Java evaluation logic was unchanged; execution used the preceding image `samlscope:reference-producer-metadata-v40`. Validated the Python changes and product evidence, G1 generated-document consistency/structure, and inventory audit. The existing G2 signed-source difference remains unresolved.
 
-継続課題は、能力対照を成立させられる製品設定・実行経路の確認、および他の未完了クラスタの実装である。現在の観測不成立を仕様上の非対応や対象外へ読み替えない。
+Remaining work is to identify product configurations/execution paths establishing capability controls and implement other incomplete clusters. Failed observations must not be reinterpreted as specification-level non-support or inapplicability.

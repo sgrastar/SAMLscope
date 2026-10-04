@@ -1,101 +1,101 @@
-# 固定した属性公開ポリシーでの比較観測
+# Comparison observations under a fixed attribute-release policy
 
-この文書は実装と観測の経緯を残す。後続の正式ケース接続、まとめた検証、判定採用は[56](56-attribute-policy-acceptance.md)を参照。
+This document retains the implementation/observation history. See [56](56-attribute-policy-acceptance.md) for later formal-case integration, batched validation and result adoption.
 
-Shibbolethで、属性resolver・公開filter・メタデータprovider設定を最初に適用し、比較中はそれらを変更せずにメタデータ入力と要求の索引を変える実行器を追加した。Runは`run_K737VNKMS7Y66MSGPCZ0F0PZSQ`。試験用SPのentityIDに限定し、独立した属性名を使用するため、既存の通常公開属性との混同を避ける。
+Added a Shibboleth driver that initially installs attribute-resolver, release-filter and metadata-provider configuration, then varies metadata inputs/request indices without changing those settings during comparison. Run: `run_K737VNKMS7Y66MSGPCZ0F0PZSQ`. It is restricted to the test SP entityID and uses distinct attribute names to avoid confusion with ordinary released attributes.
 
-ポリシーは製品の[EntityAttributeExactMatch](https://shibboleth.atlassian.net/wiki/spaces/IDP5/pages/3199502013/EntityAttributeExactMatchConfiguration)と[AttributeInMetadata](https://shibboleth.atlassian.net/wiki/spaces/IDP5/pages/3199501959/AttributeInMetadataConfiguration)を使う。後者では`onlyIfRequired`が異なる独立した属性を用意し、RequestedAttributeの存在と必須指定の効果を区別する。
+The policy uses the product's [EntityAttributeExactMatch](https://shibboleth.atlassian.net/wiki/spaces/IDP5/pages/3199502013/EntityAttributeExactMatchConfiguration) and [AttributeInMetadata](https://shibboleth.atlassian.net/wiki/spaces/IDP5/pages/3199501959/AttributeInMetadataConfiguration). The latter uses separate attributes with different `onlyIfRequired` values, distinguishing RequestedAttribute presence from required designation.
 
-## 署名検証・復号後に観測した属性
+## Attributes observed after signature verification/decryption
 
-以下は`urn:samlscope:test:policy:`以下の属性名の末尾。値自体は抽出結果へ保存していない。`anchor`は同じresolver入力から常に公開する対照属性であり、この表だけで同一ユーザーの証明とは扱わない。
+The following are suffixes of attribute names under `urn:samlscope:test:policy:`. Values are not saved in extracted results. `anchor` is a control attribute always released from the same resolver input; this table alone is not proof of the same user.
 
-| 条件 | 観測した属性 |
+| Condition | Observed attributes |
 |---|---|
-| 通常対照 | anchor |
-| EntityAttributesあり | anchor, entity |
-| EntityAttributesなし | anchor |
-| RequestedAttribute、isRequired=true | anchor, required, optional |
-| RequestedAttribute、isRequired=false | anchor, optional |
-| RequestedAttributeなし | anchor |
-| 索引ゼロ | anchor, required, optional |
-| 索引一 | anchor, surname |
-| 索引ゼロへ戻す | anchor, required, optional |
+| Ordinary control | anchor |
+| EntityAttributes present | anchor, entity |
+| EntityAttributes absent | anchor |
+| RequestedAttribute, isRequired=true | anchor, required, optional |
+| RequestedAttribute, isRequired=false | anchor, optional |
+| RequestedAttribute absent | anchor |
+| Index zero | anchor, required, optional |
+| Index one | anchor, surname |
+| Return to index zero | anchor, required, optional |
 
-比較ごとの設定ファイル読み戻しはすべて同じハッシュだった。索引比較では元XMLのSHA-256が一致し、後続のメタデータ書込・サービス再読込を省いた。通常応答の原本署名、暗号化Assertionの復号、内側の署名とIssuerをコンテナ内で検証した。秘密鍵や復号した属性値は外へ出していない。
+Configuration read-backs had identical hashes for every comparison. Original XML SHA-256 matched for index comparisons, avoiding subsequent metadata writes/service reloads. Verified original normal-response signatures, encrypted Assertion decryption, enclosed signatures and Issuer inside the container. Private keys and decrypted attribute values were not exported.
 
-実行器は`dev/shibboleth/attribute_policy_campaign.py`、暗号検証は`dev/reference-acceptance/VerifyAttributePolicy.java`、記録の整合確認は`verify_attribute_policy_experiment.py`。証拠は`build/acceptance/reference-20260918/shibboleth-attribute-policy-campaign/`。原本manifest、MetadataPreparedとfetch、署名付き要求／応答の相関、設定固定、索引の往復、復元記録を照合した。
+Driver: `dev/shibboleth/attribute_policy_campaign.py`; cryptographic verification: `dev/reference-acceptance/VerifyAttributePolicy.java`; record consistency: `verify_attribute_policy_experiment.py`. Evidence: `build/acceptance/reference-20260918/shibboleth-attribute-policy-campaign/`. Matched original manifests, MetadataPrepared/fetch, signed request/response correlation, fixed configuration, index changes/return and restoration records.
 
-## 判定と残作業
+## Evaluation and remaining work
 
-この観測は`IIP-IDP03-a-idp-01`、`IIP-IDP04-a-idp-01`、`IIP-IDP04-b-idp-01`の判定処理へ接続する候補証拠である。まだRunnerの各ケースはこの比較を評価しない。設定固定・元XML同一性・実行ユーザー／属性入力・要求相関・欠落対照を扱う判定と、その負の対照を実装する。索引比較は別キャンペーンにまたがるため、同一Runというだけで無関係な試行を結合しない設計が必要である。
+These observations are candidate evidence for integrating evaluation of `IIP-IDP03-a-idp-01`, `IIP-IDP04-a-idp-01` and `IIP-IDP04-b-idp-01`. Runner cases do not yet evaluate this comparison. Evaluation and negative controls must cover fixed configuration, original XML equality, execution user/attribute input, request correlation and missing controls. Index comparisons cross campaigns, so unrelated attempts must not be joined merely because they share a Run.
 
-### 比較判定部の追加
+### Added comparison evaluation
 
-`AttributePolicyComparison`を追加した。検証済みSampleだけを受け取る内部比較処理で、各ケースの必須条件と試験用属性集合を照合する。固定ポリシー、実行ユーザー、SP entityID、比較対象外の入力、実験識別子が一致しない場合は未検証とする。索引比較は元メタデータの完全一致と、応答完了後に次要求を発行した順序を要求する。重複条件、使い回した証拠、不完全な対照、収集時の検証エラーもSuccessにしない。
+Added `AttributePolicyComparison`, an internal comparison accepting only validated Samples and checking each case's required conditions/test attribute sets. Differences in fixed policy, execution user, SP entityID, inputs outside the comparison or experiment identity remain unverified. Index comparisons require exact original-metadata equality and ordering in which each next request follows completed response receipt. Duplicate conditions, reused evidence, incomplete controls and collection-time validation errors cannot establish Success.
 
-Sampleの指紋値は収集側が原本と準備記録から検証して作る必要がある。ユーザーが入力したハッシュや確認チェックだけでは生成しない。実行ユーザーの照合値は一時的に比較へ用い、CaseOutcomeの詳細へ保存しない。現在の抽出ファイルは属性名しか含まないため、それだけからユーザーの一致を推定しない。
+Sample fingerprints must be constructed by the collector after verifying originals/preparation records, not from user-entered hashes or confirmation checkboxes alone. Execution-user matching values are used temporarily in comparison and not saved in CaseOutcome details. Current extraction files contain only attribute names and cannot establish user equality by themselves.
 
-正常な比較と、各対照の欠落、常時公開、別実験、ポリシー変更、別ユーザー、別SP、元メタデータ変更、制御外入力変更、順序不整合、証拠重複を扱うテストを追加した。Javaテストはバッチ検証待ちで未実行。この内部比較処理はまだCONFIGケースのレジストリへ登録しておらず、判定が変わる稼働経路は追加していない。
+Added tests for valid comparisons, missing controls, unconditional release, different experiments, policy/user/SP changes, changed original metadata, uncontrolled inputs, invalid ordering and duplicate evidence. Java tests await batch validation and have not run. This internal comparison is not yet registered with CONFIG cases; no active evaluation path was added.
 
-次は原本署名・復号後の属性入力と、固定ポリシーの準備記録を結合する収集境界の実装である。既存観測の製品設定ハッシュは外部実行器の記録にあり、RunnerのTranscriptへ検証済み準備情報として接続されていない。この不足を残したまま比較関数へ定数の指紋を渡さない。
+Next is the collection boundary binding original signatures/decrypted attribute inputs to fixed-policy preparation. Existing product-configuration hashes are in external-driver records and not connected as validated preparation in Runner Transcripts. Do not pass constant fingerprints to comparison while this evidence is missing.
 
-### 原本からの属性収集処理
+### Attribute collection from originals
 
-`AttributePolicyAttributeReader`と`AttributePolicyProtocolEvidence`を追加した。既存のMetadataPrepared／fetch／要求／応答の相関検査を再利用し、正常応答の署名、広告された暗号化鍵と秘密鍵の対応、復号後のIssuerと内側署名を確認してから属性を読む。索引はTranscript要約の宣言ではなく原本AuthnRequestから取得し、メタデータの比較指紋も原本バイトから計算する。
+Added `AttributePolicyAttributeReader` and `AttributePolicyProtocolEvidence`. They reuse MetadataPrepared/fetch/request/response correlation checks, reading attributes only after normal-response signature verification, matching advertised encryption keys to private keys, and checking decrypted Issuer/enclosed signatures. Indices come from original AuthnRequests, not Transcript-summary declarations; metadata comparison fingerprints derive from original bytes.
 
-属性の比較入力は同じAssertion内に限定する。anchor不在、値が異なるmarker、重複marker、未知のmarker、異なるNameFormat、空や構造化された値、未復号のEncryptedAttributeが残る場合は証拠不成立とする。暗号化された属性を無視して「不存在」と判定しない。例外文やObservationの文字列表現にも属性値を出さない。
+Compared attribute inputs must belong to the same Assertion. Missing anchor, markers with different values, duplicate/unknown markers, different NameFormat, empty/structured values and remaining undecrypted EncryptedAttribute invalidate evidence. Encrypted attributes are not ignored and called absent. Attribute values are also excluded from exceptions and Observation string representations.
 
-Run内の属性入力照合には、Runと対象entityIDを含めた長さ付き入力のハッシュを一時的に使う。これは同じ属性入力の証拠であり、独立したログインユーザーの本人性確認ではない。比較判定部のprincipalFingerprintへそのまま代入しない。ネイティブ準備記録・実行ユーザーの結合と、比較対象以外の入力を検査する処理は依然として未完了である。
+Same-Run attribute matching temporarily uses a hash of length-prefixed input containing the Run and target entityID. This establishes the same attribute input, not independent login-user identity. Do not assign it directly to the comparison's principalFingerprint. Binding native preparation/execution-user records and checking inputs outside the comparison remain incomplete.
 
-平文／暗号化応答の一致、Runごとの照合値の分離、不足・曖昧な属性、署名改変、復号鍵不足・鍵不一致を扱うテストを追加した。前項と同様にバッチ検証待ちであり、この追加を理由に稼働イメージや台帳の判定を更新していない。
+Added tests for matching plaintext/encrypted responses, Run-specific matching-value separation, incomplete/ambiguous attributes, modified signatures, missing decryption keys and key mismatch. As above, tests await batch validation; neither the running image nor inventory conclusions were updated because of this addition.
 
-### 本体収集処理での原本再読込
+### Original rereading through the production collector
 
-RunnerとAPIの`compileTestJava`をまとめて実行し、追加した本体コード・テストコードのコンパイル成功を確認した。テスト本体は実行していないため、負の対照検証が完了したとは扱わない。
+Ran Runner/API `compileTestJava` together and confirmed compilation of the added production/test code. Tests themselves did not run, so negative-control validation is not complete.
 
-`ObserveAttributePolicyExperiment.java`を追加し、上記Runの保存済み原本を`AttributePolicyProtocolEvidence`へ渡した。読み取り専用の実行で、鍵はコンテナ内の既存ファイルを参照し、存在しない鍵を生成しない。署名・復号を再検証し、外部検証ツールの観測と照合する。
+Added `ObserveAttributePolicyExperiment.java` to feed saved originals from the above Run into `AttributePolicyProtocolEvidence`. This read-only execution references existing container key files and does not generate absent keys. It revalidates signatures/decryption and compares observations with external verification.
 
-<!--g1-literal--> 本体収集処理は9往復を読み取り、issuesは空だった。属性入力の照合値は全条件で一致したが、これを認証済みユーザーの一致とは宣言していない。結果は`production-observation.json`に保存し、原本ハッシュ・条件・索引・属性名・要求／応答参照を検査した。製品設定操作・アプリ再起動・新Run作成はいずれも0回。台帳は470観測のまま。
+<!--g1-literal--> The production collector read 9 round trips with an empty issues list. Attribute-input matching values agreed across all conditions, without claiming authenticated-user equality. Results in `production-observation.json` were checked for original hashes, conditions, indices, attribute names and request/response references. Product-configuration operations, application restarts and new Run creation were all 0. The inventory remains 470 observations.
 
-現在の補助鍵入力サービスはRunと対象メタデータへの固定を扱うが、比較実験の準備前後やユーザーの対応付けを表現しない。用途を流用せず、検証済み準備情報を受け渡す仕組みと正式ケースへの接続を残作業として維持する。
+The current auxiliary key-input service binds a Run to target metadata but does not express experiment preparation boundaries/user matching. Its purpose is not repurposed; transfer of validated preparation and formal-case integration remain outstanding.
 
-### 準備記録と原本観測の結合
+### Binding preparation records to original observations
 
-`AttributePolicyExperimentBinding`を追加した。内部の検証済み準備情報を入力とし、Run一致、要求・応答参照の一致、原本由来のvariantと索引、条件の一意性を検査して比較部へ渡す。時刻の近さやvariant名だけでは試行を推測しない。メタデータfetch／原本／要求／応答の証拠参照を判定結果へ残す。
+Added `AttributePolicyExperimentBinding`. It accepts internal validated preparation and checks Run equality, request/response references, original-derived variants/indices and unique conditions before comparison. Attempts are not guessed from nearby timestamps or variant names alone. Metadata fetch/original/request/response references remain in evaluation results.
 
-収集結果にRun IDを保持させ、異なるRunの準備記録を拒否する。準備情報がない場合は`verified_preparation_unavailable`として未検証になる。応答参照違い、要求の使い回し、重複した原本要求、条件の取り違え、署名で確認した属性入力の変化についても未検証とするテストを追加した。テスト本体は引き続きバッチ検証待ち。
+Collection results retain Run ID and reject preparation from a different Run. Missing preparation yields unverified reason `verified_preparation_unavailable`. Added unverified controls for different response references, reused requests, duplicate original requests, mixed-up conditions and changed signed attribute input. Tests still await batch validation.
 
-このPreparation型は公開APIの入力ではなく、検証済みのネイティブ準備情報を渡す内部契約である。現在はその情報を生成するアダプターが未接続であり、利用者の申告ハッシュや単なる確認チェックをそのまま渡す実装はしていない。型を追加したこと自体を、準備情報の検証完了やケースの合格とは扱わない。
+Preparation is an internal contract for validated native information, not public API input. The adapter generating that information is not yet connected; user-declared hashes or confirmation checkboxes are not passed directly. Adding the type does not establish validated preparation or passing cases.
 
-### ネイティブ準備記録の補完
+### Supplemented native preparation records
 
-Shibboleth実行器へ`preparation.json`の出力を追加した。固定する全設定のハッシュに加え、Suiteが追加したメタデータprovider、属性定義、filterのノードだけを製品からの読み戻しから抽出する。設定全体は出力しない。生成した想定設定とのバイト一致を確認し、比較前後で抽出したルールの内容も一致させる。Suite所有のノードが欠落・重複していれば記録を受け入れない。
+Added `preparation.json` output to the Shibboleth driver. Besides hashes of all fixed configuration, it extracts only Suite-added metadata-provider, attribute-definition and filter nodes from product read-back. Entire configuration is not exported. It checks byte equality against expected generated configuration and equal extracted rules before/after comparison. Missing/duplicate Suite-owned nodes reject the record.
 
-ログイン用の入力は開始時に一度だけ読み、全条件の実行へメモリ内で渡すよう変更した。同じ入力群の使用を記録するランダムな参照トークンを付けるが、ユーザー名・パスワード・そのハッシュは保存しない。このトークンは認証済み本人性の証明ではなく、`fixed-in-memory-driver-input`という実行器の来歴として扱う。
+Login inputs are read once at start and passed in memory to every condition. A random reference token records use of the same inputs; usernames, passwords and their hashes are not saved. The token is driver provenance, `fixed-in-memory-driver-input`, rather than authenticated identity evidence.
 
-記録検査側は、新しい準備記録がある場合に内容のハッシュ、条件ごとの読み戻し、ログイン入力参照を照合する。旧観測へ後から準備記録を補ったり、記録がないことを確認済みと扱ったりしない。今回追加した記録は実機ではまだ未実行で、既存Runにはない。変更・欠落・重複・別Runを拒否するテストを追加し、バッチ検証待ちとしている。製品ポリシーの意味を検証するアダプターと正式ケースへの接続は引き続き残る。
+When new preparation records exist, record validation checks content hashes, per-condition read-back and login-input references. Preparation is not backfilled into historical observations; absence is not treated as established. These records have not yet been obtained from a product and are absent from existing Runs. Added rejection tests for changes, missing/duplicate records and different Runs; tests await batch validation. Product-policy semantic validation and formal-case integration remain outstanding.
 
-### ポリシー意味検査と新規の準備実測
+### Policy semantics and new measured preparation
 
-後続で`verify_policy_semantics`を追加した。対象SP限定のRequester、入力元uid、試験用属性名とNameFormat、EntityAttributeExactMatchの値、AttributeInMetadataの属性名・onlyIfRequired・matchIfMetadataSilentを厳密に確認する。余分なルール、別入力元、別メタデータファイル、未知の属性も拒否する。改変後にハッシュを計算し直しても通さない負の対照を追加した。
+Subsequently added `verify_policy_semantics`. It strictly checks target-SP-only Requester, uid input source, test attribute names/NameFormat, EntityAttributeExactMatch values and AttributeInMetadata names/onlyIfRequired/matchIfMetadataSilent. Extra rules, different input sources/metadata files and unknown attributes are rejected. Added negative controls that remain rejected even after recalculating hashes of modified inputs.
 
-新Run `run_C97YCPR7F5KNWRMCMHWNPQ11N9`で、実行前と比較前後の読み戻しにこの検査を適用した。証拠は`build/acceptance/reference-20260918/shibboleth-attribute-policy-preparation/`。旧Runの欠落記録はそのまま残し、新Runの`preparation.json`、条件ごとのポリシー前後記録、固定したメモリ内ログイン入力の参照を取得した。
+Applied these checks to read-backs before execution and before/after comparisons in new Run `run_C97YCPR7F5KNWRMCMHWNPQ11N9`. Evidence: `build/acceptance/reference-20260918/shibboleth-attribute-policy-preparation/`. Earlier missing records remain absent; the new Run captured `preparation.json`, per-condition before/after policy records and fixed in-memory login-input references.
 
-<!--g1-literal--> 9条件を完走し、外部検証ツールと本体収集処理の双方で署名・復号後の観測を確認した。原本収集のissuesは空、準備記録の意味検査も通過した。今回の製品設定操作は14回（書込13、一時ファイル削除1）、サービス再読込14回、SSO9回、Run／preflight各1回、キャンペーン9回。設定復元済み。本人操作・製品再起動・Suite再作成は0回。
+<!--g1-literal--> Completed 9 conditions, confirming signed/decrypted observations through both external verification and the production collector. Original collection had no issues; preparation semantics passed. Product-configuration operations 14: writes 13, temporary-file deletion 1. Service reloads 14; SSO 9; Run/preflight 1 each; campaigns 9. Configuration was restored. User interactions, product restarts and Suite recreations were 0.
 
-比較処理の`principalFingerprint`は証明範囲を誤解させる名前だったため、`loginInputFingerprint`へ修正した。必要なのは固定した実行入力と署名で確認した属性入力の照合であり、この属性公開能力の試験で独立した本人性検証まで達成したとは宣言しない。ランダムな入力参照だけをユーザーの証明とすることもない。G1/G2の解釈や判定レベルは変更していない。
+Renamed the misleading comparison field `principalFingerprint` to `loginInputFingerprint`. The requirement is matching fixed driver inputs and signed attribute inputs, not claiming independent user-identity verification in this attribute-release capability test. A random input reference alone is not user proof. G1/G2 interpretations and judgment levels were unchanged.
 
-Runner本体はコンパイル成功。Javaテストと追加のPython負の対照テストはバッチ検証待ち。原本再読込の初回は検証プログラムの内部クラスのコピー不足で失敗し、そのクラスを補って同じ証拠の再読込に成功した。製品SSOを再実行した失敗ではない。
+Runner production compilation succeeded. Java tests and added Python negative controls await batch validation. The first original reread failed because internal verifier classes were not copied; copying the missing class enabled rereading the same evidence. This was not a failed product SSO rerun.
 
-<!--g1-literal--> 正式なケース接続・準備情報の受け渡しは未完了で、未検証470件を維持する。新しい準備実測を取得したことだけでは台帳の判定を変更しない。
+<!--g1-literal--> Formal-case integration/preparation transfer remain incomplete; unverified observations remain 470. Obtaining new measured preparation alone does not change inventory results.
 
-<!--g1-literal--> 正式なSuccessは追加しておらず、未検証は470観測・157ケースIDを維持する。実測した9条件を解消件数へ加算しない。
+<!--g1-literal--> No formal Success was added; unverified observations remain 470 with 157 case IDs. The 9 measured conditions are not added to resolved counts.
 
-## 操作・ビルド記録
+## Operations and builds
 
-<!--g1-literal--> 製品設定等の操作14回（書込13、試験用メタデータ削除1）、サービス再読込14回、SSO9回、Run作成・preflight各1回、キャンペーン作成9回、準備確認0回。本人操作・製品再起動はいずれも0回。設定ファイルの元と復元後のSHA-256一致、一時メタデータ削除を確認済み。
+<!--g1-literal--> Product-configuration and related operations 14: writes 13, test-metadata deletion 1. Service reloads 14; SSO 9; Run creation/preflight 1 each; campaign creation 9; preparation confirmations 0. User interactions/product restarts 0. Verified original/restored configuration SHA-256 equality and deletion of temporary metadata.
 
-署名済みコミット`2de509ec`のソースを隔離ディレクトリでビルドし、別件の未コミットAPI変更を含めず配布物を生成した。`api:installDist -x test --offline`成功。Javaテストはバッチ検証待ちであり、成功済みとは記録しない。暗号検証ツールの初回コンパイルは配布ディレクトリ指定を誤って失敗し、正しい`install/samlscope/lib`で再コンパイルして成功した。
+Built source from signed commit `2de509ec` in isolation, excluding unrelated uncommitted API changes. `api:installDist -x test --offline` succeeded. Java tests await batch validation and are not recorded as passed. The first cryptographic-verifier compilation failed because of an incorrect distribution directory; recompilation with `install/samlscope/lib` succeeded.
 
-<!--g1-literal--> イメージbuild1回、Suite／転送コンテナ再作成各1回。稼働イメージは`samlscope:reference-attribute-policy-v42`、digestは`sha256:45706f6b4ed6c5ec2d95643252aa0d3aedd15ac8cfde7f869d5f8d51104990b1`。G1生成一致・構造46/46。既存のG2保護ソース署名差分は未解消である。
+<!--g1-literal--> Image build 1; Suite/forwarder recreations 1 each. Running image: `samlscope:reference-attribute-policy-v42`; digest: `sha256:45706f6b4ed6c5ec2d95643252aa0d3aedd15ac8cfde7f869d5f8d51104990b1`. G1 generated-document consistency/structural checks 46/46. The existing protected-source G2 signed difference remains unresolved.

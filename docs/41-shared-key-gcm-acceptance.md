@@ -1,40 +1,40 @@
-# SimpleSAMLphp共有鍵GCMの実機検証
+# SimpleSAMLphp shared-key GCM acceptance
 
-## 結果と採用根拠
+## Results and evidence
 
-<!--g1-literal--> 未検証を485観測から483観測へ削減した。異なるケースIDは159のまま。SimpleSAMLphpのbrowser_sso_idpにおけるIIP-ALG04.aとIIP-ALG04.bをSuccessへ更新した。他の製品・プロファイルへ結果を転用していない。
+<!--g1-literal--> Unverified observations 485→483; distinct IDs stay 159. SimpleSAMLphp browser_sso_idp IIP-ALG04.a/b became Success. Evidence is not transferred to other products/profiles.
 
-製品自身のメタデータパーサで通常のSPメタデータを取り込み、製品設定の`assertion.encryption`、`sharedkey`、`sharedkey_algorithm`を一時設定した。通常のAuthnRequestに相関するSuccess ResponseからEncryptedAssertionを取得し、Suiteが共有鍵で復号できたことに基づく。元のRSA経路がAES-CBCを生成することは、製品全体のGCM非対応を意味しない。
+Ordinary SP metadata was imported natively, with temporary assertion.encryption, sharedkey and sharedkey_algorithm settings. Correlated Success Responses to normal AuthnRequests contained EncryptedAssertions decrypted by Suite with the shared key. AES-CBC in the original RSA path does not establish product-wide lack of GCM.
 
-| 条件 | 正常鍵のRun | 誤鍵のRun | 結果 |
+| Condition | Correct-key Run | Wrong-key Run | Result |
 |---|---|---|---|
-| AES128-GCM | `run_00MKHH590BSDDG411ST76J02AD` | `run_ZNEH2027V46ZFCD76WXK8R5XZ6` | 正常鍵は復号を伴うPASS、誤鍵はNOT_VERIFIED |
-| AES256-GCM | `run_30QS0MMCHGS3Q02VGHJ5VYEP9J` | `run_B3N52X36FKQN3RA05MD0D7S3SK` | 正常鍵は復号を伴うPASS、誤鍵はNOT_VERIFIED |
+| AES128-GCM | run_00MKHH590BSDDG411ST76J02AD | run_ZNEH2027V46ZFCD76WXK8R5XZ6 | Decrypted PASS with correct key; NOT_VERIFIED with wrong key |
+| AES256-GCM | run_30QS0MMCHGS3Q02VGHJ5VYEP9J | run_B3N52X36FKQN3RA05MD0D7S3SK | Decrypted PASS with correct key; NOT_VERIFIED with wrong key |
 
-採用前に`dev/reference-acceptance/verify_shared_gcm_batch.py`で、元XMLのハッシュ、Runと要求応答の相関、暗号方式、結果の証拠参照、ネイティブ取込、製品設定の復元、誤鍵時の未確定、鍵差替え拒否を検査した。単体テストの成功や設定読戻しだけでは製品のSuccessにしていない。
+`dev/reference-acceptance/verify_shared_gcm_batch.py` checks original XML hashes, Run/request/response correlation, algorithms, result references, native import, restoration, wrong-key uncertainty and key-replacement rejection before adoption. Unit success or configuration read-back alone is insufficient.
 
-## Run入力の寿命と固定
+## Input lifetime and freezing
 
-既存の認可済み評価API `POST /api/runs/{id}/protocol-evidence/evaluate`へ、任意の`sharedKeyBase64`入力を追加した。空の入力は従来の評価を維持する。共有鍵は当該リクエストの同期評価中、そのRun・スレッドだけに供給され、終了・例外時に参照を外し、受け取ったバイト配列を消去する。JVMや暗号ライブラリ内部の一時コピーの物理消去までは保証しない。
+The authorized POST /api/runs/{id}/protocol-evidence/evaluate API accepts optional sharedKeyBase64. Empty input preserves existing evaluation. Key bytes are supplied only to that Run/thread during synchronous request evaluation; references are removed on completion/exception and the input array erased. Physical erasure of JVM/crypto-library temporary copies is not guaranteed.
 
-SQLiteには最初に渡した鍵のSHA-256だけを保存する。同じRunへ異なる鍵を渡す評価は拒否し、再起動後も入力の固定を維持する。元の共有鍵は保存せず、評価を再実行する場合は同じ鍵を再入力する。鍵を紛失した場合は新Runで再試験する。秘密鍵本体をCaseState、Transcript、結果JSON、操作記録へ保存しない。
+SQLite stores only the first key's SHA-256. A different key for the same Run is rejected, including after restart. Repeated evaluation requires resubmitting the same key; lost keys require a new Run. Secret key bytes are not saved in CaseState, Transcript, result JSON or operation records.
 
-この供給口は暗号アルゴリズム観測へ接続した。他の復号を要する観測が共有鍵を扱えることや、復号だけでprincipalの意味的同一性を判定できることは主張しない。UIの共有鍵入力パネルは本変更の対象に含まれない。
+This input connects to algorithm observation, without claiming support for every other decrypting observer or semantic principal matching. A UI shared-key panel is outside this change.
 
-## 実行と操作負荷
+## Execution and effort
 
-<!--g1-literal--> ネイティブ取込5、製品設定書込10（投入・復元）、Run作成5、preflight5、通常SSO往復5、Docker build1、Suite／転送コンテナ再作成各1、本人操作0、製品再起動0。全試行で元設定のSHA-256一致を確認した。
+<!--g1-literal--> Native imports 5, writes 10 (install/restore), Runs 5, preflight 5, ordinary SSO round trips 5, docker build 1, Suite/forward recreation 1 each, user actions 0, product restarts 0. Every trial restored original SHA-256.
 
-<!--g1-literal--> 誤鍵の初回Run `run_XM00XBWDXACHFD2HH78BD1VGFP`では、鍵差替えをAPIが正しく拒否したが、ドライバがラップ済み例外を捕捉できず証拠収集が途中終了した。設定はfinallyで復元済み。この試行は確定根拠に採用せず、例外捕捉を修正して新Runで完走した。上記操作数にはこの試行も含む。
+<!--g1-literal--> Initial wrong-key Run run_XM00XBWDXACHFD2HH78BD1VGFP correctly rejected key replacement, but the driver failed to catch a wrapped exception and stopped evidence collection. finally restored settings. This trial is not adopted; exception handling was corrected and a fresh Run completed. Costs above include it.
 
-証拠は`build/acceptance/reference-20260918/simplesamlphp-shared-gcm*`、操作台帳・配備記録は`shared-key-input-runtime/`。証拠ファイルの秘密鍵混入検査も実施した。鍵は一時的な製品設定とプロセスメモリだけに存在し、保存したメタデータパーサ出力には追加していない。
+Evidence: build/acceptance/reference-20260918/simplesamlphp-shared-gcm*. Costs/deployment: shared-key-input-runtime/. Saved evidence was scanned for private-key leakage. Keys existed only in temporary product settings/process memory, not retained parser output.
 
-稼働イメージは`samlscope:reference-shared-key-input-v31`、digestは`sha256:497fea94b6c8ffb1c6d3d04f6367fa1f88e7dd923c93b199a9fac91047012b95`。作業ツリーに以前から存在する無関係なSOAP差分を含めないよう、Applicationクラスは変更前の追跡ソースから再コンパイルした。ビルド入力のハッシュを配備記録に保存した。
+Image: samlscope:reference-shared-key-input-v31; digest sha256:497fea94b6c8ffb1c6d3d04f6367fa1f88e7dd923c93b199a9fac91047012b95. Application was recompiled from prior tracked source to exclude unrelated existing SOAP changes. Build-input hashes are retained.
 
-## 検証と残件
+## Verification and remaining work
 
-Store・Runner・APIの回帰テストを実施した。AES共有鍵のRun／スレッド隔離、例外時の参照解除と入力バッファ消去、永続したダイジェストによる差替え拒否、未知Run拒否、秘密入力を反射しない固定エラーを検証した。API監査テストの既定ACS条件と自動オラクルの明示インベントリは、以前の実装追加へ追随する期待値に修正した。
+Store/Runner/API regressions verify Run/thread isolation, exception cleanup/input erasure, persistent digest-based replacement rejection, unknown-Run rejection and fixed errors that do not reflect secrets. API expectations for default ACS and explicit automatic-oracle inventory were updated for prior implementation additions.
 
-<!--g1-literal--> G1生成一致・構造46/46、未検証台帳監査のエラー0を確認した。G2は既存のG2-30署名対象ソース差分により20/21のまま。全体完了・リリース承認とはしていない。
+<!--g1-literal--> G1 generation/structure 46/46 and inventory audit zero errors. G2 remained 20/21 due to existing G2-30 source differences. No completion/release approval.
 
-残るSimpleSAMLphpの鍵輸送アルゴリズムや組合せ義務は本共有鍵試験では検証できない。共有鍵の直接暗号化ではEncryptedKeyを生成しないため、RSA-OAEPの別方式・Digest／MGFの証拠として数えない。
+Shared-key direct encryption generates no EncryptedKey, so it cannot establish remaining RSA-OAEP modes or Digest/MGF combinations.

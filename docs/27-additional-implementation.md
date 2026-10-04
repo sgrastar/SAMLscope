@@ -1,763 +1,747 @@
-# 追加実装と再試験
+# Additional implementation and retesting
 
-2026-09-14。Phase 1はリリース準備未完了です。ケースIDをすべて登録したことと、各条件の入力生成・観測・判定を実装したことを同一視した過去の完了記録を訂正します。
+2026-09-14. Phase 1 is not ready for release. This corrects earlier completion records that treated registration of every case ID as equivalent to implementation of input generation, observation, and evaluation for every condition.
 
-## 今回の実装
+## Implementation in this batch
 
-| 対象 | 変更 | 検証と限界 |
+| Target | Change | Verification and limits |
 |---|---|---|
-| メタデータの連続取得 | 現在のfixtureを実際に取得してから認証要求を送信。取得前は自動再確認する待機画面を返す | 前のfixtureの取得、誤ったtoken、リダイレクトだけの取得では解除しない。定期取得方式を対象とし、未知の署名鍵を見て初めて取得する方式はこの待機経路では進まない |
-| メタデータのリダイレクト | content応答はRunの取得方式で鍵を選択し、最終コンテンツ取得を記録する | tokenなしのURLから取得した証明書で実際のAuthnRequest署名を検証。古いvariantのcontent URLを拒否 |
-| IIP-MD05.fi（IdP） | Targetの公開URLを自動検査。Logo・InformationURL・PrivacyStatementURLをすべて確認 | 対象entityIDとIdPロールを限定。HTTPS以外はRECOMMENDED違反のoutcomeをEvaluatorへ渡す。URL未発行は注記。消費側URL処理のIIP-MD05.fhとは別 |
-| IIP-G02.a | 正常系対照と文字列長の境界を比較し、エラー応答を検出 | 他の文字・型の条件は未実行のため、境界の成功だけではSuccessにしない |
-| IIP-G03.b | 正常系対照の後、DOCTYPEを含むAuthnRequestに対する成功応答を検出 | 無応答を拒否成功にはしない。Response側の条件は未実装。署名必須PlanではSuiteのDOCTYPE署名処理が未対応 |
-| IIP-SSO07.b | 明示的なSubjectと成功応答内の識別子を比較。暗号化Assertion・EncryptedIDはRunの鍵で復号 | 識別子の不一致を検出する部分実装。正常系失敗・復号不能は製品FAILにしない。要求の暗号化や全確認方法の条件は未実装 |
-| CONFIGの受信後再評価 | IIP-IDP09.a、IIP-SSO01.ez/.fd/.feを新しいTranscript到着後に自動評価する | 相関確認前や不完全な履歴を除外。暗号化能力は空のEncryptedAssertionではなく、成功応答内の暗号文をRunの鍵で復号できたことを確認 |
-| 自動判定がないブラウザ経路 | 無効な完了操作を求めず、`browser.oracle-unavailable`でNOT_VERIFIEDを返す | 実装不足を明示する変更であり、適合性の確認件数は増えない |
+| Continuous metadata retrieval | Send the authentication request only after the current fixture has actually been fetched. Before retrieval, return a waiting page that checks again automatically | Fetching the previous fixture, using an incorrect token, or fetching only a redirect does not release the wait. This path targets periodic retrieval; implementations that fetch only after encountering an unknown signing key cannot advance through it |
+| Metadata redirects | Select the key for the content response using the Run's retrieval mode and record retrieval of the final content | Verify the actual AuthnRequest signature with the certificate fetched from the URL without a token. Reject content URLs for an old variant |
+| IIP-MD05.fi (IdP) | Automatically inspect the Target's published URLs: Logo, InformationURL, and PrivacyStatementURL | Restrict evidence to the target entityID and IdP role. For non-HTTPS URLs, pass a RECOMMENDED-violation outcome to Evaluator. Note URLs that are not published. Separate from consumer URL processing in IIP-MD05.fh |
+| IIP-G02.a | Compare a normal control with string-length boundaries and detect error responses | Other character and type conditions have not been executed; passing the boundary alone does not produce Success |
+| IIP-G03.b | After the normal control, detect a successful response to an AuthnRequest containing DOCTYPE | Silence is not successful rejection. Response-side conditions remain unimplemented. The Suite cannot yet sign DOCTYPE requests for Plans requiring signatures |
+| IIP-SSO07.b | Compare the explicit Subject with the identifier in a successful response. Decrypt encrypted Assertions and EncryptedID with the Run key | Partial implementation detecting identifier mismatches. A failed normal control or inability to decrypt does not produce a product FAIL. Request encryption and all confirmation-method conditions remain unimplemented |
+| CONFIG reevaluation after reception | Automatically evaluate IIP-IDP09.a and IIP-SSO01.ez/.fd/.fe after a new Transcript arrives | Exclude unconfirmed correlations and incomplete histories. Confirm encryption capability by decrypting ciphertext in a successful response with the Run key, rather than by observing an empty EncryptedAssertion |
+| Browser paths without an automatic oracle | Return NOT_VERIFIED with `browser.oracle-unavailable` instead of requesting an invalid completion action | Exposes an implementation gap; it does not increase the number of confirmed conformance observations |
 
-## 実製品の再試験
+## Retesting real products
 
-既存Planを使った新Runで実施しました。ブラウザSSOプロファイルでは正常系と登録済みの能動試験列、メタデータプロファイルでは公開メタデータ検査を実行しました。実行手段はプロトコルクライアントです。新しい実ブラウザ受入試験の完了とは扱いません。
+Tests used new Runs with existing Plans. The browser SSO profile executed the normal flow and registered active test sequence; the metadata profile inspected published metadata. Execution used a protocol client. This is not completion of a new real-browser acceptance test.
 
 | Test | Keycloak | Shibboleth | SimpleSAMLphp |
 |---|---|---|---|
-| IIP-MD05.fi | Warning：対象URL未発行 | Warning：対象URL未発行 | Warning：対象URL未発行 |
-| IIP-G02.a | Not verified：残る条件あり | Not verified：残る条件あり | Not verified：残る条件あり |
-| IIP-G03.b | Not verified：Suiteの要求署名未対応 | Not verified：残る条件あり | Not verified：Suiteの要求署名未対応 |
-| IIP-SSO07.b | Failed：Subject不一致 | Not verified：残る条件あり | Failed：Subject不一致 |
-| IIP-IDP09.a | Success：復号確認 | Success：復号確認 | Not verified：暗号化出力未取得 |
+| IIP-MD05.fi | Warning: target URLs not published | Warning: target URLs not published | Warning: target URLs not published |
+| IIP-G02.a | Not verified: conditions remain | Not verified: conditions remain | Not verified: conditions remain |
+| IIP-G03.b | Not verified: Suite request signing unsupported | Not verified: conditions remain | Not verified: Suite request signing unsupported |
+| IIP-SSO07.b | Failed: Subject mismatch | Not verified: conditions remain | Failed: Subject mismatch |
+| IIP-IDP09.a | Success: decryption confirmed | Success: decryption confirmed | Not verified: encrypted output not obtained |
 
-Subjectの違反は正常系対照、要求・応答の相関、NameIDPolicyによるFormat変更指定がないことを確認しました。Keycloakは復号後にも照合しています。識別子の生値や秘密鍵を検証要約には保存していません。製品全体の不適合を主張するものではありません。
+The Subject violation was checked against the normal control, request/response correlation, and the absence of a NameIDPolicy instruction changing Format. Keycloak was also checked after decryption. Raw identifier values and private keys are not stored in the verification summary. This does not claim that the product as a whole is nonconforming.
 
-Shibbolethの定期HTTP取得ではcontrolとHTTP 301・302・307の試験を完走しました。設定URLへの追加poll tokenと、認証要求送信後に入れていた固定待機は不要になりました。接続用の補助コンテナは開始・停止し、製品設定は復元・readback確認済みです。
+Shibboleth's periodic HTTP retrieval completed the control and HTTP 301, 302, and 307 tests. The extra poll token on the configured URL and the fixed delay after sending the authentication request are no longer needed. The auxiliary connection container was started and stopped; product settings were restored and checked by readback.
 
-比較表には今回変更したケースだけ新Runの証拠を採用し、ほかの既存証拠を保持しています。未検証は589件から584件へ減少しました。今回新たに確定したのはSubject違反とURL未発行の注記であり、すべてをSuccessとして集計していません。
+The comparison table adopts new-Run evidence only for cases changed in this batch and retains other existing evidence. Unverified observations decreased from 589 to 584. The new conclusions are Subject violations and notes for unpublished URLs; they are not all counted as Success.
 
-## 作業量
+## Work performed
 
-この追加実装後の製品試験で設定書き込みは復元込み2回、サービス再読込は2回です。設定はShibbolethのHTTP取得に限定されます。新Runの作成は6回、検証Suiteと転送コンテナの再起動は各1回。ユーザー本人の操作と代行ブラウザ操作は0回です。累計・試行明細は[操作記録](25-interaction-execution-cost.md)に統合しました。
+Product testing after this implementation required 2 configuration writes including restoration and 2 service reloads. Configuration changes were limited to Shibboleth HTTP retrieval. There were 6 new Runs, with 1 restart each of the verification Suite and forwarding container. User actions and delegated browser actions were 0. Cumulative counts and attempt details are integrated into the [operation record](25-interaction-execution-cost.md).
 
-## 検証と承認境界
+## Verification and approval boundaries
 
-通常の作業ツリーでRunner/API全回帰テストが成功し、新しい正負対照も通過しました。生成文書とG1構造検証も成功しました。G2検証は署名対象APIソースとの差分を検出してG2-30でブロックし、承認済みとは判定していません。取得前の送信禁止、リダイレクト先の署名鍵、別entity・別roleの証拠混入、文字列境界、DTD、Subject不一致、遅延受信、誤った鍵、相関未確認・履歴不完全・正常系失敗を検査しています。
+All Runner/API regression tests in the ordinary working tree passed, including the new positive and negative controls. Generated documents and G1 structural validation also passed. G2 detected differences from the approved API source and blocked at G2-30; it did not declare approval. Checks cover sending before retrieval, signing keys at redirect destinations, evidence from a different entity or role, string boundaries, DTDs, Subject mismatches, delayed reception, wrong keys, unconfirmed correlation, incomplete history, and failed normal controls.
 
-検証イメージは `samlscope:reference-additional-v5`。稼働中の承認済み定義を維持し、今回の変更クラスだけを反映しました。別件のOIDC／管理画面変更は含めていません。以前のコンテナは停止状態で保持しています。
+The verification image is `samlscope:reference-additional-v5`. It preserves the active approved definitions and incorporates only classes changed in this batch. Unrelated OIDC and administration-UI changes are excluded. The previous container is retained in a stopped state.
 
-独立したNameID再承認作業ツリーではRunnerと今回のAPI回帰テストは成功しましたが、全API試験の一部は既存のcoverage digestと機能プロファイル参照の不一致で失敗しました。その作業ツリー全体のリリース検証成功とは扱いません。今回のAPIソース変更を含むG2承認更新と、NameID定義・機能プロファイルの整合・統合は未完了です。
+In the independent NameID reapproval working tree, Runner and this batch's API regression tests passed, but some full API tests failed because of mismatched existing coverage digests and functional-profile references. This is not a successful release verification of that entire working tree. Updating G2 approval for these API source changes, and reconciling and integrating the NameID definitions and functional profiles, remain incomplete.
 
-## 残るリリース作業
+## Remaining release work
 
-### 継続中のメタデータ実装
+### Ongoing metadata implementation
 
-次の変更は開発作業ツリーの追加実装です。上記の実製品再試験・稼働イメージにはまだ含まれません。実製品の未検証件数も更新していません。
+The following changes are additional implementation in the development working tree. They are not yet included in the real-product retests or active image described above. Real-product unverified counts have not been updated.
 
-| 対象 | 追加した入力・観測 | 残る確認 |
+| Target | Added inputs and observations | Remaining verification |
 |---|---|---|
-| IIP-MD05.ad | signing指定とuse省略それぞれで先頭・第2の鍵を使う署名要求 | 製品での取込・使用。MD07の強い義務と同じ署名fixtureを共有 |
-| IIP-MD07.a | 単一鍵、複数鍵の各位置を実際に使用する要求 | 拒否・無応答だけでは製品違反としない |
-| IIP-MD06.a5 | メタデータ証明書と実行時証明書の属性を変え、同じ公開鍵で署名 | 信頼確立前の拒否と実行時の鍵比較を区別する追加診断 |
-| IIP-MD06.a7 | KeyValueとX509Certificateの両方を独立に観測 | 片方のみの成功では完了しない |
-| IIP-MD06.a9 | 有効期間、subject/issuer、拡張、KeyUsage/EKUの既存入力を実行時観測へ接続 | 製品での追加実行 |
-| IIP-IDP12.c | ACS選択属性を署名前にすべて省略。明示既定の変更と暗黙既定を観測 | 同じentityの再取得で実行。別entityを使う事前登録経路から除外 |
-| メタデータ共通観測 | Run・fixtureの完全一致、重複パラメータ拒否、取得前の古い使用証拠を除外。未取得・未使用・拒否証拠不足を個別表示 | 過去に確定した結果にも今回の厳格化が影響し得るため再評価が必要 |
-| 設定完了後の評価 | 操作完了だけで無応答を拒否成功・製品違反へ変換する経路を撤去 | 拒否を裏付ける証拠がなければNOT_VERIFIEDを維持 |
+| IIP-MD05.ad | Signed requests using the first and 2nd keys, both with signing specified and with use omitted | Native product import and use. Shares signing fixtures with the stronger `MD07` obligation |
+| IIP-MD07.a | Requests that actually use a single key and each position in a multiple-key list | Rejection or silence alone does not establish a product violation |
+| IIP-MD06.a5 | Change metadata-certificate and runtime-certificate attributes while signing with the same public key | Additional diagnostics separate rejection before trust establishment from runtime key comparison |
+| IIP-MD06.a7 | Observe KeyValue and X509Certificate independently | Success for only one representation does not complete the case |
+| IIP-MD06.a9 | Connect existing validity-period, subject/issuer, extension, and KeyUsage/EKU inputs to runtime observations | Additional product execution |
+| IIP-IDP12.c | Omit all ACS selection attributes before signing; observe explicit-default changes and implicit defaults | Execute after refetching the same entity. Exclude the preloaded path that uses a different entity |
+| Common metadata observations | Require exact Run/fixture matching, reject duplicate parameters, and exclude old use evidence preceding retrieval. Report missing retrieval, missing use, and insufficient rejection proof separately | Stricter checks may also affect previously conclusive results; reevaluation is required |
+| Evaluation after configuration completion | Remove paths that turn silence into successful rejection or a product violation solely because an operation completed | Keep NOT_VERIFIED unless evidence establishes rejection |
 
-既定ACSの暗黙選択は、文書順とindex順が一致するfixtureです。承認済み説明にある「最小index」と別のメタデータ規則との解釈差を、この実装で独断で解決していません。
+The implicit-default ACS fixture has matching document and index order. This implementation does not independently resolve the interpretation difference between the approved explanation's "minimum index" and another metadata rule.
 
-この開発バッチでは製品の設定変更・再読込・ユーザー操作は発生していません。署名対象APIに差分があるためG2の承認更新は引き続き必要です。
+This development batch involved no product configuration changes, reloads, or user actions. G2 approval still requires updating because the approved API source differs.
 
-<!--g1-literal--> バッチ検証はSAML 57、Runner 397、API 85の計539テストが成功しました。生成文書の一致、G1構造検証46/46も成功。G2は20/21で、署名対象APIとの差分によるG2-30が残ります。途中で判明した終了処理の競合も修正し、Transcript自動再評価が終了してからストレージを解放するテストを追加しました。
+<!--g1-literal--> Batch verification passed 539 tests: SAML 57, Runner 397, and API 85. Generated-document consistency and G1 structural validation 46/46 also passed. G2 remains 20/21, with G2-30 caused by differences from the approved API source. A shutdown race discovered during the work was fixed, and a test confirms that storage is released only after automatic Transcript reevaluation finishes.
 
-`IIP-MD05.am/.an/.ao`の現行製品比較は全製品で既にNot verifiedであることを確認しました。無応答判定の修正によって現行比較のSuccessを撤回する対象はありません。検証ログとソース識別情報はローカルの `build/acceptance/reference-20260914/metadata-implementation-batch/verification.json` に保存しています。
+The current product comparison already shows Not verified for `IIP-MD05.am/.an/.ao` on every product. Correcting the silence-based determination therefore withdraws no current Success in the comparison. Verification logs and source identity are stored locally at `build/acceptance/reference-20260914/metadata-implementation-batch/verification.json`.
 
-### 継続中の文字列条件実装
+### Ongoing string-condition implementation
 
-<!--g1-literal--> `IIP-G02.a`のProviderName入力を、既存のキリル文字に加えASCII、CJK、結合文字、XML特殊文字、TAB参照、LF参照、補助平面文字へ拡張しました。各カテゴリに255・256コードポイントを用意し、文字列入力16条件と正常系対照を順に実行します。3製品では対照込み51観測分ですが、51件の未検証を解消したという意味ではありません。
+<!--g1-literal--> ProviderName inputs for `IIP-G02.a` were expanded from the existing Cyrillic characters to ASCII, CJK, combining characters, XML special characters, TAB references, LF references, and supplementary-plane characters. Each category has 255 and 256 code points, with 16 string conditions and a normal control executed in sequence. Across 3 products, this represents 51 observations including controls; it does not mean 51 unverified cases were resolved.
 
-JavaのUTF-16長ではなくコードポイントで長さを決め、孤立サロゲートは生成しません。結合文字は正規化すると長さが変わる入力です。TAB・LFの文字参照がXML解析後も保持されることと、リテラルに置換した場合は空白へ正規化されることを区別して検査します。
+Length is defined by code points rather than Java UTF-16 length; isolated surrogates are not generated. Combining-character inputs change length when normalized. Tests distinguish TAB/LF character references preserved after XML parsing from literal replacements normalized to spaces.
 
-成功した文字条件は `confirmed_character_fixtures`、違反を観測した条件は `violating_fixtures` に記録します。NameID、ユーザー定義型、リテラルTAB・LFをそのまま送信する経路は `remaining_conditions` に残します。文字カテゴリをすべて通過しても、承認済みの型の全条件を完了したことにはならないため、ケース全体はNot verifiedです。
+Successful character conditions are recorded in `confirmed_character_fixtures`; conditions with observed violations are recorded in `violating_fixtures`. NameID, user-defined types, and paths sending literal TAB/LF remain in `remaining_conditions`. Passing every character category does not complete all approved type conditions, so the whole case remains Not verified.
 
-このバッチも開発作業ツリーの変更です。実製品への反映・設定変更・再試験・人手操作はまだ行っていません。
+This batch also changes only the development working tree. Product deployment, configuration changes, retesting, and human actions have not yet occurred.
 
-<!--g1-literal--> 一括回帰試験はSAML 58、Runner 398、API 85の計541テストが成功しました。各文字カテゴリだけを拒否する模擬実装を順に検出し、全カテゴリ成功でも未実装の型条件を理由にNot verifiedを維持すること、署名必須経路で値と署名が保持されることを確認しました。ローカル記録は `build/acceptance/reference-20260914/string-implementation-batch/verification.json` です。
+<!--g1-literal--> Combined regressions passed 541 tests: SAML 58, Runner 398, and API 85. They detected simulated implementations that reject only each individual character category, maintained Not verified for unimplemented type conditions even when every category passed, and confirmed preservation of values and signatures on signature-required paths. The local record is `build/acceptance/reference-20260914/string-implementation-batch/verification.json`.
 
-### 継続中の拡張属性実装
+### Ongoing extension-attribute implementation
 
-<!--g1-literal--> ピン留めされたSAMLスキーマから、宣言型にanyAttributeを持つ要素を抽出します。メタデータ側の13要素について、それぞれ一つだけ外国名前空間の属性を追加する独立したfixtureを実装しました。生成結果をスキーマとXML署名の両方で検査し、スキーマの対象一覧と生成した要素一覧が一致することを監査します。型から継承しただけのAssertionConsumerServiceなどを勝手に対象へ加えません。
+<!--g1-literal--> Elements whose declared types contain anyAttribute are extracted from the pinned SAML schemas. Independent fixtures add exactly one foreign-namespace attribute to each of 13 metadata elements. Generated results are checked against both the schema and XML signature, and the schema's target list is audited against the generated-element list. Elements such as AssertionConsumerService that only inherit the attribute through their type are not added without justification.
 
-AffiliationDescriptorは通常のSP/IdPと別entityの集約メタデータとして生成し、正常系のSSO経路を残します。各fixtureは事前登録と定期取得の生成経路で利用でき、IIP-EXT01.cの付随するメタデータ操作として作業一覧へ接続しました。付随操作を追加してもケース数・分母は増やさず、共通の取得操作を既存ケースと共有します。必要な設定操作をQUICK計画から隠さないよう、当該ケースはSTANDARDの作業として扱います。
+AffiliationDescriptor is generated as aggregate metadata for an entity distinct from the ordinary SP/IdP, preserving the normal SSO path. Each fixture supports preloaded and periodic-retrieval generation and is connected to the work list as a supplementary metadata operation for IIP-EXT01.c. Supplementary operations do not increase the case count or denominator, and reuse common retrieval operations with existing cases. The case is STANDARD work so required configuration operations are not hidden from the QUICK plan.
 
-ブラウザ側のSubjectConfirmationData・Attributeの全観測は未完了です。終了結果にメタデータ側の取得・使用状況と残るプロトコル要素を記録し、ケース全体のSuccessにはしていません。新しいfixtureを使う場合は新しいキャンペーンで再取得してください。
+Browser-side observation of all SubjectConfirmationData and Attribute conditions remains incomplete. Final diagnostics record metadata retrieval/use and remaining protocol elements; they do not mark the whole case Success. New fixtures require refetching in a new campaign.
 
-追加したスキーマ検証により、既存SuiteメタデータのIdPサービス順序が不正だったことも検出しました。SingleLogoutService・NameIDFormatの後にSingleSignOnServiceを出すよう修正しています。現行比較のIIP-MD行にFailedはなく、この発見だけで撤回すべき製品Failedはありません。ただし正常系入力を修正したため、製品試験は再実行が必要です。
+The added schema checks also detected invalid IdP service ordering in existing Suite metadata. SingleSignOnService now follows SingleLogoutService and NameIDFormat. The current comparison has no Failed IIP-MD rows, so this discovery alone requires no withdrawal of a product Failed. However, correcting the normal input requires rerunning product tests.
 
-<!--g1-literal--> 一括回帰試験はSAML 59、Runner 399、API 85の計543テストが成功しました。実製品への反映・設定変更・再試験・人手操作は行っていません。ローカル記録は `build/acceptance/reference-20260914/attribute-implementation-batch/verification.json` です。
+<!--g1-literal--> Combined regressions passed 543 tests: SAML 59, Runner 399, and API 85. Product deployment, configuration changes, retesting, and human actions have not occurred. The local record is `build/acceptance/reference-20260914/attribute-implementation-batch/verification.json`.
 
-### 遅延したメタデータ証拠の再評価
+### Reevaluation of delayed metadata evidence
 
-`metadata.fixture-probe.incomplete` または `metadata.consumer-probe.incomplete` で終了したケースに、新しいTranscript証拠が追加された場合の再評価を実装しました。ケースはFINISHEDのままで、実行状態を再開しません。試験要求・outbox・ログイン操作も追加しません。
+Reevaluation is implemented for cases finished with `metadata.fixture-probe.incomplete` or `metadata.consumer-probe.incomplete` when new Transcript evidence arrives. The case remains FINISHED; execution does not restart. No test requests, outbox actions, or login operations are added.
 
-更新は、当該ケースが再評価を明示的に許可し、履歴が完全で、新しいTranscript参照があり、既存の判定条件で確定できる場合に限ります。既に確定した成功・違反・注記、中止・期限切れ、単なる無応答、古い証拠だけでは更新しません。元の未検証結果・証拠・更新番号・日時をCaseStateと結果のdetailsに保存し、更新番号を楽観ロックで進めます。遅延した証拠で使用禁止メタデータの使用が判明した場合も、正しい条件の下で違反へ確定できます。
+Updates require explicit reevaluation support by the case, complete history, a new Transcript reference, and a conclusive outcome under existing predicates. Already conclusive success, violation, or note results, aborted/expired cases, silence, and old evidence alone cannot trigger updates. The original unverified outcome, evidence, revision, and timestamp are retained in CaseState and result details, and optimistic locking advances the revision. Delayed proof of use of prohibited metadata can also establish a violation under the correct conditions.
 
-<!--g1-literal--> Runner 403、API 85の計488テストが成功しました。SQLiteへの保存・再読出し、元の結果の保存、再送なし、重複更新防止、中止済み結果の保護、不完全履歴と既存証拠だけの更新拒否を確認しています。実製品への反映・設定変更・再試験・人手操作は行っていません。ローカル記録は `build/acceptance/reference-20260914/late-evidence-batch/verification.json` です。
+<!--g1-literal--> Runner 403 and API 85 passed 488 tests. Checks cover SQLite persistence/readback, retention of the original result, no resend, duplicate-update prevention, protection of aborted results, and rejection of updates based on incomplete history or only existing evidence. Product deployment, configuration changes, retesting, and human actions have not occurred. The local record is `build/acceptance/reference-20260914/late-evidence-batch/verification.json`.
 
-[全件台帳](26-unverified-case-inventory.md)の未実装・部分実装を完了させる必要があります。暗号アルゴリズムの全組合せ、複数SP・IdP起点・非同期SLO、文字とスキーマの全条件、メタデータ消費の拒否証拠などは今回で完了していません。APIの登録数や`not_implemented`という理由コードの不在を、実装完了の根拠にはしません。
+Unimplemented and partially implemented entries in the [complete inventory](26-unverified-case-inventory.md) still need completion. This batch does not complete all encryption-algorithm combinations, multiple-SP/IdP-initiated/asynchronous SLO, all character and schema conditions, or metadata-consumer rejection proof. API registration counts and the absence of a `not_implemented` reason code do not establish implementation completion.
 
-証拠、変更クラスのSHA-256、設定バックアップ、再試験Run、Subject再照合スクリプト、復元記録はローカルの `build/acceptance/reference-20260914/additional-implementation/` に保存しています。秘密情報を含み得るバックアップはコミット・公開対象にしません。
+Evidence, SHA-256 values of changed classes, configuration backups, retest Runs, Subject recheck scripts, and restoration records are stored locally at `build/acceptance/reference-20260914/additional-implementation/`. Backups that may contain secrets are excluded from commits and publication.
 
-### 統合反映と実製品での追加検証
+### Integrated deployment and additional real-product verification
 
-<!--g1-literal--> 上記のメタデータ、文字列、拡張属性、遅延証拠再評価の実装を検証イメージ `samlscope:reference-integrated-v6` に反映しました。変更対象の51クラスをビルド出力のSHA-256と照合し、全ライブラリJARが反映前後で一致することを確認しました。埋め込みカタログと承認記録は変更していません。各開発バッチの「未反映」は、そのバッチ終了時点の記録です。
+<!--g1-literal--> The metadata, string, extension-attribute, and delayed-evidence reevaluation implementations above were incorporated into verification image `samlscope:reference-integrated-v6`. The 51 changed classes were checked against build-output SHA-256 values, and all library JARs matched before and after deployment. Embedded catalogs and approval records were unchanged. Each development batch's "not deployed" statement records its state at that batch's end.
 
-<!--g1-literal--> Keycloak、Shibboleth、SimpleSAMLphpの新しいSSO試験列が終了しました。IIP-G02.aの文字列16入力は各製品で確認でき、合計48の部分観測を得ました。persistent/transient NameID、ユーザー定義文字列、wire上のリテラルTAB/LFは未完了なので、3製品ともケース全体はNot verifiedです。これを48ケースの解消とは数えません。
+<!--g1-literal--> New SSO sequences completed on Keycloak, Shibboleth, and SimpleSAMLphp. All 16 IIP-G02.a string inputs were confirmed per product, yielding 48 partial observations. Persistent/transient NameID, user-defined strings, and literal TAB/LF on the wire remain incomplete, so the whole case remains Not verified on all 3 products. This is not resolution of 48 cases.
 
-| 追加試験 | Keycloak | Shibboleth | SimpleSAMLphp |
+| Additional test | Keycloak | Shibboleth | SimpleSAMLphp |
 |---|---|---|---|
-| IIP-G02.a 文字列入力の部分観測 | 入力を確認／全体はNot verified | 入力を確認／全体はNot verified | 入力を確認／全体はNot verified |
-| IIP-MD05.ad 複数鍵とuse省略 | 今回の再試験対象外 | Success | 今回の再試験対象外 |
-| IIP-MD06.a5 実行時の公開鍵照合 | 今回の再試験対象外 | Success | 今回の再試験対象外 |
-| IIP-MD06.a7 KeyValueとX509Certificate | 今回の再試験対象外 | Success | 今回の再試験対象外 |
-| IIP-MD06.a9 証明書属性の取扱い | 今回の再試験対象外 | Success | 今回の再試験対象外 |
-| IIP-MD07.a 単一・複数鍵の各位置 | 今回の再試験対象外 | Success | 今回の再試験対象外 |
-| IIP-IDP12.c 既定ACSの選択 | 今回の再試験対象外 | Success | 今回の再試験対象外 |
+| IIP-G02.a partial string-input observations | Inputs confirmed / whole case Not verified | Inputs confirmed / whole case Not verified | Inputs confirmed / whole case Not verified |
+| IIP-MD05.ad multiple keys and omitted use | Outside this retest | Success | Outside this retest |
+| IIP-MD06.a5 runtime public-key comparison | Outside this retest | Success | Outside this retest |
+| IIP-MD06.a7 KeyValue and X509Certificate | Outside this retest | Success | Outside this retest |
+| IIP-MD06.a9 certificate attribute handling | Outside this retest | Success | Outside this retest |
+| IIP-MD07.a each single/multiple-key position | Outside this retest | Success | Outside this retest |
+| IIP-IDP12.c default ACS selection | Outside this retest | Success | Outside this retest |
 
-<!--g1-literal--> ShibbolethのネイティブHTTP取得を使い、メタデータRunで46入力、SSO Runで17入力を連続実行しました。いずれも同じURLの取得をSuiteが確認してから要求を送り、各入力の後に手動継続を求めません。取得だけでSuccessにはせず、正常系対照とRun・fixtureに対応するSAML応答を確認しています。既定ACSは明示既定の変更と、文書順・index順が一致する暗黙既定を確認した範囲です。
+<!--g1-literal--> Shibboleth native HTTP retrieval executed 46 inputs in the metadata Run and 17 inputs in the SSO Run. Requests were sent only after the Suite confirmed retrieval of the same URL, with no manual continuation after each input. Retrieval alone does not produce Success; the normal control and SAML responses bound to the Run/fixture were checked. Default ACS verification covers explicit-default changes and implicit defaults with matching document/index order.
 
-<!--g1-literal--> 新たに確定した6ケースだけ最新証拠を比較表へ採用しました。未検証は584件から578件へ減少しました。メタデータ拡張属性の追加観測は、未完了のプロトコル要素を含むIIP-EXT01.c全体のSuccessへ昇格させていません。
+<!--g1-literal--> Only the 6 newly conclusive cases adopted the latest evidence in the comparison. Unverified observations decreased from 584 to 578. Additional metadata-extension observations were not promoted to Success for the whole IIP-EXT01.c case, which still includes incomplete protocol elements.
 
-<!--g1-literal--> 今回の製品設定書き込みはShibbolethで4回（準備2回・復元2回）、サービス再読込4回。元の設定ファイルとのバイト一致を確認しました。試験Run作成4回、Suite再起動1回、転送コンテナ再起動1回、取得用補助コンテナの起動・停止は各2回です。途中の継続操作・ブラウザ操作・ユーザー本人の操作はいずれも0回。設定作業をスクリプトが代行した分も作業コストに含めています。
+<!--g1-literal--> Shibboleth configuration writes were 4 (2 preparation, 2 restoration), with 4 service reloads. Restored configuration matched the original file bytes. There were 4 test Runs, 1 Suite restart, 1 forwarding-container restart, and 2 starts/stops each of the auxiliary retrieval container. Intermediate continuation, browser actions, and user actions were all 0. Scripted configuration work is included in operation costs.
 
-拡張属性の終了診断について、補足したメタデータ観測のTranscript参照が親ケースの結果から抜けていた箇所も修正しました。観測の説明と証拠参照を同じ読み取り結果から取得し、親ケースの証拠へ重複なく保持します。プロトコル要素の未完了は引き続きNot verifiedです。この参照保持修正は開発作業ツリーにあり、上記の検証イメージにはまだ含みません。
+Final extension-attribute diagnostics were also corrected where supplementary metadata Transcript references were missing from the parent case result. Observation descriptions and references come from the same read, and references are retained without duplication in parent evidence. Incomplete protocol elements remain Not verified. This reference-retention fix is in the development working tree and is not yet included in the verification image above.
 
-証拠はローカルの `build/acceptance/reference-20260914/integrated-implementation/` に保存しています。`character-observations.json` は部分観測、`resolved-case-provenance.json` は確定ケースの保存記録、`runtime-verification.json` は稼働クラスとライブラリの照合結果です。全試験の完了、署名対象の再承認、リリース受入完了を意味する記録ではありません。
+Evidence is stored locally at `build/acceptance/reference-20260914/integrated-implementation/`. `character-observations.json` records partial observations, `resolved-case-provenance.json` records conclusive cases, and `runtime-verification.json` records runtime-class/library comparisons. These records do not mean every test, reapproval of the approved source, or release acceptance is complete.
 
-<!--g1-literal--> 証拠参照保持の修正後、Runnerの404テストはすべて成功しました。生成文書の一致、G1構造検証46/46も成功しています。ローカルGit設定が指す署名者ファイルが消失していたため、既存のCI用署名者ファイルを実行時指定して検証しました。承認記録は変更していません。G2は20/21で、M1Runtime・SamlScopeApplicationの署名対象との差分によるG2-30が残ります。新しいSuccessの6ケースに含まれる79件のTranscript参照が、それぞれのRunに存在することも確認しました。
+<!--g1-literal--> All 404 Runner tests passed after the reference-retention fix. Generated-document consistency and G1 structural validation 46/46 also passed. Because the signer file referenced by local Git configuration was missing, verification explicitly selected the existing CI signer file at runtime. Approval records were unchanged. G2 remains 20/21, with G2-30 caused by M1Runtime/SamlScopeApplication differences from the approved source. The 79 Transcript references in the 6 new Success cases were also verified to exist in their respective Runs.
 
-### ECDSA入力と対応確認の追加
+### Added ECDSA inputs and capability verification
 
-Suiteの鍵保存をEC P-256に対応させ、既存RSA鍵と別のディレクトリへ保存します。EC証明書は署名用であり、メタデータの暗号化用鍵には既存のRSAを掲載します。XML署名処理は実際の秘密鍵に応じてRSA-SHA256またはECDSA-SHA256を選び、それ以外の鍵形式は拒否します。
+Suite key storage now supports EC P-256 in a directory separate from existing RSA keys. EC certificates are used for signing; metadata continues to advertise the existing RSA key for encryption. XML signing selects RSA-SHA256 or ECDSA-SHA256 from the actual private-key type and rejects other key types.
 
-`ecdsa-sha256` と `ecdsa-sha256-invalid-signature` の入力を追加しました。後者は署名値だけを壊した要求を送ります。定期取得経路の正常・不正対照は同じEC公開鍵を使い、未登録の別鍵への拒否と署名値への拒否を混同しないようにしています。正常側は一括事前登録にも含めますが、不正要求は独立した対照として扱います。既定ACSなどの入力選択もVariantから共通に取得するようにしました。
+Inputs `ecdsa-sha256` and `ecdsa-sha256-invalid-signature` were added. The latter sends a request with only its signature value corrupted. Normal and invalid controls on the periodic-retrieval path use the same EC public key, avoiding confusion between rejection of an unregistered key and rejection of a signature value. The normal fixture is included in aggregate preloading; invalid requests remain separate controls. Input selection, including default ACS inputs, now uses the common Variant definitions.
 
-`IIP-ALG03.a` は、設定案内だけで終了する経路から、記録済み証拠を読む対応確認へ接続しました。確認にはRSA正常系の成功、EC正常系の成功、不正EC署名への明示的なSAMLエラーが必要です。Run・fixture・発行要求の相関と取得後の応答を確認し、履歴が不完全な場合、応答が矛盾する場合、無条件受理・無条件拒否に相当する対照失敗ではNot verifiedを維持します。EC正常系へのエラーや無応答だけで、製品にアルゴリズム対応がないと断定しません。終了済みの証拠不足ケースは、新しい完全な証拠がそろった場合に限って再送せず再評価できます。
+`IIP-ALG03.a` moved from a configuration-guidance-only path to capability verification from recorded evidence. It requires RSA normal Success, EC normal Success, and an explicit SAML error for an invalid EC signature. Run/fixture/issued-request correlation and responses after retrieval are checked. Incomplete history, contradictory responses, or controls indicating unconditional acceptance or rejection retain Not verified. An error or silence for the normal EC request alone does not establish lack of product algorithm support. Finished cases with insufficient evidence can be reevaluated without resending only when new complete evidence is available.
 
-<!--g1-literal--> 応答の有無・成功・エラー・未知Statusの組合せと履歴完全性について128条件を確認しました。Run違い、曖昧なquery、取得前の応答、矛盾する応答、中止後の更新拒否も含め、Runnerの407テストは成功しました。SAMLの一括試験も成功。APIの一括試験では85テスト中、登録件数を固定した監査2件が新規実装による件数増加で失敗しました。登録クラスと必要な対照入力も明示的に検査した上で期待値を更新し、関連APIの4テストとEC入力の2テストの再試験は成功しました。
+<!--g1-literal--> Response absence, success, error, unknown Status combinations, and history completeness were checked across 128 conditions. Including foreign Runs, ambiguous queries, responses before retrieval, contradictory responses, and rejection of updates after abortion, all 407 Runner tests passed. Combined SAML tests also passed. In the full API suite, 2 fixed-registration-count audits out of 85 tests failed because the new implementation increased the count. Expectations were updated after explicitly checking registered classes and required control inputs; retests of 4 related API tests and 2 EC-input tests passed.
 
-この変更は開発作業ツリーにあります。実製品への反映・EC試験・製品設定変更はまだ行っていません。既存の実製品結果を実装の追加だけで更新せず、未検証件数は[全件台帳](26-unverified-case-inventory.md)を維持しています。証拠はローカルの `build/acceptance/reference-20260914/ec-signature-batch/` に保存します。G2の署名対象APIとの差分は引き続き未解消です。
+This change is in the development working tree. Product deployment, EC testing, and product configuration changes have not occurred. Existing product results are not updated merely because implementation was added; unverified counts remain those of the [complete inventory](26-unverified-case-inventory.md). Evidence is stored locally at `build/acceptance/reference-20260914/ec-signature-batch/`. Differences from the G2-approved API source remain unresolved.
 
-### 公開結果での部分観測・残条件の表示
+### Displaying partial observations and remaining conditions in published results
 
-追加観測の確認にSQLを直接読む必要があったため、ケース結果へ任意項目 `diagnostics` を追加しました。確認済みの文字入力、残る型条件、メタデータの取得・使用・不足入力、拡張属性の補足観測などを、結果JSON・画面・静的HTMLで確認できます。診断がない既存結果もそのまま読めます。
+An optional `diagnostics` field was added to case results because checking additional observations previously required reading SQL directly. Confirmed character inputs, remaining type conditions, metadata retrieval and use, missing inputs, and supplementary observations of extension attributes can now be inspected in result JSON, the UI, and static HTML. Existing results without diagnostics remain readable.
 
-公開対象は、固定された診断キーとSuiteで定義した条件名の組合せだけです。任意の文字列、NameID、設定メモ、Authorization、過去結果に保存された自由記述を、そのまま公開結果へ移しません。許可リスト外の詳細は内部記録に残り、公開診断は全内部情報のダンプではありません。部分観測を表示しても、Evaluatorが決めたVerdict・集計・適合性の記述は変わりません。
+Only fixed diagnostic keys combined with Suite-defined condition names are published. Arbitrary strings, NameID values, configuration notes, Authorization, and free text stored in previous results are not copied directly into published results. Details outside the allowlist remain internal; public diagnostics are not a dump of all internal information. Displaying partial observations does not change the Verdict, aggregation, or conformance descriptions determined by Evaluator.
 
-画面では要件の中から個別ケースを展開し、理由と観測条件を確認できます。静的HTMLでも同じ診断をケース別に表示し、文字列をHTMLとして解釈せずtextContentで挿入します。新しい診断がないケースについても理由を表示します。
+The UI lets users expand individual cases within a requirement to inspect reasons and observed conditions. Static HTML displays the same diagnostics per case, inserting strings through textContent rather than interpreting them as HTML. Cases without new diagnostics still display their reasons.
 
-<!--g1-literal--> Runner 410、API 85の一括回帰試験と、画面の表示テストは成功しました。すべての定義済みメタデータ・プロトコル入力名を公開候補として検査し、未知の値と自由記述の除外、診断追加前後の判定・集計の一致も確認しました。既存のgolden結果は変更せず、診断付きJSONが結果スキーマに適合することと、不正なスカラー診断が拒否されることを確認しました。G1構造検証46/46は成功。G2は20/21で、署名対象APIとの差分が残ります。
+<!--g1-literal--> The combined Runner 410 and API 85 regression tests and the UI display tests passed. All defined metadata and protocol input names were checked as publication candidates, including exclusion of unknown values and free text and unchanged outcomes and aggregation before and after diagnostics were added. Existing golden results were unchanged. JSON containing diagnostics was checked against the result schema, and invalid scalar diagnostics were rejected. G1 structural validation passed 46/46. G2 remains at 20/21, with differences from the approved API source still outstanding.
 
-この変更も開発作業ツリーにあり、稼働イメージには未反映です。実製品試験と設定変更は行っておらず、未検証件数は更新していません。ローカル検証記録は `build/acceptance/reference-20260914/public-diagnostics-batch/verification.json` です。
+This change is also in the development working tree and has not been deployed to the running image. No product tests or configuration changes were performed, and the unverified count was not updated. The local verification record is `build/acceptance/reference-20260914/public-diagnostics-batch/verification.json`.
 
-### 暗号化入力の共通マトリクスと復号対象の修正
+### Common encryption input matrix and correction of the decryption target
 
-AES128-GCM／AES256-GCM、RSA-OAEP／RSA-OAEP 1.1、SHA-1／SHA-256と既定Digest、省略／明示MGFの入力を共通生成器へまとめました。暗号化ラッパーはEncryptedAssertion、EncryptedID、EncryptedAttributeです。XML Encryption 1.0のOAEPに1.1用のMGF指定を持ち込む組合せは生成しません。乱数を含む暗号文を作る処理だけであり、送信やVerdictを返す処理ではありません。Runnerへ接続する際は生成したpayloadをoutboxに保持し、再送時に暗号文を生成し直さない必要があります。
+Inputs for AES128-GCM/AES256-GCM, RSA-OAEP/RSA-OAEP 1.1, SHA-1/SHA-256 and the default Digest, and omitted/explicit MGF were consolidated into a common generator. The encrypted wrappers are EncryptedAssertion, EncryptedID, and EncryptedAttribute. Combinations that introduce an XML Encryption 1.1 MGF parameter into XML Encryption 1.0 OAEP are not generated. This component only generates ciphertext containing randomness; it neither sends requests nor returns Verdicts. When connecting it to Runner, the generated payload must remain in the outbox so ciphertext is not regenerated on retry.
 
-暗号ライブラリが既定パラメーターをXMLに明記することを一括試験で検出しました。省略入力では、実際の暗号処理をSHA-1／MGF1-SHA1に固定した上で、XMLの対応する省略可能要素を取り除きます。明示入力と省略入力の違いを名前だけで表現せず、実際のXMLも検査しています。平文の祖先で定義された名前空間も保持し、QName型の属性値の意味を失わないようにしました。
+The batch tests detected that the encryption library explicitly writes default parameters into XML. For omitted-parameter inputs, the actual cryptographic operation is fixed to SHA-1/MGF1-SHA1, then the corresponding optional XML elements are removed. Explicit and omitted inputs are distinguished by inspecting actual XML, rather than only their names. Namespaces declared on plaintext ancestors are also preserved so QName-valued attributes retain their meaning.
 
-既存の復号処理は、子孫からEncryptedDataを探して復号した後、先頭要素を返していました。そのため暗号文の前に無暗号の別要素があると、その別要素を復号結果として返すおそれがありました。ピン留めされたSAMLスキーマのEncryptedElementTypeに合わせて、直接のEncryptedDataと後続のEncryptedKeyだけを許す構造を確認してから復号するよう修正しました。復号された平文の型をケース側で検査する役割は維持しています。
+The existing decryption process searched descendants for EncryptedData and returned the first element after decryption. An unencrypted element preceding the ciphertext could therefore be returned as the decrypted result. Decryption now first checks the structure against the pinned SAML schema's EncryptedElementType, allowing only direct EncryptedData followed by EncryptedKey. Cases remain responsible for validating the type of the decrypted plaintext.
 
-<!--g1-literal--> アルゴリズム24組合せとラッパー3種類の計72入力で、復号、誤鍵による失敗、暗号文改ざんの失敗を確認しました。無暗号の前置・後置要素、入れ子・重複EncryptedData、余分な文字列、異なる名前空間のラッパーも拒否します。一括試験はSAML 64、Runner 410、API 85の計559テストが成功しました。その後、正常系平文と暗号化後のラッパーの両方にSAMLスキーマ検査を追加し、対象の2テストも成功しました。
+<!--g1-literal--> Decryption, failure with a wrong key, and failure after ciphertext tampering were checked for 24 algorithm combinations and 3 wrappers, totaling 72 inputs. Unencrypted preceding or following elements, nested or duplicate EncryptedData, extra text, and wrappers in another namespace are also rejected. The combined SAML 64, Runner 410, and API 85 tests passed, totaling 559 tests. SAML schema validation was then added for both normal plaintext and encrypted wrappers, and the 2 targeted tests also passed.
 
-<!--g1-literal--> G1構造検証46/46、生成文書の一致は成功しています。G2は20/21で、SamlScopeApplication、M1Runtime、および前バッチで変更したResultDocumentAssemblerと署名済み承認対象との差分が残っています。これは解消済みのゲートではありません。
+<!--g1-literal--> G1 structural validation passed 46/46, and generated documents matched. G2 remains at 20/21: SamlScopeApplication, M1Runtime, and ResultDocumentAssembler changed in the preceding batch still differ from the signed approval targets. This gate has not been resolved.
 
-この生成器は今後の暗号化・EncryptedIDシナリオで共有するための入力基盤です。既存の未検証ケースを、この内部マトリクス試験だけでSuccessへ変更していません。稼働イメージへの反映、実製品への送信、設定変更はまだ行っていません。記録はローカルの `build/acceptance/reference-20260914/encryption-matrix-batch/verification.json` です。
+This generator provides shared inputs for future encryption and EncryptedID scenarios. Existing unverified cases have not been changed to Success based only on this internal matrix test. No running-image deployment, product sends, or configuration changes have been performed. The local record is `build/acceptance/reference-20260914/encryption-matrix-batch/verification.json`.
 
-### EncryptedID要求のSubject照合への接続
+### Connecting EncryptedID requests to Subject comparison
 
-対象メタデータの選択entityとSAMLロールに属する暗号化用RSA鍵を取得する処理を追加しました。直接のKeyDescriptorにあるX509CertificateとRSAKeyValueを扱い、useがencryptionまたは省略の場合だけ利用します。署名専用鍵、別ロール・Extensions内の鍵を選びません。選択entityが重複・欠落している場合も、任意の候補を使わず取得不能として扱います。これは試験用の鍵選択であり、メタデータ全体の適合判定ではありません。
+A selector was added for RSA encryption keys belonging to the selected entity and SAML role in target metadata. It handles X509Certificate and RSAKeyValue in direct KeyDescriptor elements and uses them only when use is encryption or omitted. It does not select signing-only keys or keys in another role or Extensions. A duplicate or missing selected entity is treated as unavailable rather than selecting an arbitrary candidate. This is test key selection, not a conformance determination for the entire metadata document.
 
-Runに固定された対象メタデータから得た公開鍵を、ブラウザ試験のメモリー内設定へ渡すようにしました。取得できなければ通常の正常系対照は維持し、Subject照合ケースの診断へ `target-encryption-key` を不足入力として記録します。
+The public key obtained from the target metadata fixed for the Run is passed into the browser test's in-memory configuration. If it is unavailable, the ordinary normal control is retained, and `target-encryption-key` is recorded as a missing input in the Subject comparison diagnostics.
 
-`IIP-SSO07.b`の既存シナリオへ、NameIDをEncryptedIDへ置き換えたAuthnRequestを追加しました。暗号文を含む要求は通常のOutboundActionとして返し、Runnerの署名・outbox経路を利用します。ケース側からHTTPを直接送信しません。アルゴリズムと対象公開鍵をシナリオ識別情報へ含め、再開時に試験条件が変わることを検出できるようにしています。
+AuthnRequests replacing NameID with EncryptedID were added to the existing `IIP-SSO07.b` scenario. Requests containing ciphertext are returned as ordinary OutboundAction values and use Runner's signing and outbox path. Cases do not send HTTP directly. The algorithm and target public key are included in scenario identity so changed test conditions can be detected on resume.
 
-<!--g1-literal--> 24種類の暗号入力について、平文NameIDで返る場合とSuiteの鍵で暗号化されたNameIDで返る場合を確認しました。それぞれの入力だけが異なる識別子を返す対照も実行し、不一致を検出しました。すべて一致する場合でも、SubjectConfirmationなど残る条件は未確認なのでケース全体はNot verifiedです。計50シナリオでこの境界を確認し、要求のSAMLスキーマ検証も行いました。これは50件の未検証ケースを解消したという意味ではありません。
+<!--g1-literal--> For 24 encrypted inputs, both plaintext NameID responses and NameID responses encrypted with the Suite key were checked. Controls returning a different identifier for each individual input were also run and detected as mismatches. Even when every identifier matches, conditions such as SubjectConfirmation remain unverified, so the whole case remains Not verified. This boundary was checked in 50 scenarios, and request SAML schema validation was performed. This does not mean 50 unverified cases were resolved.
 
-<!--g1-literal--> 一括試験で新しい入力名が既存の長さ制限を超える問題を検出し、`enc-subject-`を使う短い識別名へ修正しました。SAML 65、Runner 411、API 85の回帰確認は成功しました。G1構造検証46/46と生成文書の一致も成功しています。G2の署名対象との差分は継続して残ります。
+<!--g1-literal--> The batch tests detected that the new input names exceeded the existing length limit; they were shortened using `enc-subject-`. SAML 65, Runner 411, and API 85 regression checks passed. G1 structural validation passed 46/46, and generated documents matched. Differences from the G2 approval targets remain outstanding.
 
-2026-09-15時点では、この接続は開発作業ツリーの実装です。稼働イメージへの反映・実製品での実行・製品設定変更は未実施であり、未検証件数は変更していません。検証記録はローカルの `build/acceptance/reference-20260914/encrypted-subject-batch/verification.json` に保存しています。
+As of 2026-09-15, this connection is implemented in the development working tree. It has not been deployed to the running image, executed against products, or accompanied by product configuration changes. The unverified count is unchanged. Verification records are stored locally at `build/acceptance/reference-20260914/encrypted-subject-batch/verification.json`.
 
-### Subject判定の追加点検と統合イメージの準備
+### Additional Subject checks and preparation of an integrated image
 
-復号後のAssertion／NameIDをローカル名だけで扱うと、異なる名前空間の要素をSAML識別子として判定するおそれがあったため、名前空間も確認するよう修正しました。Subjectや識別子の選択肢が重複する曖昧な構造は、この意味照合では未検証にとどめます。また、復号できないAssertionが先に現れても、後続の別Assertionで明確に観測できる識別子不一致を見落とさないよう、復号失敗をAssertion単位で扱います。
+Treating decrypted Assertion/NameID elements by local name alone could classify elements from another namespace as SAML identifiers, so namespace checks were added. Ambiguous structures with duplicate Subject or identifier choices remain unverified for this semantic comparison. Decryption failures are also handled per Assertion so an earlier undecryptable Assertion does not hide a clearly observed identifier mismatch in a later Assertion.
 
-<!--g1-literal--> メイン作業ツリーのRunner 412テストが成功しました。続けて、追加した暗号化・ECDSA・公開診断の処理を独立した検証用作業ツリーへまとめ、SAML 65、Runner 413、対象API 6テストが成功しました。API全体のリリース検証を通過したという意味ではなく、対象APIはSamlScopeApplicationTestに限定した確認です。
+<!--g1-literal--> The main working tree's 412 Runner tests passed. The added encryption, ECDSA, and public diagnostic changes were then combined in an independent verification working tree, where SAML 65, Runner 413, and 6 targeted API tests passed. This does not mean full API release verification passed: the API check was limited to SamlScopeApplicationTest.
 
-<!--g1-literal--> 反映範囲を31のJavaソースから生成した97クラスと結果スキーマに限定し、SHA-256を記録しました。API・M1Runtimeは必要な要求生成・暗号鍵選択の箇所だけを反映し、カタログ、承認済み定義、別件のOIDC／管理画面の実装を混在させていません。新しい画面バンドルはこのイメージに含めず、公開JSONと静的HTMLの診断処理を含めています。
+<!--g1-literal--> The deployment scope was limited to 97 classes generated from 31 Java sources and the result schema, with SHA-256 recorded. API and M1Runtime changes were limited to necessary request generation and encryption-key selection; the catalog, approved definitions, and unrelated OIDC or administration UI work were not mixed in. The new UI bundle is not included in this image, while public JSON and static HTML diagnostics are included.
 
-ローカル検証イメージ `samlscope:reference-crypto-v7` を作成しました。稼働中は引き続き `samlscope:reference-integrated-v6` で、切替・製品設定変更・新イメージでの実製品試験は未実施です。G1構造検証と生成文書の一致は成功していますが、G2の署名対象との差分は残ります。ビルド・クラス・イメージの照合記録は `build/acceptance/reference-20260914/crypto-integrated-implementation/` に保存しています。
+The local verification image `samlscope:reference-crypto-v7` was built. The running image remains `samlscope:reference-integrated-v6`; no switch, product configuration change, or product test with the new image has occurred. G1 structural validation and generated-document matching passed, but differences from the G2 approval targets remain. Build, class, and image comparison records are stored at `build/acceptance/reference-20260914/crypto-integrated-implementation/`.
 
 
-### 統合イメージへの切替と実製品の再試験
+### Switching to the integrated image and retesting products
 
-2026-09-15、検証環境を `samlscope:reference-crypto-v7` へ切り替えました。以下は前節の「未反映」時点より後の実施記録です。旧コンテナーは停止状態で保持しています。
+On 2026-09-15, the verification environment was switched to `samlscope:reference-crypto-v7`. The following records describe work performed after the preceding section's undeployed state. The old containers are retained in a stopped state.
 
-<!--g1-literal--> 稼働コンテナーの97クラスと結果スキーマをSHA-256で照合しました。ライブラリー、組込みカタログ、承認記録は切替前と一致しています。画面バンドルは更新していません。公開JSONと静的HTMLの診断処理は稼働版に含まれます。
+<!--g1-literal--> The running container's 97 classes and result schema were checked by SHA-256. Libraries, the embedded catalog, and approval records match their pre-switch versions. The UI bundle was not updated. Public JSON and static HTML diagnostics are included in the running version.
 
-<!--g1-literal--> 各製品でブラウザSSO試験列を完走し、`IIP-SSO07-b-idp-01` と `IIP-G02-a-idp-01` の証拠を比較表へ採用しました。他のケースの既存証拠は保持しています。Subject照合の結果は以下のとおりです。送信数には正常系対照を含みます。
+<!--g1-literal--> Each product completed its browser SSO sequence, and evidence for `IIP-SSO07-b-idp-01` and `IIP-G02-a-idp-01` was adopted into the comparison table. Existing evidence for other cases was retained. Subject comparison results are shown below. Send counts include normal controls.
 
-| 製品 | 送信／記録応答 | Subject照合結果 | 観測と制約 |
+| Product | Sends / recorded responses | Subject comparison result | Observations and limitations |
 |---|---:|---|---|
-<!--g1-literal--> | Keycloak | 2 / 2 | Failed (Product) | 平文の識別子不一致。適格な暗号化鍵がメタデータにないため暗号入力は未実行 |
-<!--g1-literal--> | Shibboleth | 26 / 26 | Not verified | 平文と暗号化入力で照合に必要な証拠が不足 |
-<!--g1-literal--> | SimpleSAMLphp | 26 / 26 | Failed (Product) | 平文と暗号化入力で識別子不一致を観測 |
+<!--g1-literal--> | Keycloak | 2 / 2 | Failed (Product) | Plaintext identifier mismatch. Encrypted inputs were not executed because metadata contained no eligible encryption key |
+<!--g1-literal--> | Shibboleth | 26 / 26 | Not verified | Evidence required for comparison is missing for plaintext and encrypted inputs |
+<!--g1-literal--> | SimpleSAMLphp | 26 / 26 | Failed (Product) | Identifier mismatches observed for plaintext and encrypted inputs |
 
-暗号入力への応答を受信したことや不一致を検出したことだけで、暗号アルゴリズム対応を確認したとは扱いません。Keycloakの署名専用鍵を暗号化用へ流用せず、鍵不足は診断に残しました。
+Receiving a response to encrypted input or detecting a mismatch alone is not treated as verification of encryption-algorithm support. Keycloak's signing-only key was not reused for encryption; the missing key remains in diagnostics.
 
-<!--g1-literal--> 文字列入力は16条件の部分観測と6種類の残条件を公開診断で確認しました。静的HTMLを取得してjsdomで実行し、161ケースの診断表示処理に実行エラーがないことを確認しました。これは実ブラウザーでの目視確認ではありません。
+<!--g1-literal--> Public diagnostics confirmed partial observations for 16 character conditions and 6 types of remaining conditions. Static HTML was retrieved and executed with jsdom, confirming that diagnostic display processing for 161 cases had no execution errors. This was not visual inspection in an actual browser.
 
-ShibbolethのECDSA試験では、ネイティブのHTTPメタデータ取得を一時設定してRSA正常系とECDSA正常系の成功を記録しました。不正ECDSA署名はHTTP 400のMessage Security Error画面で停止しました。相関したSAMLエラー応答がなく、履歴完全性も成立していないため、対応確認をSuccessへ変更していません。プロトコル証拠APIの部分観測と停止画面を保存し、自己申告で結果を確定していません。
+In the Shibboleth ECDSA test, native HTTP metadata retrieval was temporarily configured, and successful RSA and ECDSA normal controls were recorded. The invalid ECDSA signature stopped at an HTTP 400 Message Security Error page. No correlated SAML error response was present, and history completeness was not established, so support verification was not changed to Success. Partial protocol-evidence API observations and the stop page were saved; the outcome was not finalized through self-attestation.
 
-<!--g1-literal--> 今回の製品設定書込みはShibbolethの適用・復元の2回、再読込み2回です。補助コンテナーの起動・停止は各1回で、設定は元のバイト列への復元を確認しました。各製品のSSO再試験に製品設定変更はありません。いずれもエージェントによるHTTP操作で、人間の手操作・ブラウザー操作は0回です。稼働Suiteと転送コンテナーの再起動も操作台帳へ記録しました。
+<!--g1-literal--> Product configuration writes comprised 2 Shibboleth writes for application and restoration, with 2 reloads. The auxiliary container was started and stopped 1 time each, and restoration to the original configuration bytes was verified. Product settings were not changed for the SSO retests. All operations used agent-driven HTTP; human manual and browser operations were 0. Restarts of the running Suite and forwarding container were also recorded in the operation ledger.
 
-<!--g1-literal--> 全件台帳の未検証は578件のままです。実行した入力の増加をケース解消数へ換算していません。G2の署名対象ソースとの差分も残っており、リリース可能な状態には達していません。
+<!--g1-literal--> The full inventory remains at 578 unverified observations. Additional executed inputs were not converted into resolved-case counts. Differences from the G2 approved source remain, so release readiness has not been reached.
 
-実行証拠はローカルの `build/acceptance/reference-20260914/crypto-integrated-implementation/`、操作回数は[設定・操作コスト](25-interaction-execution-cost.md)、製品別の結果は[比較表](23-reference-test-comparison.md)に記録しています。
+Execution evidence is stored locally at `build/acceptance/reference-20260914/crypto-integrated-implementation/`. Operation counts are recorded in [configuration and interaction costs](25-interaction-execution-cost.md), and product results in the [comparison table](23-reference-test-comparison.md).
 
-### 利用者定義文字列型とNameIDの入力行列
+### User-defined string types and NameID input matrix
 
-承認済みG02の型条件に対応する入力断片の生成器 `SamlTypedStringFixtures` を追加しました。persistent／transient NameID、Advice内のxs:string要素、独自のxs:string派生型を指定したAttributeValue、Extensions内のxs:string属性を生成します。Adviceなどを任意のAuthnRequestへ挿入する処理ではなく、許されたメッセージ位置へ組み込むための独立した断片です。
+The `SamlTypedStringFixtures` input-fragment generator was added for the approved G02 type conditions. It generates persistent/transient NameID, xs:string elements in Advice, AttributeValue with a user-defined xs:string-derived type, and xs:string attributes in Extensions. These are independent fragments for permitted message positions, not a mechanism for inserting Advice or similar content into arbitrary AuthnRequests.
 
-<!--g1-literal--> 5か所と既存の16文字条件を組み合わせた80入力です。255／256コードポイント、ASCII、キリル文字、CJK、結合文字、XML特殊文字、TAB／LFの文字参照、補助平面文字を扱います。これは80ケースの未検証を解消したという意味ではありません。
+<!--g1-literal--> The 5 positions combined with the existing 16 character conditions produce 80 inputs. They cover 255/256 code points, ASCII, Cyrillic, CJK, combining characters, XML special characters, TAB/LF character references, and supplementary-plane characters. This does not mean 80 unverified cases were resolved.
 
-利用者定義型の名前だけを見て文字列と推測せず、Suiteに同梱した固定スキーマで型情報を得ます。独自型の検証は明示的な専用メソッドで行い、通常の対象XML検証へ任意のスキーマを取り込む機能は追加していません。ネットワークからのDTD・スキーマ取得は無効です。
+String types are identified from a fixed schema bundled with the Suite, rather than inferred from user-defined type names. Custom types are validated through an explicit dedicated method; arbitrary schema import was not added to normal target XML validation. Network retrieval of DTDs and schemas is disabled.
 
-この入力行列の一括検査で、既存の文字列型観測がrestrictionだけをたどり、NameIDのsimpleContent extensionを認識しない問題を検出しました。xs:stringまでのrestriction／extension継承を調べるよう修正しました。これは既存の非空文字列判定が受信NameIDも観測するための修正です。
+The matrix tests detected that existing string-type observation followed only restriction and did not recognize NameID's simpleContent extension. It now follows restriction/extension inheritance to xs:string. This allows the existing nonempty-string check to observe received NameID values as well.
 
-実製品への送信経路と登録済みNameIDの準備、値が対象内部で保持されたことの観測は別途必要です。独自拡張の無視や正常応答だけで文字列保持を確認したとは扱いません。今回の入力基盤は開発作業ツリーの変更で、稼働版への反映・製品設定変更は行っていません。未検証件数は維持しています。
+Product delivery paths, preparation of registered NameID values, and observation that values are retained inside the target still require separate work. Ignoring a custom extension or returning a normal response is not treated as proof of string retention. This input foundation is a development working-tree change and has not been deployed or accompanied by product configuration changes. The unverified count is retained.
 
-<!--g1-literal--> 型継承修正後の一括回帰試験はSAML 68、Runner 412が成功しました。その後、独自スキーマを専用検証の初回呼出時だけ読み込むようにし、NameIDを実際の非空判定へ渡す回帰条件を追加しました。最終の対象試験はSAML 3、Runner 5が成功しています。入力行列では型・文字数・切詰めの検出、未知の独自型の拒否、DOMの独立性を検証しました。NameIDの32入力について正常値と空文字・空白だけの値を対照にしています。
+<!--g1-literal--> Combined regression tests after the type-inheritance fix passed for SAML 68 and Runner 412. Custom schemas were then loaded only on the first call to dedicated validation, and a regression condition passing NameID to the actual nonempty check was added. The final targeted SAML 3 and Runner 5 tests passed. Matrix checks covered type, character count, truncation detection, rejection of unknown custom types, and DOM independence. The 32 NameID inputs use normal values and empty or whitespace-only values as controls.
 
-<!--g1-literal--> G1構造検証46/46と生成文書の一致は成功しました。G2は20/21で、既存の署名対象ソースとの差分が残ります。ソースのSHA-256と検証ログはローカルの `build/acceptance/reference-20260914/typed-string-batch/verification.json` に保存しています。
+<!--g1-literal--> G1 structural validation passed 46/46, and generated documents matched. G2 remains at 20/21, with existing differences from the approved source. Source SHA-256 and verification logs are stored locally at `build/acceptance/reference-20260914/typed-string-batch/verification.json`.
 
-### 拡張文字列入力のブラウザ試験への接続と台帳点検
+### Connecting extension string inputs to browser tests and checking the inventory
 
-<!--g1-literal--> Extensions内の利用者定義xs:string属性16入力をG02のブラウザシナリオに接続しました。ProviderNameの入力列に続いて、既定要求のIssuer直後へExtensionsを追加します。この入力ではProviderNameを変更せず、変更要因を拡張内の値に限定します。通常のOutboundActionとして返し、Runnerの署名・outbox経路で送ります。再開時の入力列変更を検出する定義キーも更新しました。
+<!--g1-literal--> The 16 user-defined xs:string attribute inputs in Extensions were connected to the G02 browser scenario. Following the ProviderName sequence, Extensions is inserted directly after Issuer in the default request. ProviderName is unchanged for these inputs, limiting the changed factor to the extension value. Requests are returned as ordinary OutboundAction values and sent through Runner's signing and outbox path. The definition key detecting input-sequence changes on resume was also updated.
 
-正常な相関応答とAssertionを受け取った入力名は、`responded_extension_string_fixtures`として公開診断へ記録します。拡張が無視された場合も正常応答になり得るため、内部で値が保持されたことの証明には使いません。残条件の`user-defined-extension-string-attribute`は維持します。エラー応答やAssertionのない応答はこの追加観測の不足とし、文字列要件への製品違反とは判定しません。
+Names of inputs that receive a normal correlated response with an Assertion are recorded in public diagnostics as `responded_extension_string_fixtures`. Ignored extensions can also produce normal responses, so this is not proof of internal value retention. The remaining condition `user-defined-extension-string-attribute` is retained. Error responses or responses without an Assertion are treated as missing supplementary observations, not product violations of the string requirement.
 
-<!--g1-literal--> ProviderName各条件の拒否を含む17シナリオに、拡張文字列各条件のエラー・Assertion欠落を含む34シナリオを加え、一括検証しました。入力のXMLスキーマ適合、値と文字数、観測済み条件から欠落した入力だけが除かれることを確認しています。公開診断には固定された入力IDだけを許し、値そのものは含めません。SAML 68、Runner 415の一括回帰試験は成功しました。
+<!--g1-literal--> Combined verification covered 17 scenarios including rejection of each ProviderName condition, plus 34 scenarios including errors or missing Assertions for each extension string condition. Input XML schema conformance, values and character counts, and removal only of missing inputs from observed conditions were checked. Public diagnostics allow only fixed input IDs, not the values themselves. SAML 68 and Runner 415 combined regression tests passed.
 
-<!--g1-literal--> 台帳点検ではECDSAの12観測が旧ブラウザ待機情報に基づいて「自動判定なし」に残っていました。現在のEcSignatureSupportTestCaseと登録処理を確認し、「メタデータの追加試験・観測不足」へ分類を更新しました。製品判定と未検証総数578件は変更していません。実装・登録ソースのハッシュを`remaining-audit/implementation-audit.json`へ保存し、登録が変われば再点検を要求します。
+<!--g1-literal--> The inventory audit found 12 ECDSA observations still classified as having no automatic oracle based on old browser-wait information. Current EcSignatureSupportTestCase and registration code were checked, and the classification was updated to additional metadata tests / observation gaps. Product outcomes and the total of 578 unverified observations were unchanged. Implementation and registration source hashes were saved in `remaining-audit/implementation-audit.json`, requiring reinspection when registration changes.
 
-今回の接続は開発作業ツリーにあり、稼働イメージへの反映と実製品再試験は未実施です。製品設定変更・ユーザー本人の操作はありません。検証記録はローカルの `build/acceptance/reference-20260914/extension-string-batch/verification.json` に保存しています。
-
-
-### 文字列試験統合版の実環境への反映
-
-<!--g1-literal--> 文字列入力とNameID型観測の変更を独立した作業ツリーへまとめ、SAML 68、Runner 416の一括試験を通過しました。4つの実装ソースから生成した15クラスと、固定の利用者定義型スキーマをv7イメージへ追加しています。既存ライブラリー・組込みカタログ・承認済み定義は変更していません。
-
-検証環境を `samlscope:reference-string-v8` へ切り替え、稼働クラスと固定スキーマをSHA-256で照合しました。旧Suite・転送コンテナーは停止状態で保持しています。画面バンドルは今回更新していません。
-
-<!--g1-literal--> Keycloak、Shibboleth、SimpleSAMLphpの新RunでG02の33要求をそれぞれ送信し、全要求で応答を記録しました。公開診断にProviderNameの16文字条件と拡張文字列の16応答条件が表示されます。これは拡張値が対象内部で保持されたことの確認ではないため、G02全体は引き続きNot verifiedです。実行中の結果と観測数を`string-integrated-implementation/diagnostics-live-check.json`へ保存しています。
-
-<!--g1-literal--> Suiteと転送コンテナーの再起動は各1回、製品設定変更・人間の手操作・ブラウザー操作は0回です。試験はプロトコルクライアントで実行し、Run作成と所要時間は試験列の終了時に操作台帳へ追記します。
+This connection is in the development working tree and has not been deployed or retested against products. No product configuration changes or user actions occurred. Verification records are stored locally at `build/acceptance/reference-20260914/extension-string-batch/verification.json`.
 
 
-<!--g1-literal--> その後、3製品のSSO試験列がFINISHEDとなり、結果を保存しました。Keycloakは前回v7から判定変更なし、SimpleSAMLphpはForceAuthnの1ケースを新たにSuccessとして確認しました。要求・応答の4組のTranscriptを照合し、省略・falseの正常系は同じ認証時刻を保持、trueでは要求後の新しい認証時刻となることを確認しています。確認時刻とXMLのSHA-256は`string-integrated-implementation/simplesamlphp/force-authn-evidence-check.json`に保存しています。
+### Deploying the integrated string-test version to the live environment
 
-<!--g1-literal--> 比較表にはG02の追加観測とSimpleSAMLphpのForceAuthn成功を採用し、既存の未検証集合は578件から577件となりました。操作台帳へ各Runの所要時間、自動fixture開始・応答数、自動セッション初期化回数も記録しています。
+<!--g1-literal--> String-input and NameID type-observation changes were combined in an independent working tree, passing the SAML 68 and Runner 416 batch tests. The 15 classes generated from 4 implementation sources and the fixed user-defined-type schema were added to the v7 image. Existing libraries, the embedded catalog, and approved definitions were unchanged.
 
-<!--g1-literal--> Shibbolethの署名・相関ケース3件（SSO01-fk/fu/gi）は、今回の正常系でStale Requestとなりcontrol_failedでした。従来の成功証拠を消去していませんが、比較表の該当セルには「以前のRunの成功／最新の正常系は未確認」と明示しました。上の577件は既存未検証集合の残数で、この3件の最新試行の再確認作業が不要という意味ではありません。生成済み要求が送信待ち中に古くなる可能性を含め、Suiteの実行順序を追加調査します。新たな製品FAILは認定していません。
+The verification environment was switched to `samlscope:reference-string-v8`, and running classes and the fixed schema were checked by SHA-256. The old Suite and forwarding containers are retained in a stopped state. The UI bundle was not updated.
 
-### 長い試験列での要求生成タイミングの修正
+<!--g1-literal--> New Keycloak, Shibboleth, and SimpleSAMLphp Runs each sent 33 G02 requests and recorded responses for all of them. Public diagnostics display 16 ProviderName character conditions and 16 extension-string response conditions. Because this does not verify internal retention of extension values, G02 remains Not verified as a whole. Running results and observation counts are saved in `string-integrated-implementation/diagnostics-live-check.json`.
 
-<!--g1-literal--> ShibbolethのSSO01-fk/fu/giで送信した正常系要求を保存Transcriptから読み、IssueInstantと記録された送信時刻を照合しました。要求生成から送信までそれぞれ約367秒、374秒、383秒経過していました。Suiteがプロファイル開始時に全ブラウザケースを開始し、後続ケースの要求・署名・待機期限まで先に作っていたことをコードでも確認しました。記録は`request-queue-batch/stale-request-evidence.json`です。
+<!--g1-literal--> Suite and forwarding-container restarts were 1 each; product configuration changes, human manual operations, and browser operations were 0. Tests used protocol clients. Run creation and elapsed time will be added to the operation ledger after the sequences finish.
 
-ApprovedCaseStarterは、対象ロール・プロファイル・適用条件の選択後、BrowserFrontChannelScenarioについて開始予約だけを永続化するようにしました。予約中はpayload・署名・応答期限を作りません。ActiveProbeCoordinatorが次のケースを選ぶ時にCaseExecutionServiceを通して開始し、その時点の時計・通常の署名・outbox経路を使用します。実行中のケースを、新たに予約された別ケースで追い越しません。
 
-前提条件不足などで要求を生成せず終了したケースは、その結果を保持して次の予約へ進みます。予約と開始は既存リポジトリーのrevision比較によって保存し、重複した開始要求では既存状態を返します。ケース側のOutcomeとEvaluatorのVerdict変換、送信済み・配送不明のoutbox payloadは変更していません。
+<!--g1-literal--> The 3 product SSO sequences subsequently reached FINISHED, and results were saved. Keycloak outcomes were unchanged from v7. SimpleSAMLphp newly confirmed 1 ForceAuthn case as Success. The 4 request/response Transcript pairs were compared: omitted/false normal controls retain the same authentication time, while true produces a new authentication time after the request. Check timestamps and XML SHA-256 are saved in `string-integrated-implementation/simplesamlphp/force-authn-evidence-check.json`.
 
-<!--g1-literal--> 回帰条件では50ケースを予約して2時間待機させ、署名・outbox追加・応答期限が発生しないことを確認しました。その後、各ケースの応答まで10分ずつ時計を進め、次に選ばれたケースだけがその時点の要求時刻と期限を持つことを確認しました。既存payloadの不変、重複照会・開始で署名回数が増えないことも検査しています。Runner 416、API 85の一括回帰試験は成功しました。
+<!--g1-literal--> Additional G02 observations and SimpleSAMLphp's ForceAuthn success were adopted into the comparison table, reducing the existing unverified set from 578 to 577. The operation ledger also records elapsed time per Run, automatic fixture starts and response counts, and automatic session initialization counts.
 
-これは他ケースの実行待ちによる滞留を解消する変更です。選択済みの要求をユーザーが長時間送らず保持する場合や、既にpayloadを持つ旧Runを自動更新する処理は追加していません。既存のpayloadを書き換えて要求時刻を新しくすると署名と配送記録の意味を変えるためです。稼働v8への反映と新Runでの実製品確認はまだ行っておらず、今回停止したケースが解消したとは数えていません。製品設定変更・人間の手操作はありません。
+<!--g1-literal--> Shibboleth's 3 signature/correlation cases (SSO01-fk/fu/gi) encountered Stale Request in this normal control and became control_failed. Prior successful evidence was not deleted, but the relevant comparison cells explicitly state prior Run success / latest normal control unconfirmed. The 577 above is the size of the existing unverified set; it does not mean these 3 latest attempts need no recheck. Suite execution order will be investigated further, including whether generated requests become stale while queued. No new product FAIL was established.
 
-### 開始予約方式の検証環境への反映
+### Correcting request-generation timing in long test sequences
 
-<!--g1-literal--> 開始予約・選択時の要求生成を独立した作業ツリーへまとめ、Runner 417、対象API 6テストが成功しました。対象APIはSamlScopeApplicationTestであり、API全体のリリース検証を意味しません。3つの実装ソースから生成した8クラスだけをv8イメージへ追加しています。
+<!--g1-literal--> Saved Transcripts for Shibboleth's SSO01-fk/fu/gi normal requests were read, comparing IssueInstant with recorded send time. Approximately 367, 374, and 383 seconds respectively elapsed between generation and sending. Code inspection also confirmed that the Suite started every browser case when starting a profile, generating later cases' requests, signatures, and response deadlines in advance. The record is `request-queue-batch/stale-request-evidence.json`.
 
-検証環境を `samlscope:reference-queue-v9` へ切り替え、稼働クラスのSHA-256と、既存ライブラリーの不変を照合しました。カタログ、承認済み定義、画面バンドルは変更していません。旧Suite・転送コンテナーは停止状態で保持しています。
+After selecting target role, profile, and applicability, ApprovedCaseStarter now persists only a start reservation for BrowserFrontChannelScenario. Reserved cases have no payload, signature, or response deadline. ActiveProbeCoordinator starts the next selected case through CaseExecutionService using the clock at selection time and the normal signing and outbox path. A newly reserved case does not overtake a running case.
 
-新しいRunでKeycloak、Shibboleth、SimpleSAMLphpのSSO試験列を開始しました。生成済み要求を持つ旧Runは更新せず、旧結果と比較できる状態を保ちます。実行証拠と操作記録はローカルの `build/acceptance/reference-20260914/queue-integrated-implementation/` に保存します。
+A case that finishes without generating a request because prerequisites are missing retains its result before advancing to the next reservation. Reservations and starts use the existing repository revision comparison; duplicate start requests return the existing state. Case Outcome, Evaluator Verdict conversion, and sent or unknown-delivery outbox payloads are unchanged.
 
-<!--g1-literal--> 3製品の試験列がFINISHEDとなり、結果・操作台帳・全判定差分を保存しました。Shibbolethでは、前回停止した正常系要求の滞留時間が次のように短縮し、ケースのSuccessを再確認できました。時間は判定閾値ではなく、記録済みXMLのIssueInstantとTranscript送信時刻の差です。
+<!--g1-literal--> Regression conditions reserved 50 cases and advanced the clock by 2 hours, confirming that no signatures, outbox entries, or response deadlines were created. The clock was then advanced by 10 minutes before each response, confirming that only the next selected case receives the current request time and deadline. Existing payload immutability and unchanged signing counts on duplicate queries or starts were also checked. Runner 416 and API 85 combined regression tests passed.
 
-| Shibbolethのケース | v8の生成後待ち時間（秒） | v9の生成後待ち時間（秒） | v9の結果 |
+This change removes delays caused by waiting for other cases. It does not automatically refresh requests already selected but held unsent by a user, or old Runs that already contain payloads. Rewriting an existing payload's request time would change the meaning of signatures and delivery records. It has not yet been deployed to live v8 or verified against products in new Runs; the stopped cases have not been counted as resolved. There were no product configuration changes or human manual operations.
+
+### Deploying start reservations to the verification environment
+
+<!--g1-literal--> Start reservations and request generation on selection were combined in an independent working tree. Runner 417 and 6 targeted API tests passed. The targeted API was SamlScopeApplicationTest; this does not imply full API release verification. Only 8 classes generated from 3 implementation sources were added to the v8 image.
+
+The verification environment was switched to `samlscope:reference-queue-v9`. Running class SHA-256 and unchanged existing libraries were checked. The catalog, approved definitions, and UI bundle were unchanged. Old Suite and forwarding containers are retained in a stopped state.
+
+New Keycloak, Shibboleth, and SimpleSAMLphp Runs started their SSO sequences. Old Runs containing generated requests were not updated and remain available for comparison. Execution evidence and operation records are stored locally at `build/acceptance/reference-20260914/queue-integrated-implementation/`.
+
+<!--g1-literal--> The 3 product sequences reached FINISHED, and results, operation ledgers, and all outcome differences were saved. Shibboleth's previously stopped normal requests had shorter queue delays, as shown below, allowing case Success to be reconfirmed. These times are not judgment thresholds; they are differences between recorded XML IssueInstant and Transcript send time.
+
+| Shibboleth case | v8 delay after generation (seconds) | v9 delay after generation (seconds) | v9 result |
 |---|---:|---:|---|
 <!--g1-literal--> | IIP-SSO01-fk | 366.656 | 7.482 | Success |
 <!--g1-literal--> | IIP-SSO01-fu | 374.271 | 5.916 | Success |
 <!--g1-literal--> | IIP-SSO01-gi | 382.835 | 5.987 | Success |
 
-署名の不正入力には、クライアントがMessage Security Error画面とSAML応答なしを確認した試行を含みます。全入力が明示的なSAMLエラー応答を返したという意味ではありません。正常系のStale Requestが解消したこと、既存のケース実装が正常・異常の試行を完了したことを記録しています。
+Invalid-signature inputs include attempts where the client observed a Message Security Error page with no SAML response. This does not mean every input returned an explicit SAML error response. The records establish that normal-control Stale Request failures were resolved and that the existing cases completed their normal and abnormal attempts.
 
-<!--g1-literal--> Keycloakはv8から判定変更なしでした。SimpleSAMLphpのIIP-IDP06-bはSuccessとなり、4段階の要求と応答を照合しました。省略・falseで認証時刻を維持し、trueだけが要求後の再認証時刻となることを確認しています。一方、IIP-IDP06-aの最新試行は時刻精度の曖昧さでNot verifiedでした。比較表には同ケースの以前の成功証拠を採用していることと、最新試行の保留を明示しています。
+<!--g1-literal--> Keycloak outcomes were unchanged from v8. SimpleSAMLphp's IIP-IDP06-b became Success, and its 4 request/response stages were compared. Omitted/false retained authentication time; only true produced a reauthentication time after the request. The latest IIP-IDP06-a attempt was Not verified because of ambiguous timestamp precision. The comparison table explicitly identifies adoption of earlier successful evidence for that case and the latest attempt's pending status.
 
-<!--g1-literal--> 既存の未検証集合は577件から576件になりました。Shibbolethの3件は以前の成功証拠も保持していたため、この減少数へ重ねて数えていません。Suite・転送コンテナーの再起動は各1回、製品設定変更・人間の手操作・ブラウザー操作は0回です。自動試験の開始・応答・セッション初期化回数、所要時間は操作台帳に記録しました。
+<!--g1-literal--> The existing unverified set decreased from 577 to 576. Shibboleth's 3 cases retained previous successful evidence and were not counted again in this reduction. Suite and forwarding-container restarts were 1 each; product configuration changes, human manual operations, and browser operations were 0. Automatic test starts, responses, session initialization counts, and elapsed times were recorded in the operation ledger.
 
-照合証拠は`queue-integrated-implementation/*/request-age-check.json`、`verdict-delta.json`、SimpleSAMLphpの`force-authn-evidence-check.json`、実環境の照合結果は`runtime-verification.json`です。これらはローカルの実行証拠であり、リリース承認の通過を意味しません。
+Comparison evidence is in `queue-integrated-implementation/*/request-age-check.json`, `verdict-delta.json`, and SimpleSAMLphp's `force-authn-evidence-check.json`; live-environment checks are in `runtime-verification.json`. These are local execution records, not proof of release approval.
 
-<!--g1-literal--> 反映・記録更新後のG1構造検証は46/46、生成文書の一致も成功しました。G2は20/21で、ApprovedCaseStarter、M1Runtime、SamlScopeApplication、ResultDocumentAssemblerが署名済み承認対象との差分として残っています。開始予約方式のApprovedCaseStarterも再承認対象に含まれ、リリースゲートは未通過です。
+<!--g1-literal--> After deployment and record updates, G1 structural validation passed 46/46, and generated documents matched. G2 remains at 20/21, with ApprovedCaseStarter, M1Runtime, SamlScopeApplication, and ResultDocumentAssembler differing from the signed approval targets. ApprovedCaseStarter's reservation change is also subject to reapproval; the release gate has not passed.
 
-### G02の受理条件と値保持条件の分離の訂正
+### Correcting the separation of G02 acceptance and value-retention conditions
 
-承認済み`tests/coverage.yaml`のIIP-G02.aを再照合したところ、これまで拡張文字列に追加していた値保持確認は同義務の条件ではありませんでした。同定義は「エラーなくフローが完了すること」を受理の証拠とし、拡張が無視された可能性が残ってもG02.aを確認できると明記しています。無視・切詰めの確認はG02.b/cで別に扱います。前節までの、値保持を確認できないためG02.aの拡張型条件を残す説明は訂正します。
+Rechecking IIP-G02.a in approved `tests/coverage.yaml` showed that the value-retention check previously added for extension strings was not a condition of this obligation. The definition treats completion of the flow without errors as acceptance evidence and explicitly allows G02.a to be verified even if an extension may have been ignored. Ignoring and truncation are handled separately by G02.b/c. The preceding explanation that G02.a extension-type conditions must remain because value retention was unverified is corrected here.
 
-<!--g1-literal--> 拡張文字列16入力の全てが正常完了した場合、`confirmed_type_conditions`へ`user-defined-extension-string-attribute`を記録し、同じ条件をG02.aの`remaining_conditions`から除くよう修正しました。応答した入力名も引き続き公開診断に残します。NameID、Advice、AttributeValue、リテラルTAB/LFの別条件は残るため、これだけでケース全体をSuccessにはしません。
+<!--g1-literal--> When all 16 extension-string inputs complete normally, `user-defined-extension-string-attribute` is now recorded in `confirmed_type_conditions` and removed from G02.a's `remaining_conditions`. Responding input names remain in public diagnostics. Separate NameID, Advice, AttributeValue, and literal TAB/LF conditions remain, so this alone does not make the whole case Success.
 
-拡張入力への明示的なSAMLエラーもG02.aの拒否として判定し、特定の文字種・境界値だけを拒否する実装を検出できるよう修正しました。不明または欠落したStatusは文字列要件への違反と断定せず、その入力の観測不足として扱います。正常系対照が成立しない場合は型条件を確認済みにしません。稼働中・保存済みケースの定義と混在させないようシナリオ定義キーも更新しています。
+Explicit SAML errors for extension inputs are also treated as G02.a rejections, detecting implementations that reject only specific character classes or boundary values. Unknown or missing Status is treated as an observation gap for that input, not a definitive string-requirement violation. Type conditions are not confirmed when the normal control fails. The scenario definition key was also updated to avoid mixing definitions with running or stored cases.
 
-<!--g1-literal--> 既存の51応答シナリオと、標準・拡張文字列32入力のそれぞれに不明／欠落Statusを与える64シナリオをまとめて検証しました。Runner 418、API 85の一括試験は成功しました。公開診断には固定された型条件IDだけを許し、任意の型名や値を公開しないことも確認しました。
+<!--g1-literal--> Combined verification covered the existing 51 response scenarios plus 64 scenarios assigning unknown/missing Status to each of 32 standard and extension string inputs. Runner 418 and API 85 batch tests passed. Public diagnostics were also checked to allow only fixed type-condition IDs, excluding arbitrary type names and values.
 
-承認済み定義は変更していません。その定義に実装を合わせる修正です。現時点では開発作業ツリーにあり、稼働v9への反映・実製品再試験・設定変更は未実施です。製品別の未検証件数は変更していません。根拠となる定義と変更ソースのSHA-256、検証記録はローカルの `build/acceptance/reference-20260914/string-acceptance-batch/verification.json` に保存しています。
+Approved definitions were not changed; the implementation was aligned with them. This is currently a development working-tree change and has not been deployed to live v9, retested against products, or accompanied by configuration changes. Product unverified counts are unchanged. The supporting definition, changed-source SHA-256, and verification record are stored locally at `build/acceptance/reference-20260914/string-acceptance-batch/verification.json`.
 
-### リテラルTAB・LFと文字参照の送信経路
+### Delivery paths for literal TAB/LF and character references
 
-<!--g1-literal--> ProviderNameのリテラルTAB／LFを255／256コードポイントで送る4入力を追加しました。標準文字列入力は20種類となります。XML解析時には属性内のリテラルTAB・LFが空白へ正規化され、文字参照はTAB・LFの値を保持するため、それぞれの解析後の期待値を分けています。独自型の入力行列へリテラル用の名前だけを流用せず、既存の型入力は文字参照の条件を維持します。
+<!--g1-literal--> 4 inputs sending literal TAB/LF in ProviderName at 255/256 code points were added, bringing standard string inputs to 20. XML parsing normalizes literal TAB/LF in attributes to spaces, while character references retain TAB/LF values, so their expected parsed values are distinguished. Literal input names are not merely reused in the custom-type matrix; existing typed inputs retain their character-reference conditions.
 
-署名必須モードでは、XML解析後の値へ通常の署名を行い、署名後のProviderNameに元の字句表現を復元します。復元前に解析後の属性値が同一であることを確認し、意味が変わっていれば拒否します。変更対象はAuthnRequestのルート属性だけです。引用符を区別し、XML宣言・コメント・処理命令を飛ばして位置を特定するため、別属性やコメント内の似た文字列を変えません。既に署名がある入力は従来どおり再署名・再直列化せず保持します。
+In signature-required mode, normal signing operates on the parsed XML value, then the original lexical representation is restored in ProviderName after signing. Before restoration, equality of the parsed attribute value is checked, rejecting any semantic change. Only the AuthnRequest root attribute is changed. Quote styles are distinguished, and XML declarations, comments, and processing instructions are skipped when locating the attribute, preventing changes to other attributes or similar strings inside comments. Already-signed inputs remain unchanged, without re-signing or reserialization.
 
-<!--g1-literal--> 引用符・名前空間接頭辞・プロローグ・数値文字参照の32組合せ、標準文字列20入力、署名検証とSQLite outbox保存を一括確認しました。保存されたpayloadに実際のリテラルTAB／LFが残り、受信側と同じXML解析後の値で署名検証できることを確認しています。SAML 70テストとRunnerの一括回帰試験が成功しました。
+<!--g1-literal--> Combined checks covered 32 combinations of quote style, namespace prefix, prolog, and numeric character reference, 20 standard string inputs, signature verification, and SQLite outbox storage. Stored payloads retain actual literal TAB/LF and verify signatures using the same parsed values as the receiver. SAML 70 tests and the Runner combined regression tests passed.
 
-<!--g1-literal--> G02の標準・拡張36入力に対する不明／欠落Statusの72シナリオも確認しました。リテラルと文字参照の両方が観測できた場合だけ`literal-tab-and-lf-on-wire`を残条件から除きます。どちらかが不足したときに誤って除外しない追加の境界確認も、対象Runner 9テストで成功しました。
+<!--g1-literal--> The 72 unknown/missing Status scenarios for 36 standard and extension G02 inputs were also checked. `literal-tab-and-lf-on-wire` is removed from remaining conditions only when both literals and character references are observed. Additional boundary checks preventing removal when either is missing passed in 9 targeted Runner tests.
 
-これらは開発作業ツリーの変更です。前節のG02受理条件訂正とともに稼働v9への反映・実製品再試験は未実施であり、製品の未検証件数は変更していません。検証ログとソースのSHA-256はローカルの `build/acceptance/reference-20260914/literal-whitespace-batch/verification.json` に保存しています。製品設定変更・人間の手操作はありません。
+These are development working-tree changes. They and the preceding G02 acceptance correction have not been deployed to live v9 or retested against products, and product unverified counts are unchanged. Verification logs and source SHA-256 are stored locally at `build/acceptance/reference-20260914/literal-whitespace-batch/verification.json`. There were no product configuration changes or human manual operations.
 
-### リテラル文字列と受理条件の統合版を実製品へ適用
+### Applying the integrated literal-string and acceptance-condition version to products
 
-<!--g1-literal--> 前節の変更を分離した検証用作業ツリーでまとめ、SAML 70、Runner 419、対象API 6テストが成功しました。対象APIはSamlScopeApplicationTestであり、API全体のリリース検証ではありません。6ソースから生成した10クラスを、ローカル試験用の `samlscope:reference-literal-v10` に反映しました。
+<!--g1-literal--> The preceding changes were combined in an isolated verification working tree, where SAML 70, Runner 419, and 6 targeted API tests passed. The targeted API was SamlScopeApplicationTest, not full API release verification. The 10 classes generated from 6 sources were included in the local test image `samlscope:reference-literal-v10`.
 
-稼働クラスのSHA-256と既存ライブラリーの不変を確認しました。承認済み定義は変更していません。旧Suite・転送コンテナーは復旧用に保持しています。実行証拠はローカルの `build/acceptance/reference-20260914/literal-integrated-implementation/` に保存します。
+Running class SHA-256 and unchanged existing libraries were checked. Approved definitions were unchanged. The old Suite and forwarding containers were retained for recovery. Execution evidence is stored locally at `build/acceptance/reference-20260914/literal-integrated-implementation/`.
 
-<!--g1-literal--> 新RunのG02では3製品とも37往復（正常系対照、標準文字列20入力、拡張属性16入力）のSAML成功応答を確認しました。全応答を同じRunのoutbound actionと相関し、ケースの証拠参照にも含まれることを確認しています。リテラルTAB／LFの4入力について保存XMLの字句表現、XML解析後のコードポイント数、署名の有無を記録しました。署名自体の検証は前節の自動テストで行っています。
+<!--g1-literal--> G02 in new Runs received successful SAML responses for all 37 exchanges on each of the 3 products: the normal control, 20 standard string inputs, and 16 extension-attribute inputs. Every response was correlated to an outbound action in the same Run and checked for inclusion in case evidence references. For the 4 literal TAB/LF inputs, recorded XML lexical forms, parsed code-point counts, and signature presence were recorded. Signatures themselves were verified in the preceding automated tests.
 
-<!--g1-literal--> 公開診断の未確認条件は6種類から4種類になりました。拡張属性の受理とリテラル文字の条件を確認済みとし、persistent NameID、transient NameID、Advice文字列、AttributeValue文字列は残しています。G02全体はNot verifiedを維持します。条件の進展を、ケース全体の解消数には加算していません。照合結果は各製品の `string-evidence-check.json` です。
+<!--g1-literal--> Public diagnostics' unconfirmed conditions decreased from 6 types to 4. Extension-attribute acceptance and literal-character conditions are confirmed; persistent NameID, transient NameID, Advice strings, and AttributeValue strings remain. G02 as a whole remains Not verified. Progress on conditions is not added to whole-case resolution counts. Checks are saved in each product's `string-evidence-check.json`.
 
-<!--g1-literal--> 3製品のSSO試験列がFINISHEDとなり、v9との差分を全件確認しました。Keycloak・ShibbolethのVerdict変更はありません。SimpleSAMLphpはIDP06-aがSuccess、IDP06-bが時刻精度によるNot verifiedとなりました。両方の4段階の要求・応答と認証時刻を照合しています。比較表はIDP06-aのv10成功証拠を採用し、IDP06-bはv9の成功証拠を残して最新試行の保留を明記しました。証拠は `verdict-delta.json` とSimpleSAMLphpの `force-authn-evidence-check.json` です。
+<!--g1-literal--> The 3 product SSO sequences reached FINISHED, and all differences from v9 were checked. Keycloak and Shibboleth had no Verdict changes. SimpleSAMLphp's IDP06-a became Success, while IDP06-b became Not verified because of timestamp precision. All 4 request/response stages and authentication times were compared for both. The comparison table adopts IDP06-a's v10 success and retains IDP06-b's v9 success with the latest attempt explicitly pending. Evidence is in `verdict-delta.json` and SimpleSAMLphp's `force-authn-evidence-check.json`.
 
-<!--g1-literal--> 未検証総数は576件のままです。比較表の31実行証拠についてRun IDとSHA-256を検証しました。全件台帳にもG02の公開診断と残条件を保存し、次に必要な入力・観測条件を明示しています。JSONと静的HTMLに含まれる診断の一致も確認しました。
+<!--g1-literal--> The total remains 576 unverified observations. Run IDs and SHA-256 were checked for 31 execution records in the comparison table. The full inventory also stores G02 public diagnostics and remaining conditions, identifying the next required inputs and observations. Diagnostics in JSON and static HTML were confirmed to match.
 
-| 製品 | 自動fixture開始 | 記録済み応答 | 自動セッション初期化 | 所要時間（秒） |
+| Product | Automatic fixture starts | Recorded responses | Automatic session initializations | Elapsed time (seconds) |
 |---|---:|---:|---:|---:|
 <!--g1-literal--> | Keycloak | 131 | 105 | 6 | 511.070 |
 <!--g1-literal--> | Shibboleth | 160 | 127 | 6 | 617.478 |
 <!--g1-literal--> | SimpleSAMLphp | 161 | 140 | 6 | 124.221 |
 
-<!--g1-literal--> 各Runの初期正常系往復は表とは別に1回です。数値はプロトコルfixture単位で、ログイン画面やリダイレクトを含む全HTTP操作数ではありません。Suite・転送コンテナー再起動は各1回、製品設定変更・人間の手操作・ブラウザー操作は0回です。操作台帳に所要時間とともに記録しました。
+<!--g1-literal--> Each Run has 1 initial normal exchange in addition to the table. Counts are per protocol fixture, not all HTTP operations including login pages and redirects. Suite and forwarding-container restarts were 1 each; product configuration changes, human manual operations, and browser operations were 0. These were recorded with elapsed times in the operation ledger.
 
-<!--g1-literal--> G1構造検証は46/46、生成文書の一致も成功しました。G2は20/21で、ApprovedCaseStarter、M1Runtime、SamlScopeApplication、ResultDocumentAssemblerの承認対象との差分が残っています。今回の再試験完了はリリース可能の判定ではありません。
+<!--g1-literal--> G1 structural validation passed 46/46, and generated documents matched. G2 remains at 20/21, with differences from the approval targets for ApprovedCaseStarter, M1Runtime, SamlScopeApplication, and ResultDocumentAssembler. Completion of this retest is not a release-readiness determination.
 
-### SLO共通判定の証拠欠落・XML範囲の検査
+### Checking evidence gaps and XML scope in the common SLO oracle
 
-未検証台帳からSLOの追加実装経路を再点検し、既存の共通判定が読めない記録を除外して残りだけを評価すること、任意のXML子孫から最初のLogoutRequest／LogoutResponseを拾うことを確認しました。これは読取失敗を隠した成功や、交換対象ではないメッセージの判定につながるため、追加のSLOケースへ広げる前に修正しました。
+Reinspection of SLO implementation paths from the unverified inventory found that the existing common oracle excluded unreadable records and evaluated only the remainder, and selected the first LogoutRequest/LogoutResponse from arbitrary XML descendants. Both could create success from hidden read failures or evaluate messages outside the exchange. They were corrected before extending the oracle to additional SLO cases.
 
-Run単位のスナップショットについて、取得失敗、別Run混入、記録IDの重複、XML参照の欠落、記録サイズと実バイト数の不一致、読取・解析失敗を検査します。不完全な場合は `slo.evidence.incomplete` とし、製品の違反とはしません。証拠を読み捨てて成功にすることはなく、別Runの記録は読み込まず結果の証拠参照にも含めません。これは保存内容の暗号学的な完全性検証を追加するものではありません。
+Run snapshots are checked for retrieval failure, foreign-Run records, duplicate record IDs, missing XML references, mismatches between recorded size and actual byte count, and read or parse failure. Incomplete evidence produces `slo.evidence.incomplete`, not a product violation. Evidence is not discarded to produce success; foreign-Run records are neither read nor included in result evidence references. This does not add cryptographic integrity verification of stored content.
 
-XMLではルートのSLOメッセージ、またはSOAP Body直下の単一SLOメッセージを使用します。任意のラッパー、Header内だけのメッセージ、複数Body・複数本文メッセージは成功根拠にしません。SOAP Headerの同名メッセージをBodyの交換メッセージとして扱わない正負対照も検証しました。
+XML selection uses a root SLO message or a single SLO message directly under SOAP Body. Arbitrary wrappers, messages appearing only in Header, multiple Bodies, and multiple body messages cannot support success. Positive and negative controls also verify that same-named SOAP Header messages are not treated as Body exchange messages.
 
-ブラウザー経路と受動判定の両方で、CaseContextの履歴不完全フラグを尊重します。履歴取得失敗などを新しいブラウザー操作待ちへ戻さず、Not verifiedと固定された原因IDを表示します。不完全な記録を「観測完了」へ数えず、例外本文・ファイルパス・任意値は公開診断へ出しません。
+Browser and passive evaluation both respect CaseContext's incomplete-history flag. History retrieval failures do not return to waiting for another browser action; Not verified and a fixed reason ID are displayed. Incomplete records are not counted as observation complete, and exception text, file paths, and arbitrary values are excluded from public diagnostics.
 
-<!--g1-literal--> 共通判定23規則に対して、証拠欠落など9条件の207シナリオ、曖昧なXML範囲9条件の207シナリオ、SOAP Bodyの正負対照4シナリオをまとめて確認しました。さらにブラウザー／受動判定の接続と診断9種の公開制限を確認し、Runner 423テストが成功しました。
+<!--g1-literal--> The 23 common oracle rules were checked against 207 scenarios covering 9 evidence-gap conditions, 207 scenarios covering 9 ambiguous-XML-scope conditions, and 4 SOAP Body positive/negative scenarios. Browser/passive integration and publication restrictions for 9 diagnostic types were also checked. The 423 Runner tests passed.
 
-この変更は開発作業ツリーにあり、稼働v10への反映・実製品SLOの再試験は未実施です。未検証件数は変更していません。製品設定変更・人間の手操作もありません。ソースのSHA-256と検証ログはローカルの `build/acceptance/reference-20260914/slo-evidence-integrity-batch/` に保存しています。
+This is a development working-tree change, not deployed to live v10 or retested with product SLO. The unverified count is unchanged. No product configuration changes or human manual operations occurred. Source SHA-256 and verification logs are stored locally at `build/acceptance/reference-20260914/slo-evidence-integrity-batch/`.
 
-### SP起点ログアウトの要求入力群
+### Request inputs for SP-initiated logout
 
-SLOの現行経路は受信中心で、SP起点の連続試験で再利用する要求生成がありませんでした。`SamlLogoutRequestFactory`を追加し、呼出側が指定する安定した要求ID、送信先、Issuer、NameID／EncryptedID、SessionIndex列、発行時刻、任意の期限、非同期指定からLogoutRequestを生成できるようにしました。
+The current SLO path centered on receiving messages and lacked reusable request generation for SP-initiated sequences. `SamlLogoutRequestFactory` was added to generate LogoutRequest from caller-specified stable request ID, destination, Issuer, NameID/EncryptedID, SessionIndex list, issue time, optional deadline, and asynchronous setting.
 
-SessionIndexの省略・複数値、別の識別子・送信先、過去の期限も個別入力として表現できます。これらの生成自体を、適合・違反の判断とはしません。AsynchronousはExtensions直下に配置し、識別子の内容・修飾属性と継承された名前空間を維持します。元の識別子DOMは変更しません。
+Omitted or multiple SessionIndex values, alternative identifiers or destinations, and past deadlines can be expressed as separate inputs. Generating these inputs does not itself determine conformance or violation. Asynchronous is placed directly under Extensions, preserving identifier content, qualifier attributes, and inherited namespaces. The source identifier DOM is unchanged.
 
-EncryptedIDは既存の暗号入力群を使用し、呼出側が選ぶ公開鍵で暗号化します。署名はIssuerの後で一度だけ行い、署名済み入力の再署名は拒否します。要求生成はHTTP送信やケース判定を行わず、送信・再送の判断はRunnerに残します。既存PlanのAuthnRequest署名設定の意味は変更していません。
+EncryptedID uses the existing encryption inputs and the caller's selected public key. Signing occurs once, after Issuer; re-signing an already-signed input is rejected. Request generation performs neither HTTP sends nor case evaluation; Runner retains responsibility for delivery and retry. Existing Plan AuthnRequest-signing semantics are unchanged.
 
-<!--g1-literal--> 平文の構築72シナリオでは文字列・名前形式・SessionIndex列・非同期指定・期限の組合せを確認しました。暗号化48シナリオでは24方式と2受信鍵を組み合わせ、選んだ鍵で復号でき、別の鍵では復号できないことを検証しました。XSD構造、署名検証、署名後のDestination改変の検出、入力DOMの不変も確認しています。
+<!--g1-literal--> The 72 plaintext construction scenarios checked combinations of strings, name formats, SessionIndex lists, asynchronous settings, and deadlines. The 48 encryption scenarios combined 24 algorithms with 2 receiver keys, verifying decryption with the selected key and failure with another key. XSD structure, signature verification, detection of Destination changes after signing, and unchanged input DOM were also checked.
 
-<!--g1-literal--> 正常署名・署名値改変・署名済み内容改変の3要求を実際のSQLite outbox経路で保存しました。既存のAuthnRequest署名設定が有効でもLogoutRequestのバイト列を修復・再署名せず保持し、LOGOUT_REQUESTの再送区分がUNSAFEのままであることを確認しました。SAML 73、Runner 424テストの一括検証が成功しました。
+<!--g1-literal--> 3 requests with a normal signature, modified signature value, and modified signed content were stored through the actual SQLite outbox path. Even with existing AuthnRequest signing enabled, LogoutRequest bytes were retained without repair or re-signing, and LOGOUT_REQUEST retry classification remained UNSAFE. SAML 73 and Runner 424 batch tests passed.
 
-これは要求入力と保存経路の実装です。SP起点ログアウトのシナリオ登録、SLO受信とactive-probeの接続、実製品での判定はまだ完了していません。稼働v10への反映や製品設定変更は行っておらず、未検証件数を減らしていません。ソースのSHA-256と検証ログはローカルの `build/acceptance/reference-20260914/slo-request-fixture-batch/` に保存します。
+This implements request inputs and storage. SP-initiated logout scenario registration, SLO reception/active-probe integration, and product evaluation remain incomplete. It has not been deployed to live v10 or accompanied by product configuration changes, and the unverified count was not reduced. Source SHA-256 and logs are stored locally at `build/acceptance/reference-20260914/slo-request-fixture-batch/`.
 
-### SLO応答とactive-probeの接続
+### Connecting SLO responses to active probes
 
-SloPeerServiceにactive-probe用RelayStateの処理を追加しました。相関したRunがエンドポイントのPlanに所属すること、URLのrun指定と食い違わないこと、run指定が重複しないことを確認します。通常のSLO受信は既存経路を維持します。
+Active-probe RelayState handling was added to SloPeerService. It checks that the correlated Run belongs to the endpoint's Plan, agrees with the URL's run parameter, and has no duplicate run parameter. Ordinary SLO reception retains the existing path.
 
-active-probeでは、異常な応答も先にTranscriptへ保存してから解析し、記録IDと元のXMLを待機中ケースへ渡します。InResponseToやStatusの適合判定はケースが担当し、受信成功だけで製品Successにしません。解析前・解析後の記録を区別し、通知時点で解析結果が保存済みであることを検証しました。AuthorizationとCookieはRecorderに渡す前に除去します。
+Active probes save abnormal responses in Transcript before parsing, then pass the record ID and original XML to the waiting case. Cases determine InResponseTo and Status conformance; reception alone does not establish product Success. Pre-parse and post-parse records are distinguished, and the parsed result is confirmed to be stored before notification. Authorization and Cookie are removed before submission to Recorder.
 
-SLOの受信は専用のacceptLogoutを通し、outboxがLOGOUT_REQUESTの場合だけ受け付けます。通常ACS側はAUTHN_REQUESTだけを受け付けます。別経路の応答は配送状態の確認やケース再開より前に拒否します。SLO応答画面は既存のactive-probe継続画面を共用し、ケースが終わった時点の結果生成にも接続しました。
+SLO reception uses dedicated acceptLogout and accepts only LOGOUT_REQUEST outbox entries. The normal ACS accepts only AUTHN_REQUEST. Responses arriving through the wrong route are rejected before delivery-state checks or case resume. SLO response pages reuse the existing active-probe continuation page and trigger result generation when cases finish.
 
-ブラウザー送信の許可対象にLOGOUT_REQUESTを追加し、記録するメッセージ種別もLogoutRequestとしました。送信経路と再送安全性は別であり、UNKNOWN_DELIVERYからの再送は禁止したままです。SLO専用のSOAP送信やHTTP-Redirect送信を追加したわけではありません。
+LOGOUT_REQUEST was added to the browser-send allowlist, with recorded message type LogoutRequest. Delivery path and retry safety remain separate: retries from UNKNOWN_DELIVERY are still forbidden. This does not add SLO-specific SOAP or HTTP-Redirect sending.
 
-<!--g1-literal--> 受信試験はPOST／Redirect、URLのrun指定、正常・エラー・相関不一致・異種・解析不能XMLなど36シナリオと、相関拒否16シナリオをまとめて実施しました。記録の同時刻ソート順に依存したテストの不備は、通知された証拠IDで直接照合する形へ修正しました。
+<!--g1-literal--> Reception tests covered 36 scenarios across POST/Redirect, URL run parameters, normal/error responses, correlation mismatch, wrong message types, and unparseable XML, plus 16 correlation-rejection scenarios. A test defect depending on same-time record sort order was corrected by comparing the notified evidence ID directly.
 
-<!--g1-literal--> ブラウザー送信はAuthnRequestとLogoutRequestが混在する50ケースで、選択時の要求生成、送信後のバイト列不変、重複送信拒否、受信経路の取り違え拒否を確認しました。Runner 424、Peer 11、API 85の一括テストが成功しました。
+<!--g1-literal--> Browser delivery was checked with 50 cases mixing AuthnRequest and LogoutRequest: request generation on selection, immutable bytes after sending, duplicate-send rejection, and wrong reception-route rejection. Runner 424, Peer 11, and API 85 batch tests passed.
 
-これは通信と実行制御の接続です。製品のSLO判定ケース登録・実製品再試験・稼働v10への反映は未実施であり、未検証件数は変更していません。製品設定変更・人間の手操作はありません。ソースのSHA-256と検証ログはローカルの `build/acceptance/reference-20260914/slo-active-routing-batch/` に保存しています。
+This connects communication and execution control. Product SLO case registration, product retesting, and deployment to live v10 remain unperformed; the unverified count is unchanged. No product configuration changes or human manual operations occurred. Source SHA-256 and logs are stored locally at `build/acceptance/reference-20260914/slo-active-routing-batch/`.
 
-### SP起点ログアウトの基本ケース登録
+### Registering the basic SP-initiated logout case
 
-承認済みIIP-IDP17.aの要求に合わせて、`IdpBasicLogoutScenarioTestCase`をM3のブラウザー登録へ接続しました。新しいセッションで署名付きAuthnRequestを送り、署名を検証できる正常系Responseから識別子とSessionIndexを取得して、署名付きの同期LogoutRequestをoutboxへ返します。実際のHTTP送信は既存Runner経路が担当します。
+`IdpBasicLogoutScenarioTestCase` was connected to M3 browser registration according to approved IIP-IDP17.a. It sends a signed AuthnRequest in a new session, obtains the identifier and SessionIndex from a normal Response whose signature can be verified, then returns a signed synchronous LogoutRequest to the outbox. Existing Runner paths perform actual HTTP delivery.
 
-正常系では、要求との相関、ACS、SAMLバージョン、Status、XML構造、対象Issuer、署名、識別子とSessionIndexを確認します。EncryptedAssertionとEncryptedIDはメモリー内で復号し、復号後のAssertion構造も確認します。複数Assertion、識別子やSessionIndexを確定できない入力、署名や復号を検証できない入力では要求を生成しません。復号した識別子や鍵をCaseStateへ保存せず、正常系証拠の参照だけを引き継ぎます。
+The normal control checks request correlation, ACS, SAML version, Status, XML structure, target Issuer, signature, identifier, and SessionIndex. EncryptedAssertion and EncryptedID are decrypted in memory, and decrypted Assertion structure is checked. No request is generated for multiple Assertions, indeterminate identifiers or SessionIndex, or unverifiable signatures or decryption. Decrypted identifiers and keys are not stored in CaseState; only normal-control evidence references are carried forward.
 
-LogoutResponseは、対象署名とIssuerを確認してから、要求ID・SuiteのSLO応答先との対応を確認します。相関・宛先の不一致は違反、正常系不成立・無応答・配送不明・履歴不足・署名を検証できない応答はNot verifiedです。承認済み定義でセッション終了とStatus分岐はIIP-IDP17.e/o/qへ分けられているため、正しく相関したエラーLogoutResponseをこの基本ケースの違反にはしません。
+LogoutResponse is checked for target signature and Issuer before request-ID and Suite SLO-destination correlation. Correlation or destination mismatch is a violation; failed normal controls, no response, unknown delivery, incomplete history, and unverifiable signatures produce Not verified. Approved definitions assign session termination and Status branches separately to IIP-IDP17.e/o/q, so a correctly correlated error LogoutResponse is not a violation of this basic case.
 
-この実装の試験前提には、対象のHTTP-POST SSO/SLOエンドポイントと署名証明書、Suite側の署名・復号鍵が必要です。前提が不足してもN/Aや製品FAILにはせず、Not verifiedのまま理由を残します。HTTP-Redirectだけを提供する対象を非対応と断定するものではありません。
+Test prerequisites include target HTTP-POST SSO/SLO endpoints and signing certificates, plus Suite signing/decryption keys. Missing prerequisites retain Not verified with a reason, rather than N/A or product FAIL. This does not establish lack of support for targets providing only HTTP-Redirect.
 
-<!--g1-literal--> セッション入力はNameID形式、Assertion暗号化、識別子暗号化、署名位置、SessionIndex数の48組合せで検証しました。Statusと宛先・相関・署名異常は28組合せ、無応答・期限切れ・中断は各段階の計6シナリオで確認しています。正常系の欠落、復号後の構造不正、バージョン不一致、履歴不足も確認し、Runner 428、API 85の一括テストが成功しました。
+<!--g1-literal--> Session inputs were verified across 48 combinations of NameID format, Assertion encryption, identifier encryption, signature placement, and SessionIndex count. Status, destination, correlation, and signature abnormalities covered 28 combinations; no response, expiry, and interruption covered 6 scenarios across stages. Missing normal controls, malformed decrypted structure, version mismatch, and incomplete history were also checked. Runner 428 and API 85 batch tests passed.
 
-<!--g1-literal--> 全件台帳では3製品のIIP-IDP17-aを「自動判定なし」から「新実装の反映・追加観測待ち」へ更新しました。旧Runの実行証拠はNot verifiedのままであり、総数576件は変更していません。稼働v10への反映と実製品再試験は未実施です。製品設定変更・人間の手操作はありません。ソースのSHA-256と検証ログはローカルの `build/acceptance/reference-20260914/basic-slo-case-batch/` に保存します。
+<!--g1-literal--> The full inventory reclassified IIP-IDP17-a for the 3 products from no automatic oracle to awaiting new implementation deployment / additional observations. Old Run evidence remains Not verified; the total of 576 is unchanged. Deployment to live v10 and product retesting have not occurred. There were no product configuration changes or human manual operations. Source SHA-256 and logs are stored locally at `build/acceptance/reference-20260914/basic-slo-case-batch/`.
 
-### SLO実製品再試験とStatus URI修正
+### Runtime SLO retests and Status URI correction
 
-SLO要求生成・受信接続・基本判定をローカルSuiteへ反映し、実製品で再試験しました。正常ログインのStatus URIをプロトコル名前空間から誤って構築していたSuite不具合を発見しました。テストfixtureにも同じ誤りがあったため、標準のSuccess URIへ修正し、誤った名前空間とResponderを正常系として受理しない負例を追加しました。これは製品の失敗ではありません。
+SLO request generation, reception, and basic evaluation were deployed locally and retested against real products. A Suite bug constructed the normal-login Status URI from the protocol namespace. Test fixtures shared the mistake. Both were corrected to the standard Success URI, with negative controls rejecting the wrong namespace and Responder as normal success. This was not a product failure.
 
-修正後、KeycloakはLogoutRequest送信まで進みましたが、試験用クライアント設定に旧Run固定のSLO応答先が残っていたため、SuiteのRun相関検査で停止しました。相関検査は維持し、応答先をPlan固定URLへ修正しました。Runの識別はactive-probeのRelayStateから行うため、以後この経路でRunごとの設定書換えは不要です。
+Keycloak then sent LogoutRequest, but the test client still had an old Run-specific SLO response URL. Suite's Run correlation rejected it. Correlation checks were preserved; response URLs were changed to Plan-fixed URLs. active-probe RelayState identifies the Run, removing per-Run configuration rewrites on this path.
 
-<!--g1-literal--> Keycloakの設定変更はAPI更新1回、SLO応答先2項目、人間操作0回です。修正前を含む6回のRun作成・実行、途中停止、Suite切替も作業量台帳へ記録しました。途中停止を試験完了へ計上していません。
+<!--g1-literal--> Keycloak required 1 API update affecting 2 SLO response fields, with 0 human operations. 6 Run creation/execution attempts, interrupted trials, and Suite switches, including pre-fix attempts, were recorded. Interrupted trials were not counted as completed tests.
 
-Keycloakの新Runでは基本SLOケースが `slo.basic.synchronous-response-observed` / PASSになりました。署名付き正常ログインから得た識別子とSessionIndexでLogoutRequestを生成し、相関したLogoutResponseを受信しています。結果の証拠参照とTranscriptのResponse／LogoutResponseを照合し、静的HTMLの埋込結果とJSONの一致も確認しました。製品比較表はこのケースだけ新しい証拠へ更新します。セッション終了など他のSLO要件まで成功したことは意味しません。
+A fresh Keycloak Run produced `slo.basic.synchronous-response-observed` / PASS. LogoutRequest used the identifier and SessionIndex from a verified signed login, and a correlated LogoutResponse arrived. Result references matched Transcript Response/LogoutResponse evidence; static HTML embedded results matched JSON. Only this comparison case was updated. Other SLO obligations, including session termination, were not concluded.
 
-ShibbolethはLogoutRequest送信後の製品ページでプロトコルクライアントが停止しており、ページ内容・追加操作の確認が必要です。SimpleSAMLphpのRun固定メタデータはSLOにHTTP-Redirectだけを公開していました。現在の基本ケースはHTTP-POST送信を前提としているため、Suite側のRedirect送信経路の追加が必要です。いずれも製品FAILとは判断していません。
+Shibboleth's protocol client stopped on the product page after sending LogoutRequest; page content and further steps required investigation. SimpleSAMLphp's Run-fixed metadata advertised only HTTP-Redirect SLO, while the basic case assumed HTTP-POST. Suite needed a Redirect sender. Neither limitation was classified as product FAIL.
 
-<!--g1-literal--> Runner 428テスト、G1生成文書一致、G1構造46/46が成功しました。G2は20/21で承認対象コードとの差分が残っています。未検証台帳は576件から575件へ減少しましたが、全件完走・リリース可能の判定ではありません。
+<!--g1-literal--> Runner 428 tests passed; G1 generated docs matched and G1 structure passed 46/46. G2 remained 20/21 with protected-source differences. Unverified observations fell from 576 to 575; this was neither a complete run nor release readiness.
 
-検証済み修正版は `samlscope:reference-slo-status-v12` です。既存ライブラリーの不変を検証し、旧コンテナは復元用に保持しました。証拠、ソースとクラスのハッシュ、再試験結果、設定変更前後はローカル `build/acceptance/reference-20260914/slo-status-correction/` に保存しています。
+Verified runtime was `samlscope:reference-slo-status-v12`. Existing libraries were checked unchanged and old containers retained for recovery. Evidence, source/class hashes, retests, and before/after settings are in local `build/acceptance/reference-20260914/slo-status-correction/`.
 
-### Redirect SLO送信とブラウザー自動遷移
+### Redirect SLO sending and automatic browser transitions
 
-SimpleSAMLphpの実メタデータがHTTP-Redirect SLOだけを公開していたため、署名付きRedirectエンコーダーを追加しました。[SAML Bindings §3.4.4.1](https://docs.oasis-open.org/security/saml/v2.0/saml-bindings-2.0-os.pdf)に従い、コピー上でプロトコルメッセージ直下のXML署名を除去し、埋込Assertion署名を保持します。raw DEFLATE、Base64、URLエンコード後のクエリー値にRSA-SHA256署名を付けます。元のoutbox要求は変更せず、送信するクエリー・XMLと同じものをTranscriptへ記録します。予約済みSAMLパラメーターを含む宛先はSuiteの設定エラーとして拒否します。
+SimpleSAMLphp advertised only HTTP-Redirect SLO, so a signed Redirect encoder was added. Under [SAML Bindings §3.4.4.1](https://docs.oasis-open.org/security/saml/v2.0/saml-bindings-2.0-os.pdf), it removes only the direct protocol-message XML signature from a copy and retains embedded Assertion signatures. It applies raw DEFLATE, Base64, URL encoding, and RSA-SHA256 signatures over query values. Original outbox requests remain unchanged; actual outbound query/XML is recorded in Transcript. Destinations with reserved SAML parameters are rejected as Suite configuration errors.
 
-BrowserFrontChannelScenarioの送信方式を実行制御へ接続しました。基本SLOではPOSTがあれば使用し、なければRedirectを選択します。方式はCaseStateに保存し、通常ログインはPOSTのままです。既存のケース・呼出し元はPOSTを既定値とし、RedirectはRunnerの鍵プロバイダーで署名してブラウザーへ渡します。配送状態は相関した応答が来るまでUNKNOWN_DELIVERYとし、同一要求の再送は禁止したままです。
+BrowserFrontChannelScenario binding selection was connected to execution. Basic SLO selects POST when available, otherwise Redirect; the choice is stored in CaseState. Normal login remains POST. Existing callers default to POST; Runner's key provider signs Redirect requests for the browser. Delivery remains UNKNOWN_DELIVERY until a correlated response, and replaying the same request remains prohibited.
 
-<!--g1-literal--> メッセージ種別・RelayState・宛先クエリー・元XML署名の120組合せで圧縮復元、元入力の不変、埋込署名の保持、正しい鍵の署名検証、別鍵・改変したメッセージ・RelayStateの拒否を確認しました。予約パラメーターの通常表記とエンコード表記も拒否します。POST／Redirectが混在する50ケースで記録するHTTP方式、クエリー、送信先、署名、outbox保持、再送拒否を確認しました。SAML 75、Runner 429、API 85テストが成功しました。
+<!--g1-literal--> Across 120 combinations of message type, RelayState, destination query, and original XML signature, tests checked decompression, unchanged inputs, embedded-signature preservation, correct-key verification, and rejection of wrong keys or altered messages/RelayState. Both plain and encoded reserved parameters were rejected. 50 mixed POST/Redirect cases checked HTTP method, query, destination, signatures, outbox preservation, and replay refusal. SAML 75, Runner 429, and API 85 tests passed.
 
-実製品試験では、SimpleSAMLphpが未署名LogoutResponseを返していたため、当該試験SPへのsign.logoutを有効にしました。未署名応答を製品FAILには変更していません。設定直後の読戻しでPHP解析エラーが一度発生しましたが、再確認ではホスト・コンテナのファイルサイズとSHA-256が一致し、PHP構文・設定値も正常でした。追加の設定書換えはせず、読戻しのやり直しを記録しています。
+SimpleSAMLphp initially returned an unsigned LogoutResponse. sign.logout was enabled for this test SP without changing the unsigned result to product FAIL. Immediate read-back produced one PHP parsing error; repeat checks found matching host/container size and SHA-256, valid PHP syntax, and correct settings. No further setting write was made; the read-back retry was recorded.
 
-Shibbolethで応答前に停止していた原因は、試験用プロトコルクライアントが非表示iframeによる自動遷移を実行していなかったことでした。稼働製品の画面テンプレートと実ページを確認し、実ページに指定された同一オリジン・同一パスの自動遷移だけを追従させました。オペレーターが成功を自己申告したわけではありません。
+Shibboleth stopped before responding because the protocol client did not execute a hidden iframe's automatic transition. Runtime page templates and actual pages were inspected. The client followed only the same-origin, same-path transition explicitly specified by the product page; this was not operator self-attestation.
 
-<!--g1-literal--> 今回はSLO Runを4回作成・実行し、途中停止と未署名応答を含めて作業量に計上しました。新たな設定変更はShibbolethとSimpleSAMLphpの旧Run固定SLO応答先の変更各1回、SimpleSAMLphpの署名設定1回、計3回・3項目です。Shibbolethのメタデータ再読込1回、設定読戻しの再確認1回、iframe自動遷移1回も記録しました。人間の手操作は0回です。固定応答先を使用するため、この経路のRunごとの設定変更は不要になりました。
+<!--g1-literal--> 4 SLO Runs were created/executed, including interrupted trials and unsigned responses. New settings comprised 1 old Run-specific response-URL change each for Shibboleth and SimpleSAMLphp and 1 SimpleSAMLphp signature change: 3 writes affecting 3 fields. 1 Shibboleth metadata reload, 1 read-back retry, and 1 iframe transition were recorded. Human operations: 0. Fixed response URLs remove per-Run rewrites on this path.
 
-<!--g1-literal--> Keycloakの既存成功証拠に加え、SimpleSAMLphpとShibbolethの基本SLOが実通信でPASSになりました。結果のResponse／LogoutResponse証拠、元要求との相関、静的HTMLとJSONの一致、Redirectの実クエリーから復元したXMLとTranscriptの一致を確認しました。比較表と未検証台帳は基本ケースだけ更新し、残件は575から573になりました。他のSLO要件や全体完走の成功には広げていません。
+<!--g1-literal--> Alongside existing Keycloak evidence, SimpleSAMLphp and Shibboleth basic SLO now passed in real exchanges. Response/LogoutResponse references, request correlation, static HTML/JSON equality, and XML reconstructed from the actual Redirect query matched. Only basic-case inventory/comparison entries changed; unresolved observations fell from 575 to 573. No other SLO obligations or complete campaign were claimed.
 
-<!--g1-literal--> 稼働版は `samlscope:reference-slo-redirect-v13` です。対象16クラスのハッシュと既存ライブラリーの不変を検証し、旧コンテナは保持しました。G1構造検証は46/46、生成文書一致も成功しています。G2は20/21で承認対象コードの差分確認が残ります。追加実装は継続中で、リリース可能という判断ではありません。
+<!--g1-literal--> Runtime was `samlscope:reference-slo-redirect-v13`. 16 class hashes and unchanged libraries were checked; old containers were retained. G1 structure passed 46/46 and generated docs matched. G2 remained 20/21 with approved-source differences unresolved. Implementation continued; release readiness was not claimed.
 
-ローカル証拠は `build/acceptance/reference-20260914/slo-redirect-implementation/` に保存しています。送信方式の追加は、Redirectで受けた応答すべての自動判定対応を意味しません。今回成功したSLO応答はPOSTで受信し、XML署名を検証しています。
+Local evidence is in `build/acceptance/reference-20260914/slo-redirect-implementation/`. Adding Redirect sending does not establish automatic evaluation of every Redirect response. Successful SLO responses in this batch arrived by POST and their XML signatures were verified.
 
-### Redirect署名と判定対象XMLの対応確認
+### Binding Redirect signatures to evaluated XML
 
-SLOの共通署名判定を再点検し、有効なRedirect署名のクエリーと、判定対象の保存XMLが同一かを結び付けていない不足を修正しました。元のクエリーで署名を検証したうえで、圧縮されたメッセージを復元して判定対象XMLとバイト単位で照合します。読み出す復元データ量は期待XML長に合わせて制限し、重複するメッセージパラメーター、圧縮不正、異なるXMLを受理しません。
+The shared SLO verifier previously did not bind a valid Redirect-signed query to the stored XML being evaluated. It now verifies the original query signature, decompresses its message, and compares exact bytes with the evaluated XML. Decompression is bounded by expected XML length. Duplicate message parameters, invalid compression, and different XML are rejected.
 
-GETの記録でクエリーと保存XMLが食い違う場合、共通SLO判定は `slo.evidence.incomplete` とし、原因 `redirect_message_mismatch` を公開診断へ渡します。証拠の不一致を製品の署名違反へ変換しません。POSTのURLに付いた署名クエリーを、POST本文の署名として扱うことも禁止しました。以前のRedirect正常系テストがダミーの圧縮値を使用していたため、実際に復元可能な値へ修正しました。
+A GET query/XML mismatch yields `slo.evidence.incomplete` with public diagnostic `redirect_message_mismatch`, not a product signature violation. A signed URL query on POST cannot stand in for the POST body's signature. Former positive Redirect tests used dummy compression values; they were replaced with actual decompressible messages.
 
-基本SLOケースは、XML署名のないLogoutResponseでも、受信証拠IDで一意に特定した同じRunのINBOUND／GET記録があり、その元クエリーの対象署名とXML同一性を検証できた場合に判定を続行できます。別Run、OUTBOUND、POST、証拠ID重複、記録欠落、異なるXML、不正署名はNot verifiedです。既存のIssuer・InResponseTo・Destination・スキーマ検査は維持します。
+Basic SLO can evaluate an XML-unsigned LogoutResponse only when its unique receipt ID identifies a same-Run INBOUND/GET entry and that original query verifies under target trust with identical XML. Another Run, OUTBOUND, POST, duplicate evidence IDs, missing records, mismatched XML, and bad signatures remain Not verified. Issuer, InResponseTo, Destination, and schema validation remain unchanged.
 
-<!--g1-literal--> エンコーダーの120組合せに、同一XMLの署名検証・別鍵・長さ違い・内容違い・重複パラメーター・圧縮不正の検査を追加しました。共通SLOの23規則には証拠不一致3種類の69シナリオ、基本SLOにはStatusと証拠状態の40シナリオを追加しています。SAML 75、Runner 431テストが成功しました。
+<!--g1-literal--> The 120 encoder combinations gained checks for identical XML, wrong keys, differing length/content, duplicate parameters, and bad compression. 23 shared SLO rules gained 69 scenarios covering 3 evidence mismatches; basic SLO gained 40 Status/evidence-state scenarios. SAML 75 and Runner 431 tests passed.
 
-<!--g1-literal--> G1生成文書一致と構造46/46が成功しました。G2は20/21で既存の承認対象コードとの差分確認が残ります。今回の変更は開発作業ツリーにあり、稼働v13への反映・実製品のRedirect応答試験は未実施です。未検証573件は変更していません。製品設定変更、人間の手操作はありません。ソースのSHA-256と検証ログはローカル `build/acceptance/reference-20260914/slo-redirect-trust-batch/` に保存します。
+<!--g1-literal--> G1 generation matched and structure passed 46/46. G2 remained 20/21. These changes were in the working tree, not deployed to v13; real product Redirect-response trials were not yet run. Unverified observations remained 573. Product writes and human operations: zero. Source SHA-256 and logs are in local `build/acceptance/reference-20260914/slo-redirect-trust-batch/`.
 
-### SOAP受信の本文範囲と拒否証拠の引き継ぎ
+### SOAP body scope and preserving rejection evidence
 
-SLOのSOAP受信側が、Envelope内の任意の子孫から最初のLogoutRequest／LogoutResponseを拾う実装だったため修正しました。SOAP transportはSOAPバインディングのSOAP 1.1 Envelope、直下の単一Body、その直下の単一LogoutRequest／LogoutResponseを使用します。Header内の同名要素は選択しません。複数Body・複数本文メッセージ・任意のラッパー・別名前空間・単体SAML文書は、この受信経路の本文として処理しません。
+The SLO SOAP receiver previously selected the first LogoutRequest/LogoutResponse anywhere under Envelope. It now requires a SOAP 1.1 Envelope, one direct Body, and one direct LogoutRequest/LogoutResponse inside it. Header lookalikes are not selected. Multiple Bodies, multiple messages, arbitrary wrappers, different namespaces, and standalone SAML are rejected on this transport path.
 
-OpenSAMLへ渡す本文コピーには祖先の名前空間宣言を引き継ぎ、元のSOAP EnvelopeはTranscriptにそのまま保存します。本文範囲が不正でもURLのRunを当該Planに結び付けられる場合は、元入力と固定の拒否理由 `invalid-soap-message-scope` を記録してから拒否します。記録前にAuthorization／Cookieヘッダーを除去し、SAML応答は生成しません。
+The body copy passed to OpenSAML inherits ancestor namespace declarations; the original Envelope is stored unchanged. If invalid scope can still be bound through a URL Run belonging to the Plan, original bytes and fixed rejection `invalid-soap-message-scope` are recorded before rejection. Authorization/Cookie headers are removed before recording, and no SAML response is generated.
 
-受信拒否の記録を後の受動判定が読み直して成功にしないよう、共通SLO判定へ拒否理由を接続しました。SOAP受信側の拒否が記録されている場合は `slo.evidence.incomplete` と `logout_message_scope_unresolved` を返し、製品FAILとはしません。これはSOAPの全規則や追加プロファイルの実装完了を意味しません。
+Shared SLO evaluation preserves receiver rejection so passive replay cannot turn rejected input into success. Recorded SOAP rejection yields `slo.evidence.incomplete` and `logout_message_scope_unresolved`, never product FAIL. This does not complete every SOAP rule or additional profile.
 
-<!--g1-literal--> メッセージ種別・名前空間prefix・不正配置の48シナリオと、正常Body／Headerの同名要素の4シナリオを確認しました。さらに共通判定23規則に対し、受信拒否を保持する46シナリオを確認しています。Runner 432、Peer 13テストが成功しました。
+<!--g1-literal--> Tests covered 48 message-type/namespace-prefix/misplacement scenarios, 4 valid Body/Header-lookalike scenarios, and 46 rejection-preservation scenarios across 23 shared rules. Runner 432 and Peer 13 tests passed.
 
-<!--g1-literal--> G1生成文書一致と構造46/46を確認し、G2は20/21で承認対象コードの差分確認が残っています。今回の変更と前回のRedirect応答署名の対応確認は開発作業ツリーにあり、稼働v13への反映は未実施です。未検証573件は変更していません。製品設定変更や人間の手操作はありません。ソースのSHA-256と検証ログはローカル `build/acceptance/reference-20260914/slo-soap-scope-batch/` に保存します。
+<!--g1-literal--> G1 generation matched and structure passed 46/46; G2 remained 20/21. This and the prior Redirect signature/XML fix stayed in the working tree, not deployed to v13. Unverified observations remained 573; product writes and human operations were zero. Source SHA-256 and logs are in local `build/acceptance/reference-20260914/slo-soap-scope-batch/`.
 
-### SLO受信修正の反映とRedirect応答の実通信確認
+### Deploying reception fixes and verifying real Redirect responses
 
-前回までのRedirect署名・XML同一性確認とSOAP本文範囲の修正を `samlscope:reference-slo-receive-v14` にまとめて反映しました。検証済みソースと現在の作業ツリーのSHA-256を照合し、稼働クラスのハッシュと既存ライブラリーの不変を検証しました。旧コンテナは復元用に保持しています。
+Redirect signature/XML binding and SOAP body-scope fixes were deployed together as `samlscope:reference-slo-receive-v14`. Verified source SHA-256 matched the working tree; runtime class hashes and unchanged libraries were checked. Old containers were retained for recovery.
 
-SimpleSAMLphpの当該試験SPへのSLO応答方式をHTTP-Redirectへ変更し、署名設定を保持したまま新Runを実行しました。ログイン後のLogoutRequestをGETで送り、XML署名を含まないLogoutResponseをGETで受信しています。基本ケースは保存された同じ受信証拠の元クエリーで署名とXML同一性を確認し、PASSになりました。Suiteとは独立にOpenSSLでも元クエリーの署名をRun固定メタデータの公開証明書で検証し、成功しました。元クエリーから復元したXMLと保存XML、要求との相関、静的HTMLとJSONの一致も確認しています。
+SimpleSAMLphp's test-SP response binding was changed to HTTP-Redirect while retaining signatures, then a new Run executed. LogoutRequest was sent by GET after login; an XML-unsigned LogoutResponse arrived by GET. The basic case verified its original query signature and XML identity and passed. Independent OpenSSL verification also succeeded using the Run-fixed metadata public certificate. Reconstructed/stored XML, request correlation, and static HTML/JSON equality were verified.
 
-比較表の採用範囲を再点検し、前回のSimpleSAMLphp実行でもIIP-IDP18-aのRedirect要求受理がPASSになっていたものの、基本ケースだけを採用していたことを確認しました。承認済み定義がSP起点LogoutRequestの受信方向を対象とすることを照合し、今回の新Runの受理証拠を採用しました。同じプロファイルの旧Not verifiedから新PASSへの変化も全件照合し、他の変化は既に採用済みの共通拡張ケースと基本SLOだけでした。
+Review found the preceding SimpleSAMLphp run also passed IIP-IDP18-a Redirect-request acceptance, but only basic SLO had been adopted. The approved definition covers reception of SP-initiated LogoutRequest; the new Run's evidence was adopted. Every old Not verified → new PASS transition in the profile was checked; other changes were already adopted shared-extension and basic-SLO cases.
 
-<!--g1-literal--> 今回はSuiteとforwardの切替各1回、製品設定変更1回・1項目、Run作成・実行1回です。設定ファイルは読戻したハッシュの一致を確認してからPHPの設定値を確認しました。人間の手操作は0回です。作業量台帳へ記録し、未検証総数は573から572へ更新しました。元のPOST応答の証拠は削除していません。
+<!--g1-literal--> Suite/forward switches: 1 each; product setting change: 1 write affecting 1 field; Run creation/execution: 1; human operations: 0. Setting-file read-back hashes matched before PHP value checks. Costs were recorded; unverified observations fell from 573 to 572. Original POST-response evidence was retained.
 
-<!--g1-literal--> 反映対象14クラスとライブラリー不変を確認しています。実装バッチのSAML 75、Runner 432、Peer 13テストの検証記録を引き継ぎ、今回は実製品の通信経路を追加検証しました。G1生成文書一致と構造46/46、G2の20/21を確認しています。G2承認対象の差分と残る未検証は未解消であり、リリース可能とは判断していません。SOAP受信の実製品再試験は今回の範囲に含めていません。
+<!--g1-literal--> 14 deployed classes and unchanged libraries were checked. Prior successful SAML 75, Runner 432, and Peer 13 test records were retained; this batch added real transport validation. G1 generation matched, structure passed 46/46, and G2 remained 20/21. Remaining G2 approval-source differences and unverified cases prevent release-readiness claims. Real product SOAP reception was outside this batch.
 
-ソース・クラスのハッシュ、切替、設定変更、Run結果、OpenSSLによる検証記録はローカル `build/acceptance/reference-20260914/slo-receive-integrated/` に保存しています。
+Hashes, switches, settings, Runs, and OpenSSL verification are in local `build/acceptance/reference-20260914/slo-receive-integrated/`.
 
-### Redirect要求受理ケースの専用実行経路
+### Dedicated execution for Redirect-request acceptance
 
-IIP-IDP18-aはRedirect LogoutRequestの受理を対象としますが、基本SLOがPOSTを選択する製品ではその実行だけでは証拠が集まりませんでした。既存の署名・セッション確認を共用しながら、当該ケースがRedirectを指定して実行する経路をM3登録へ接続しました。承認済みケース定義・判定レベル・variantは変更していません。
+IIP-IDP18-a requires Redirect LogoutRequest reception, which basic SLO cannot demonstrate on products selecting POST. A dedicated Redirect execution path was registered in M3 using existing signature/session verification. Approved cases, levels, and variants were unchanged.
 
-メタデータにPOSTがあってもこの受理ケースはRedirectのSLOエンドポイントを選びます。設定が欠けている場合にPOSTへ代替したり、成功・N/Aにしたりせず、Not verifiedにします。正常ログインの署名、識別子、SessionIndex、復号・構造確認は基本ケースと共用し、送信はoutboxを経由します。
+The acceptance case selects the Redirect SLO endpoint even when POST exists. Missing configuration yields Not verified, never fallback POST, success, or N/A. Normal-login signatures, identifiers, SessionIndex, decryption, and structure checks are shared with basic SLO. Sending stays outbox-only.
 
-ケースIDを状態へ保存し、要求IDもケースごとに導出します。別ケースの状態や旧状態での再開はNot verifiedとし、証拠を混同しません。基本SLOは相関した応答の存在、Redirect受理ケースはその受理を判定するため、署名・Issuer・宛先・相関・構造を検証できるエラー応答の扱いを分けています。無応答、配送不明、不正署名、正常系不成立は製品FAILにはしません。
+Case IDs are stored in state and request IDs derive per case. Another case's or old state cannot resume and mix evidence. Basic SLO observes a correlated response; Redirect acceptance evaluates reception, so verified error responses are handled according to that distinction. Signatures, Issuer, destination, correlation, and structure remain checked. Silence, unknown delivery, bad signatures, and failed normal controls are not product FAIL.
 
-<!--g1-literal--> Redirect専用の正常セッション48条件と、Status・宛先・相関・署名の28条件をまとめて検証しました。さらに要求IDの分離、別ケース状態の拒否、POST代替の禁止を確認し、Runner 435、API 85テストが成功しました。
+<!--g1-literal--> Tests covered 48 Redirect-only normal-session conditions, 28 Status/destination/correlation/signature conditions, request-ID separation, other-case-state rejection, and prohibition of POST fallback. Runner 435 and API 85 tests passed.
 
-テスト追加・実行は一度自動承認レビューで拒否されました。現行の作業指示にG2独立承認済み・実装済みと明記されていること、承認済み試験定義・承認記録が無変更であることを現物で確認して再審査へ提示し、同じローカル検証操作が許可されました。G2の既存ソース差分を解消扱いにしたり、承認記録を書き換えたりしていません。
+Automatic approval review initially rejected test addition/execution. Current instructions explicitly stated independent G2 approval and implementation completion; unchanged approved definitions/records were inspected and supplied for review. The same local validation was then allowed. Existing G2 source differences were neither cleared nor concealed, and approval records were unchanged.
 
-<!--g1-literal--> G1生成文書一致と構造46/46、G2は20/21です。新経路は開発作業ツリーにあり、稼働v14への反映・実製品再試験は未実施です。未検証572件は変更していません。製品設定変更・人間の手操作はありません。全件台帳の実装確認情報と、ローカル `build/acceptance/reference-20260914/slo-redirect-receiver-batch/` のソースSHA-256・検証ログを更新しています。
+<!--g1-literal--> G1 generation matched, structure passed 46/46, and G2 remained 20/21. The new path was in the working tree, not deployed to v14 or tested against products. Unverified observations remained 572; product writes and human operations were zero. Implementation details in the inventory and source SHA-256 hashes/logs in local `build/acceptance/reference-20260914/slo-redirect-receiver-batch/` were updated.
 
-### 専用Redirect受理ケースの実製品確認
+### Runtime confirmation of dedicated Redirect acceptance
 
-検証済みのRedirect受理シナリオを `samlscope:reference-slo-receiver-v15` に反映しました。現在のソースが実装バッチの検証対象と一致することをSHA-256で確認し、M1Runtimeの差分が今回のケース登録・エンドポイント選択だけであることも確認しました。稼働クラスと既存ライブラリーの不変を検証し、旧コンテナは保持しています。
+The verified scenario was deployed as `samlscope:reference-slo-receiver-v15`. Source SHA-256 matched tested inputs; M1Runtime differences were limited to registration and endpoint selection. Runtime classes and unchanged libraries were verified; old containers were retained.
 
-Keycloak・Shibboleth・SimpleSAMLphpの既存Planで新Runを作成し、基本SLOの後に専用のRedirect要求受理ケースを実行しました。各ケースが別の新鮮なログインから進み、別の要求ID・受信証拠を使用しています。各製品とも署名と相関を検証できるLogoutResponseを受信し、基本SLOとRedirect受理がPASSになりました。Shibbolethの自動iframe遷移は前回追加したクライアント処理で追従しています。
+New Runs on existing Keycloak, Shibboleth, and SimpleSAMLphp Plans executed basic SLO then dedicated Redirect acceptance. Each case used a separate fresh login, request ID, and receipt. Every product returned a signature/correlation-verifiable LogoutResponse; both cases passed. Shibboleth iframe transitions used the previously added client processing.
 
-<!--g1-literal--> 3製品の計6ケースについて、正常ログインとLogoutResponseの証拠、ケースごとの相関と証拠の分離、Redirectクエリーから復元したXMLとTranscriptの一致、静的HTMLとJSONの一致を確認しました。比較表はこの2ケースだけ新Runへ更新しています。未検証は572件から570件、未検証の異なるケースIDは180となりました。単一Runの全試験完走や他のSLO条件の成功を意味しません。
+<!--g1-literal--> Across 6 cases on 3 products, normal-login/LogoutResponse evidence, per-case correlation/separation, reconstructed Redirect XML versus Transcript, and static HTML/JSON equality were checked. Only these 2 comparison cases moved to the new Runs. Unverified observations fell from 572 to 570 with 180 distinct case IDs. This is not completion of a single Run or other SLO requirements.
 
-<!--g1-literal--> 今回の製品設定変更と人間の手操作は0回です。Run作成・実行3回、Suite／forwardの切替各1回、Shibbolethのiframe自動遷移2回を作業量へ記録しました。ケースごとのログインと送受信数も台帳へ計上しています。
+<!--g1-literal--> Product writes and human operations: 0. Run creation/execution: 3; Suite/forward switches: 1 each; Shibboleth iframe transitions: 2. Per-case logins and protocol messages were counted.
 
-<!--g1-literal--> 反映した6クラスのハッシュと既存ライブラリーの不変を確認しました。前回のRunner 435、API 85の一括検証記録を引き継ぎ、今回は実製品経路を検証しました。G1生成文書一致と構造46/46、G2は20/21です。承認対象のソース差分と残る未検証は継続対応であり、リリース可能とは判断していません。
+<!--g1-literal--> 6 deployed classes and unchanged libraries were checked. Successful Runner 435/API 85 records were retained; this batch verified real product paths. G1 generation matched, structure passed 46/46, and G2 remained 20/21. Approved-source differences and unverified cases remained; release readiness was not claimed.
 
-ローカルの `build/acceptance/reference-20260914/slo-redirect-receiver-integrated/` に、反映元ソース・クラスのハッシュ、切替記録、各Runと証拠照合結果を保存しています。
+Source/class hashes, switches, Runs, and evidence comparisons are in local `build/acceptance/reference-20260914/slo-redirect-receiver-integrated/`.
 
-### LogoutRequestのEncryptedID復号確認経路
+### LogoutRequest EncryptedID decryption path
 
-IIP-IDP19-aの承認済み条件に合わせ、発行されたNameIDをEncryptedIDにしてLogoutRequestを送る経路をM3登録へ追加しました。Run固定メタデータから対象IdPの暗号化用途のRSA公開鍵を選びます。適切な鍵がない、またはSuiteの公開鍵が対象の暗号化鍵として登録されている場合は、対照を構成できないためNot verifiedです。
+M3 gained an IIP-IDP19-a path encrypting the issued NameID in LogoutRequest under approved conditions. It selects an encryption-use RSA public key from Run-fixed target IdP metadata. Missing eligible keys or registration of Suite's control key prevent the control and yield Not verified.
 
-最初の新鮮なログイン後、対象メタデータにないSuite側の鍵で識別子を暗号化して、署名付きLogoutRequestを送ります。署名・Issuer・宛先・相関・構造を確認できる拒否応答が得られた場合だけ、別の新鮮なログインへ進みます。次は対象の登録済み鍵で暗号化し、相関したSuccess応答で復号の観測を成立させます。対照へのSuccess、無応答、署名不正、相関不一致はNot verifiedです。対照を通過しても登録鍵の正常入力を拒否する場合は違反とします。
+After fresh login, a signed LogoutRequest encrypts the identifier under Suite's unregistered key. Only a rejection response with valid signature, Issuer, destination, correlation, and structure permits another fresh login. The registered-key trial then requires correlated Success to demonstrate decryption. Control Success, silence, bad signature, or bad correlation remains Not verified. After a valid negative control, rejection of correct registered-key input is a violation.
 
-暗号入力はAES128-GCMとrsa-oaep-mgf1pの組合せで生成し、暗号化後のLogoutRequestへSuite署名を付けてoutboxへ保存します。復号した識別子や秘密鍵をCaseStateへ保存しません。未登録鍵を拒否したセッションをそのまま正常系に使わず、別のログインと要求IDを使います。複数の対象鍵を順番に試すIIP-IDP19-cや、他の暗号アルゴリズムケースを完了したことにはしません。
+Inputs use AES128-GCM and rsa-oaep-mgf1p. Suite signs the encrypted request before outbox storage. Decrypted identifiers/private keys never enter CaseState. The rejected control session is not reused; normal trials use another login and request ID. This does not complete IIP-IDP19-c multiple-key traversal or other algorithms.
 
-<!--g1-literal--> 識別子形式、Assertion／NameIDの暗号化、署名位置、SessionIndex数の48組合せで、対照鍵と登録鍵の復号結果、XML構造、署名、証拠の引き継ぎを確認しました。各組合せで正常入力へのSuccessと3種のエラー応答を判定し、対照の署名・相関など7条件と無応答等3条件も検証しています。最終的にRunner 437、API 85テストが成功しました。
+<!--g1-literal--> 48 combinations of identifier format, Assertion/NameID encryption, signature position, and SessionIndex count checked correct/control-key decryption, XML structure, signatures, and evidence propagation. Each normal input checked Success and 3 errors, plus 7 control signature/correlation conditions and 3 silence/interruption conditions. Runner 437/API 85 tests ultimately passed.
 
-初回API検証では `OidcLoginIntegrationTest.checksResponseIssuerBeforeExchangingCode` に接続エラーが発生しました。失敗ログを保存し、OIDCのコードは変更せず再実行したところ成功しました。この再実行でEncryptedIDの正常入力を拒否する実装の対照も追加確認しています。
+Initial API validation had a connection error in `OidcLoginIntegrationTest.checksResponseIssuerBeforeExchangingCode`. The log was retained; unchanged OIDC code passed on rerun. The rerun additionally verified controls against rejecting valid EncryptedID input.
 
-<!--g1-literal--> G1生成文書一致と構造46/46、G2は20/21です。新経路は開発作業ツリーにあり、稼働v15への反映と実製品試験は未実施です。未検証570件は変更せず、全件台帳では3製品の当該ケースを実装済み・追加観測待ちへ分類し直しました。製品設定変更・人間の手操作はありません。ソースSHA-256と検証ログはローカル `build/acceptance/reference-20260914/slo-encrypted-id-batch/` に保存します。
+<!--g1-literal--> G1 generation matched, structure passed 46/46, and G2 remained 20/21. The path was in the working tree, not deployed to v15 or tested with real products. Unverified observations remained 570; all 3 product entries were reclassified as implemented, awaiting additional evidence. Product writes/human operations were zero. SHA-256 hashes and logs are in local `build/acceptance/reference-20260914/slo-encrypted-id-batch/`.
 
+### Runtime EncryptedID confirmation
 
-### EncryptedID復号ケースの実製品確認
+The verified scenario was deployed as `samlscope:reference-slo-encrypted-v16`; SLO reran from existing product Plans. Runtime/source hashes and unchanged libraries matched.
 
-検証済みシナリオを `samlscope:reference-slo-encrypted-v16` に反映し、既存Planから各製品のSLOを再実行しました。稼働クラスと検証元ソースのハッシュを照合し、既存ライブラリーが変更されていないことを確認しました。
-
-| 項目 | Keycloak | Shibboleth | SimpleSAMLphp |
+| Item | Keycloak | Shibboleth | SimpleSAMLphp |
 |---|---|---|---|
-| 基本SLO | Success | Success | Success |
-| Redirect要求受理 | Success | Success | Success |
-| EncryptedID復号 | Not verified：暗号化鍵不足 | Success | Not verified：負の対照不成立 |
+| Basic SLO | Success | Success | Success |
+| Redirect acceptance | Success | Success | Success |
+| EncryptedID decryption | Not verified: missing encryption key | Success | Not verified: negative control failed |
 
-Shibbolethは未登録鍵への署名付きResponderと、新鮮な別セッションでの登録鍵への署名付きSuccessを返しました。送信したLogoutRequestに平文NameIDがなく、EncryptedIDがあること、各応答と要求の相関、証拠のケース帰属を確認しています。
+Shibboleth returned signed Responder for the unregistered-key control and signed Success under the registered key in a separate fresh session. Outbound LogoutRequests contained EncryptedID without plaintext NameID; request correlation and case ownership were checked.
 
-KeycloakのRun固定メタデータにはsigning用途の鍵だけがあり、試験に必要な暗号化用途の鍵を選択できませんでした。これは設定・試験準備の不足であり、製品の暗号化非対応やFAILとは判定しません。
+Keycloak's Run metadata contained only signing keys, preventing encryption-key selection. This is a configuration/test-preparation limitation, not proof of unsupported encryption or product FAIL.
 
-SimpleSAMLphpは未登録鍵で暗号化した識別子にも署名付きSuccessを返したため、正常復号を判別する対照が成立していません。インストール済みソースの `IdP/SAML2.php::receiveLogoutMessage` は、メッセージ署名検証後にSPのassociationを使ってlogout処理へ渡しています。この入口の分岐にはNameID復号が見当たらず、今回のSuccessだけでは復号を証明できないという診断を補強します。製品全体の復号能力についての断定や、製品FAILへの変更はしていません。調査対象ソースもローカル証拠へ保存しました。
+SimpleSAMLphp returned signed Success for an identifier encrypted under an unregistered key, so the control could not distinguish decryption. Installed `IdP/SAML2.php::receiveLogoutMessage` verifies signatures and delegates logout through the SP association; no NameID decryption was found in that entry branch. Source inspection corroborates that Success alone cannot prove decryption. No product-wide capability claim or product FAIL was added; investigated source was saved locally.
 
-<!--g1-literal--> 比較表ではEncryptedIDの3製品分だけ新しい証拠と理由を採用し、未検証は570件から569件になりました。再試験前594件に対する確定は25件で、単一Runの全件完走を意味しません。基本SLOとRedirect受理も今回の再試験で計6ケースのPASSを維持しています。
+<!--g1-literal--> Only the 3 EncryptedID product entries adopted new evidence/reasons. Unverified observations fell from 570 to 569; 25 of the original 594 were concluded. This does not complete a single Run. Basic SLO and Redirect acceptance retained PASS across 6 retested cases.
 
-<!--g1-literal--> 製品設定変更0回、人間の手操作0回、Run作成・実行3回、Suiteとforwardの切替各1回を作業量台帳へ記録しました。Shibbolethの自動iframe遷移3回、セッション分離と送受信数も記録しています。ユーザーのChrome操作ではなく、ローカルのプロトコルクライアントで実行しました。
+<!--g1-literal--> Product writes: 0; human operations: 0; Run creation/execution: 3; Suite/forward switches: 1 each; Shibboleth automatic iframe transitions: 3. Session separation and message counts were recorded. Trials used the local protocol client, not the user's Chrome.
 
-<!--g1-literal--> 実装バッチのRunner 437、API 85の成功記録を引き継ぎ、今回は実通信と静的HTML・JSONの一致を検証しています。残る未検証とG2承認対象のソース差分があり、リリース可能とは判断していません。
+<!--g1-literal--> Successful Runner 437/API 85 records were retained; this batch checked real exchanges and static HTML/JSON equality. Remaining unverified cases and G2 approved-source differences prevented release readiness.
 
-証拠、Run結果、ソース・稼働クラスの照合、切替記録はローカル `build/acceptance/reference-20260914/slo-encrypted-id-integrated/` に保存しています。
+Evidence, Runs, source/runtime comparisons, and switches are in local `build/acceptance/reference-20260914/slo-encrypted-id-integrated/`.
 
+### Multiple decryption-key EncryptedID path
 
-### 複数復号鍵のEncryptedID試験経路
+IIP-IDP19-c gained an unregistered-key rejection control followed by decryption under the next distinct registered key in metadata order. Encryption/unspecified-use RSA keys are restricted to the target entity, IdP Role, and SAML protocol. Duplicate public keys are removed at retrieval, so repeating certificates cannot satisfy multiple-key prerequisites.
 
-IIP-IDP19-cの承認済みvariantに合わせ、未登録鍵の拒否対照と、異なる登録鍵のうちメタデータ順で次の鍵による復号を確認する経路を追加しました。暗号化用途または用途未指定のRSA公開鍵を、対象entity・IdPロール・SAMLプロトコルへ限定して取得します。同じ公開鍵はメタデータ取得時に重複除去されるため、証明書を重ねて掲載しても複数鍵の前提を満たしません。
+After a valid signed/correlated negative control, a separate fresh login supplies the next registered-key LogoutRequest. Control Success or silence yields Not verified; valid-input rejection after a proven control is a violation; signature/correlation/structure-verified Success satisfies the observation. No KeyName or other selection hints are added. This executes the approved external observation and does not claim to observe internal key-search order.
 
-正常ログイン後に未登録鍵の対照を送り、署名・相関を確認できる拒否が得られた場合だけ新鮮な別ログインへ進みます。次のLogoutRequestは別の登録鍵でEncryptedIDを生成します。対照へのSuccessや無応答はNot verified、対照成立後の正常入力への拒否は違反、相関・署名・構造を確認できるSuccessは満足となります。鍵選択を補助するKeyName等は暗号入力へ追加していません。内部の鍵探索順自体を観測したという主張ではなく、承認済みの外部観測条件を実行します。
+Missing distinct keys, a registered Suite control key, or unavailable corresponding keys stop sending with Not verified. Publishing keys alone does not satisfy IIP-IDP19-b configuration capability. Case IDs/state versions prevent reuse of another case or old execution evidence.
 
-複数の異なる鍵がない、Suiteの対照鍵が登録されている、対応する鍵を取得できない場合は送信前にNot verifiedで止めます。設定能力を扱うIIP-IDP19-bをメタデータ掲載だけで成功に変更しません。ケースIDと状態バージョンを区別して、別ケースや旧実行状態の証拠を再利用しない構成です。
+<!--g1-literal--> Single-key and multiple-key paths each covered 48 session combinations, 96 total. Every valid input checked Success/3 errors, each case checked 7 signature/correlation conditions and 3 interruption conditions, and 5 key absence/duplication/control-contamination conditions were checked. Inputs decrypt only under the selected key, not another registered or control key.
 
-<!--g1-literal--> 単一鍵・複数鍵それぞれで48通り、合わせて96通りのセッション条件を検証対象にしました。各正常入力でSuccessと3種の拒否応答、各ケースで署名・相関等7条件と中断等3条件、さらに鍵不足・重複・対照鍵混在の5条件を確認します。暗号入力は対象の選択鍵だけで復号でき、別の登録鍵と対照鍵では復号できないことをテストしています。
+<!--g1-literal--> This was working-tree implementation, not deployed to v16; multiple-key product configuration/retests were unperformed. Product writes and human operations: 0. Unverified observations remained 569; inventory entries were updated to await additional evidence.
 
-<!--g1-literal--> 現在は開発作業ツリーの追加実装です。稼働v16への反映・製品の複数鍵設定・再試験は未実施で、製品設定変更と人間の手操作は0回です。実製品の未検証569件は維持し、全件台帳では当該ケースを追加観測待ちへ更新しました。
+<!--g1-literal--> Runner 438/API 85 tests passed. G1 generation matched, structure passed 46/46, and G2 remained 20/21 with existing protected-source differences. SHA-256 hashes/logs are in local `build/acceptance/reference-20260914/slo-multiple-keys-batch/`.
 
-<!--g1-literal--> 一括検証はRunner 438、API 85テストが成功しました。G1生成文書一致と構造46/46、G2は20/21で、承認対象ソースとの差分が引き続き残っています。ソースSHA-256と検証ログはローカル `build/acceptance/reference-20260914/slo-multiple-keys-batch/` に保存しました。
+### Runtime multiple-key verification and configuration rework
 
+Verified classes were deployed as `samlscope:reference-slo-multiple-v17`; runtime SHA-256 and unchanged libraries were checked. An extra RSA key was added to Shibboleth's existing rollover configuration and published for encryption before a fresh Run. Private keys stayed inside the test container.
 
-### 複数復号鍵の実製品確認と設定作業の手戻り
-
-検証済みクラスを `samlscope:reference-slo-multiple-v17` へ反映し、稼働クラスのSHA-256と既存ライブラリーの不変を確認しました。Shibbolethの既存ロールオーバー設定に追加のRSA鍵を登録し、公開メタデータへ暗号化用途で掲載して、新Runで試験しました。秘密鍵は試験用コンテナ内に保持しています。
-
-| ケース | Keycloak | Shibboleth | SimpleSAMLphp |
+| Case | Keycloak | Shibboleth | SimpleSAMLphp |
 |---|---|---|---|
-| 基本SLO | Success | Success | Success |
-| Redirect要求受理 | Success | Success | Success |
-| EncryptedID復号 | Not verified：暗号化鍵不足 | Success | Not verified：負の対照不成立 |
-| 複数復号鍵 | Not verified：暗号化鍵不足 | Success | Not verified：複数鍵の設定不足 |
+| Basic SLO | Success | Success | Success |
+| Redirect acceptance | Success | Success | Success |
+| EncryptedID decryption | Not verified: missing encryption key | Success | Not verified: negative control failed |
+| Multiple decryption keys | Not verified: missing encryption key | Success | Not verified: multiple-key configuration missing |
 
-Shibbolethの複数鍵ケースで、未登録鍵の入力への拒否と、追加鍵の入力へのSuccessを別セッションで確認しました。保存した実送信XMLについて、未登録鍵の対照は対象のどちらの秘密鍵でも復号できず、正常入力は追加した鍵だけでNameIDへ復号できることも独立に確認しています。鍵や復号平文は検証成果物へ保存せず、送信XMLのハッシュと復号できた鍵の位置のみ記録しました。
+Shibboleth rejected the unregistered-key input and accepted extra-key input in separate sessions. Independent decryption of actual transmitted XML confirmed neither target key decrypts the control, while only the extra key decrypts valid input to NameID. Keys/plaintext were not saved; records retain XML hashes and successful key position only.
 
-<!--g1-literal--> 比較表と全件台帳には複数鍵ケースの3製品分の新しい証拠を採用しました。未検証は569件から568件、再試験前594件に対する確定は26件です。単一Runの全件完走やリリース完了ではありません。
+<!--g1-literal--> The 3 multiple-key product entries adopted new evidence. Unverified observations fell from 569 to 568; 26 of the baseline 594 were concluded. This was not single-Run completion or release readiness.
 
-今回、コンテナ内の `/opt/shibboleth-idp` と実際の `/opt/reference-idp` を取り違え、非稼働側へ最初の設定変更を行いました。その変更はバックアップから復元し、稼働側へ適用し直しています。また、コンテナ再起動では手動起動していたTomcatが復帰せず、起動設定に試験用idp.homeが保存されていなかったこと、停止ポート無効により旧プロセスが残ることを確認しました。試験用ホームを起動設定へ保存し、確認した旧プロセスを終了して復旧しました。メタデータの実取得で稼働側の追加鍵を確認してから試験しています。
+Initial writes targeted inactive `/opt/shibboleth-idp` instead of active `/opt/reference-idp`. They were restored from backup, then applied to the active home. Container restart did not restore manually started Tomcat: startup lacked test idp.home, and disabled shutdown ports left old processes alive. Startup was corrected to retain the test home; identified old processes were terminated. Published metadata confirmed the active extra key before testing.
 
-<!--g1-literal--> 作業量は設定ファイルへの書込み10回、人間の手操作0回です。内訳は誤った設定先への3回、復元3回、稼働側への3回、起動設定の修正1回です。鍵生成2回のうち最初の1回は非稼働側での手戻りです。Suite／forward切替、Run作成・実行3回、製品の起動・復旧、確認した旧プロセス2件の終了、プロトコル送受信数も台帳へ記録しました。この手戻りを設定自動化の成功や無操作として隠していません。
+<!--g1-literal--> Configuration-file writes: 10; human operations: 0. Breakdown: 3 wrong-home writes, 3 restorations, 3 active-home writes, 1 startup correction. Key generations: 2, including 1 wrong-home attempt. Suite/forward switches, 3 Run creation/execution attempts, product startup/recovery, termination of 2 identified old processes, and protocol counts were recorded. Rework was not disguised as successful automation or zero operations.
 
-今後の再実行では、稼働ホーム・起動コマンド・公開メタデータを先に照合し、既存の追加鍵と設定を再利用します。複数鍵設定能力を扱うIIP-IDP19-bは、設定能力の対照と所定の証拠経路を完了していないため、自動的に成功へ変更していません。
+Future reruns must first match active home, startup command, and published metadata, then reuse existing extra-key configuration. IIP-IDP19-b configuration capability still lacked its required controls/evidence and was not automatically concluded.
 
-<!--g1-literal--> 実装バッチのRunner 438、API 85の成功記録を引き継ぎ、今回は実製品の通信・鍵選択・静的HTMLとJSONの一致を検証しました。証拠・設定バックアップ・切替・検証スクリプトはローカル `build/acceptance/reference-20260914/slo-multiple-keys-integrated/` に保存しています。
+<!--g1-literal--> Successful Runner 438/API 85 records were retained; this batch verified real exchanges, key selection, and static HTML/JSON equality. Evidence, configuration backups, switches, and verification scripts are in local `build/acceptance/reference-20260914/slo-multiple-keys-integrated/`.
 
+### Auditing every unresolved contract during inventory generation
 
-### 未解決条件の全件照合を台帳生成へ接続
+`audit_unresolved_contracts.py` checks unique product/profile/case observations, approved variant references/instructions, positive/negative controls, original result.json SHA-256, Run ID, case uniqueness, NOT_VERIFIED, and reason codes. Missing files, mixed Runs, or concluded results still present as unresolved fail the audit.
 
-`audit_unresolved_contracts.py` を追加し、台帳の各観測について、製品・プロファイル・ケースの重複、承認済みvariantの参照と指示、正負対照、元result.jsonのSHA-256・Run ID・ケースの一意性・NOT_VERIFIED・理由コードを照合するようにしました。結果ファイルが欠けている、別Runの結果が混ざる、既に確定した結果が未検証台帳に残る場合も監査が失敗します。
+Per-case artifacts retain all variants, all_of/one_of groups, control details, prerequisites, interpretation limits, false-positive counterexamples, and product/profile observations. Completion remains `not_proven`. Class registration or some valid inputs do not prove implementation of every condition.
 
-ケース単位の監査成果物には、全variant、all_of／one_ofグループ、対照の詳細、前提条件、解釈制約、誤判定を防ぐ反例、各製品・プロファイルの観測を保存します。全ケースの完了状態は `not_proven` のままです。登録クラスの存在や一部の正常入力を、全条件の実装完了とみなしません。
+<!--g1-literal--> The audit matched 568 unresolved observations, 180 cases, 455 conditions, and 356 controls with no discrepancies. Conditions/controls are counted per case without duplication across products. Runtime unresolved counts were unchanged.
 
-<!--g1-literal--> 現在の未検証568観測、180ケース、455条件、356対照を照合し、不一致はありませんでした。条件と対照の数はケース単位であり、製品別に重複して数えていません。実製品の未検証数は変更していません。
+The inventory generator runs the audit before updating Markdown and stops on mismatch. Details are in local `build/acceptance/reference-20260914/remaining-audit/unresolved-contract-audit.json`. This proves inventory/evidence consistency, not completion of missing oracles.
 
-台帳ジェネレーターにも監査を接続し、不一致がある場合はMarkdownの更新前にエラーで止めます。詳細はローカル `build/acceptance/reference-20260914/remaining-audit/unresolved-contract-audit.json` に保存します。この検査は台帳と証拠の整合性を確認するものであり、未実装の判定処理を完了した証拠にはなりません。
+<!--g1-literal--> Product writes and human operations: 0. Only ledger/audit processing changed; Java evaluators and product retests were unchanged.
 
-<!--g1-literal--> 今回は台帳と監査処理の変更で、製品設定変更・人間の手操作ともに0回です。Java判定処理の変更や実製品の再試験は行っていません。
+### Shared validation of configuration protocol evidence
 
+`AutoConfigurationTranscriptEvidenceTestCase` now validates complete Run history, Run ID, unique evidence IDs, content existence/byte count/XML structure, and Response namespace. Unreadable storage or failed history/decryption-key retrieval becomes Suite evidence insufficiency and Not verified rather than an uncaught exception.
 
-### 設定確認の通信証拠を検証する共通処理
+Previously content-read exceptions escaped, and other Runs/duplicate IDs were not explicitly checked. Known evidence faults now return reasons rather than asking for reconfiguration. Losing history after confirmation or response arrival returns the same diagnostic Not verified. Valid-record automatic evaluation and guidance when evidence is not yet available remain supported.
 
-`AutoConfigurationTranscriptEvidenceTestCase` の証拠読出しを見直しました。設定確認に使う受信Responseについて、完全なRun履歴、Run ID、証拠IDの一意性、保存コンテンツの存在・バイト数・XML構造・Responseの名前空間を確認します。保存先が読めない、履歴や復号鍵の取得が失敗する場合も例外で処理を中断せず、Suite側の証拠不足としてNot verifiedにします。
+Public diagnostics are limited to Suite-defined tokens `history_incomplete`, `history_unavailable`, `run_mismatch`, `ambiguous_entry_id`, `decoded_content_missing`, `decoded_content_size_mismatch`, `decoded_content_unreadable`, `decoded_content_invalid_xml`, `response_type_mismatch`, and `target-encryption-key`. Paths, exception messages, private keys, and plaintext are excluded. New XML/Response diagnostics were added to the report allowlist.
 
-これまでは保存コンテンツの読出し例外が外へ伝わり、別Runや重複IDも明示的に検査していませんでした。証拠の不備が判明している場合は再設定を促す質問へ進めず、理由を返します。設定完了後・通信到着後に履歴が利用できなくなった場合も、同じ診断付きNot verifiedへ戻します。正常な記録から自動判定する既存経路と、証拠がまだない場合の設定案内は維持します。
+<!--g1-literal--> 4 Assertion-encryption capability/placement cases covered 14 history/evidence/key-retrieval faults, 56 conditions total. Initial validation found a missing CaseOutcome notVerifiedReason initialization; it was corrected and tests rerun. Failed logs were retained.
 
-診断は `history_incomplete`、`history_unavailable`、`run_mismatch`、`ambiguous_entry_id`、`decoded_content_missing`、`decoded_content_size_mismatch`、`decoded_content_unreadable`、`decoded_content_invalid_xml`、`response_type_mismatch`、`target-encryption-key` のSuite定義トークンに限定しています。保存先のパス、例外メッセージ、秘密鍵や復号平文は結果へ出しません。新しいXML・Response種別の診断も公開レポートの許可リストへ追加しました。
+<!--g1-literal--> This shared checker was in the working tree, not deployed or retested against products. Unverified observations remained 568; product writes and human operations were 0. Validation records are in local `build/acceptance/reference-20260914/configuration-evidence-integrity-batch/`.
 
-<!--g1-literal--> Assertion暗号化能力と暗号化要素の配置を扱う4ケースで、履歴・証拠・鍵取得の14種の不備、計56条件をまとめて検証対象としました。初回検証では追加したCaseOutcomeのnotVerifiedReason初期化不備を検出し、修正して再実行しています。初回の失敗ログも保持しています。
+<!--g1-literal--> Runner 439 tests passed after correction. G1 generation matched and structure passed 46/46. Existing protected G2 source differences remained unresolved.
 
-<!--g1-literal--> この修正は開発作業ツリーの共通確認処理です。実製品への反映・再試験は未実施で、未検証568件は変更していません。製品設定変更・人間の手操作は0回です。検証記録はローカル `build/acceptance/reference-20260914/configuration-evidence-integrity-batch/` に保存します。
+### Observing multiple-key configuration capability through exchanges
 
-<!--g1-literal--> 修正後のRunner 439テストはすべて成功しました。G1生成文書一致と構造46/46を確認しています。既存のG2承認対象ソース差分は未解消です。
+`MultipleDecryptionKeysConfigurationTestCase` was connected to IIP-IDP19-b. It uses same-Run IIP-IDP19-a and IIP-IDP19-c results, each passing an unregistered-key control followed by registered-key decryption. Automatic satisfaction requires evidence that distinct keys are actually configured and used.
 
+Run-fixed target metadata must expose distinct encryption keys. Dependencies must be FINISHED/SATISFIED with dedicated reasons; all control-to-normal references must resolve to unique same-Run inbound records. Published keys, one success, self-attestation, other Runs, duplicate evidence, or failed controls do not prove capability. No automatic FAIL inferring capability absence was added.
 
-### 実通信から複数復号鍵の設定能力を確認する経路
+Insufficient evidence retains the approved configuration/evidence-confirmation path. Later same-Run evidence can update Not verified through explicit recorded-evidence reevaluation without another configuration-complete response. Provenance separates self-attestation from protocol observation.
 
-IIP-IDP19-bへ `MultipleDecryptionKeysConfigurationTestCase` を接続しました。承認済みの設定能力の確認に対し、同じRun内のIIP-IDP19-aとIIP-IDP19-cが、それぞれ未登録鍵の拒否対照を経て登録鍵での復号に成功した結果を利用します。異なる鍵が実際に設定・利用されている証拠がそろった場合に限り、自動で満足とします。
+<!--g1-literal--> 6 faults across 4 references for each dependency gave 48 conditions, alongside missing/duplicate keys, absent/wrong-Run/wrong-case/wrong-reason/incomplete/self-attested/unsatisfied results. The first compile failed because a test helper's byte-count type differed from TranscriptEntry; it was corrected, the failed log retained, and tests rerun.
 
-Run固定メタデータから対象IdPの異なる暗号化鍵を取得でき、依存するケースがFINISHED・SATISFIEDで専用の理由コードを持ち、対照から正常系までの証拠が同じRunの一意な受信記録へ解決できることを確認します。メタデータへの鍵掲載だけ、片方の成功だけ、自己申告の成功、他Runの成功、重複した証拠、対照不成立は設定能力の自動証明になりません。能力がないと断定する自動FAILは追加していません。
+<!--g1-literal--> This path was added to the working tree, not deployed or verified in new product Runs. Unverified observations remained 568; product writes and human operations were 0. Inventory entries record implementation and needed observations.
 
-証拠不足の場合は承認済みの設定・証拠確認経路を残します。後から同じRunに実通信の証拠がそろえば、明示的な記録再評価の仕組みを通じてNot verifiedから更新できます。追加の設定完了回答を要求せず、出所も自己申告とプロトコル観測で区別します。
+<!--g1-literal--> Runner 442/API 85 tests passed. G1 generation matched, structure passed 46/46, and G2 remained 20/21. Source SHA-256/logs are in local `build/acceptance/reference-20260914/multiple-key-capability-batch/`.
 
-<!--g1-literal--> 依存する各ケースの4証拠に対する6種の不備、計48条件に加え、鍵不足・重複、結果欠落・Run／ケース相違・理由相違・未完了・自己申告・判定不成立などをまとめて検証対象にしました。初回はテスト補助メソッドのバイト数型がTranscriptEntryの型と異なりコンパイルが失敗したため修正し、初回ログを保存して再実行しています。
+### Deploying automatic multiple-key capability observation
 
-<!--g1-literal--> この経路は開発作業ツリーへ追加した段階です。実製品への反映と新Runでの再評価確認は未実施で、未検証568件は維持しています。製品設定変更・人間の手操作は0回です。全件台帳に実装先と必要な追加観測を反映しました。
+Automatic capability observation and configuration-evidence integrity were deployed as `samlscope:reference-key-capability-v18`. Verified source/class SHA-256 hashes and unchanged libraries matched. Shibboleth reused the previously configured extra key and published metadata.
 
-<!--g1-literal--> 修正後の一括検証はRunner 442、API 85テストが成功しました。G1生成文書一致と構造46/46、G2は20/21で、既存の承認対象ソース差分が残っています。ソースSHA-256と検証ログはローカル `build/acceptance/reference-20260914/multiple-key-capability-batch/` に保存しました。
+After single/multiple-key decryption cases, Shibboleth IIP-IDP19-b automatically became Success with `attested: false` and `evidence_class: PROTOCOL_OBSERVED`. Every capability reference matched dependent decryption evidence. Independent checks again confirmed neither target key decrypts the control and only the extra key decrypts normal input.
 
+Keycloak lacked observable encryption keys; SimpleSAMLphp lacked a valid single-key control and multiple-key configuration. Their capability cases remained unverified. Basic SLO and Redirect acceptance retained Success for all products.
 
-### 複数鍵設定能力の自動確認を実製品へ反映
+<!--g1-literal--> Only Shibboleth's capability comparison entry moved to the new Run. Unverified observations fell from 568 to 567; 27 of the baseline 594 were concluded. Capability reused 8 existing evidence entries with 0 extra protocol operations or configuration answers.
 
-設定能力の自動確認と設定証拠の整合性検査を `samlscope:reference-key-capability-v18` に反映しました。検証済みソース・クラスのSHA-256を確認し、既存ライブラリーが変わっていないことを照合しています。Shibbolethの追加鍵と公開メタデータは前回の設定を再利用しました。
+<!--g1-literal--> Product writes and human operations: 0; new Run creation/execution: 3; Suite/forward switches: 1 each. Case logins, messages, and browser transitions were counted. Trials used the local protocol client, not the user's Chrome.
 
-Shibbolethでは単一鍵・複数鍵の復号試験に続いて、設定能力IIP-IDP19-bも自動的にSuccessになりました。結果は `attested: false`、`evidence_class: PROTOCOL_OBSERVED` で、設定能力の全証拠が依存する復号試験の証拠と一致することを確認しています。実送信XMLの対照が対象のどちらの鍵でも復号できず、正常入力が追加した鍵だけで復号できることも再確認しました。
+<!--g1-literal--> 8 runtime classes were checked. Successful Runner 442/API 85 records were retained; this batch checked real SLO, capability provenance, and static HTML/JSON equality. Deployment of the integrity checker does not establish retesting of all CONFIG cases.
 
-Keycloakは暗号化鍵の不足、SimpleSAMLphpは単一鍵試験の対照不成立と複数鍵設定の不足があり、設定能力を自動成功にしませんでした。両製品の設定能力は引き続き未検証です。基本SLOとRedirect要求受理は各製品で成功を維持しています。
+Evidence, switches, class/library comparisons, Runs, and scripts are in local `build/acceptance/reference-20260914/key-capability-integrated/`. Remaining unverified cases and approved-source differences prevented release-readiness claims.
 
-<!--g1-literal--> 比較表はShibbolethの設定能力ケースだけ新Runへ更新し、未検証は568件から567件になりました。再試験前594件に対する確定は27件です。設定能力判定には8件の既存証拠を利用し、そのための追加プロトコル通信・設定回答は0回でした。
+### Diagnosing Keycloak encryption-key visibility
 
-<!--g1-literal--> 今回の製品設定変更・人間の手操作はともに0回です。新Run作成・実行3回、Suite／forward切替各1回、ケースのログイン・送受信とブラウザ自動遷移を台帳へ記録しています。ユーザーのChromeではなく、ローカルのプロトコルクライアントで試験しています。
+Administration API investigation found an existing RSA-OAEP encryption-key provider, while retrieved SAML metadata published only signing keys. The earlier missing-encryption-configuration diagnosis means Suite cannot obtain test encryption keys from Run metadata, not that no key exists inside the product.
 
-<!--g1-literal--> 稼働した8クラスを照合しました。実装バッチのRunner 442、API 85の成功記録を引き継ぎ、今回はSLO実通信、設定能力の証拠の出所、静的HTMLとJSONの一致を確認しています。設定証拠の整合性検査を反映したことと、すべてのCONFIGケースを実製品で再試験したことは別です。
+<!--g1-literal--> Runtime services JAR 26.7.2 bytecode confirmed metadata generation selects SIG/RS256 keys, matching [official source for the same version](https://github.com/keycloak/keycloak/blob/26.7.2/services/src/main/java/org/keycloak/protocol/saml/SamlService.java). Adding another encryption provider alone cannot fix Suite's current retrieval path.
 
-証拠、切替、クラス・ライブラリーの照合、各Runの結果と検証スクリプトはローカル `build/acceptance/reference-20260914/key-capability-integrated/` に保存しています。残る未検証と承認対象ソース差分があり、リリース可能とは判断していません。
+Next implementation was an explicit supplemental test-public-key input with frozen provenance and Run binding. Signing-only keys must not be silently reused, and unpublished KeyDescriptors must not be fabricated in target metadata. Supplemental input still requires unregistered-key rejection and normal-key responses; decryption capability was not yet proven.
 
+<!--g1-literal--> Product writes/human operations: 0. Unverified observations remained 567 and Verdicts unchanged. Inventory next actions were updated to avoid repeated unnecessary key additions. Public administration fields, retrieved metadata, runtime JAR/source SHA-256 hashes, and diagnosis are in local `build/acceptance/reference-20260914/keycloak-decryption-keys/`. Tokens/private keys were not recorded.
 
-### Keycloakの暗号化鍵不足の個別診断
+### Supplemental public-key storage foundation
 
-Keycloakの管理APIを確認したところ、RSA-OAEP用の暗号化鍵プロバイダーは既に存在していました。一方、実際に取得したSAMLメタデータはsigning用途の鍵だけを掲載しています。以前の「暗号化鍵の設定不足」は、製品内に鍵がないという意味ではなく、SuiteがRunメタデータから試験用暗号化鍵を取得できない状態として訂正します。
+`SupplementalDecryptionKeys` and `SqliteSupplementalDecryptionKeys` store test public keys bound to Run, target entity, metadata SHA-256, source URI, and time without changing public metadata. Inputs are RSA SubjectPublicKeyInfo; duplicates after normalization are rejected. Private/non-RSA/malformed keys do not echo input or parser exceptions in errors.
 
-<!--g1-literal--> 稼働中の26.7.2のservices JARを取り出し、メタデータ生成メソッドのバイトコードがSIG／RS256の鍵を選ぶことを確認しました。[同バージョンの公式ソース](https://github.com/keycloak/keycloak/blob/26.7.2/services/src/main/java/org/keycloak/protocol/saml/SamlService.java)とも一致します。このため、暗号化プロバイダーを追加するだけでは現在のSuiteの取得経路は解消しません。
+Source URIs are references, not fetched. Only HTTP(S) is accepted; userinfo/query/fragment are rejected to avoid retaining credential-bearing URLs. Empty-key snapshots have no provenance.
 
-次の実装対象は、公開メタデータとは別に、出所とRunへの適用を固定した試験用公開鍵を明示入力する経路です。署名専用の公開鍵を暗黙に流用したり、対象が実際に公開していないKeyDescriptorをメタデータへ追加して判定したりはしません。補助入力ができても、未登録鍵の拒否対照と正常鍵での応答確認が必要であり、復号能力の成功はまだ証明していません。
+A unique SQLite constraint permits only initial INSERT per Run, never update. First test access may freeze no supplemental keys, preventing later additions from changing prerequisites. Snapshots for another entity or metadata SHA-256 are rejected. Parent Run deletion removes inputs.
 
-<!--g1-literal--> 今回の製品設定変更・人間の手操作は0回です。未検証567件と各Verdictは変更していません。全件台帳のKeycloak暗号化ケースの次作業を更新し、不要な鍵追加を繰り返さないようにしました。管理APIの公開可能な設定項目、取得メタデータ、稼働JARとソースのSHA-256、個別診断はローカル `build/acceptance/reference-20260914/keycloak-decryption-keys/` に保存しています。認証トークンや秘密鍵は記録していません。
+<!--g1-literal--> 60 rejected-input conditions plus normalization/order, duplicates, empty input, replacement prevention, reopen, target/hash mismatch, missing Run, cascade deletion, and 8 parallel initial-insert races were verified. Initial validation found missing handling of a relative URI's null scheme; it was fixed and rechecked.
 
+<!--g1-literal--> Core 179/Store 39 tests then passed. Types/storage were in the working tree; API, execution, reporting, and deployment remained unfinished. Unverified observations remained 567; product writes and human operations were 0.
 
-### 補助公開鍵入力の保存基盤
+SHA-256 hashes and initial/rerun logs are in local `build/acceptance/reference-20260914/supplemental-key-input-batch/`.
 
-`SupplementalDecryptionKeys` と `SqliteSupplementalDecryptionKeys` を追加しました。試験用の補助公開鍵を対象Run、target entity、RunメタデータのSHA-256、出所URI、記録時刻と一緒に保存します。公開メタデータ自体は変更しません。入力はRSAのSubjectPublicKeyInfo公開鍵に限定し、正規化後の重複を拒否します。秘密鍵・非RSA・不正形式を渡しても、入力値や解析例外をエラーメッセージへ含めません。
+### Supplemental-key freezing and combination service
 
-出所URIは参照用であり、取得処理は行いません。HTTP(S)の参照だけを受け付け、userinfo・query・fragmentを拒否して認証情報を含むURLをそのまま記録することを避けます。公開鍵なしのスナップショットには出所を付けません。
+`SupplementalDecryptionKeyService` compares submitted entity/SHA-256 with Run-resolved target metadata and saves only matching inputs. Read-only inspect does not freeze input merely because a user opens the panel.
 
-Runごとの保存はSQLiteの一意制約を使った初回INSERT限定で、更新はしません。試験で初めて参照する際に「補助鍵なし」も保存でき、後から鍵を追加して同じRunの前提を変えることを防ぎます。既存のスナップショットが別の対象entity・メタデータSHA-256に属する場合は使用を拒否します。Run削除に連動して補助入力も削除します。
+Identical resubmission retains original time/provenance. Key, ordering, source, entity, or metadata-SHA-256 changes are rejected rather than overwritten. Legacy started Runs without snapshots freeze no supplemental keys and reject late registration.
 
-<!--g1-literal--> 入力拒否の60条件に加え、公開鍵の正規化と順序、重複、空入力、保存後の上書き禁止、再オープン、対象・メタデータ不一致、存在しないRun、Run削除の連動、8並列の初回保存競合を検証しました。初回検証で相対URIのschemeがnullの場合の処理不備を検出し、修正して再検証しています。
+Effective keys retain published order, then append supplemental keys without double-counting public keys. Neither metadata rewriting nor source-URI fetch occurs. Frozen inputs are rejected if target entity/hash no longer matches.
 
-<!--g1-literal--> 修正後はCore 179、Store 39テストが成功しました。入力型と保存基盤は開発作業ツリーにあり、API・試験実行・レポートへの接続と稼働環境への反映は未完了です。未検証567件は変更せず、製品設定変更・人間の手操作は0回です。
+<!--g1-literal--> 4 published-key lists, 3 supplemental inputs, and 4 change types gave 48 combinations checking order, deduplication, identical resubmission, and change rejection. Tests also covered freezing absent input, late input on started legacy Runs, and target mismatch.
 
-ソースSHA-256、初回失敗と再検証のログはローカル `build/acceptance/reference-20260914/supplemental-key-input-batch/` に保存しています。
+<!--g1-literal--> Run-scoped service processing was implemented; authorized HTTP registration, start-time freezing, encryption/result provenance, and UI integration remained necessary. Runtime was unchanged; unverified observations remained 567; product writes and human operations were 0.
 
+<!--g1-literal--> Runner 444 tests passed. G1 generation matched and structure passed 46/46. SHA-256 hashes/logs are in local `build/acceptance/reference-20260914/supplemental-key-service-batch/`.
 
-### 補助公開鍵の確定・合成サービス
+### Supplemental-key API, UI, and execution integration (2026-09-15)
 
-`SupplementalDecryptionKeyService` を追加しました。Run解決側が渡す対象entity・メタデータSHA-256と投稿内容を照合し、一致する補助公開鍵だけ保存します。読み取り専用のinspectでは入力を確定しないため、画面を開いただけで後から登録できなくなることはありません。
+The unfinished supplemental-public-key integration in `28-deepseek-handoff.md` was completed and retested against runtime. Baseline commit: `52e8feff9507b4bcae4e9f46152a6439ef94a4dd`.
 
-同一内容の再送では、元の記録時刻と出所を維持した記録を返します。鍵、鍵の順序、出所、対象entity、メタデータSHA-256の変更は上書きせず拒否します。試験が開始済みなのに入力スナップショットがない旧Runでは、補助鍵なしを固定して後付け登録を拒否します。
+- Runner: `SupplementalDecryptionKeyService.KeySet` freezes provenance `published-metadata` / `supplemental-input`. `TestInputFixed` extends `IllegalStateException` and maps to HTTP 409 Conflict. `keySet` freezes absent inputs before returning effective keys; SQLite's first INSERT determines concurrent start/submission outcomes.
+- Encryption: `IdpBasicLogoutScenarioTestCase` excludes Suite control keys from effective registered keys. 19a uses the first key, 19c the 2nd. Results record `decryption_key_source`. Capability 19b uses the same frozen inputs and preserves exact evidence requirements: 4 per encryption case and 8 for 19b.
+- API: `GET /api/runs/{id}/supplemental-decryption-keys` returns state/frozen input without freezing. `POST .../submit` uses shared Run authorization/CSRF. Reads do not return 409; before preflight they report metadata unavailable.
+- UI: Run workspace adds “IdP decryption key input” with entity, metadata SHA-256, frozen state, provenance, and time. PEM/base64 public keys are accepted; frozen inputs cannot be edited.
+- Result: `decryption_key_source` is an allowlisted diagnostic containing fixed tokens only. Arbitrary source URIs/key material are excluded from public results.
 
-試験用の実効鍵は、公開メタデータ側の鍵の順序を維持し、その後に補助鍵を追加します。同じ公開鍵は二重に数えません。公開メタデータを書き換える処理や、出所URIへアクセスする処理はありません。入力が固定された後でも、対象entityやメタデータが一致しなくなった場合は使用を拒否します。
+<!--g1-literal--> API/Runner tests covered authorization, legacy Runs, start races, and premature freezing. GET does not save; identical submission preserves time; replacement returns 409; starting retains prior input or freezes absence and prevents late additions. 20 concurrent freeze/submit trials stored exactly submitted-key or no-key state.
 
-<!--g1-literal--> 公開鍵一覧4種類、補助入力3種類、変更4種類の48組合せで順序・重複排除・同一再送・変更拒否を検証しています。さらに未入力の固定、試験済み旧Runへの後付け拒否、対象不一致をまとめて検証します。
+<!--g1-literal--> Core 179, SAML 75, Store 39, Runner 451, Peer 13, API 86, and Web 83 passed, 926 total. G1 generation matched and structure passed 46/46. G2 remained 20/21 with G2-30 protected-source signature differences; old G2 approval was not treated as independent approval of these changes.
 
-<!--g1-literal--> この段階はRun単位のサービス処理の追加です。HTTP APIの認可付き登録、試験開始時の確定呼出し、暗号化シナリオと結果への出所反映、画面への接続はまだ必要です。稼働環境は変更せず、未検証567件を維持しています。製品設定変更・人間の手操作は0回です。
+Full-built `samlscope:reference-supplemental-v19`, digest `sha256:59a7760e2becec15c7f2854ad71011fd0a3c9bcab87a63bfe6d94f8c600bd878`, was deployed. Keycloak's SLO Run received 1 RSA-OAEP ENC public key from the administration API with provenance `http://localhost:18180/admin/realms/samlscope/keys` before start. Among 49 cases, `IIP-IDP19-a` changed `slo.encrypted-id.key-unavailable` → `slo.encrypted-id.negative-control-failed`; `IIP-IDP19-c` changed `...key-unavailable` → `...configuration-unavailable`. Both remained NOT_VERIFIED. Keycloak accepted the unregistered-key LogoutRequest control, so positive input was not sent. No product Failed was added.
 
-<!--g1-literal--> Runner 444テストが成功しました。G1生成文書一致と構造46/46を確認しています。ソースSHA-256と検証ログはローカル `build/acceptance/reference-20260914/supplemental-key-service-batch/` に保存しました。
+Shibboleth had 0 Verdict differences across the same 49 cases. `IIP-IDP19-a`/`19-c` retained Success with 4 references; `19-b` used 8. Results added `decryption_key_source: ["published-metadata"]`. SimpleSAMLphp was not rerun because it already had `slo.encrypted-id.negative-control-failed`.
 
+<!--g1-literal--> Unverified observations remained 567 with 180 distinct IDs. New evidence demonstrated supplemental-input application/provenance, not final Verdicts. Docker builds: 2, including an unadopted failed initial overlay; Suite/forwarder recreations: 2 each; product restarts: 0; product setting writes: 0; administration reads: 2; supplemental submissions: 1; new Runs: 2; protocol round trips: 46; browser automatic transitions: 4; direct user operations: 0. See [supplemental-key acceptance](29-supplemental-key-acceptance.md).
 
-### 補助公開鍵のAPI・画面・試験接続（2026-09-15）
+### Producer-algorithm evaluation and 8 conclusions (2026-09-15)
 
-引き継ぎ文書 `28-deepseek-handoff.md` の「直前の作業途中：補助公開鍵入力」にあった未完成の接続を実装し、実環境で再試験しました。既定のコミットは `52e8feff9507b4bcae4e9f46152a6439ef94a4dd` です。
+<!--g1-literal--> Among 567 unresolved observations, 6 IIP-ALG04/06 cases covered 3 products and 2 profiles, 36 observations. `ApprovedBrowserCaseRegistry` returned `browser.oracle-unavailable` because generated EncryptedAssertion algorithms lacked an evaluator.
 
-- Runner: `SupplementalDecryptionKeyService.KeySet` を追加し、公開メタデータ鍵と補助鍵の出所（`published-metadata` / `supplemental-input`）を固定入力として扱えるようにしました。`TestInputFixed`（`IllegalStateException` の派生）を追加し、APIでは409 Conflictとして返します。`keySet` は入力が未確定なら「補助鍵なし」を保存してから実効鍵を返し、初回INSERTが勝つSQLiteの一意制約で開始処理と投稿の競合を一意に確定させます。
-- 暗号化シナリオ: `IdpBasicLogoutScenarioTestCase` は実効鍵一覧からSuiteの対照鍵を除いた登録鍵だけを使います。19aは先頭、19cは2番目の鍵を正の試験に使い、結果へ `decryption_key_source` を記録します。設定能力19bは同じ固定入力を用い、各暗号化試験が丁度4件、19bが8件の証拠を要求する検査を維持します。
-- API: `GET /api/runs/{id}/supplemental-decryption-keys` は状態と固定済み入力だけを返し、Runを固定しません。`POST .../submit` は認可・CSRFを他のRun操作と共通経路で要求します。読み取りは409ではなく、Run preflight前はメタデータ未取得のエラーになります。
-- 画面: Run workspace に「IdP decryption key input」パネルを追加し、対象entity・RunメタデータSHA-256・固定状態・出所・記録時刻を表示します。PEMまたはbase64の公開鍵を受け付け、固定済みなら編集不可です。
-- 結果: 公開診断の許可キーに `decryption_key_source` を追加し、値は固定トークンだけに限定しました。任意の出所URIや鍵素材は公開結果へ出しません。
+`EncryptionAlgorithmObservation` and `EncryptionAlgorithmBrowserEvidenceTestCase` decrypt normally correlated Response EncryptedAssertions with Run keys before inspecting EncryptionMethod, EncryptedKey key transport, DigestMethod, and MGF. Metadata algorithm names alone cannot yield Success. Missing EncryptedAssertions, failed decryption, only other algorithms, or partial 4-combination coverage remain NOT_VERIFIED. ECP correlates through outbox actions with SOAP AuthnRequest IDs.
 
-<!--g1-literal--> 認可・旧Run・開始競合・早すぎる固定を、API結合テストとRunnerの競合テストで確認しました。GETは保存を行わないこと、同一再送は記録時刻を維持すること、差し替えが409になること、試験開始が投稿済み入力を保持すること、未投稿のまま開始すると「補助鍵なし」が固定され後付けできないことを検証しています。20回の同時freeze/submitでも保存は「投稿鍵」か「補助鍵なし」のどちらかに一致しました。
+<!--g1-literal--> Runtime `samlscope:reference-alg-v20` was deployed and retested. Keycloak `IIP-ALG04-b` AES256-GCM and `IIP-ALG06-b` rsa-oaep, and Shibboleth `IIP-ALG04-a` AES128-GCM and `IIP-ALG06-a` rsa-oaep-mgf1p, became Success in browser_sso_idp and ecp_idp: 8 observations. SimpleSAMLphp had 0 EncryptedAssertions in 161 browser_sso_idp cases, so no conclusions. Unresolved conditions were algorithms not generated by the products (AES128/256-GCM, the other rsa-oaep family member, and default MGF1-SHA1), not product FAIL.
 
-<!--g1-literal--> ローカル検証はCore 179、SAML 75、Store 39、Runner 451、Peer 13、API 86、Web 83の計926件が成功しました。G1生成文書一致と構造46/46は成功、G2は20/21でG2-30（保護実装ソースの署名差分）は未解消のままです。今回の変更を過去のG2承認と同一視していません。
+9 SSO/SLO NormalFlow cases were investigated: `IIP-SSO01-g/z` needs IdP-initiated success; `IIP-SSO01-ep` needs a VersionMismatch SAML Response; `IIP-SSO01-k` needs accepted alternative ACS; `IIP-SSO03-b` needs a 2nd SAML error type; `IIP-IDP17-n/u` needs target-initiated LogoutRequest. Only ECP correlation could be completed on Suite's side here; other evidence depended on target initiation or settings. Verdicts were unchanged.
 
-実環境はフルビルドした `samlscope:reference-supplemental-v19`（digest `sha256:59a7760e2becec15c7f2854ad71011fd0a3c9bcab87a63bfe6d94f8c600bd878`）へ反映しました。KeycloakのSLO Runでは管理APIからRSA-OAEPのENC公開鍵を読み、出所 `http://localhost:18180/admin/realms/samlscope/keys` として補助入力を1件投稿してから試験を開始しました。49ケースのうち変化は `IIP-IDP19-a` が `slo.encrypted-id.key-unavailable` から `slo.encrypted-id.negative-control-failed` へ、`IIP-IDP19-c` が `...key-unavailable` から `...configuration-unavailable` へ変わり、いずれもNOT_VERIFIEDのままです。Keycloakは未登録鍵の対照LogoutRequestも受理したため、正の試験は送信されていません。製品のFailed判定は追加していません。
+<!--g1-literal--> Unverified observations fell from 567 to 559; distinct IDs remained 180. Unit conditions were not counted as resolutions. G2-30 remained unresolved; this was not independent approval. See [producer-algorithm acceptance and operations](30-algorithm-observation-operations.md).
 
-ShibbolethのSLO Runは同じ49ケースでVerdictの差分が0件でした。`IIP-IDP19-a`/`19-c`は4件、`19-b`は8件の証拠でSuccessのまま、結果に `decryption_key_source: ["published-metadata"]` が追加されています。SimpleSAMLphpは既に `slo.encrypted-id.negative-control-failed` のため再試験していません。
+### Target-message reception and 9 conclusions (2026-09-15)
 
-<!--g1-literal--> 未検証567件と異なるケースID 180件は変更していません。新しく得られたのは補助入力の適用と出所記録の実証であり、Verdictの確定ではないためです。操作量は docker build 2回（初回のオーバーレイは起動失敗のため不採用、記録は残しています）、Suite/転送コンテナ再作成 各2回、製品コンテナ再起動0回、製品設定書き込み0回、管理API読み取り2回、補助入力投稿1回、新Run 2件、プロトコル往復46回、ブラウザ自動遷移4回、ユーザー本人の操作0回です。詳細は [補助公開鍵の受入記録](29-supplemental-key-acceptance.md) に保存しています。
+<!--g1-literal--> Single-use preparation intents (`TargetInitiatedIntents`) were added for IdP-initiated SSO and target logout that Suite cannot directly initiate. ACS/SLO accept RelayState-free unsolicited Responses or LogoutRequests for the sole waiting Run in a Plan only when intent is prepared, validating Issuer, Destination, Success, and single use. Unprepared reception remains rejected.
 
+`GET/POST /api/runs/{id}/target-initiated` and a workspace preparation panel show RelayState/waiting state. `LogoutBrowserEvidenceTestCase` can reevaluate completed NOT_VERIFIED with new Transcript evidence. SLO decrypts Assertion NameID/SessionIndex with Run keys before comparison. Adversarial outbound DOCTYPE inputs no longer halt all normal-flow observation; unparseable received responses remain uncertain.
 
-### 生成側アルゴリズム判定と未検証8件の確定（2026-09-15）
+<!--g1-literal--> Keycloak `IIP-SSO01-g` became Success and `IIP-SSO01-z` Warning. Shibboleth `IIP-SSO01-g` and `IIP-SSO01-k` became Success, `IIP-SSO01-z` Warning, `IDP17-j/k/l/m` Success, `IDP17-t` known Failed, and `IDP17-n/u` NOT_VERIFIED with specific reasons. Unverified observations fell from 559 to 550; distinct IDs remained 180. Keycloak/SimpleSAMLphp target LogoutRequests did not reach Suite and stayed unverified. See [target-message acceptance](31-peer-intent-acceptance.md).
 
-<!--g1-literal--> 未検証567件のうち、IIP-ALG04/06の6ケースは3製品×2プロファイルの36観測として残っていました。`ApprovedBrowserCaseRegistry` が `browser.oracle-unavailable` を返し、生成された EncryptedAssertion のアルゴリズムを読む判定がなかったためです。
+### Diagnostic classification and SimpleSAMLphp encryption (2026-09-15)
 
-`EncryptionAlgorithmObservation` と `EncryptionAlgorithmBrowserEvidenceTestCase` を追加し、正常に相関した Response 内の EncryptedAssertion を Run 鍵で復号してから、EncryptionMethod（ブロック暗号）、EncryptedKey の EncryptionMethod（鍵輸送）、DigestMethod、MGF を検査する共通判定を実装しました。公開メタデータのアルゴリズム名だけではSuccessにせず、暗号化Assertionがない場合・復号できない場合・要求と異なるアルゴリズムだけの場合・4組合せの一部だけの場合はNOT_VERIFIEDを維持します。ECPはoutbox actionで相関し、SOAP内のAuthnRequest IDを使う経路も補完しました。
+<!--g1-literal--> Reasons for 548 unresolved observations were classified as `capability_diagnosis` without changing Verdict: suite-observation-gap 379, operator-attestation-available 77, evidence-form-mismatch 47, role-inapplicable 24, feature-absent 21. The key and fixed tokens were added to public diagnostics for future display, including OIDF Conformance skipped-equivalent presentation. Generated classification is in the [complete inventory](26-unverified-case-inventory.md).
 
-<!--g1-literal--> 実環境は `samlscope:reference-alg-v20` へ反映して再試験しました。Keycloakは `IIP-ALG04-b`（AES256-GCM）と `IIP-ALG06-b`（rsa-oaep）を、Shibbolethは `IIP-ALG04-a`（AES128-GCM）と `IIP-ALG06-a`（rsa-oaep-mgf1p）を、それぞれbrowser_sso_idpとecp_idpで確定し、Success 8観測を追加しました。SimpleSAMLphpはbrowser_sso_idpの161ケースで暗号化Assertionが0件のため確定なしです。未確定の理由は製品が生成しないアルゴリズム（AES128/256-GCM、rsa-oaep系の相方、既定MGF1-SHA1）で、製品FAILにはしていません。
+<!--g1-literal--> SimpleSAMLphp Suite-SP metadata temporarily set `assertion.encryption=true`; browser_sso_idp/ecp_idp Runs returned EncryptedAssertions. RSA-OAEP-MGF1P satisfied `IIP-ALG06-a`; CBC content encryption left `IIP-ALG04.a` unresolved. Configuration was restored in place; after container restart PHP syntax and NULL value were verified. Unverified observations fell from 548 to 546.
 
-SSO/SLOのNormalFlow判定で証拠を生成できない9ケースを調査しました。`IIP-SSO01-g/z` はIdP起点成功、`IIP-SSO01-ep` はVersionMismatchのSAML Response、`IIP-SSO01-k` は受理される別ACS、`IIP-SSO03-b` は2種類目のSAMLエラー、`IIP-IDP17-n/u` はtarget-initiated LogoutRequestが不足しています。Suite側で補完できるのはECP相関のみで、残りは対象製品側の起点操作または設定に依存します。判定は前後で変わっていません。
+### Reconciling saved evidence with the inventory (2026-09-17)
 
-<!--g1-literal--> 未検証は567から559へ減少しました（異なるケースID 180は不変）。単体テスト条件の追加は未検証の解消として数えていません。G2-30は未解消のままで、今回の変更を独立承認として扱いません。変更・検証・操作の詳細は [生成側アルゴリズム判定の受入記録](30-algorithm-observation-operations.md) に保存しています。
+<!--g1-literal--> Saved result.json conclusions produced 24 candidates against the unresolved inventory. Only SimpleSAMLphp browser_sso_idp `IIP-IDP09-a-idp-01` Assertion-encryption capability was adopted as 1 observation. Unverified observations changed 518→517, distinct IDs 171→170, and baseline conclusions 76→77. No new product tests ran.
 
+Adopted Run: `run_VRW5T0M31JGT71ZG6MR1JF92PJ`; source: `build/acceptance/reference-20260915/peer-intent/simplesamlphp/browser_alg_enc/result.json`; SHA-256: `503d257c71742219b1dac6574dc96ebf631cdc7642007c2c905b29e3cdc62b50`. `configuration.passive.assertion-encryption-capability` PASS was adopted. Decrypted EncryptedAssertion references `tx_5R7TGFK6S2CR86125YH70J5PQJ` and `tx_YTZYN207T7VA49N6WEY7N4EB5S` belong to the same Run and its already adopted ALG06.a evidence. The approved condition requires EncryptedAssertion returned for Suite metadata encryption keys; the evaluator verifies decryption under Run keys.
 
-### 対象起点メッセージの受信経路と未検証9件の確定（2026-09-15）
+Old SLO nonissuance/unimplemented/consumption conclusions had been withdrawn by audit and were not readopted. SimpleSAMLphp SSO01.cz Warning had no evidence references and did not prove Subject evaluation inside an encrypted Assertion, so it was excluded. Old signature/error/NameID tests did not supply new evidence overcoming existing conclusions/reservations. Candidate decisions and source SHA-256 hashes are in `build/acceptance/reference-20260917/ledger-reconciliation/audit.json`.
 
-<!--g1-literal--> Suiteから直接起動できないIdP起点SSOとtarget-initiated logoutについて、単一使用の準備intent（`TargetInitiatedIntents`）を追加しました。ACSとSLOの受信経路は、準備済みintentがある場合だけRelayStateなしのunsolicited Responseまたはプラン内で唯一の待機RunへのLogoutRequestを受け付け、Issuer・Destination・Success・単一使用を検証します。未準備の受信は従来どおり拒否します。
+Comparison generation now reads adopted Run/SHA-256/Verdict/reason from the inventory retest delta, preventing missing SLO adoption and redisplay of withdrawn results. A ledger-adopted FAIL absent from the comparison's product-cause confirmation list is labeled cause-classification-unconfirmed; this update does not newly authorize product attribution.
 
-API `GET/POST /api/runs/{id}/target-initiated` とRun workspaceの準備パネルを追加し、RelayStateと待機状態を表示します。`LogoutBrowserEvidenceTestCase`は完了後のNOT_VERIFIEDを新Transcript証拠で再評価でき、SLO判定は暗号化Assertion内のNameID/SessionIndexをRun鍵で復号してから照合します。DOCTYPE付きの敵対的送信要求が正常系観測全体を停止させる問題も修正し、解析不能な受信応答は不確定のまま維持します。
+<!--g1-literal--> Product writes, restorations, browser operations, and user interactions: 0. Docker stayed stopped. This corrected missing adoption of historical evidence. The temporary allowed-signers file missing after restart was restored from the existing public signing key.
 
-<!--g1-literal--> 実製品では、Keycloakで`IIP-SSO01-g`がSuccess、`IIP-SSO01-z`がWarning、Shibbolethで`IIP-SSO01-g`と`IIP-SSO01-k`がSuccess、`IIP-SSO01-z`がWarning、`IDP17-j/k/l/m`がSuccess、`IDP17-t`が既知のFailed、`IDP17-n/u`が具体的な理由付きNOT_VERIFIEDになりました。未検証は559から550へ減少しました（異なるケースID 180は不変）。KeycloakとSimpleSAMLphpのtarget-initiated logoutはSuiteへのLogoutRequestが到達せず未検証のままです。詳細は [対象起点メッセージの受入記録](31-peer-intent-acceptance.md) に保存しています。
+### Conclusions through SSO after native console import (2026-09-17)
 
-
-### 未検証の診断分類とSimpleSAMLphp暗号化観測（2026-09-15）
-
-<!--g1-literal--> 未検証548件の解消理由を、Verdictを変えずに`capability_diagnosis`として分類しました。内訳はsuite-observation-gap 379、operator-attestation-available 77、evidence-form-mismatch 47、role-inapplicable 24、feature-absent 21です。公開診断の許可キーに同キーと固定トークンを追加し、将来の表示（OIDF Conformanceのskipped相当を含む）に備えました。分類は台帳生成器が作成し、[全件台帳](26-unverified-case-inventory.md)に記録しています。
-
-<!--g1-literal--> SimpleSAMLphpのSuite SPメタデータへ`assertion.encryption=true`を設定し、browser_sso_idpとecp_idpのRunでAssertion暗号化を観測しました。鍵輸送はRSA-OAEP-MGF1Pで`IIP-ALG06-a`がSuccess、内容暗号はCBCのため`IIP-ALG04.a`は未検証を維持しました。設定はin-placeで復元し、コンテナ再起動後にPHP構文と値（NULL）を確認しています。未検証は548から546へ減少しました。
-
-
-### 保存済み実証と台帳の照合（2026-09-17）
-
-<!--g1-literal--> 現在の未検証に対して保存済みresult.jsonの確定判定を照合し、24観測の候補を確認しました。採用できたのはSimpleSAMLphpのbrowser_sso_idp、`IIP-IDP09-a-idp-01`（Assertion暗号化能力）の1観測です。未検証は518→517、異なるケースIDは171→170、基準からの確定は76→77になりました。新しい製品試験は実行していません。
-
-採用Runは `run_VRW5T0M31JGT71ZG6MR1JF92PJ`、元結果は `build/acceptance/reference-20260915/peer-intent/simplesamlphp/browser_alg_enc/result.json`、SHA-256は `503d257c71742219b1dac6574dc96ebf631cdc7642007c2c905b29e3cdc62b50` です。`configuration.passive.assertion-encryption-capability` のPASSを採用しました。復号済みEncryptedAssertionの応答参照は `tx_5R7TGFK6S2CR86125YH70J5PQJ` と `tx_YTZYN207T7VA49N6WEY7N4EB5S` で、同Runですでに採用済みのALG06.aの証拠集合にも含まれます。承認済み条件はSuiteメタデータの暗号化鍵に対するEncryptedAssertionの返却で、判定処理はRun鍵でのAssertion復号を確認します。
-
-古いSLOの未発行・未実装・消費確認の判定は監査で撤回済みのため再採用しません。SimpleSAMLphpのSSO01.czのWarningは証拠参照が空で、暗号化されたAssertion内のSubjectを評価した証明にならないため採用しません。過去の署名・エラー・NameID試験も、現在採用している結果とSuite側の留保を覆す新しい証拠ではないため維持しました。候補別の採否と元結果のSHA-256は `build/acceptance/reference-20260917/ledger-reconciliation/audit.json` に保存しました。
-
-比較表の生成器も、全件台帳の再試験差分から最終採用Run・SHA-256・Verdict・理由を照合して反映するよう修正しました。これにより以前のSLO採用漏れと撤回済み判定の再表示を防ぎます。台帳で採用済みでも比較表の製品原因確認リストにないFAILは、原因分類未確認と明記し、今回の更新で製品への原因帰属を追加承認しません。
-
-<!--g1-literal--> 製品設定変更・復元・ブラウザ操作・本人操作はいずれも0回です。Dockerは停止したままで、過去の実証の採用漏れを反映した更新です。再起動後に欠けていた一時allowed-signersファイルは、既存の公開署名鍵から復元しました。
-
-
-### 製品コンソール取込後のSSOによる確定（2026-09-17）
-
-<!--g1-literal--> Keycloakの元メタデータ取込と署名付きSSOの連続実行を実装し、MD02.c、MD05.a4、MD05.a5、MD05.g、MD12.a、MD12.cの6観測を確定しました。未検証は517→511、異なるケースIDは170のままです。KeyValue-onlyで署名検証が無効になっても旧判定がPASSを返す問題も検出し、その2ケースは採用しません。必要条件と設定作業量、失敗試行、採用証拠は [製品コンソール取込の受入記録](34-native-metadata-import-acceptance.md) を参照してください。
+<!--g1-literal--> Keycloak native metadata import and signed SSO automation concluded MD02.c, MD05.a4, MD05.a5, MD05.g, MD12.a, and MD12.c: 6 observations. Unverified changed 517→511; distinct IDs remained 170. It also exposed old PASS with signature verification disabled after KeyValue-only import; those 2 cases were not adopted. See [native console-import acceptance](34-native-metadata-import-acceptance.md) for prerequisites, settings, failed attempts, and evidence.

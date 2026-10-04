@@ -1,23 +1,23 @@
-# SimpleSAMLphpの暗号化応答の実測
+# Native SimpleSAMLphp encrypted response observations
 
-`dev/simplesamlphp/producer_algorithm_campaign.py`を追加した。署名モード比較と同じ設定復元・読み戻し基盤を使い、通常の元メタデータを製品自身のパーサーへ渡した一時SPで、非暗号化、暗号化、暗号化再実行を記録する。標準設定`assertion.encryption`を切り替え、ResponseとAssertionの署名は維持する。生成処理をSuite実装へ置き換えていない。
+`dev/simplesamlphp/producer_algorithm_campaign.py` was added. Using the same configuration restoration/read-back foundation as signature-mode comparison, it records unencrypted, encrypted, and repeated encrypted exchanges for a temporary SP whose normal original metadata is passed to the product's own parser. Standard `assertion.encryption` settings change while Response and Assertion signatures remain enabled. Suite does not replace the product's generation implementation.
 
-## 原本と正式判定
+## Originals and formal determination
 
-Run `run_BTJPR0GYG7H7FMBJRCJ7Z699RK`の原本は`build/acceptance/reference-20260918/simplesamlphp-native-producer-encryption-normal/`に保持する。暗号化応答は`aes128-cbc`、鍵輸送は`rsa-oaep-mgf1p`、DigestMethod省略時のSHA-1だった。この観測からAES-GCMや別のOAEP方式の対応を推定しない。
+Originals for Run `run_BTJPR0GYG7H7FMBJRCJ7Z699RK` remain in `build/acceptance/reference-20260918/simplesamlphp-native-producer-encryption-normal/`. Encrypted responses used `aes128-cbc`, key transport `rsa-oaep-mgf1p`, and SHA-1 with DigestMethod omitted. These observations do not imply AES-GCM or other OAEP support.
 
-`VerifyNativeProducerAlgorithms.java`をSimpleSAMLphpの比較にも対応させた。秘密鍵はSuiteの読み取り専用ボリューム内で使用し、持ち出さない。元AuthnRequestのRedirect署名、固定対象鍵によるResponse署名、復号後のAssertion署名を検査する。別の秘密鍵による復号失敗とResponse改変時の署名不成立も確認する。平文Assertionは保存しない。既存Keycloak比較の必須条件数は維持した。
+`VerifyNativeProducerAlgorithms.java` also supports SimpleSAMLphp comparison. Private keys are used within Suite's read-only volume and not exported. It checks original AuthnRequest Redirect signatures, Response signatures with the fixed target key, and decrypted Assertion signatures. It also verifies decryption failure with another private key and signature failure for altered Responses. Plaintext Assertions are not saved. Required condition counts for existing Keycloak comparison remain unchanged.
 
-正式なprotocol-evidence判定で`IIP-ALG06-a-idp-01`が`SATISFIED / PASS / browser.encryption.rsa-oaep-mgf1p.decrypted`となった。`verify_ssp_producer_acceptance.py`が原本ハッシュ、対象とRunの一致、設定読み戻し、復元、暗号検証結果、正式判定の証拠参照を照合する。設定を受け付けたことやHTTP完了だけでSuccessにしていない。ただし現在の生成台帳では同ケースが既に別の実証で解消済みだった。今回の結果は追加実証として保持し、新規解消には数えず、既存の採用元も変更しない。
+Formal protocol-evidence evaluation produced `SATISFIED / PASS / browser.encryption.rsa-oaep-mgf1p.decrypted` for `IIP-ALG06-a-idp-01`. `verify_ssp_producer_acceptance.py` matches original hashes, target/Run identity, configuration read-back, restoration, cryptographic verification results, and formal determination evidence references. Accepted settings or HTTP completion alone do not establish Success. However, the current generated inventory already resolved this case through another demonstration. This result remains additional evidence, adds no new resolution, and does not change the existing adoption source.
 
-<!--g1-literal--> 未検証は429観測のまま。その他のアルゴリズムはこの実測から確定しない。新しい単体テスト群や全体テストはこの小単位では実行せず、関連実装のまとめた検証へ残す。追加実証の原本検証は実行した。
+<!--g1-literal--> Unverified observations remain 429. Other algorithms are not determined from this observation. New unit-test groups or full tests were not run in this small batch and remain for combined verification of related implementation. Original verification for the additional demonstration was executed.
 
-## 失敗試行と設定作業
+## Failed attempts and configuration work
 
-初回の`simplesamlphp-native-producer-encryption/`は、Suite側で明示的な`variant=control`を使い、ACSがメタデータ試験経路になった。このため通常ログインが完了せず、profile開始APIが拒否した。製品の失敗には分類していない。通常メタデータURLへ修正して新Runで再実行し、初回の原本も保存した。
+The initial `simplesamlphp-native-producer-encryption/` attempt explicitly used Suite `variant=control`, putting ACS on the metadata-test path. Normal login therefore remained incomplete and the profile-start API rejected the request. This is not classified as product failure. The metadata URL was corrected to the normal path and a new Run executed; initial originals are retained.
 
-両試行で設定を元のバイト列へ復元し、ハッシュ一致を確認した。同時変更を検出した場合は上書きしない。実行中の設定は一時SPだけに追加し、既存SPの設定を変更しない。
+Both attempts restored configuration to original bytes and verified matching hashes. Concurrent changes are not overwritten. Runtime settings were added only to a temporary SP; existing SP settings remained unchanged.
 
-<!--g1-literal--> 失敗試行を含む操作は、Run作成・preflight各2、製品設定書込8（復元2を含む）、ネイティブ読み戻し6、AuthnRequest・Response各6、profile開始試行2（失敗1）、正式証拠評価1。製品再起動、Docker build、Suite再作成、本人操作は0。原本検証用の一時コンテナは1回。`batch-operations.json`に記録した。コミットは作成していない。
+<!--g1-literal--> Including failed attempts: Run creation/preflight 2 each, product configuration writes 8 (including restoration 2), native read-backs 6, AuthnRequest/Response 6 each, profile-start attempts 2 (failed 1), formal evidence evaluation 1. Product restarts, Docker builds, Suite recreation, and user interactions 0. Temporary original-verification container executions 1. Recorded in `batch-operations.json`. No commit was made.
 
-前段で追加したMDIOP証明書アダプターと属性ポリシー再判定のソース変更は、この稼働イメージにはまだ含まれない。今回の確定は既存の暗号化判定処理を使っており、保留中の変更を検証済みとは扱わない。
+Earlier source changes for the MDIOP certificate adapter and attribute-policy reevaluation are not yet included in this running image. This determination uses existing encryption evaluation and does not validate those pending changes.

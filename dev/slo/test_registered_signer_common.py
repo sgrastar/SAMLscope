@@ -26,7 +26,7 @@ class Response(io.BytesIO):
 
 class CommonTest(unittest.TestCase):
     def test_exact_public_language_navigation_preserves_original_and_rejects_capability_forms(self):
-        navigation='<form id="language-form" class="pure-form" method="get"><div id="languageform"><select aria-label="Language" class="pure-input-1-4 language-menu" name="language" id="language-selector"><option value="en" selected="selected">English</option><option value="ja">日本語</option></select><noscript><button type="submit" class="pure-button"><i class="fa fa-arrow-right"></i></button></noscript></div></form>'
+        navigation='<form id="language-form" class="pure-form" method="get"><div id="languageform"><select aria-label="Language" class="pure-input-1-4 language-menu" name="language" id="language-selector"><option value="en" selected="selected">English</option><option value="ja">\u65e5\u672c\u8a9e</option></select><noscript><button type="submit" class="pure-button"><i class="fa fa-arrow-right"></i></button></noscript></div></form>'
         raw=(navigation+'<p>Native signature rejected</p>').encode();self.assertEqual(common.safe_body(raw),raw)
         for changed in (navigation.replace('method="get"','method="post"'),navigation.replace('method="get"','method="get" action="/auth"'),navigation.replace('name="language"','name="csrf"'),navigation.replace('</form>','<input name="password" value="secret"></form>'),navigation.replace('</form>','<input name="session_code" value="secret"></form>'),navigation.replace('value="ja"','value="secret/capability"'),navigation+navigation,navigation+'<form><input name="token" value="secret"></form>'):
             with self.assertRaises(ValueError):common.safe_body(changed.encode())

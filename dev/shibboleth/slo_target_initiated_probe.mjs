@@ -81,8 +81,8 @@ try {
     const before = page.url();
     // The IdP logout view offers a local logout and a global (propagating) logout. Only the
     // global option makes the target send LogoutRequests to the other participants.
-    const global = page.getByRole('button', { name: /グローバル|global/i });
-    const globalLink = page.getByRole('link', { name: /グローバル|global/i });
+    const global = page.getByRole('button', { name: /\u30b0\u30ed\u30fc\u30d0\u30eb|global/i });
+    const globalLink = page.getByRole('link', { name: /\u30b0\u30ed\u30fc\u30d0\u30eb|global/i });
     if (await global.count()) await global.first().click({ timeout: 2000 }).catch(() => {});
     else if (await globalLink.count()) await globalLink.first().click({ timeout: 2000 }).catch(() => {});
     const propagate = page.getByRole('button', { name: /propagate|continue|proceed|confirm/i });

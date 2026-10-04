@@ -1,54 +1,54 @@
-# 認証コンテキストの強度比較・優先順の共通実装
+# Shared authentication context strength and preference comparison
 
-対象は`IIP-SSO01-ga-idp-01`、`gb`、`gc`、`gj`の承認済み定義。製品が宣言・設定した強度順序を使用し、候補の記載順を強度順序へ置き換えない。現段階では要求生成と、検証済み成功応答に適用する内部規則を実装した。製品設定・原本collector・ケース全体の集約は未接続である。
+The targets are the approved definitions of `IIP-SSO01-ga-idp-01`, `gb`, `gc`, and `gj`. Comparisons use the product's declared or configured strength order; candidate order does not substitute for strength order. At this stage request generation and internal rules for verified successful responses are implemented. Product configuration, the original-evidence collector, and whole-case aggregation are not yet connected.
 
-## 要求生成
+## Request generation
 
-`SamlRequestedAuthnContextRequestFactory.ContextRequest`はComparison、参照の種類、順序を保持する候補集合を受け取る。既存の固定exact fixtureは従来の生成経路を維持し、新しい`buildConfiguredContext`からminimum・better・maximum・候補反転を構成できる。AuthnContextClassRefとAuthnContextDeclRefを明示的に分け、URIの名前や候補の位置から強度を推定しない。
+`SamlRequestedAuthnContextRequestFactory.ContextRequest` accepts Comparison, reference type, and an ordered candidate set. Existing fixed exact fixtures retain their generation path; the new `buildConfiguredContext` can construct minimum, better, maximum, and reversed candidates. AuthnContextClassRef and AuthnContextDeclRef are explicitly separate. URI names and candidate positions do not imply strength.
 
-候補の空欄・重複・空集合は、今回の正常系比較fixtureとして生成前に拒否する。これは製品へ課す独自の適合条件ではない。要求生成器自身は送信せず、実行経路へ接続する際もRunnerのoutboxを使用する。
+Blank, duplicate, or empty candidates are rejected before generation for these normal comparison fixtures. This is not an additional product conformance requirement. The factory does not send requests; integration with execution also uses Runner's outbox.
 
-## 内部規則
+## Internal rules
 
-`AuthnContextSelectionRule`は、既に検証された成功応答にだけ使う比較部品である。OutcomeやVerdictを直接確定しない。判定ケースは原本の署名・要求相関、ネイティブ準備、全条件、正負対照を別途確認する必要がある。
+`AuthnContextSelectionRule` is a comparison component for already verified successful responses. It does not directly determine Outcome or Verdict. The case must separately verify original signatures and request correlation, native preparation, all conditions, and positive and negative controls.
 
-- minimumは、返された値が指定した単一閾値以上かを製品の順序で比較する。
-- betterは、同じ閾値を返す実装を区別し、厳密に上回ることを確認する。
-- maximumは、固定したユーザー入力で利用可能な集合が網羅的に確認されていることを前提とし、上限以下の最大値を選んだかを確認する。上限以下でもより弱い値なら一致とは扱わない。
-- 優先順は、全候補が充足可能と準備で確認された場合に先頭候補を選んだかを比較する。強度順序を使わない。ケース全体では順序を反転した原本が別途必須となる。
+- minimum compares the returned value to the single specified threshold using the product's order and requires it to be at least that threshold.
+- better distinguishes returning the threshold itself and requires a strictly stronger value.
+- maximum requires exhaustive confirmation of the set available with fixed user input and checks selection of its greatest value at or below the upper bound. A weaker value is not a match merely because it is below the bound.
+- Preference checks selection of the first candidate when preparation confirms that every candidate is satisfiable. It does not use strength order. Whole-case evaluation also requires originals with the candidate order reversed.
 
-強度順序、候補の充足可能性、maximumの利用可能集合が未確認の場合はUNPROVENとする。ネイティブ準備で用いる数値は順序関係の表現であり、Suiteが定めた認証強度の点数ではない。
+Unconfirmed strength order, candidate satisfiability, or maximum's available set yields UNPROVEN. Native preparation's numeric values express order relations; they are not Suite-defined authentication strength scores.
 
-エラーResponseはこの成功応答用規則の入力にしない。承認済み定義ではエラーが許される条件があり、常にエラーを返すことだけでは製品違反を確定しない。優先順ケースではエラーから順序評価の成功を推定できない。これらは今後のケース集約で区別する。
+Error Responses are not inputs to these success-selection rules. The approved definitions permit errors in some conditions; always returning errors alone does not establish a product violation. The preference case cannot infer successful order evaluation from an error. Future case aggregation must distinguish these situations.
 
-## 残作業と検証
+## Remaining work and verification
 
-製品の標準設定から強度順序・利用可能集合・固定ログイン条件を収集し、classとdeclarationを別々に試す経路を実装する必要がある。加えてエラーResponseの相関・真正性、候補反転、設定復元、各ケースの要求条件を満たすことを証拠から確認して初めて正式結果へ接続する。
+A path must collect strength order, available sets, and fixed login conditions from standard product configuration and test class and declaration separately. Only evidence establishing error Response correlation and authenticity, candidate reversal, configuration restoration, and each case's request conditions can connect the comparison to formal results.
 
-<!--g1-literal--> 全Comparisonと両参照形式の候補順序保持、maximumの弱すぎる選択、betterの同値選択、製品順序の反転、未確認の候補充足可能性を対象にテストを追加し、コンパイルまで確認した。実行はバッチ検証へ保留。製品設定書込・プロトコル往復・本人操作は0回。未検証462件を維持し、内部部品の追加を解消件数には含めない。
+<!--g1-literal--> Added tests cover candidate-order preservation for every Comparison and both reference types, an overly weak maximum selection, an equal better selection, reversed product order, and unconfirmed candidate satisfiability. Compilation passed; execution awaits batch verification. Product configuration writes, protocol round trips, and user interactions: 0. The inventory remains 462 unverified observations; adding internal components is not counted as resolution.
 
-## 署名済み応答の読取とケース条件の生成
+## Reading signed responses and generating case conditions
 
-`AuthnContextResponseEvidence`はResponseのInResponseTo・Destinationを照合し、成功応答では共通の署名・復号・Audience・SubjectConfirmation検証を通過したAssertionだけを使用する。単一AuthnStatementのAuthnContextからClassRefとDeclRefを分離して読み取る。両方がある場合も混同せず保持し、重複や空参照、DeclとDeclRefの同時指定は不成立とする。インライン宣言は存在のみ記録し、外部DeclRefが返された証拠にはしない。
+`AuthnContextResponseEvidence` checks Response InResponseTo and Destination. For success it uses only an Assertion passing shared signature, decryption, Audience, and SubjectConfirmation validation. It reads ClassRef and DeclRef separately from a single AuthnStatement's AuthnContext, preserving both when present. Duplicate or blank references and simultaneous Decl and DeclRef invalidate the evidence. An inline declaration records presence only and does not prove return of an external DeclRef.
 
-エラー応答はResponse署名と要求相関、標準のトップレベルStatusCode、Assertionがないことを確認する。ERRORという観測種別を返し、成功時の選択値は持たせない。エラーを許す強度比較と、エラーから優先順の評価を証明できないケースとの区別は、後段のケース集約で行う。無署名・復号不能・曖昧な構造は実証不成立として扱う。
+For errors it verifies the Response signature, request correlation, a standard top-level StatusCode, and absence of Assertions. It returns observation type ERROR without a successful selection value. Later case aggregation distinguishes strength comparisons that permit errors from cases where errors cannot establish preference order. Unsigned, undecryptable, or ambiguous structures cannot establish the demonstration.
 
-`AuthnContextComparisonInputs`はネイティブアダプターが用意した参照値を受け取り、各ケースの入力を組み立てる。maximumではlow／mediumが利用可能でhighが上限になる準備を前提とする。優先順ではlow／highの両方を充足可能にし、順序を反転する。`unavailable`という引数名自体は到達不能の証拠ではなく、比較方式ごとに製品設定で条件を確立する必要がある。
+`AuthnContextComparisonInputs` accepts reference values prepared by a native adapter and assembles each case's inputs. maximum assumes preparation making low/medium available and high the upper bound. Preference makes both low/high satisfiable and reverses their order. The argument name `unavailable` is not evidence of unreachability; product configuration must establish the conditions for each comparison method.
 
-<!--g1-literal--> 4ケース×class／declaration×各2条件の計16入力を構成する。未接続のネイティブ準備は、ケース間で利用可能集合が異なるため別々に固定する必要がある。要求生成数を実行数や解消数として数えていない。
+<!--g1-literal--> It constructs 16 inputs: 4 cases × class/declaration × 2 conditions each. The native preparation still to be connected must be fixed separately because available sets differ between cases. Generated requests are not counted as executions or resolutions.
 
-<!--g1-literal--> 平文／暗号化Assertion、ClassRefとDeclRefの同時保持、署名付きエラー、エラー内のAssertion、重複・空参照・改変、全条件の生成を対象にテストソースを追加し、コンパイル確認した。実行はバッチ確認へ保留。製品設定・プロトコル実行は0回、未検証462件を維持する。次はネイティブ準備と原本collector、ケース全体の比較へ接続する。
+<!--g1-literal--> Added test sources cover plaintext/encrypted Assertions, simultaneous ClassRef and DeclRef retention, signed errors, Assertions in errors, duplicate/blank/altered references, and all generated conditions. Compilation passed; execution awaits batch verification. Product configuration and protocol executions: 0; the inventory remains 462 unverified observations. Next are native preparation, the original-evidence collector, and whole-case comparison.
 
-## ケース全体の比較
+## Whole-case comparison
 
-`AuthnContextComparison`は、ネイティブ準備から生成した必要条件と実際の要求を照合し、class／declaration双方の条件を集約する。実験・SP・ログイン入力・設定の指紋を固定し、交換の時間窓が重ならないこと、原本要求／応答の参照が一意であることを確認する。条件の不足・重複・入替や設定混在はNOT_VERIFIEDとする。
+`AuthnContextComparison` matches required conditions generated from native preparation to actual requests and aggregates both class/declaration conditions. It fixes experiment, SP, login-input, and configuration fingerprints and checks non-overlapping exchange windows and unique original request/response references. Missing, duplicate, swapped, or mixed-configuration conditions yield NOT_VERIFIED.
 
-準備情報では、製品が宣言したlow／highの順序、maximumのlow／medium／highの順序と利用可能集合、優先順候補の充足可能性、到達不能条件の実証を明示する。URIの名前だけからこれらを推定しない。正負対照の確認状態も必須とし、未確認なら選択不一致が見えていても製品違反へ変換しない。この状態は将来の信頼された準備・対照検証アダプターが設定する内部値であり、ユーザーの確認クリックを代入する入力ではない。
+Preparation explicitly states the product's low/high order, maximum's low/medium/high order and available set, preference candidate satisfiability, and demonstration of unreachable conditions. URI names alone do not establish these facts. Verified positive and negative controls are also required; without them, an observed selection mismatch does not become a product violation. This state is an internal value for a future trusted preparation/control-verification adapter, not an input set by a user confirmation click.
 
-成功応答の選択不一致は、必要条件と前提・対照が揃った場合に限りVIOLATEDとなる。ケース側はVerdictを返さず、レベルに応じた変換はEvaluatorへ委ねる。強度比較で相関・署名確認済みエラーが返ること自体は違反としない。エラーのみの実験は成功選択の対照が不足しているためNOT_VERIFIEDとする。優先順では、反転条件が成功しなければ選択順を確認済みにできない。
+A successful selection mismatch becomes VIOLATED only when required conditions, prerequisites, and controls are complete. Cases do not return Verdict; Evaluator converts according to level. A correlated, signature-verified error in a strength comparison is not itself a violation. An error-only experiment lacks a successful-selection control and yields NOT_VERIFIED. Preference cannot be confirmed unless the reversed condition succeeds.
 
-<!--g1-literal--> maximumの弱い選択、候補順を無視する実装、対照未確認、エラーのみ、条件欠落・重複のテストを追加し、コンパイルまで確認した。実行テストはバッチにまとめる。今回の追加は内部比較までであり、原本collector・ネイティブ準備・正式registryは未接続。製品操作0回、未検証462件を維持する。
+<!--g1-literal--> Tests for weak maximum selection, ignoring candidate order, unverified controls, errors only, and missing/duplicate conditions were added and compile. Execution is grouped into the test batch. This addition reaches internal comparison only; the original-evidence collector, native preparation, and formal registry remain unconnected. Product operations: 0; the inventory remains 462 unverified observations.
 
-## 実機接続の更新
+## Native integration update
 
-<!--g1-literal--> 上記の未接続・テスト保留は各部品追加時点の記録。現在は原文collector、ネイティブ設定自動化、正式CONFIG登録、実機検証と台帳採用まで完了した。Shibbolethで3件Success・1件Failedを確定し、未検証462→458。詳細と操作回数は[認証コンテキスト比較の実機接続](67-authn-context-native-acceptance.md)を参照。
+<!--g1-literal--> The unconnected paths and pending tests above record the time each component was added. Original-evidence collection, native configuration automation, formal CONFIG registration, native verification, and inventory adoption are now complete. Shibboleth established 3 Success results and 1 Failed result, reducing unverified observations 462→458. Details and operation counts are in [Native authentication context comparison integration](67-authn-context-native-acceptance.md).

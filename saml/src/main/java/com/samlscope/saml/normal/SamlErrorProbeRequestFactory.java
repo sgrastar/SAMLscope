@@ -253,7 +253,7 @@ public final class SamlErrorProbeRequestFactory {
         var sample = switch (category) {
             case "BOUNDARY" -> "\u0416";
             case "ASCII" -> "aZ09";
-            case "CJK" -> "漢字";
+            case "CJK" -> "\u6f22\u5b57";
             case "COMBINING" -> "e\u0301";
             case "XML_SPECIAL" -> "<&\"'>";
             case "TAB_REFERENCE", "TAB_LITERAL" -> "a\tb";

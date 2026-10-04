@@ -1,42 +1,42 @@
-# 認証コンテキスト比較の実機接続と正式判定
+# Native authentication context comparison and formal determination
 
-<!--g1-literal--> 未検証は462→458観測、異なるケースIDは156のまま。Shibbolethのbrowser_sso_idpでminimum・better・候補優先順をSuccess、maximumをFailedとして正式採用した。他製品・別プロファイルへ横展開した判定ではない。
+<!--g1-literal--> Unverified observations decreased 462→458; distinct case IDs remain 156. Shibboleth browser_sso_idp formally adopted Success for minimum, better, and candidate preference, and Failed for maximum. These determinations do not extend to other products or profiles.
 
-| ケース | 結果 | 実測 |
+| Case | Result | Observation |
 |---|---|---|
-| IIP-SSO01.ga | Success | ClassRef／DeclRefとも成功時は要求したlow以上。達成不能要求には署名付きエラー。 |
-| IIP-SSO01.gb | Success | 双方ともlowより強いmedium。達成不能要求には署名付きエラー。 |
-| IIP-SSO01.gc | Failed (Product) | ClassRefはmediumだがDeclRefはlow。後続の同一設定・同一SP・同一ログイン入力でexact mediumの成功を確認し、より強い候補が利用可能だったことを実証。 |
-| IIP-SSO01.gj | Success | 双方で候補順を反転すると、最初の候補に応答の選択値も追従。 |
+| IIP-SSO01.ga | Success | Successful ClassRef/DeclRef selections are at least the requested low. Unachievable requests receive signed errors. |
+| IIP-SSO01.gb | Success | Both select medium, stronger than low. Unachievable requests receive signed errors. |
+| IIP-SSO01.gc | Failed (Product) | ClassRef selects medium; DeclRef selects low. Subsequent exact medium succeeds with the same configuration, SP, and login input, demonstrating availability of the stronger candidate. |
+| IIP-SSO01.gj | Success | For both reference types, reversing candidate order also changes the response selection to follow the first candidate. |
 
-## 実装と判定の根拠
+## Implementation and determination evidence
 
-`AuthnContextCampaignInputs`がローカルアダプターの入力をRunと対象メタデータのハッシュへ固定し、既存の事前取込ブラウザキャンペーンで署名付き要求を生成する。入力は送信条件のみであり、強度順位やVerdictの確認操作にはならない。元の経路の要求署名・RelayState・ACS相関を維持する。これは既存キャンペーンの要求生成経路であり、新たなケース内HTTP送信は追加していない。
+`AuthnContextCampaignInputs` binds local adapter inputs to the Run and target metadata hash and generates signed requests through the existing preloaded browser campaign. Inputs specify sending conditions; they are not confirmation of strength order or Verdict. Existing request signatures, RelayState, and ACS correlation are preserved. This uses the existing campaign request generation path and adds no case-side HTTP sending.
 
-Shibbolethの標準`shibboleth.AuthnComparisonRules`とPasswordフローの`supportedPrincipals`を使用した。ClassRefには`saml2`、DeclRefには実機同梱定義の`saml2declref`を使う。独自URNを比較用の識別子として登録し、製品自身の比較ルールへ順序を設定する。実在する認証方式の強度をSuiteが決めたものではない。最大値の試験ではlow／mediumのみを利用可能にし、highを上限として要求する。一般利用の設定に対する推奨ではなく、隔離した参照IdPの一時試験設定である。
+The campaign uses standard Shibboleth `shibboleth.AuthnComparisonRules` and Password-flow `supportedPrincipals`. ClassRef uses `saml2`; DeclRef uses the product's bundled `saml2declref` definition. Custom URNs identify comparison values, and the product's own comparison rules define their order. Suite does not determine the strength of real authentication methods. The maximum test makes only low/medium available and requests high as the upper bound. This is temporary test configuration for an isolated reference IdP, not a recommendation for general deployment.
 
-設定方法は[Shibboleth AuthenticationFlowSelection](https://shibboleth.atlassian.net/wiki/spaces/IDP5/pages/3199505253/AuthenticationFlowSelection)と、実機同梱の`authn-system.xml`を照合した。元設定・適用設定・各往復前後の読み戻し・復元ハッシュを保存する。有効な認証フローがPasswordだけであることも各読み戻し時に確認する。
+Configuration was checked against [Shibboleth AuthenticationFlowSelection](https://shibboleth.atlassian.net/wiki/spaces/IDP5/pages/3199505253/AuthenticationFlowSelection) and bundled `authn-system.xml`. Original and applied configuration, read-back before and after each exchange, and restoration hashes are saved. Every read-back also verifies that Password is the only enabled authentication flow.
 
-原文collectorは、同じ事前取込メタデータ、公開されたACS／送信先、要求IDと応答、署名、復号、Audience、SubjectConfirmationを検査する。RequestedAuthnContext以外の要求入力は指紋で固定する。準備証拠はローカルファイルとして読み込み、原文のハッシュと参照を再照合する。maximumでは利用可能性対照の原文も正式判定で検証し、候補の存在を設定ラベルだけで判定しない。
+The original-evidence collector checks the same preloaded metadata, published ACS/destination, request ID and response, signature, decryption, Audience, and SubjectConfirmation. Request inputs other than RequestedAuthnContext are fixed by fingerprint. Preparation evidence is loaded from a local file and rechecked against original hashes and references. Formal maximum evaluation also verifies originals from availability controls; configuration labels alone do not establish candidate availability.
 
-`AuthnContextConfigurationTestCase`をCONFIG registryへ登録した。ケースはOutcomeを返し、正式なPASS／FAILはEvaluatorが変換する。今回の確定はいずれも`attested=false`。無応答、HTTP画面の見た目、設定保存成功だけを確定根拠にしていない。
+`AuthnContextConfigurationTestCase` is registered in the CONFIG registry. Cases return Outcome; Evaluator converts formal PASS/FAIL. All determinations here are `attested=false`. Missing responses, HTTP page appearance, or successful configuration saves alone are insufficient evidence.
 
-## 証拠と検証
+## Evidence and verification
 
-<!--g1-literal--> 正式Runは`run_FWMYG7PY9SWNNNMYQA39DS4B8D`。評価条件16往復＋利用可能性対照4往復の計20往復で署名・復号・相関が成立した。元設定へ復元後、通常SSOの前提を1往復実行してケースを開始し、証拠を使って正式評価した。
+<!--g1-literal--> Formal Run: `run_FWMYG7PY9SWNNNMYQA39DS4B8D`. Signatures, decryption, and correlation passed for 20 round trips: 16 evaluation conditions + 4 availability controls. After original configuration restoration, 1 normal SSO prerequisite round trip was completed, cases were started, and the evidence was formally evaluated.
 
-証拠は`build/acceptance/reference-20260918/shibboleth-authn-context-acceptance/`、正式結果は`shibboleth-authn-context-evaluation/`に置く。`verify_authn_context_acceptance.py`が準備証拠の再生成一致、インストールの読み戻し、正負対照、通常SSO前提、正式結果、原文参照の不変性を検査してから台帳へ採用する。原文やローカル証拠はGitのignore設定を維持する。
+Evidence is in `build/acceptance/reference-20260918/shibboleth-authn-context-acceptance/`; formal results are in `shibboleth-authn-context-evaluation/`. `verify_authn_context_acceptance.py` checks equality with regenerated preparation evidence, installed-record read-back, positive and negative controls, the normal SSO prerequisite, formal results, and unchanged original references before inventory adoption. Original and local evidence retain their Git ignore settings.
 
-<!--g1-literal--> 認証コンテキスト関連の対象テストはSAML 2件＋Runner 13件が成功。集約処理の正対照4件、参照形式別の負対照8件、条件不足4件、対照未確認4件を実行した。さらに実測証拠への欠落・重複・応答取り違え・対照未確認の変形が全ケースでNOT_VERIFIEDに戻ることを確認した。全テスト一式の実行済みという意味ではない。
+<!--g1-literal--> Related targeted tests passed: SAML 2 + Runner 13. Aggregation checks executed 4 positive controls, 8 reference-specific negative controls, 4 missing-condition checks, and 4 unverified-control checks. Missing, duplicate, mismatched-response, and unverified-control mutations of observed evidence returned NOT_VERIFIED for every case. This does not mean the entire test suite ran.
 
-<!--g1-literal--> G1生成一致・構造46/46を確認。G2の既知の保護実装署名差分は別途残っており、リリース可能とは扱わない。
+<!--g1-literal--> G1 generated-document consistency and structural checks passed 46/46. Known G2 protected-implementation signature differences remain separately unresolved; this is not release readiness.
 
-## 設定・操作の記録
+## Configuration and operation records
 
-<!--g1-literal--> 初回は参照コンテナの起動コマンドが`sleep infinity`であることを見落とし、コンテナ再起動後のTomcat起動が不足した。プロトコル0往復で終了。設定を全バイト復元し、Tomcatを起動してメタデータHTTP 200を確認した。続く試行で16往復を観測し、利用可能性対照を加えた最終試行で20往復を観測した。失敗試行も操作総数に含む。
+<!--g1-literal--> The initial attempt overlooked that the reference container's startup command was `sleep infinity`; Tomcat did not start after container restart. It ended with 0 protocol round trips. Configuration was restored byte-for-byte, Tomcat started, and metadata HTTP 200 verified. The next attempt observed 16 round trips; the final attempt with availability controls observed 20. Failed attempts are included in total operations.
 
-<!--g1-literal--> この実装バッチ全体は製品側ファイル書込28回（設定24回・一時メタデータ4回）、製品コンテナ再起動8回、Tomcat明示起動7回、サービス再読込2回、一時メタデータ削除4回、プロトコル往復37回。Suite入力書込3回・準備証拠配置4回。イメージビルド2回、Suite／転送コンテナ再作成は各2回。本人操作0回。CONFIG APIの余分なnoteによる拒否1回、結果取得URLの誤り1回も記録し、いずれも製品操作ではない。
+<!--g1-literal--> Across this implementation batch: product file writes 28 (configuration 24, temporary metadata 4), product container restarts 8, explicit Tomcat starts 7, service reloads 2, temporary metadata deletions 4, protocol round trips 37. Suite input writes 3, preparation evidence installations 4. Image builds 2; Suite/forwarder container recreations 2 each. User interactions 0. Also recorded: 1 CONFIG API rejection for an extra note and 1 incorrect result retrieval URL; neither is a product operation.
 
-設定回数は少なくない。最終キャンペーンは条件を同じ設定ごとにまとめ、通常比較・maximum・復元の切替で実行する。今回増えた初回起動失敗と対照追加の再試行は今後の定常手順には含めない。次の改善対象は通常SSO前提の取込をキャンペーン準備と共用することと、ケース別の小さな再起動を増やさず製品別にまとめて実行することである。
+The configuration count is substantial. The final campaign groups conditions sharing configuration and switches among normal comparison, maximum, and restoration. Initial startup failure and the retry to add controls are not part of the future routine procedure. Next improvements are sharing the normal SSO prerequisite import with campaign preparation and grouping execution by product to avoid additional small case-specific restarts.
 
-<!--g1-literal--> 実機イメージは`samlscope:reference-authn-context-v53`、digestは`sha256:10f435a8289e3ea733fb8b54a06c8513e7f9eeac70f3804997c6cf5a1bb75241`。ソースハッシュは`authn-context-runtime-v53/source.json`。無関係な既存SOAP差分を隔離ビルドから除外した。細分化したコミットは作成していない。
+<!--g1-literal--> Native image: `samlscope:reference-authn-context-v53`; digest: `sha256:10f435a8289e3ea733fb8b54a06c8513e7f9eeac70f3804997c6cf5a1bb75241`. Source hash: `authn-context-runtime-v53/source.json`. Unrelated existing SOAP changes were excluded from the isolated build. No separate fine-grained commits were created.

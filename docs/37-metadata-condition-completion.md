@@ -1,48 +1,48 @@
-# メタデータ拡張点・既定ACSの不足条件の補完
+# Missing metadata-extension and default-ACS conditions
 
-## 結果
+## Results
 
-<!--g1-literal--> 未検証は490→489観測、異なるケースIDは161のまま。SimpleSAMLphpのIIP-IDP12.cをSuccessとして採用した。Failed・Warningの追加はない。入力生成の追加自体は削減件数に含めない。
+<!--g1-literal--> Unverified observations 490→489; distinct IDs remain 161. SimpleSAMLphp IIP-IDP12.c became Success. No Failed/Warning additions. New input generation alone is not counted as a reduction.
 
-## まとめて追加した入力と実行経路
+## Batched inputs and execution paths
 
-| 対象 | 追加した条件 | 完成範囲 |
+| Target | Added conditions | Implemented scope |
 |---|---|---|
-| 拡張点 | Organization、ContactPerson、AffiliationDescriptorの非SAML名前空間拡張 | 必須の親要素構造を保持して署名メタデータを生成。製品自身のパーサーを経由した取込と署名付きSSOを実行 |
-| 名前空間の負の対照 | Organization/Extensions内のSAML名前空間要素 | 旧root直下の入力と異なるvariant IDで生成。旧証拠を新条件へ流用しない |
-| 既定ACS | 最初が明示falseで次が省略、すべてfalse、複数true | 要求から選択属性を省略して実行し、応答先をメタデータの既定選択と照合 |
-| index負の対照 | 同じACS集合内の重複index | 入力生成のみ。重複入力の受理を直ちに製品違反と扱うオラクルには接続していない |
+| Extension points | Non-SAML namespaces in Organization, ContactPerson, AffiliationDescriptor | Preserve required parent structure in signed metadata; native parsing and signed SSO |
+| Namespace negative control | SAML namespace element inside Organization/Extensions | Separate variant from the old root-level input; no evidence reuse across conditions |
+| Default ACS | First explicitly false/next omitted; all false; multiple true | Omit request selection fields and compare response destination with metadata default selection |
+| Index negative control | Duplicate index in one ACS collection | Input generation only; no oracle that treats acceptance alone as product violation |
 
-AffiliationDescriptorは通常のRoleDescriptor群と同一EntityDescriptorへ混在させず、別のEntityDescriptorとして集合内に配置する。既定ACSの照合はAssertionConsumerServiceの集合だけを使用する。
+AffiliationDescriptor occupies a separate EntityDescriptor in the aggregate, not an EntityDescriptor containing ordinary roles. Default selection compares only the AssertionConsumerService collection.
 
-SimpleSAMLphpの取込ドライバーにbrowser_sso_idpプロファイルを追加した。既定ACSの対照はメタデータ変更後の応答先変更であり、通常AuthnRequest専用の署名破壊APIをこの経路へ呼び出さないよう修正した。初回試験の未対応呼出しはSuiteのHTTPエラーとして記録し、拒否成功の証拠には使っていない。
+The SimpleSAMLphp driver gained browser_sso_idp. Default-ACS controls change response destinations after metadata updates; the normal-AuthnRequest-specific signature-corruption API is not called on this path. The initial unsupported call remains a Suite HTTP error, not successful rejection evidence.
 
-## 実測で判明したSuiteの誤判定と修正
+## Incorrect Suite judgment found and corrected
 
-IIP-MD05.a3の承認済み制約は「未知拡張の受理はMD05.g、ここでは名前空間修飾と拡張点制約を判定する」と分離している。既存の消費側オラクルはSuiteが生成した不適切な拡張を製品が受理するとVIOLATEDを返していた。これは対象自身の拡張内容が不適切である証拠にはならない。
+MD05.a3 separates unknown-extension acceptance (MD05.g) from namespace/extension-point constraints. The old consumer oracle returned VIOLATED when the product accepted a Suite-authored malformed extension. This does not prove malformed target-authored extensions.
 
-この経路を修正し、名前空間を直接検査する証拠がない限りreadyにせず、NOT_VERIFIEDを維持する。必要証拠には `namespace-qualification:extension-points` を追加した。元の誤ったFAIL結果は履歴として保存するが、比較表・台帳には採用しない。修正後の新Runでも同じ入力が受理され、製品FAILが発生しないことを確認した。
+Without direct namespace evidence, the case now remains not ready and NOT_VERIFIED, requiring namespace-qualification:extension-points. Old false FAIL is retained historically but not adopted in comparison/inventory. A fresh Run still accepted the same input without a product FAIL.
 
-修正後のケースは未完了なので結果の理由は `case.pending-interaction`。protocol-evidenceの詳細で、操作では解消できない名前空間確認経路の不足を記録し、台帳の次アクションを更新した。試行完了のconfigure送信は「Transcript駆動ケースはoperator確認不可」とSuiteが拒否したため、その経路で確定を代用していない。
+The unfinished case keeps case.pending-interaction. Protocol-evidence detail identifies a namespace observation path that additional operations cannot resolve. The inventory next action was updated. Suite rejected the attempted configure conclusion because Transcript-driven cases cannot be operator-confirmed; that path did not substitute for evidence.
 
-## 証拠と再現
+## Evidence and reproduction
 
-基点は `build/acceptance/reference-20260918/`。fixture原本、パーサー出力、設定投入・復元、フロー相関、要求・応答原本とSHA-256 manifestを保存した。
+Root: build/acceptance/reference-20260918/. Original fixtures, parser output, install/restore, flow correlation, original requests/responses and SHA-256 manifests are retained.
 
-| 試験 | Run | フォルダー |
+| Trial | Run | Folder |
 |---|---|---|
-| 既定ACS | run_XKNHNHTS27D8V15RGGVWPPNWX4 | simplesamlphp-default-acs |
-| 拡張点・修正前 | run_9HVYC3FA0WW6BYBZSMY1PN33YN | simplesamlphp-extension-points |
-| 拡張点・修正後 | run_NTB45B0333JF88W97SGWEMZD0D | simplesamlphp-extension-points-corrected |
+| Default ACS | run_XKNHNHTS27D8V15RGGVWPPNWX4 | simplesamlphp-default-acs |
+| Extensions before correction | run_9HVYC3FA0WW6BYBZSMY1PN33YN | simplesamlphp-extension-points |
+| Extensions after correction | run_NTB45B0333JF88W97SGWEMZD0D | simplesamlphp-extension-points-corrected |
 
-採用検証器 `verify_default_acs_batch.py` は、実際の要求にACS選択属性がないこと、署名の存在、応答のInResponseToとSuccess、実際の受信URLと元メタデータの選択先が一致することを確認する。全指定条件と変更対照が揃った場合だけ台帳へ採用する。
+verify_default_acs_batch.py requires absent ACS-selection attributes in the actual request, signature presence, correlated InResponseTo/Success, and actual reception URL matching the original metadata-selected endpoint. Adoption requires every specified condition and change control.
 
-最終稼働イメージは `samlscope:reference-metadata-conditions-v27-final`、digestは `sha256:98a366f4362bddb9d5d1d395c6080b53d7eeeac67378cec0159a4eb9c3de04d4`。
+Final image: samlscope:reference-metadata-conditions-v27-final; digest sha256:98a366f4362bddb9d5d1d395c6080b53d7eeeac67378cec0159a4eb9c3de04d4.
 
-## コスト・検証・残り
+## Costs, verification and remaining work
 
-<!--g1-literal--> このバッチは入力種類追加8、ネイティブ取込23、設定書込49（投入・復元46と各バッチfinallyの再復元3）、Run作成3、preflight3、Docker build2、Suite／転送コンテナ再作成各2、本人操作0、製品再起動0。configureの拒否試行1。元設定はSHA-256一致で復元済み。
+<!--g1-literal--> Added input kinds 8; native imports 23; configuration writes 49 (46 install/restores plus three finally restorations); Runs 3; preflight 3; docker builds 2; Suite/forward recreations 2 each; user actions 0; product restarts 0; rejected configure attempt 1. Original SHA-256 restoration verified.
 
-SAML生成とRunner全体をまとめて回帰検証し、実測で発見した誤判定の修正だけ追加検証した。G1生成一致・構造検証成功。G2の署名済みソース差分は引き続き未解消であり、リリース承認完了とは扱わない。
+Batched SAML/Runner regression passed, with additional verification of the false-judgment correction. G1 generation/structure passed. Existing G2 protected-source differences remained unresolved; no release approval is claimed.
 
-名前空間の直接確認、入れ子内の全entityの鍵・エンドポイント使用、重複index対照の適切な判定、他製品への同一条件の実行は継続課題。今回の受理結果や単体テストだけでこれらを完了と扱わない。
+Direct namespace inspection, all nested entity endpoint/key usage, sound duplicate-index controls and equivalent trials on other products remain. Acceptance or unit tests alone do not complete them.

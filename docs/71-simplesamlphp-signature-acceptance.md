@@ -1,34 +1,34 @@
-# SimpleSAMLphp の共通署名試験
+# SimpleSAMLphp shared signature tests
 
-SimpleSAMLphp の共通署名試験へ、製品が直接返す署名検証エラーの観測を接続した。汎用 HTTP エラーを拒否へ変換せず、正常な署名の受理、署名付き成功応答の作成、本文・参照・署名値を破損した要求への具体的な検証エラーを組み合わせる。
+SimpleSAMLphp shared signature tests now use observations of signature-verification errors returned directly by the product. Generic HTTP errors are not converted to rejection. The evidence combines acceptance of normal signatures, creation of signed successful responses, and specific validation errors for requests with corrupted bodies, references, or signature values.
 
-<!--g1-literal--> ALG01 と ALG02 を browser_sso_idp / metadata_idp / ecp_idp / single_logout_idp で実行し、8 観測を正式 PASS に確定した。未検証は 460 → 452 観測、異なるケース ID は 156。各プロファイルの共通 BROWSER 試験であり、ECP SOAP・SLO メッセージ固有の署名試験を代替したとは扱わない。
+<!--g1-literal--> ALG01 and ALG02 ran on browser_sso_idp / metadata_idp / ecp_idp / single_logout_idp, producing 8 formal PASS observations. Unverified observations decreased 460 → 452; distinct case IDs are 156. These are each profile's shared BROWSER tests, not substitutes for signature tests specific to ECP SOAP or SLO messages.
 
-## 製品のエラーと Suite の証拠
+## Product errors and Suite evidence
 
-稼働中の製品ソースで、IdP が `Message::validateMessage` を呼び、署名検証が有効な場合に `checkSign` を実行する経路を確認した。元の SP メタデータを製品自身のパーサーで取り込み、`validate.authnrequest=true` を確認した。Suite 側で署名ポリシーを模倣して判定したものではない。
+Running product source confirmed that the IdP calls `Message::validateMessage` and, with signature validation enabled, executes `checkSign`. The product's own parser imported original SP metadata and `validate.authnrequest=true` was confirmed. Suite did not imitate the product's signature policy to make the determination.
 
-実機の直接応答では、本文・参照先の破損に対して `SimpleSAML\Error\Exception: Validation of received messages enabled, but no signature found on message.` が現れた。署名値の破損は、対象要素が AuthnRequest の `NOTVALIDCERTSIGNATURE` だった。前者は単に「署名なし要求を送った」という意味ではなく、Suite の原文再生で署名を持つ指定の破損 fixture であることを別途検証する。
+Direct native responses to corrupted bodies/references contained `SimpleSAML\Error\Exception: Validation of received messages enabled, but no signature found on message.` Corrupted signature values produced `NOTVALIDCERTSIGNATURE` for an AuthnRequest element. The former does not merely mean an unsigned request was sent: Suite original replay separately verifies that the request is the specified signed, corrupted fixture.
 
-観測器は固定の署名エラー種別、要求 ID、要求原文 SHA-256、要求・応答 URL、応答時刻、応答本文のハッシュを保存する。Cookie、認証情報、フォーム入力、エラーページ全文は保存しない。一般的な `UNHANDLEDEXCEPTION`、画面の「Signature failed」という語、別種の SAML 要素、正常 HTTP 応答、script/style 内だけの文字列は、この分類の根拠にしない。
+The observer saves a fixed signature-error category, request ID, original request SHA-256, request/response URLs, response time, and response-body hash. It does not save Cookie, credentials, form inputs, or complete error pages. Generic `UNHANDLEDEXCEPTION`, page text “Signature failed,” other SAML element types, normal HTTP responses, and strings appearing only in script/style are insufficient for classification.
 
-判定器は既存の outbox 原文を Run の鍵で再生成して一致させる。正常応答の実署名を対象メタデータの鍵で検証し、作成側のアルゴリズムを確認する。異常系は、元の要求を送った同じエンドポイントからの直接応答であり、要求ハッシュと時刻が一致し、当該 fixture に対応する明示的な署名エラーがある場合に限り採用する。汎用エラー、別 URL へのリダイレクト、無応答、衝突する SAML 応答は未検証のままにする。
+The verifier regenerates existing outbox originals with the Run key and checks equality. It verifies the actual normal-response signature using the target metadata key and checks producer algorithms. Abnormal evidence is adopted only for a direct response from the endpoint receiving the original request, with matching request hash/time and an explicit signature error corresponding to that fixture. Generic errors, redirects to another URL, no response, and conflicting SAML responses remain unverified.
 
-## 実証と負の対照
+## Demonstration and negative controls
 
-<!--g1-literal--> 初回の観測では汎用エラーコードだけを記録していたため採用しなかった。診断用に破損要求 3 件を再送して具体的な製品エラーを調べた後、詳細な分類を接続して新しい Run で全マトリクスを再実行した。初回と診断用再送は正式判定の証拠に使っていない。
+<!--g1-literal--> Initial observations recorded only generic error codes and were not adopted. After 3 corrupted requests were resent diagnostically to inspect specific product errors, detailed classification was connected and the full matrix rerun with new Runs. Initial and diagnostic resends are not formal determination evidence.
 
-<!--g1-literal--> 各観測で、Run・ケース・要求・エラー・対象メタデータ・fixture・応答の取り違え／欠落に加え、HTTP status・原文ハッシュ・エンドポイントの取り違えを含む 12 種の負の対照を確認した。8 観測分、計 96 対照が NOT_VERIFIED となった。これらを製品観測の解消数へ加算していない。
+<!--g1-literal--> Each observation checked 12 negative controls covering mismatched/missing Run, case, request, error, target metadata, fixture, and response, plus incorrect HTTP status, original hash, and endpoint. Across 8 observations, all 96 controls returned NOT_VERIFIED. They are not added to resolved product-observation counts.
 
-分類器には、汎用エラーや別要素、正常応答、非表示スクリプトだけのエラー文字列を拒否する確認を追加した。本バッチはコンパイル、実機マトリクス、原文と対照の再生、正式 API 評価をまとめて実施した。全 Java/Web テストの再実行とコミットは行っていない。
+Classifier checks were added to reject generic errors, other elements, normal responses, and error strings present only in hidden scripts. This batch combined compilation, the native matrix, original/control replay, and formal API evaluation. The full Java/Web test suite was not rerun, and no commit was made.
 
-## 設定操作と保存先
+## Configuration operations and storage
 
-<!--g1-literal--> 初回・診断・再実行を含め、Run 作成 8、製品設定の書込は復元を含め 12、製品再起動 0、本人操作 0。Suite に記録された AuthnRequest は 80、Response は 32、これに未採用の診断用再送 3 件が加わる。Suite build、Suite 再作成、転送コンテナ再作成は各 1、receipt 配置 8、正式評価 API 呼出し 4。全プロファイルで設定の差分だけを適用し、最後に元のバイト列への復元を確認した。
+<!--g1-literal--> Including initial attempts, diagnostics, and reruns: Run creations 8, product configuration writes including restoration 12, product restarts 0, user interactions 0. Suite recorded AuthnRequests 80 and Responses 32, plus 3 unadopted diagnostic resends. Suite build, Suite recreation, and forwarder recreation 1 each; receipt installations 8; formal evaluation API calls 4. Only configuration differences were applied across profiles; restoration to original bytes was finally verified.
 
-採用した証拠は `build/acceptance/reference-20260918/simplesamlphp-native-signature-observation-v2/<profile>/`。原文と対照は `verification/protocol-verification.json`、正式結果は `evaluation/result.json`。稼働製品の検証関数と呼出し元は親の `native-source/` にソースとハッシュを記録した。
+Adopted evidence: `build/acceptance/reference-20260918/simplesamlphp-native-signature-observation-v2/<profile>/`. Originals and controls: `verification/protocol-verification.json`; formal results: `evaluation/result.json`. Running-product validation functions and callers are stored with source and hashes in the parent `native-source/`.
 
-操作記録は `native-ssp-signature-runtime-v57/acceptance-operations.json`、実行イメージは `samlscope:reference-native-ssp-signature-v57`。台帳は `verify_native_signed_acceptance.py` が設定復元、元 fixture、読み戻し、原文、対照、正式判定と証拠参照の一致を検査した結果を採用する。
+Operation records: `native-ssp-signature-runtime-v57/acceptance-operations.json`; execution image: `samlscope:reference-native-ssp-signature-v57`. The inventory adopts results checked by `verify_native_signed_acceptance.py` for configuration restoration, original fixtures, read-back, originals, controls, formal determinations, and matching evidence references.
 
 ```sh
 .venv/bin/python dev/reference-acceptance/verify_native_signed_acceptance.py build/acceptance/reference-20260918 simplesamlphp
@@ -36,4 +36,4 @@ SimpleSAMLphp の共通署名試験へ、製品が直接返す署名検証エラ
 .venv/bin/python dev/reference-acceptance/generate_comparison.py --evidence-root build/acceptance/reference-20260914
 ```
 
-Keycloak の同種ケースは引き続き未検証。今回の製品固有エラーを他製品へ流用しない。
+Equivalent Keycloak cases remain unverified. These product-specific errors are not reused for other products.

@@ -1,45 +1,45 @@
-# 属性公開ポリシー比較の正式判定接続
+# Formal evaluation integration for attribute-release policy comparisons
 
-## 次のバッチへ追加した再判定経路
+## Reevaluation path added to the next batch
 
-属性ポリシーのCONFIG実装が、原本とネイティブ準備記録の比較に成功しても証拠ステータスを常に未準備としていた箇所を修正した。EntityAttributes、RequestedAttribute、索引比較の各ケースで、既存の署名検査・固定入力比較が成立した場合に限って自動判定へ進める。
+Corrected attribute-policy CONFIG implementation that always reported evidence as unprepared even after successful original/native-preparation comparison. EntityAttributes, RequestedAttribute and index-comparison cases proceed to automatic evaluation only when existing signature checks and fixed-input comparisons succeed.
 
-自己申告操作が許可されないため終了したケース、および属性比較の証拠不足で終了したケースにも、保存済み証拠による再判定を追加した。完了したRunに限定し、追加のTranscript証拠があり、比較が成立した場合だけ更新する。既存の確定結果や無関係な未検証理由は対象にしない。再判定は要求を送信せず、製品設定も変更しない。
+Added saved-evidence reevaluation for cases terminated because attestation was disallowed or attribute-comparison evidence was incomplete. Updates are limited to completed Runs with additional Transcript evidence and successful comparison. Existing conclusive results and unrelated unverified reasons are excluded. Reevaluation sends no requests and changes no product configuration.
 
-この変更は証明書・UI処理とまとめて`reference-config-ui-v64`へ反映した。比較・結合・原本読取・準備記録の既存チェックも同じバッチで成功した。属性ケースの新規実機確定は行っておらず、台帳減少には数えない。下記のShibboleth正式結果と当時の検証記録はそのまま保持する。
+This change was included with certificate/UI processing in `reference-config-ui-v64`. Existing comparison, binding, original-reading and preparation checks passed in the same batch. No new product-level attribute conclusion was made or counted as an inventory reduction. The following Shibboleth formal results and contemporary validation records are retained.
 
-固定ポリシーの準備記録、署名・復号後の属性観測、要求ごとの比較条件をCONFIGケースへ接続した。[55](55-fixed-attribute-policy-observations.md)で段階的に追加した比較・収集・結合処理が、実際のRunの判定に使われる。
+Connected fixed-policy preparation records, signed/decrypted attribute observations and request-specific comparison conditions to CONFIG cases. The comparison, collection and binding introduced incrementally in [55](55-fixed-attribute-policy-observations.md) now participate in actual Run evaluation.
 
-## 正式結果
+## Formal results
 
-Run `run_C97YCPR7F5KNWRMCMHWNPQ11N9`の保存済み実測を使用した。製品設定の再変更やSSO再実行はせず、検証済み準備記録を配置して準備確認を実行した。
+Used saved observations from Run `run_C97YCPR7F5KNWRMCMHWNPQ11N9`. Without changing product configuration or rerunning SSO, installed validated preparation records and performed preparation confirmation.
 
-| Shibbolethのケース | 正式結果 | 根拠 |
+| Shibboleth case | Formal result | Evidence |
 |---|---|---|
-| `IIP-IDP03-a-idp-01` | Success | EntityAttributes存在・不存在による属性差 |
-| `IIP-IDP04-a-idp-01` | Success | RequestedAttribute存在・不存在とisRequiredの差 |
-| `IIP-IDP04-b-idp-01` | Success | 同一メタデータで要求の索引を切替えた属性差と復帰 |
+| `IIP-IDP03-a-idp-01` | Success | Attribute differences with EntityAttributes presence/absence |
+| `IIP-IDP04-a-idp-01` | Success | RequestedAttribute presence/absence and isRequired differences |
+| `IIP-IDP04-b-idp-01` | Success | Attribute differences and return to baseline when switching request indices with identical metadata |
 
-すべて`SATISFIED / configuration.attribute-policy.comparison-observed`をEvaluatorがPASSへ変換した。自己申告の結果ではなく、`attested=false`である。準備確認だけでは合格しない。自動比較が成立しない場合は既存の手動証拠確認経路を維持する。
+Evaluator converted every `SATISFIED / configuration.attribute-policy.comparison-observed` to PASS. These are not attested results: `attested=false`. Preparation confirmation alone cannot pass. If automatic comparison fails, the existing manual evidence-confirmation path remains.
 
-<!--g1-literal--> 未検証は470→467観測。異なるケースIDは157のまま。Keycloak／SimpleSAMLphpの同ケースは今回のShibboleth実証から推定しない。台帳監査はエラーなし、inventory SHA-256は`3cfb7fa86140303319cbd9faccf5661ae55f227cba3477090eb09e302d456a6f`。
+<!--g1-literal--> Unverified observations decreased 470→467; distinct case IDs remain 157. The corresponding Keycloak/SimpleSAMLphp cases are not inferred from this Shibboleth evidence. No inventory-audit errors; inventory SHA-256: `3cfb7fa86140303319cbd9faccf5661ae55f227cba3477090eb09e302d456a6f`.
 
-## 準備記録の扱い
+## Preparation records
 
-`export_attribute_policy_preparation.py`は、ネイティブポリシーの意味、設定の前後一致、元メタデータの条件、署名・復号後の観測を検査してローカルアダプター用記録を生成する。記録はVerdictを含まない。固定入力の比較指紋は、検査済みルールが参照する対象SP・uid入力元と固定した設定から作る。署名で確認した属性入力の一致も別途必要である。
+`export_attribute_policy_preparation.py` checks native-policy semantics, before/after configuration equality, original metadata conditions and signed/decrypted observations to generate local-adapter records. Records contain no Verdict. Fixed-input comparison fingerprints derive from the inspected rules' target SP/uid input and fixed configuration. Signed attribute-input equality is also required independently.
 
-Runnerは`attribute-policy-preparations/<run>.json`をデータディレクトリ内から読む。この場所は信頼されたローカルアダプター／管理者用であり、未検証の外部ファイルを任意に投入してよい境界ではない。HTTP投稿経路は追加していない。Run、固定対象メタデータ、準備記録が指す原本ハッシュ、要求／応答参照を再照合し、通常ファイル以外や過大なファイルも拒否する。ローカル管理者が記録自体を捏造した場合まで製品署名だけで検出できるとは主張しない。
+Runner reads `attribute-policy-preparations/<run>.json` from its data directory. This is a trusted local-adapter/administrator boundary, not permission to submit arbitrary unvalidated external files. No HTTP submission path was added. Run, fixed target metadata, original hashes referenced by preparation, and request/response references are rechecked; nonregular/oversized files are rejected. Product signatures alone are not claimed to detect an administrator fabricating the record itself.
 
-初回の出力では、対象entityIDに公開resultの`redacted:internal-target`を使うSuite側の不備があった。Runnerはこれを拒否し、未検証を維持した。exporterを固定メタデータ原本のentityIDを使うよう修正した。拒否された記録は別名で保存し、修正版のハッシュと訂正理由を`preparation-correction.json`へ記録した。受理済み結果を別の準備情報で上書きしたのではない。
+Initial output contained a Suite defect using public-result value `redacted:internal-target` as target entityID. Runner rejected it and retained unverified status. The exporter was corrected to use entityID from fixed original metadata. Rejected records were saved separately; corrected hashes and explanation are in `preparation-correction.json`. Accepted results were not overwritten with different preparation information.
 
-元証拠は`build/acceptance/reference-20260918/shibboleth-attribute-policy-preparation/`、正式なconfigure応答と結果は`shibboleth-attribute-policy-evaluation/`。`verify_attribute_policy_acceptance.py`が両方を照合して生成台帳へ採用する。元の実測結果・拒否記録・修正後の正式結果を分けて保持する。
+Original evidence: `build/acceptance/reference-20260918/shibboleth-attribute-policy-preparation/`; formal configure responses/results: `shibboleth-attribute-policy-evaluation/`. `verify_attribute_policy_acceptance.py` matches both before adopting into the generated inventory. Original observations, rejection records and corrected formal results are retained separately.
 
-## まとめて実施した検証と操作
+## Batched validation and operations
 
-<!--g1-literal--> Javaは計15テスト成功（比較・結合・原本属性読取・メタデータ入力・署名付き索引要求・API入力制限・準備ファイル境界）。Pythonの準備記録検査4テストも成功。これまでバッチ待ちだった負の対照をまとめて実行し、後から追加した準備ファイル境界の検証を補完した。G1生成一致・構造46/46。G2の既存署名差分は未解消。
+<!--g1-literal--> 15 Java tests passed: comparison, binding, original attribute reading, metadata inputs, signed indexed requests, API input restrictions and preparation-file boundary. 4 Python preparation-record tests also passed. Previously deferred negative controls ran together, supplemented by the later preparation-file checks. G1 generated-document consistency/structural checks 46/46. The existing G2 signed-source difference remains unresolved.
 
-<!--g1-literal--> G2は20/21でG2-30が阻害要因のまま。今回のM1Runtime接続変更も保護ソースの署名差分に含まれる。旧承認を今回の実装へ流用せず、リリース完了とは扱わない。
+<!--g1-literal--> G2 remains 20/21, blocked by G2-30. This M1Runtime integration change is also part of the protected-source signed difference. Earlier approvals are not reused for the current implementation; release completion is not claimed.
 
-<!--g1-literal--> 今回の正式判定接続で製品設定書込・製品再起動・SSO・新Run作成・本人操作は0回。準備確認POST3回、ローカル準備入力の配置2回（拒否分を含む）、拒否記録の保存先変更1回。イメージbuild1回、Suite／転送コンテナ再作成各1回。前段の実測は[55](55-fixed-attribute-policy-observations.md)に失敗・復元込みで記録しており、今回の費用へ二重加算しない。
+<!--g1-literal--> Product configuration writes, product restarts, SSO, new Run creation and user interactions for this formal integration were 0. Preparation-confirmation POSTs 3; local preparation-input installations 2, including the rejected input; relocation of rejection records 1. Image build 1; Suite/forwarder recreations 1 each. Earlier observations are recorded with failures/restoration in [55](55-fixed-attribute-policy-observations.md) and are not charged twice here.
 
-署名済み実装チェックポイント`1afa954a`から隔離ビルドした。稼働イメージは`samlscope:reference-attribute-policy-oracle-v43`、digestは`sha256:ebc4f33b53048011f765dc1b7189850bf7fee1d01a3e447dae0c41691e41e3ca`。別件の作業ツリー内SOAP変更は含めていない。exporterの対象entityID修正はローカル実行器の変更であり、配布したJava成果物の変更ではない。
+Built in isolation from signed implementation checkpoint `1afa954a`. Running image: `samlscope:reference-attribute-policy-oracle-v43`; digest: `sha256:ebc4f33b53048011f765dc1b7189850bf7fee1d01a3e447dae0c41691e41e3ca`. Unrelated working-tree SOAP changes were excluded. The exporter's entityID correction is a local-driver change, not a change to distributed Java artifacts.

@@ -1,32 +1,32 @@
-# 未対応方式のスキップと暗号方式順序の条件判定
+# Skipping unsupported algorithms and evaluating encryption-order conditions
 
-## 実装
+## Implementation
 
-MD05.e9を、前回の原本・要求応答相関・署名検証付きの共通判定へ追加した。対応する方式の順序交換と単一方式条件に加え、先頭がSuite定義の未対応URI、次が対応方式となる条件を要求する。先頭を無条件に使う実装や、全条件で同じ方式を選ぶ実装をSuccessにしない。証拠不足やポリシー未確認はNOT_VERIFIEDのままにする。
+MD05.e9 was added to the common original-byte, request/response-correlation, and signature-verified evaluator. Alongside reversed supported-algorithm order and single-algorithm conditions, it requires a Suite-defined unsupported URI followed by a supported algorithm. Always choosing the first entry or a fixed algorithm for all conditions cannot yield Success. Insufficient evidence or unconfirmed policy remains NOT_VERIFIED.
 
-MD05.e5では、承認済み定義に明記された「同じ一般型の方式が存在しない、または単独なら条件が成立しない」という枝を実装した。SAML2 IdPの公開メタデータ内で、暗号化用または用途省略のKeyDescriptorごとに一般型を検査する。複数候補や分類不能なURIがあるときは、この枝で成功にしない。方式の強弱をSuite独自に順位付けしない。公開メタデータからの判定であり、複数方式を設定できる能力の証明ではない。
+MD05.e5 implements the approved branch in which the condition is false when algorithms of the same general type are absent or there is only one. It examines each encryption or unspecified-use KeyDescriptor in published SAML2 IdP metadata. Multiple candidates or unclassifiable URIs cannot satisfy this branch. Suite does not invent algorithm-strength rankings. This evaluates public metadata, not the ability to configure multiple algorithms.
 
-既存Runが旧実装の設定待ち状態でも、準備確認時に固定済み公開メタデータを再評価できるようにした。設定不可・キャンセルのイベントをこの判定で上書きしない。確認自体はOutcomeを与えず、証拠がなければ従来の未確定経路へ進む。
+Preparation confirmation can reevaluate Run-fixed published metadata even for existing Runs waiting on old implementation configuration. Configuration-unavailable and canceled events are preserved. Confirmation itself supplies no Outcome; missing evidence continues through the existing undecided path.
 
-## 保存済み実機証拠の判定
+## Results from saved runtime evidence
 
-| ケース | Keycloak | Shibboleth | SimpleSAMLphp | 根拠の種類 |
+| Case | Keycloak | Shibboleth | SimpleSAMLphp | Evidence type |
 |---|---|---|---|---|
-| IIP-MD05-e5-idp-01 | Success | Success | Success | 今回の公開スナップショットに、対象KeyDescriptor内のEncryptionMethod広告がないため、明示された条件不成立の枝が成立。 |
-| IIP-MD05-e9-idp-01 | NOT_VERIFIED | Success | NOT_VERIFIED | Shibbolethは対応方式の順序交換に追従し、未対応候補を飛ばした検証済み署名応答を生成。他製品はローカルポリシーとSHA384使用可能性が未確認。 |
+| IIP-MD05-e5-idp-01 | Success | Success | Success | The published snapshots contain no EncryptionMethod advertisements in applicable KeyDescriptors, satisfying the explicitly defined false-condition branch. |
+| IIP-MD05-e9-idp-01 | NOT_VERIFIED | Success | NOT_VERIFIED | Shibboleth's verified signed responses follow reversed supported order and skip unsupported candidates. Other products' local policy and SHA384 availability remain unconfirmed. |
 
-<!--g1-literal--> 未検証は479→475観測、異なるケースIDは158→157。今回のSuccess4観測のうち3観測は定義上の条件不成立、1観測は方式選択の実測。単体テストや操作完了だけを解消件数にはしていない。
+<!--g1-literal--> Unverified observations changed from 479 to 475; distinct case IDs changed from 158 to 157. Of four Success observations, three concern a false condition in the approved definition and one measures algorithm selection. Unit tests and completed operations were not counted as resolved observations.
 
-証拠は`build/acceptance/reference-20260918/algorithm-followup/{product}/`。原本と署名応答は各製品の前回アルゴリズム試験フォルダを参照し、評価前・評価後の結果と確認応答を別途保存した。`verify_algorithm_followup.py`が固定メタデータのdigest、適用対象のRoleとKeyDescriptor、原本取込・復元、署名検証記録、必要条件・証拠参照を照合してから生成台帳へ採用する。
+Evidence is in `build/acceptance/reference-20260918/algorithm-followup/{product}/`. Originals and signed responses reference previous product algorithm directories; before/after results and confirmation responses are saved separately. `verify_algorithm_followup.py` checks fixed metadata digest, applicable Roles/KeyDescriptors, native import/restoration, signature verification, required conditions, and evidence references before generated adoption.
 
-## 検証
+## Validation
 
-Runner・APIの回帰テストをまとめて実施した。追加した順序判定は無条件先頭選択・固定方式・条件欠落を成功にしない。公開条件判定は同種の複数方式・不明なURI・不正なRoleでは確定しない。保存済みRun再評価の追加後には、その再開経路と設定不可イベント維持を対象テストで確認した。
+Runner and API regressions verified that unconditional first selection, fixed algorithms, and missing conditions cannot pass ordering. Multiple algorithms of the same type, unknown URIs, and incorrect Roles cannot conclude the public-condition branch. Tests after saved-Run reevaluation integration covered resumption and preservation of configuration-unavailable events.
 
-各製品の保存証拠監査、台帳監査、G1生成一致・構造検証を実施。G2の既存署名差分は未解消で、リリース完了にはしていない。
+Product saved-evidence audits, inventory audits, G1 generation, and structural validation ran. The existing G2 signature difference remained unresolved; release completion was not claimed.
 
-## 操作量
+## Operation cost
 
-<!--g1-literal--> 製品設定書込0、製品再取込0、製品再起動0、新Run0、新規SSO試行0、本人操作0。保存済みRunへの確認6、Docker build1、Suite／転送コンテナ再作成各1。元のネイティブ取込作業は二重計上しない。
+<!--g1-literal--> Product configuration writes: 0; reimports: 0; product restarts: 0; new Runs: 0; new SSO attempts: 0; user interactions: 0. Saved-Run confirmations: 6; Docker builds: 1; Suite/forwarder recreations: 1 each. Previous native-import operations were not counted again.
 
-稼働イメージは`samlscope:reference-algorithm-order-v37`、digestは`sha256:982a123e8351d1bb8094254491fdf6e445f33a379752a674249ee90a0ed2e99b`。Runnerのみを更新し、以前からある無関係なSOAP差分は含めていない。
+Runtime was `samlscope:reference-algorithm-order-v37`, digest `sha256:982a123e8351d1bb8094254491fdf6e445f33a379752a674249ee90a0ed2e99b`. Only Runner was updated; pre-existing unrelated SOAP differences were excluded.

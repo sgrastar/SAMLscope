@@ -20,8 +20,8 @@ class SamlEncryptionFixtureFactoryTest {
             String name=switch(wrapper){case EncryptedAssertion->"Assertion";case EncryptedID->"NameID";case EncryptedAttribute->"Attribute";};
             String body=switch(wrapper) {
                 case EncryptedAssertion -> "<saml:Issuer>https://issuer.example</saml:Issuer>";
-                case EncryptedID -> "日本語 &amp; text";
-                case EncryptedAttribute -> "<saml:AttributeValue>日本語 &amp; text</saml:AttributeValue>";
+                case EncryptedID -> "\u65e5\u672c\u8a9e &amp; text";
+                case EncryptedAttribute -> "<saml:AttributeValue>\u65e5\u672c\u8a9e &amp; text</saml:AttributeValue>";
             };
             String attributes=switch(wrapper) {
                 case EncryptedAssertion -> " ID='_fixture' Version='2.0' IssueInstant='2026-09-14T00:00:00Z'";

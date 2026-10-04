@@ -1,217 +1,217 @@
-# SLO共通実行基盤と判定の実装計画
+# Implementation Plan for Common SLO Execution Infrastructure and Evaluation
 
-対象は、未検証546観測のうち`browser.oracle-unavailable`で終わっているSLOブラウザoracle未実装の42観測です。3製品の`single_logout_idp`で共通する14ケースを、Suiteが能動的に送出するfixture、相関、対照、判定、表示まで実装します。判定は`Evaluator`が行い、ケースは`outcome`のみを返します（AGENTS.md 3）。送出はoutbox経由です（AGENTS.md 4）。
+Among the 546 unverified observations, the scope is the 42 observations that end with `browser.oracle-unavailable` because the SLO browser oracle is not implemented. For `single_logout_idp` across 3 products, implement the 14 common cases from active fixture delivery by the Suite through correlation, controls, evaluation, and display. `Evaluator` performs evaluation, and cases return only `outcome` (AGENTS.md 3). Delivery goes through the outbox (AGENTS.md 4).
 
-## 1. 対象ケースと必要証拠
+## 1. Target Cases and Required Evidence
 
-| ケース | 必須のfixture | 観測する事実 | 主な解釈制約 |
+| Case | Required fixture | Facts to observe | Main interpretation constraints |
 |---|---|---|---|
-| `IIP-IDP17.b` | 非同期LogoutRequest（Destination不一致／未知SessionIndex）と正常対照 | 応答を返さず、セッションへ適用しない | セッション終了自体はSHOULD。b/b1/b2/b3で分離 |
-| `IIP-IDP17.b1` | 有効署名＋認証済み送信元の信頼できる非同期LogoutRequest | samlp:LogoutResponseを返さない（front/back両方） | 同期の正常対照を併置。HTTPフィードバックはb2の義務 |
-| `IIP-IDP17.b2` | 成功／失敗のfront-channel非同期要求 | user-facing HTTP応答が成功/失敗を示す | 固定「成功」ページを検出するため成功・失敗を対にする。失敗誘導不能時は`not_verified(session_termination_failure_not_inducible)` |
-| `IIP-IDP17.c` | （informational）上流権限・secondary_peer登録 | 伝播の有無を情報記録。Verdictなし | 非伝播はNOT_SUPPORTED。FAILにしない |
-| `IIP-IDP17.r` | 3参加者で最初がタイムアウト／エラー | 伝播実装時に残りへ試行する | 1参加者のみでは`satisfied_with_note`相当の確認ができない。伝播不実装はsatisfied_with_note。タイムアウト単独でFAILにしない |
-| `IIP-IDP17.s` | 非同期でない要求＋参加者失敗 | 二段目StatusCode=PartialLogout | 全成功時にPartialLogoutを要求しない。トップレベルはエラーにしない |
-| `IIP-IDP17.x` | Destination不一致のLogoutRequest（署名有効）＋正しいDestination対照 | セッションへ適用しない | Destination省略の受理を要求しない |
-| `IIP-IDP17.y` | 署名値／署名対象を改変したLogoutRequest | セッションへ適用しない | Redirectのクエリ署名は対象外。LogoutResponse方向が未観測なら`satisfied_with_note` |
-| `IIP-IDP17.z` | 無効署名のLogoutRequest（および任意のLogoutResponse） | 内容に依拠しない | yとの分離。応答抑止をasloで正当化しない |
-| `IIP-IDP17.aa` | 無効署名LogoutRequest | 応答するならエラーLogoutResponse。無応答はWARNING | SHOULD_CLASS。内部処理不能ならnot_verified。応答方向未観測は`satisfied_with_note` |
-| `IIP-IDP17.al` | 署名対象を空にするtransform／識別子等を除外した署名 | 拒否する | 受容のみ違反。Suiteがfixtureの暗号学的有効性と実際の除外を自己検証する |
-| `IIP-IDP18.b` | Suite SPがRedirect応答エンドポイントのみ広告＋HTTP-Redirect LogoutRequest | IdPがHTTP-RedirectでLogoutResponseを返す | RedirectとPOST併記時はRedirectを強制しない |
-| `IIP-IDP18.c` | Suite SLO要求エンドポイントをRedirect限定にし、IdPがRedirect LogoutRequestを送る | 受信できる | IdP発行が未観測なら`satisfied_with_note` |
-| `IIP-IDP18.d` | IdPが通常LogoutRequestを発行し、SuiteがRedirectでLogoutResponse | IdPが消費する | 非同期のみのRunは`satisfied_with_note` |
+| `IIP-IDP17.b` | Asynchronous LogoutRequest (Destination mismatch / unknown SessionIndex) and positive control | No response is returned, and the request is not applied to the session | Session termination itself is SHOULD. Separate b/b1/b2/b3 |
+| `IIP-IDP17.b1` | Trusted asynchronous LogoutRequest with a valid signature and authenticated sender | No samlp:LogoutResponse is returned (both front/back) | Include a synchronous positive control. HTTP feedback is the obligation in b2 |
+| `IIP-IDP17.b2` | Successful / failed front-channel asynchronous requests | The user-facing HTTP response indicates success/failure | Pair success and failure to detect a fixed "success" page. If failure cannot be induced, use `not_verified(session_termination_failure_not_inducible)` |
+| `IIP-IDP17.c` | (informational) Upstream authority and secondary_peer registration | Record whether propagation occurs as information. No Verdict | No propagation is NOT_SUPPORTED. Do not make it FAIL |
+| `IIP-IDP17.r` | 3 participants, with the first timing out / returning an error | If propagation is implemented, attempt the remaining participants | With only 1 participant, confirmation equivalent to `satisfied_with_note` cannot be obtained. Unimplemented propagation is satisfied_with_note. A timeout alone must not produce FAIL |
+| `IIP-IDP17.s` | A request that is not asynchronous + participant failure | Second-level StatusCode=PartialLogout | Do not require PartialLogout when all participants succeed. Do not make the top level an error |
+| `IIP-IDP17.x` | LogoutRequest with a Destination mismatch (valid signature) + control with the correct Destination | The request is not applied to the session | Do not require acceptance when Destination is omitted |
+| `IIP-IDP17.y` | LogoutRequest with a modified signature value / signed content | The request is not applied to the session | Redirect query signatures are out of scope. If the LogoutResponse direction is unobserved, use `satisfied_with_note` |
+| `IIP-IDP17.z` | LogoutRequest with an invalid signature (and optional LogoutResponse) | The content is not relied upon | Separate from y. Do not justify response suppression by aslo |
+| `IIP-IDP17.aa` | LogoutRequest with an invalid signature | If a response is returned, it is an error LogoutResponse. No response is WARNING | SHOULD_CLASS. Use not_verified if internal processing is unavailable. Use `satisfied_with_note` if the response direction is unobserved |
+| `IIP-IDP17.al` | A transform that makes the signed content empty / a signature that excludes identifiers or other content | Rejection | Only acceptance is a violation. The Suite self-verifies the fixture's cryptographic validity and actual exclusions |
+| `IIP-IDP18.b` | Suite SP advertises only a Redirect response endpoint + HTTP-Redirect LogoutRequest | IdP returns LogoutResponse via HTTP-Redirect | Do not force Redirect when both Redirect and POST are advertised |
+| `IIP-IDP18.c` | Suite SLO request endpoints are restricted to Redirect, and IdP sends a Redirect LogoutRequest | The request can be received | Use `satisfied_with_note` if issuance by the IdP is unobserved |
+| `IIP-IDP18.d` | IdP issues a normal LogoutRequest, and Suite returns LogoutResponse via Redirect | IdP consumes the response | An asynchronous-only Run is `satisfied_with_note` |
 
-## 2. 共通基盤
+## 2. Common Infrastructure
 
-### 2.1 直接HTTP送出（outbox拡張）
+### 2.1 Direct HTTP Delivery (Outbox Extension)
 
-front-channelのブラウザ配送では、応答が来ないことを「応答なし」と確定できません（配送自体がUNKNOWNのため。AGENTS.md 4）。非同期b/b1、署名無効z/aa、Destination不一致x、transform除外alは、**配送確認とHTTP応答本文の観測**が必要です。そこでoutboxに直接HTTP配送の種類を追加します。
+With front-channel browser delivery, a missing response cannot establish "no response" (because delivery itself is UNKNOWN; AGENTS.md 4). Asynchronous b/b1, invalid-signature z/aa, Destination-mismatch x, and transform-exclusion al require **delivery confirmation and observation of the HTTP response body**. Add a direct HTTP delivery kind to the outbox for this purpose.
 
-- `OutboundKind.LOGOUT_PROBE`（Retry.UNSAFE）を追加。
-- `HttpOutboundSender`が`LOGOUT_PROBE`を処理し、POST（`SAMLRequest`フォーム）またはGET（Deflate+Base64+署名クエリ）で送出、HTTP status・ヘッダ・本文（上限1MiB）をINBOUNDトランスクリプトへ記録。
-- 応答本文にSAML LogoutResponseが含まれれば既存のSAML解析対象として扱い、含まれなければ「HTTP応答のみ」として記録。
-- 接続失敗・タイムアウトは例外→`UNKNOWN_DELIVERY`（製品FAILにしない）。
-- 応答の相関は`actionId`。ケースは`ScenarioActionId`で待機。
+- Add `OutboundKind.LOGOUT_PROBE` (Retry.UNSAFE).
+- `HttpOutboundSender` handles `LOGOUT_PROBE`, sends via POST (`SAMLRequest` form) or GET (Deflate+Base64+signed query), and records the HTTP status, headers, and body (limit 1MiB) in an INBOUND transcript.
+- If the response body contains a SAML LogoutResponse, treat it as an existing SAML parsing target; otherwise, record it as "HTTP response only."
+- Connection failures and timeouts become exceptions → `UNKNOWN_DELIVERY` (do not make the product FAIL).
+- Correlate the response by `actionId`. The case waits using `ScenarioActionId`.
 
-### 2.2 ActiveProbeCoordinatorの拡張
+### 2.2 ActiveProbeCoordinator Extension
 
-直接配送のoutboxアクションを、外部ユーザーエージェントを介さずSuiteが実行します。
+The Suite executes direct-delivery outbox actions without an external user agent.
 
-- `status()`で、待機中アクションの種類が`LOGOUT_PROBE`の場合、`dispatcher.dispatch`で送出し、記録されたINBOUNDエントリを`InboundCaseRouter`で待機ケースへ`InboundMessage`として配送する。
-- 送出が`UNKNOWN_DELIVERY`の場合は`CaseEvent.InboundUnavailable("unknown-delivery")`で再開し、ケースはNOT_VERIFIED相当を返す。
-- 待機期限は`CaseTimeoutService`が`TimedOut`で再開する。直接配送でHTTP応答が記録済みの場合は、`TimedOut`に依存せず応答本文の有無で判断する。
-- `Status`に`directProbe`フラグを追加し、ドライバとレポートがブラウザ操作の有無を区別できるようにする。
+- In `status()`, if the waiting action kind is `LOGOUT_PROBE`, send it through `dispatcher.dispatch`, then route the recorded INBOUND entry through `InboundCaseRouter` to the waiting case as an `InboundMessage`.
+- If delivery is `UNKNOWN_DELIVERY`, resume with `CaseEvent.InboundUnavailable("unknown-delivery")`; the case returns the equivalent of NOT_VERIFIED.
+- `CaseTimeoutService` resumes the case with `TimedOut` when the waiting deadline expires. If a direct-delivery HTTP response has already been recorded, determine the result from the presence or absence of content in the response body rather than relying on `TimedOut`.
+- Extend `Status` with a `directProbe` flag so that the driver and report can distinguish whether browser interaction is involved.
 
-### 2.3 セッション生存の対照
+### 2.3 Session Survival Controls
 
-x/y/z/alの「セッションへ適用しない」は、次の対照で観測します。
+Observe "not applied to the session" for x/y/z/al using the following controls.
 
-1. ブラウザで正常ログイン（既存`IdpBasicLogoutScenarioTestCase`と同一手順）。
-2. 不正fixtureを直接配送し、応答（エラーLogoutResponse／無応答／HTTP応答のみ）を記録。
-3. 正しいDestination・有効署名のLogoutRequestを直接配送し、Success LogoutResponseを確認。これが成功すればセッションは不正fixtureで失われていない。
-4. 2でSuccess LogoutResponseが返っていた場合は、セッションが適用された強い証拠としてVIOLATED。
+1. Perform a normal browser login (the same procedure as the existing `IdpBasicLogoutScenarioTestCase`).
+2. Deliver the malformed fixture directly and record the response (error LogoutResponse / no response / HTTP response only).
+3. Deliver a LogoutRequest with the correct Destination and a valid signature directly, and confirm a Success LogoutResponse. If this succeeds, the malformed fixture did not destroy the session.
+4. If a Success LogoutResponse was returned in 2, treat it as strong evidence that the request was applied to the session and return VIOLATED.
 
-3が失敗（セッション消失・エラー）した場合は2が適用された証拠としてVIOLATED。3の配送自体が不明な場合はNOT_VERIFIED。
+If 3 fails (session lost / error), return VIOLATED as evidence that 2 was applied. If delivery of 3 itself is unknown, return NOT_VERIFIED.
 
-### 2.4 fixture生成
+### 2.4 Fixture Generation
 
-`SamlLogoutRequestFactory`を拡張し、以下を同一セッションで順に生成できるようにします。
+Extend `SamlLogoutRequestFactory` so that it can generate the following in sequence for the same session.
 
-- Destination差替え（署名前に設定し、署名は有効なまま）。
-- 署名後の改変（署名値1バイト変更／署名対象要素のテキスト変更、XMLとして妥当なまま）。
-- XPath transformでIDまたはSessionIndexを署名対象から除外した署名（自己検証付き）。
-- 非同期（`aslo:Asynchronous`）の付与。
+- Destination replacement (set before signing, so that the signature remains valid).
+- Modification after signing (change 1 byte of the signature value / change the text of a signed element while retaining valid XML).
+- A signature that excludes ID or SessionIndex from the signed content through an XPath transform (with self-verification).
+- Addition of the asynchronous marker (`aslo:Asynchronous`).
 
-各fixtureは`fixture_id`と`ActionIds.derive`による決定的`actionId`を持ち、`CaseState`で段階を管理します。
+Each fixture has a `fixture_id`; `ActionIds.derive` provides its deterministic `actionId`. `CaseState` manages the stages.
 
-### 2.5 判定と表示
+### 2.5 Evaluation and Display
 
-- 判定は既存の`LogoutTranscriptProfileCase`の規則を拡張し、`Rule`ごとに以下を返します。
-  - 直接配送応答の有無・HTTP status・SAMLメッセージ種別・Destination・署名検証結果。
-  - 対照（正しいDestination）の成否。
-  - セッション生存の成否。
-- 結果は`PublicCaseDiagnostics`へ`fixture_id`、`probe_transport`、`response_kind`、`control_outcome`を追加して表示します。
-- 理由コードはケース個別に定義し、`docs/26`と`docs/23`へ生成器で反映します。
+- Extend the existing rules in `LogoutTranscriptProfileCase` to return the following for each `Rule`.
+  - Presence or absence of a direct-delivery response, HTTP status, SAML message type, Destination, and signature verification result.
+  - Success or failure of the control (correct Destination).
+  - Success or failure of session survival.
+- For display, extend `PublicCaseDiagnostics` with `fixture_id`, `probe_transport`, `response_kind`, and `control_outcome`.
+- Define reason codes for each case and reflect them in `docs/26` and `docs/23` through the generators.
 
-## 3. 解釈判断が必要な項目（実装前に確認しないと誤判定になるもの）
+## 3. Items Requiring Interpretation Decisions (Risk of Incorrect Determinations Without Confirmation Before Implementation)
 
-1. **b2のHTTP応答観測**: 直接配送で得たHTML本文・HTTP statusを「user-facing応答」とみなすか。ブラウザと同一ではないが、応答本文の差（成功／失敗）を観測できます。承認済みvariantは「user-facing HTTP response」を要求するため、自動配送の応答をそのまま証拠にできると考えます。
-2. **r/sの多参加者**: 「3参加者」「secondary_peer登録」は対象製品側に2つ目のSPを登録する運用操作が必要です。Suite側は2つ目のSPエンドポイントを公開できますが、対象IdPへの登録（Keycloak管理API、Shibboleth設定、SimpleSAMLphp設定）を操作として記録する必要があります。1参加者しか登録できない場合はrを`satisfied_with_note`にできません（試験経路の不備を任意機能未発動と扱わない）。NOT_VERIFIED（経路未整備）とし、多参加者登録を実装します。
-3. **18-cの広告条件**: Suite SPのメタデータでSLO要求エンドポイントをRedirect限定にするfixtureを、既存のメタデータ公開機構に追加する必要があります。既存の公開メタデータを書き換えず、実験用の別Plan/エンドポイントとして追加します。
-4. **b1の「応答なし」**: 直接配送のHTTP応答が返ったこと（status任意）を配送確認とし、SAML LogoutResponseが含まれない場合に「LogoutResponseを返さない」をSATISFIEDとします。HTTP応答自体がない場合（接続断）はUNKNOWN_DELIVERYでNOT_VERIFIEDです。
+1. **HTTP response observation for b2**: Whether to treat the HTML body and HTTP status obtained through direct delivery as a "user-facing response." This is not identical to browser delivery, but differences in response bodies (success/failure) can be observed. The approved variant requires a "user-facing HTTP response," so the response from automated delivery is considered usable as evidence without modification.
+2. **Multiple participants for r/s**: "3 participants" and "secondary_peer registration" require an operational action to register a 2nd SP on the target product. The Suite can expose a 2nd SP endpoint, but registration with the target IdP (Keycloak administration API, Shibboleth configuration, SimpleSAMLphp configuration) must be recorded as an operation. If only 1 participant can be registered, r cannot become `satisfied_with_note` (do not treat an incomplete test path as an optional feature not being invoked). Return NOT_VERIFIED (path not prepared) and implement multiple-participant registration.
+3. **Advertisement condition for 18-c**: Add a fixture that restricts the SLO request endpoints in Suite SP metadata to Redirect to the existing metadata publication mechanism. Add it as a separate experimental Plan/endpoint without rewriting the existing published metadata.
+4. **"No response" for b1**: Treat receipt of a direct-delivery HTTP response (any status) as delivery confirmation. If it contains no SAML LogoutResponse, return SATISFIED for "does not return LogoutResponse." If there is no HTTP response itself (connection interruption), return NOT_VERIFIED with UNKNOWN_DELIVERY.
 
-## 4. 実装順序
+## 4. Implementation Order
 
-1. `OutboundKind.LOGOUT_PROBE`と`HttpOutboundSender`対応、セッション生存・改変fixture、Coordinator拡張、`LogoutProbeScenarioTestCase`（x/y/z/aa/al/b/b1）。
-2. 実製品3社でx/y/z/aa/al/b/b1を実行し、証拠と台帳を更新。
-3. 18-b（Redirect限定広告とbinding観測）、18-c/d（Suite応答binding fixture）。
-4. b2（HTTP応答本文の成功／失敗対照）、c（informational）、r/s（多参加者登録）。
-5. Keycloakメタデータ観測経路（別節で分類・実装）。
+1. Support `OutboundKind.LOGOUT_PROBE` and `HttpOutboundSender`, session survival and modified fixtures, Coordinator extension, and `LogoutProbeScenarioTestCase` (x/y/z/aa/al/b/b1).
+2. Execute x/y/z/aa/al/b/b1 against 3 real products and update the evidence and inventory.
+3. 18-b (Redirect-only advertisement and binding observation), 18-c/d (Suite response binding fixture).
+4. b2 (success/failure controls for HTTP response bodies), c (informational), r/s (multiple-participant registration).
+5. Keycloak metadata observation path (classify and implement in a separate section).
 
-## 5. バッチ1の結果（IIP-IDP17.x / y / z / aa / al）
+## 5. Batch 1 Results (IIP-IDP17.x / y / z / aa / al)
 
-Suite側の直接HTTP送出（`LOGOUT_PROBE`）と、正しいDestinationの対照LogoutRequestによるセッション生存確認を3製品で実行しました。対照がSuccessを返せば、craftされた要求はセッションへ適用されていません。
+Executed direct HTTP delivery (`LOGOUT_PROBE`) on the Suite side and session survival confirmation using a control LogoutRequest with the correct Destination against 3 products. If the control returns Success, the crafted request was not applied to the session.
 
-| ケース | Keycloak | Shibboleth | SimpleSAMLphp | 観測した事実 |
+| Case | Keycloak | Shibboleth | SimpleSAMLphp | Observed facts |
 |---|---|---|---|---|
-| `IIP-IDP17-x` | Success | Success | Success | Destination不一致の要求は適用されず、対照の有効要求がSuccess |
-| `IIP-IDP17-y` | Warning | Warning | Warning | 改変署名は適用されない。IdPが応答を消費する方向は未観測のため`satisfied_with_note` |
-| `IIP-IDP17-z` | Warning | Warning | Warning | 無効署名の内容に依拠しない（セッション維持を対照で確認）。上と同じ注記 |
-| `IIP-IDP17-aa` | Warning | Warning | Warning | 無効署名に対してSAMLエラー応答を返さない（SHOULD違反相当・無応答はvariant規定どおりWARNING） |
-| `IIP-IDP17-al` | Success | Success | Success | SessionIndexを署名対象から除外した署名は受理されない |
+| `IIP-IDP17-x` | Success | Success | Success | The Destination-mismatched request was not applied, and the valid control request returned Success |
+| `IIP-IDP17-y` | Warning | Warning | Warning | The modified signature was not applied. Use `satisfied_with_note` because the direction in which the IdP consumes a response was unobserved |
+| `IIP-IDP17-z` | Warning | Warning | Warning | The content with an invalid signature was not relied upon (session preservation confirmed by the control). Same note as above |
+| `IIP-IDP17-aa` | Warning | Warning | Warning | No SAML error response was returned for an invalid signature (equivalent to a SHOULD violation; no response is WARNING as specified by the variant) |
+| `IIP-IDP17-al` | Success | Success | Success | A signature excluding SessionIndex from the signed content was not accepted |
 
-- 実証による未検証解消: 15観測（546→531、異なるケースID 179→174）。
-- 製品設定変更: 0回。環境のSPメタデータを確認し、KeycloakのSLO URLとSimpleSAMLphpのSingleLogoutServiceが相関なしの`/sp/slo`を指すことを確認しています。
-- Suite再作成: 3回（実装修正と再デプロイの単位）。Run作成: 3回（製品別）。ユーザー本人のブラウザ操作: 0回（プロトコルクライアントが自動実行）。
-- 判明した環境要因: ShibbolethのSP起点SLOは、ログアウト完了ページの隠しiframe（`_eventId=proceed`）を追従しないとLogoutResponseが送出されません。参照ドライバをiframe追従に修正しました（実ブラウザは自動取得します）。判定ロジック側ではありません。
+- Unverified observations resolved through empirical evidence: 15 observations (546→531, distinct case IDs 179→174).
+- Product configuration changes: 0. Checked the environment's SP metadata and confirmed that Keycloak's SLO URL and SimpleSAMLphp's SingleLogoutService point to the uncorrelated `/sp/slo`.
+- Suite recreations: 3 (each implementation fix and redeployment). Run creations: 3 (one per product). Browser interactions by the user personally: 0 (automated by the protocol client).
+- Identified environmental factor: Shibboleth SP-initiated SLO does not send LogoutResponse unless the hidden iframe (`_eventId=proceed`) on the logout completion page is followed. Updated the reference driver to follow the iframe (a real browser retrieves it automatically). This was outside the evaluation logic.
 
-次の実装対象は、非同期SLO（b/b1/b2）、HTTP-Redirect限定端点（18-b/c/d）、伝播（r/s・c）です。
+The next implementation targets are asynchronous SLO (b/b1/b2), HTTP-Redirect-only endpoints (18-b/c/d), and propagation (r/s and c).
 
-## 6. バッチ2の結果（IIP-IDP17.b / b1 / b2 / x / y / z / aa / al）
+## 6. Batch 2 Results (IIP-IDP17.b / b1 / b2 / x / y / z / aa / al)
 
-バッチ1の直接HTTP探索は**ブラウザのセッションCookieを持たない**ため、セッション依存の検証を迂回していました（SimpleSAMLphpは未認証要求をログインへ転送し、xの「Destination不一致は適用されない」という結論は実際には未検証でした）。そこで配送を認証済みブラウザ経由に変更し、ブラウザが観測したHTTP応答を新しい`browser-response` APIで構造化証拠として記録する方式に置き換えました。Keycloakの署名無効fixtureは、IdPが返したLogoutResponseの`InResponseTo`と要求のDestinationを転記で照合し、Suiteの検証器で署名が無効であることも確認しています。
+Batch 1's direct HTTP probes **did not carry the browser's session Cookie**, so they bypassed session-dependent verification (SimpleSAMLphp redirects unauthenticated requests to login, so the x conclusion that "Destination mismatch is not applied" was actually unverified). Delivery was therefore changed to use an authenticated browser, replacing the approach with structured evidence recorded from browser-observed HTTP responses through the new `browser-response` API. For Keycloak's invalid-signature fixture, the IdP's LogoutResponse `InResponseTo` and the request Destination were compared from transcribed values, and the Suite verifier also confirmed that the signature was invalid.
 
-| ケース | Keycloak | Shibboleth | SimpleSAMLphp | 観測した事実 |
+| Case | Keycloak | Shibboleth | SimpleSAMLphp | Observed facts |
 |---|---|---|---|---|
-| `IIP-IDP17-b` | Success | Success | **Failed (Product)** | SSPはDestination不一致の非同期要求にもLogoutResponse(Success)を返す |
-| `IIP-IDP17-b1` | **Failed (Product)** | Success | **Failed (Product)** | Keycloak/SSPは信頼できる非同期要求へLogoutResponse(Success)を返す |
-| `IIP-IDP17-b2` | Success | Success | Not verified | SSPは成功/失敗ページを区別できる証拠を返さず（理由を更新） |
-| `IIP-IDP17-x` | Success | Success | **Failed (Product)** | SSPはDestination不一致の同期要求を適用しSuccessを返す |
-| `IIP-IDP17-y` | **Failed (Product)** | Warning | Warning | Keycloakは`SAML Client Signature`無効構成で提示された無効署名を検証せず適用 |
-| `IIP-IDP17-z` | **Failed (Product)** | Warning | Warning | 同上（内容に依拠） |
-| `IIP-IDP17-aa` | Warning | Warning | Warning | 3製品ともSAMLエラー応答を返さない（SHOULD相当） |
-| `IIP-IDP17-al` | **Failed (Product)** | Success | Success | Keycloakは署名対象からSessionIndexを除外した署名を受理 |
+| `IIP-IDP17-b` | Success | Success | **Failed (Product)** | SSP returns LogoutResponse(Success) even for an asynchronous request with a Destination mismatch |
+| `IIP-IDP17-b1` | **Failed (Product)** | Success | **Failed (Product)** | Keycloak/SSP return LogoutResponse(Success) for a trusted asynchronous request |
+| `IIP-IDP17-b2` | Success | Success | Not verified | SSP did not return evidence that distinguishes success/failure pages (reason updated) |
+| `IIP-IDP17-x` | Success | Success | **Failed (Product)** | SSP applies a synchronous request with a Destination mismatch and returns Success |
+| `IIP-IDP17-y` | **Failed (Product)** | Warning | Warning | With `SAML Client Signature` disabled, Keycloak applies the presented invalid signature without verification |
+| `IIP-IDP17-z` | **Failed (Product)** | Warning | Warning | Same as above (relies on the content) |
+| `IIP-IDP17-aa` | Warning | Warning | Warning | None of the 3 products returns a SAML error response (equivalent to SHOULD) |
+| `IIP-IDP17-al` | **Failed (Product)** | Success | Success | Keycloak accepts a signature that excludes SessionIndex from the signed content |
 
-- 実証による未検証解消: 23観測（531→523、異なるケースID 174→172）。残る`IIP-IDP17.b2`のSSP観測は、フィードバックページの意味が読み取れないためNot verifiedを維持。
-- Keycloakのy/z/alは、対象クライアントの`saml.client.signature=false`（既定）という構成での観測です。構成を変更すれば挙動が変わり得るため、台帳の理由と併せて構成を記録します。仕様は「消費したメッセージに署名が存在すれば検証する」ことを要求しており、この構成はその義務に適合しません。
-- 操作: 製品設定変更0回、Suite再作成4回（証拠APIと配送方式の修正）、Run作成3回、ユーザー本人のブラウザ操作0回。
-- 検証: Keycloak y要求の署名はSuiteの検証器で`valid=false`、応答は`InResponseTo`一致のSuccess。SSP x要求のDestinationは`https://samlscope.invalid/sp/slo`、応答はSuccess。
+- Unverified observations resolved through empirical evidence: 23 observations (531→523, distinct case IDs 174→172). The remaining SSP observation for `IIP-IDP17.b2` remains Not verified because the meaning of the feedback page cannot be determined.
+- Keycloak y/z/al were observed with the target client's `saml.client.signature=false` (default). Behavior may change if the configuration changes, so record the configuration together with the inventory's reason. The specification requires verification "if a consumed message has a signature," and this configuration does not conform to that obligation.
+- Operations: product configuration changes 0, Suite recreations 4 (evidence API and delivery mechanism fixes), Run creations 3, browser interactions by the user personally 0.
+- Verification: the Suite verifier returned `valid=false` for the Keycloak y request's signature, and the response was Success with a matching `InResponseTo`. The SSP x request's Destination was `https://samlscope.invalid/sp/slo`, and the response was Success.
 
-次の実装対象は、HTTP-Redirect限定端点（18-b/c/d）と伝播（r/s・c）です。
+The next implementation targets are HTTP-Redirect-only endpoints (18-b/c/d) and propagation (r/s and c).
 
-## 7. バッチ3の結果（IIP-IDP18.b / c / d）
+## 7. Batch 3 Results (IIP-IDP18.b / c / d)
 
-Suite SPがRedirect応答エンドポイントのみを広告する構成を、対象製品側の設定で作成しました（Shibboleth: `suite.xml`のSP SingleLogoutServiceをRedirectのみにしてMetadataResolverService再読込。Keycloak: クライアント属性`post`/`soap`を空文字で除去し`redirect`のみ残置。SimpleSAMLphp: 既にRedirectのみ）。Suiteは署名付きRedirect（GET）LogoutRequestを送出し、応答のbindingをトランスクリプトのHTTPメソッドから判定します。
+Created a configuration in which the Suite SP advertises only a Redirect response endpoint through target-product settings (Shibboleth: changed the SP SingleLogoutService in `suite.xml` to Redirect only and reloaded MetadataResolverService. Keycloak: removed the client attributes `post`/`soap` by setting them to empty strings, leaving only `redirect`. SimpleSAMLphp: already Redirect only). The Suite sends a signed Redirect (GET) LogoutRequest and determines the response binding from the transcript's HTTP method.
 
-| ケース | Keycloak | Shibboleth | SimpleSAMLphp | 観測した事実 |
+| Case | Keycloak | Shibboleth | SimpleSAMLphp | Observed facts |
 |---|---|---|---|---|
-| `IIP-IDP18.b` | Success | Success | Success | Redirect要求に対しLogoutResponseがHTTP-Redirectで返る |
-| `IIP-IDP18.c` | 未確定 | Success | 未確定 | ShibbolethはIdP起点LogoutRequestをHTTP-Redirectで送出 |
-| `IIP-IDP18.d` | 未確定 | Success | 未確定 | SuiteがRedirectで返したLogoutResponseをIdPが消費（ブラウザ観測200・失敗表示なし） |
+| `IIP-IDP18.b` | Success | Success | Success | LogoutResponse is returned via HTTP-Redirect for a Redirect request |
+| `IIP-IDP18.c` | Undetermined | Success | Undetermined | Shibboleth sends an IdP-initiated LogoutRequest via HTTP-Redirect |
+| `IIP-IDP18.d` | Undetermined | Success | Undetermined | IdP consumes the LogoutResponse returned by Suite via Redirect (browser-observed 200, no failure display) |
 
-- 実証による未検証解消: 5観測（523→518、異なるケースID 172→171）。
-- Keycloak/SimpleSAMLphpの`IIP-IDP18.c/d`は、対象がIdP起点LogoutRequestを発行しないため（`docs/31`参照）、キャンペーンのケースが未起動のままです。variantの「発行されない場合は`satisfied_with_note`」を適用するには、キャンペーンの完了（未発行の確定）を記録する経路が必要で、これは未実装の残課題として記録します。
-- 操作: ShibbolethのSPメタデータ書換え1回・再読込1回、Keycloakクライアント属性書換え1回（post/soap除去）、Suite再作成1回、Run作成4回（18-b用3、18-c/d用1）、ユーザー操作0回。
+- Unverified observations resolved through empirical evidence: 5 observations (523→518, distinct case IDs 172→171).
+- The campaign cases for Keycloak/SimpleSAMLphp `IIP-IDP18.c/d` remain unstarted because the targets do not issue an IdP-initiated LogoutRequest (see `docs/31`). Applying the variant's "use `satisfied_with_note` if not issued" requires a path that records campaign completion (confirmation of non-issuance); record this as an unimplemented remaining task.
+- Operations: Shibboleth SP metadata rewrite 1 and reload 1, Keycloak client attribute rewrite 1 (post/soap removal), Suite recreation 1, Run creations 4 (3 for 18-b, 1 for 18-c/d), user interactions 0.
 
-## 8. バッチ4の結果（IIP-IDP17.c とキャンペーン完了）
+## 8. Batch 4 Results (IIP-IDP17.c and Campaign Completion)
 
-- `IIP-IDP17.c`（informational）: 伝播の有無を情報記録する規則を追加。ShibbolethはIdP起点LogoutRequestを送出（`propagated=true`）、Keycloak/SimpleSAMLphpは送出しない（`propagated=false`）。Verdictは情報記録のWarning。
-- ターゲット起点ログアウトのキャンペーンは、対象が要求を発行しない場合に永久待機していました。`POST /api/runs/{id}/target-initiated/conclude` を追加し、未発行を確定して規則の観測（`not-issued`）を記録します。Suiteが自ら「発行なし」を観測できない場合でも、未発行の確定を運用者/ドライバの操作として記録する経路です。
-- 実証による未検証解消: 7観測（518→511、異なるケースID 171→168）。
+- `IIP-IDP17.c` (informational): Added a rule to record whether propagation occurs as information. Shibboleth sends an IdP-initiated LogoutRequest (`propagated=true`); Keycloak/SimpleSAMLphp do not (`propagated=false`). The Verdict is Warning for informational recording.
+- Target-initiated logout campaigns waited indefinitely if the target did not issue a request. Added `POST /api/runs/{id}/target-initiated/conclude` to confirm non-issuance and record the rule's observation (`not-issued`). This provides a path to record confirmation of non-issuance as an operator/driver action, even when the Suite cannot itself observe "not issued."
+- Unverified observations resolved through empirical evidence: 7 observations (518→511, distinct case IDs 171→168).
 
-## 9. バッチ5の結果（IIP-IDP17.r / s）
+## 9. Batch 5 Results (IIP-IDP17.r / s)
 
-| ケース | Keycloak | Shibboleth | SimpleSAMLphp | 観測した事実 |
+| Case | Keycloak | Shibboleth | SimpleSAMLphp | Observed facts |
 |---|---|---|---|---|
-| `IIP-IDP17.r` | Warning | 未確定 | Warning | Keycloak/SimpleSAMLphpは伝播自体を実装しないため、variant規定どおり`satisfied_with_note`（伝播不実装）。Shibbolethは伝播するが、単一参加者では「失敗後の継続」を証明できない |
-| `IIP-IDP17.s` | Warning | 未確定 | Warning | 同上。Shibbolethは単一参加者のため失敗を誘導できず、PartialLogoutの観測経路がない |
+| `IIP-IDP17.r` | Warning | Undetermined | Warning | Keycloak/SimpleSAMLphp do not implement propagation itself, so use `satisfied_with_note` as specified by the variant (propagation not implemented). Shibboleth propagates, but a single participant cannot prove "continuation after failure" |
+| `IIP-IDP17.s` | Warning | Undetermined | Warning | Same as above. Shibboleth has a single participant, so failure cannot be induced and there is no observation path for PartialLogout |
 
-- 実証による未検証解消: 4観測（511→507）。Shibbolethのr/sは理由を`slo.propagation.failure-induction-unavailable` / `slo.partial-logout.unobserved`へ精密化し、未確定を維持。
-- Shibbolethの伝播継続・PartialLogoutを確定するため、**追加SP参加者をIdPメタデータだけに登録する軽量ハーネス**を実装しました（Suiteの複数SP公開は不要）。
-  - 追加参加者: `sp-fail`（SLOは常時500の`/p/{plan}/sp/slo-fail`）と`sp-remain`（SLOは`/p/{plan}/sp/slo[/soap]?run={run}`で同一Runに相関）。
-  - 同一ブラウザで主SP＋2参加者にログイン（Unsolicited SSO）すると、IdPセッションに3参加者が入ります。
-  - 到達点: 2参加者のセッション確立、IdPの伝播UI（`PropagateLogout`）到達、失敗参加者への500誘導、残参加者への伝播要求が同一Runに記録されるところまで確認。
-  - 残ブロッカー: ShibbolethのSLO Webflowは伝播ページのJS/後続遷移で完了し、開始SPへのLogoutResponse（PartialLogout）を送出します。curl相当のドライバでは`_eventId=proceed`後はスナップショット失効となり完了できません。実ブラウザ相当のJS実行または正しい継続イベントの特定が必要です。
-  - 失敗誘導用エンドポイント`/p/{plan}/sp/slo-fail`（常時500・判定なし）は実装済みです。
+- Unverified observations resolved through empirical evidence: 4 observations (511→507). Refined the reasons for Shibboleth r/s to `slo.propagation.failure-induction-unavailable` / `slo.partial-logout.unobserved`, retaining the undetermined status.
+- Implemented a **lightweight harness that registers additional SP participants only in IdP metadata** to determine Shibboleth's propagation continuation and PartialLogout (the Suite does not need to publish multiple SPs).
+  - Additional participants: `sp-fail` (SLO always returns 500 at `/p/{plan}/sp/slo-fail`) and `sp-remain` (SLO at `/p/{plan}/sp/slo[/soap]?run={run}` correlates to the same Run).
+  - Logging in to the primary SP + 2 participants in the same browser (Unsolicited SSO) adds 3 participants to the IdP session.
+  - Confirmed progress: session establishment for 2 participants, arrival at the IdP's propagation UI (`PropagateLogout`), inducing 500 for the failing participant, and recording a propagation request to the remaining participant in the same Run.
+  - Remaining blocker: Shibboleth's SLO Webflow completes through JS/subsequent transitions on the propagation page and sends LogoutResponse (PartialLogout) to the initiating SP. With a curl-equivalent driver, the snapshot expires after `_eventId=proceed`, preventing completion. JS execution equivalent to a real browser or identification of the correct continuation event is required.
+  - The failure-induction endpoint `/p/{plan}/sp/slo-fail` (always 500, no evaluation) is implemented.
 
-## 10. 確定結果の監査（2026-09-15）
+## 10. Audit of Determined Results (2026-09-15)
 
-- キャンペーン終了操作（`target-initiated/conclude`）だけで「未発行」「伝播不実装」のWarningにしないよう規則を修正しました。証拠がない場合は`not-observed`系の理由でNOT_VERIFIEDへ戻します。
-- 18-d（IdPによるRedirect応答の消費）は、200ページの観測だけでは消費の証明にならないためNOT_VERIFIEDへ戻し、`consumption-unobserved`/`unavailable`を理由とします。
-- 同一Run内に複数のログアウト処理がある場合、前回処理の遅延要求が今回の窓内の同一参加者端点へ到着しても区別できません。参加者端点を処理単位で識別できるようになるまで、rは`processing-ambiguous`でNOT_VERIFIEDを維持します（負の対照テスト済み）。
-- r（伝播継続）のSuccess条件を**実行単位の相関**で再実装しました。起点要求の記録時刻から相関する最終応答までの窓を1つのログアウト処理とし、窓内で (1) 失敗参加者エンドポイントへの**500応答の発行記録**（到着時刻ではなく発行応答）、(2) その後の**別参加者エンドポイント**への要求、(3) その要求へのSuite応答、が揃う場合のみSuccessとします。窓外・重複窓・到着のみ・応答なし・同一参加者への再試行・無関係なPartialLogout・SessionIndexが参加者間で異なる場合は、それぞれ対応する理由でNOT_VERIFIEDを返します。負の対照はユニットテストで検証済みです。
-- 監査で戻した観測: Keycloak/SimpleSAMLphpの17-c・18-c/d・r/s（10件）とShibboleth 18-d（1件）。Shibbolethの17-c（伝播を実測）と18-c（bindingを実測）は維持します。台帳は507→518観測。
-- メタデータ消費の原則: SuiteのXML→管理API属性変換は製品のメタデータ解釈の証拠にせず、製品自身の取込経路へ元fixtureを渡した後の挙動で判定します（[docs/33](33-keycloak-metadata-observation.md)）。
+- Revised the rules so that campaign completion (`target-initiated/conclude`) alone does not produce Warning for "not issued" or "propagation not implemented." If evidence is absent, return to NOT_VERIFIED with a `not-observed` reason.
+- Returned 18-d (IdP consumption of a Redirect response) to NOT_VERIFIED because observing a 200 page alone does not prove consumption, using `consumption-unobserved`/`unavailable` as the reasons.
+- If the same Run contains multiple logout operations, a delayed request from a previous operation cannot be distinguished even if it reaches the same participant endpoint within the current window. Retain NOT_VERIFIED with `processing-ambiguous` for r until participant endpoints can identify individual operations (negative control tested).
+- Reimplemented the Success condition for r (propagation continuation) using **correlation per execution**. Treat the window from the initiating request's recorded time to the correlated final response as 1 logout operation. Return Success only when the window contains (1) **a record of a 500 response issued** by the failing participant endpoint (the issued response rather than arrival time), (2) a subsequent request to a **different participant endpoint**, and (3) the Suite response to that request. Return NOT_VERIFIED with the corresponding reason for an event outside the window, overlapping windows, arrival only, no response, a retry to the same participant, unrelated PartialLogout, or different SessionIndex values between participants. Negative controls were verified in unit tests.
+- Observations reverted by the audit: Keycloak/SimpleSAMLphp 17-c / 18-c/d / r/s (10 observations) and Shibboleth 18-d (1 observation). Retain Shibboleth 17-c (propagation measured) and 18-c (binding measured). The inventory changed from 507→518 observations.
+- Metadata consumption principle: Do not use the Suite's XML→administration API attribute conversion as evidence of the product's metadata interpretation. Evaluate behavior after passing the original fixture through the product's own import path ([docs/33](33-keycloak-metadata-observation.md)).
 
-## 11. 操作コストの記録方針
+## 11. Operation Cost Recording Policy
 
-製品設定の書き込み・復元、管理API操作、Suite再作成、Run回数をバッチごとに記録し、`docs/31`と各バッチの`operations.json`へ保存します。失敗試行も含めます。
+Record product configuration writes and restoration, administration API operations, Suite recreations, and Run counts for each batch, saving them in `docs/31` and each batch's `operations.json`. Include failed attempts.
 
-## 12. 進捗の区分
+## 12. Progress Categories
 
-- コード実装: Suite/コアの変更とテスト。
-- 実環境への接続: Run作成、fixture送出、応答記録。
-- 実証による未検証解消: Success/Failed/Warningへ到達した観測数。
-- 診断だけの更新: Verdictを変えず理由・分類を更新した観測数。
+- Code implementation: Suite/core changes and tests.
+- Connection to the real environment: Run creation, fixture delivery, response recording.
+- Unverified observations resolved through empirical evidence: number of observations reaching Success/Failed/Warning.
+- Diagnostic-only updates: number of observations whose reasons/classifications were updated without changing the Verdict.
 
-## 13. 参照製品の再測定
+## 13. Reference Product Remeasurement
 
-SimpleSAMLphpのiframeログアウトは、参加者エラーの後に製品画面のContinue操作が必要だった。ブラウザドライバにこの操作を追加したが、同じアクションでログアウト開始ボタンを二重に押すと伝播継続の見かけのSuccessが生じた。二重クリックを排除した`ssp-slo-iframe-v131i`では、相関する最終LogoutResponseの第二階層StatusCodeにPartialLogoutを確認し、`IIP-IDP17.s`だけを採用した。`IIP-IDP17.r`は別参加者への継続要求を観測できずNOT_VERIFIEDのままとした。採用検証は`dev/reference-acceptance/verify_ssp_iframe_partial_logout.py`がSAML原本、失敗応答、単一処理、設定復元ハッシュを照合する。
+SimpleSAMLphp's iframe logout required the Continue action on the product screen after a participant error. Added this action to the browser driver, but pressing the logout start button twice for the same action produced apparent Success for propagation continuation. In `ssp-slo-iframe-v131i`, which eliminated the duplicate click, PartialLogout was confirmed in the second-level StatusCode of the correlated final LogoutResponse, and only `IIP-IDP17.s` was adopted. `IIP-IDP17.r` remained NOT_VERIFIED because a continuation request to another participant could not be observed. Adoption verification in `dev/reference-acceptance/verify_ssp_iframe_partial_logout.py` checks the original SAML, failure response, single operation, and configuration restoration hashes.
 
-ShibbolethのIdP起点ログアウトでは、`shibboleth-target-slo-v131`に失敗応答の後の別参加者への要求と相関するSuite応答を再記録した。これは既に採用済みの`IIP-IDP17.r`の証拠を、製品メタデータのバイト一致復元付きRunへ更新するもので、未検証件数の追加削減ではない。SP起点Webflowの再測定`shibboleth-webflow-v131`は失敗参加者への試行を生まず、`IIP-IDP17.s`を確定しなかった。
+For Shibboleth's IdP-initiated logout, rerecorded a request to another participant after the failure response and the correlated Suite response in `shibboleth-target-slo-v131`. This updates the evidence for the already adopted `IIP-IDP17.r` to a Run with byte-identical restoration of product metadata; it does not reduce the unverified count further. SP-initiated Webflow remeasurement in `shibboleth-webflow-v131` did not produce an attempt to the failing participant and did not determine `IIP-IDP17.s`.
 
-## 14. 非同期ログアウトの失敗誘導に関する取り消し
+## 14. Revocation Regarding Failure Induction for Asynchronous Logout
 
-`IIP-IDP17-b2-idp-01` は、正常終了とIdP自身のセッション終了失敗の両方について、利用者への通知を検証する。誤ったDestinationを持つ要求への拒否は、IdP自身のセッション終了失敗を起こした証拠にならない。承認済み定義では `IIP-IDP17.o` と同じ失敗誘導を使い、安全に誘導できなければ未検証を維持する。
+`IIP-IDP17-b2-idp-01` verifies user notification both for normal termination and for failure of the IdP's own session termination. Rejection of a request with an incorrect Destination is not evidence that a failure of the IdP's own session termination occurred. The approved definition uses the same failure induction as `IIP-IDP17.o` and retains unverified status if it cannot be induced safely.
 
-<!--g1-literal--> KeycloakとShibbolethの旧Success 2観測は、誤DestinationへのHTTP 400と正常要求後のHTTP 200または相関LogoutResponseを根拠としていた。この原本を独立に調べ、失敗側の承認済み条件が証明されていないため採用を取り消した。保存済みresult.jsonとtranscriptは変更せず、`audit_async_feedback_failure_evidence.py` が固定したRun・要求原本・署名・非同期Extensions・相関・承認済み条件を照合し、生成器の採用結果だけをNOT_VERIFIEDへ戻す。製品の違反とはしていない。
+<!--g1-literal--> The 2 former Success observations for Keycloak and Shibboleth relied on HTTP 400 for an incorrect Destination and HTTP 200 or a correlated LogoutResponse after a normal request. Independently examined these originals and revoked adoption because the approved condition for the failure side had not been proven. Without changing saved result.json or transcripts, `audit_async_feedback_failure_evidence.py` checks the pinned Run, original request, signature, asynchronous Extensions, correlation, and approved conditions, returning only the generator's adoption result to NOT_VERIFIED. This is not treated as a product violation.
 
-修正後の `LogoutAsyncScenarioTestCase` も、従来の誤Destination試験や画面の違いからこのケースを確定しない。IdP自身のセッション終了失敗を誘導する実装と証拠が揃うまで、`slo.async.feedback.own-session-failure-unproven` を返す。同期ログアウトと他の非同期ケースの条件は維持する。実配備の確認は、対象Runner JARのハッシュと配備記録で別途行う。
+The revised `LogoutAsyncScenarioTestCase` also does not determine this case from the previous incorrect-Destination test or differences in screens. Until implementation and evidence for inducing failure of the IdP's own session termination are available, it returns `slo.async.feedback.own-session-failure-unproven`. The conditions for synchronous logout and the other asynchronous cases are retained. Actual deployment is confirmed separately using the target Runner JAR's hash and deployment records.
 
-原本と独立監査は `build/acceptance/reference-20261002/cross-cluster-audit/slo-async-feedback-adopted-boundary/` に保存する。失敗通知を調べるために追加のログインや製品設定変更は行っていない。
+The originals and independent audit are saved in `build/acceptance/reference-20261002/cross-cluster-audit/slo-async-feedback-adopted-boundary/`. No additional logins or product configuration changes were performed to investigate failure notification.
 
-## 15. SOAP伝播継続の実行・採用条件
+## 15. Execution and Adoption Conditions for SOAP Propagation Continuation
 
-ShibbolethのSOAPログアウト経路を使い、同じRunで参加者エラーを返す試験と全参加者が成功する対照を実行する。ケースが準備した署名済みメタデータを製品へ適用し、参加者ごとのログイン、起点要求、伝播要求と応答、相関する最終応答を原本として保存する。設定はスクリプトが変更・読み戻し・復元し、復元後の状態を変更前と照合する。
+Use Shibboleth's SOAP logout path to execute a trial that returns a participant error and a control in which all participants succeed in the same Run. Apply the case-prepared signed metadata to the product and save each participant's login, the initiating request, propagation requests and responses, and the correlated final response as originals. The script changes, reads back, and restores the configuration, then compares the restored state with the state before the change.
 
-IdPの参加者選択順は登録順と一致するとは限らない。失敗用の固定参加者が途中で選ばれた試行は、承認済みの「最初の参加者が失敗する」という条件を満たさないため採用しない。失敗fixtureは、Run・trial・準備メタデータに束縛した最初の真正SOAP要求へ署名済みResponderを返し、後続の参加者へSuccessを返す。重複要求や別スコープの要求を最初の試行として再利用しない。
+The IdP's participant selection order does not necessarily match registration order. Do not adopt an attempt in which a fixed failing participant was selected midway, because it does not meet the approved condition that "the first participant fails." The failure fixture returns a signed Responder to the first genuine SOAP request bound to the Run, trial, and prepared metadata, then returns Success to subsequent participants. Do not reuse duplicate requests or requests from another scope as the first attempt.
 
-伝播の判定は、検証済みの参加者集合、実際の試行順、署名応答、処理終了時の集合から共通処理で算出する。失敗後に残参加者を試行した原本で成立を確認し、処理が完全に終了した証拠と未試行の参加者が揃う場合に違反を判定する。応答欠落や完全性の証拠不足は未検証を維持する。
+The common evaluation process computes the propagation determination from the verified participant set, actual attempt order, signed responses, and sets at operation completion. Confirm satisfaction from originals showing attempts to the remaining participants after failure, and determine a violation when evidence of complete operation termination and unattempted participants are both present. Missing responses or insufficient completeness evidence retain unverified status.
 
-承認済みの負の対照は、隔離したSuite所有ターゲットで実際にHTTP・SAMLを実行する。正常ターゲットと失敗後に停止する変異ターゲットは同じ前提と判定処理を使う。校正の原本へアクセスする許可は、判定結果を切り替える条件にしない。校正ターゲットの結果を参照製品の結果として採用しないよう、公開受領証の設置と採用検証で製品由来の原本を確認する。
+The approved negative control performs actual HTTP/SAML execution against an isolated Suite-owned target. The normal target and the mutant target that stops after failure use the same prerequisites and evaluation process. Permission to access calibration originals must not become a condition that switches the evaluation result. Public receipt installation and adoption verification check product-origin originals so that calibration-target results are not adopted as reference-product results.
 
-正式採用では、配布JARと独立保存したJARの一致、ケース全体の開始・再開・証拠確認・再評価、正常系と負の対照、設定復元、再評価前後のtranscriptとoutboxの不変を確認する。比較表と未検証台帳は、この検証を通った保存済み結果から生成する。
+Formal adoption verifies agreement between the distributed JAR and the independently saved JAR, whole-case start/resume/evidence checks/reevaluation, the positive and negative controls, configuration restoration, and transcript/outbox immutability before and after reevaluation. Generate the comparison table and unverified inventory from saved results that passed this verification.
 
-実機採用は `build/acceptance/reference-20261004/shibboleth-soap-slo-continuation-r5/` に保存した。正式Runは `run_8N96KQNNSSG8NAK632QZRG5SCG`、対象ケースは `IIP-IDP17-r-idp-01`。配備済みJARと独立アーカイブで同じケース全体の結果を確認し、正常継続をSATISFIED、隔離した停止対照をVIOLATEDとした。製品由来のケースだけを正式再評価し、Successを確認した。署名済み通信原本、設定復元、再評価前後のtranscriptとoutboxの不変も照合済みである。
+Real-product adoption is saved in `build/acceptance/reference-20261004/shibboleth-soap-slo-continuation-r5/`. The formal Run is `run_8N96KQNNSSG8NAK632QZRG5SCG`, and the target case is `IIP-IDP17-r-idp-01`. Confirmed the same whole-case results using the deployed JAR and independent archive: normal continuation was SATISFIED, and the isolated stop-after-error control was VIOLATED. Only the product-origin case was formally reevaluated, and Success was confirmed. Signed communication originals, configuration restoration, and transcript/outbox immutability before and after reevaluation were also checked.
 
-`operation-counts.json` は当該試行、`failed-inclusive-operation-counts.json` は先行試行を含む費用を記録する。設定変更・認証・プロトコル操作はスクリプトが実施し、利用者本人の操作と製品再起動は発生していない。先行試行の途中停止や参加者順の不適合、採用補助処理の失敗は原本を保持し、台帳削減として数えない。残る完全性証拠がない製品挙動を、この停止対照の結果から違反と推定しない。
+`operation-counts.json` records the current attempt's costs; `failed-inclusive-operation-counts.json` records costs including preceding attempts. Scripts performed configuration changes, authentication, and protocol operations, with no interactions by the user personally and no product restarts. Originals from preceding interrupted attempts, nonconforming participant order, and failures of adoption helper processing are retained and are not counted as inventory reductions. Do not infer a violation for product behavior that still lacks completeness evidence from this stop-after-error control's result.

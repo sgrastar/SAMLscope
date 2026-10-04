@@ -1,11 +1,25 @@
 """Generate operation-cost and result deltas from the recorded local follow-up evidence."""
 import argparse
 from collections import Counter
+import hashlib
 import json
 from pathlib import Path
+import re
 
 PRODUCTS = ('keycloak', 'shibboleth', 'simplesamlphp')
 NAMES = dict(zip(PRODUCTS, ('Keycloak', 'Shibboleth', 'SimpleSAMLphp')))
+DESCRIPTION_TRANSLATIONS = json.loads(
+    Path(__file__).with_name('operation-descriptions-en.json').read_text())
+JAPANESE = re.compile(r'[\u3040-\u30ff\u31f0-\u31ff\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]')
+
+
+def description_en(description):
+    """Translate display text without changing the immutable operation ledger."""
+    digest = hashlib.sha256(description.encode('utf-8')).hexdigest()
+    translated = DESCRIPTION_TRANSLATIONS.get(digest, description)
+    if JAPANESE.search(translated):
+        raise ValueError('Operation description needs an English presentation translation: ' + digest)
+    return translated
 
 def cases(path):
     return {c['id']: c for r in json.loads(path.read_text())['requirements'] for c in r['cases']}
@@ -27,54 +41,54 @@ def render(root, output, date='2026-09-14', focus=(), notes=None):
             totals[product]['after'] += case['verdict'] == 'NOT_VERIFIED'
             if old[key]['verdict'] != case['verdict']:
                 transitions.append((product, profile, key, old[key]['verdict'], case['verdict'], case['reason_code']))
-    lines = ['# 追加試験と設定・操作コストの記録', '',
-             f'この記録は{date}の追加試験だけを計測対象にしています。それ以前の環境構築・試行の回数や時間は未計測であり、ゼロとは扱いません。既存Runに追加の証拠を集め、同じケース定義で判定の差分を比較しています。' + ('対象ケースを限定した前後比較です。' if focus else ''), '',
-             'ユーザー本人の操作、エージェントが代行したブラウザ操作、API・ファイルによる設定変更を別々に数えます。設定書き込みは復元も含めて1回ずつ数え、サービス再読み込みは別計上します。ブラウザ操作はページを開く・項目入力・クリック・手動継続をそれぞれ1回と数え、自動リダイレクトは含めません。スクリプトによる代行は、設定作業自体の消滅を意味しません。', '',
-             '## 判定の変化', '', '| 製品 | Not verified：前 | 後 | 減少 |', '|---|---:|---:|---:|']
+    lines = ['# Follow-up tests and configuration and operation costs', '',
+             f'This record measures only follow-up tests on {date}. Earlier environment setup and attempts have unmeasured counts and durations, which are not treated as zero. Additional evidence is collected for existing Runs and conclusion deltas are compared under the same case definitions.' + (' This before/after comparison is limited to the selected cases.' if focus else ''), '',
+             'Human user actions, agent browser actions on behalf of the user, and API/file configuration changes are counted separately. Each configuration write, including restoration, counts once; service reloads are separate. Opening a page, entering a field, clicking, and manual continuation each count as one browser action; automatic redirects do not. Scripted execution does not eliminate the configuration work itself.', '',
+             '## Changes in conclusions', '', '| Product | Not verified: before | After | Reduction |', '|---|---:|---:|---:|']
     for p in PRODUCTS:
         t=totals[p]; lines.append(f"| {NAMES[p]} | {t['before']} | {t['after']} | {t['before']-t['after']} |")
     if focus:
-        lines += ['', '上の差分は対象ケースに限定した前後比較です。対象外ケースの判定は変更していません。全件の未検証件数と製品別の再試験結果は [全件台帳](26-unverified-case-inventory.md) を参照してください。', '', 'この件数は製品・プロファイル・ケース単位の延べ観測数です。操作や設定の回数とは異なります。', '',]
+        lines += ['', 'The deltas above cover only the selected cases. Conclusions for other cases are unchanged. See the [complete inventory](26-unverified-case-inventory.md) for all unverified counts and retest results by product.', '', 'These counts are observations per product, profile, and case. They are distinct from operation and configuration counts.', '',]
     else:
-        lines += ['', '上の差分は最初の追加試験の記録です。その後の全件監査では共通ケースを別Runで再試験し、追加で5件のSuccessを確認しました。さらに追加実装後の再試験で、現在の未検証件数は全件台帳で集計しています（[実装記録](27-additional-implementation.md)）。詳細と製品別の再試験結果は [全件台帳](26-unverified-case-inventory.md) を参照してください。以下の作業量・明細には、この再試験と不成功だった署名必須設定の試行も含めます。', '', 'この件数は製品・プロファイル・ケース単位の延べ観測数です。操作や設定の回数とは異なります。', '',]
-    lines += ['## 作業量', '', '| 製品 | 設定書き込み（復元含む） | サービス再読込 | 代行ブラウザ操作 | ユーザー本人の操作 |', '|---|---:|---:|---:|---:|']
+        lines += ['', 'The deltas above record the first follow-up tests. A later complete audit retested common cases in separate Runs and confirmed 5 additional Success observations. Subsequent retests after additional implementation are reflected in the current unverified counts in the complete inventory ([implementation record](27-additional-implementation.md)). See the [complete inventory](26-unverified-case-inventory.md) for details and retest results by product. The workload and details below include these retests and unsuccessful attempts to require signatures.', '', 'These counts are observations per product, profile, and case. They are distinct from operation and configuration counts.', '',]
+    lines += ['## Workload', '', '| Product | Configuration writes (including restoration) | Service reloads | Agent browser actions | Human user actions |', '|---|---:|---:|---:|---:|']
     for p in PRODUCTS:
         rows=[r for r in operations if r['product']==p]
         counts=[sum(r.get(k,0) for r in rows) for k in ('configuration_writes','service_reloads','browser_actions','human_actions')]
         lines.append('| '+NAMES[p]+' | '+' | '.join(map(str,counts))+' |')
-    lines += ['', f"補助接続コンテナの起動は{sum(r.get('environment_helper_starts',0) for r in operations)}回です。一時スクリプトの誤りによる設定再試行も台帳に含め、製品の不具合とは扱いません。"]
-    lines += ['', f"Suiteのローカル検証環境の再起動は{sum(r.get('suite_restarts',0) for r in operations)}回、転送コンテナの再起動は{sum(r.get('forward_restarts',0) for r in operations)}回です。製品の設定操作とは別計上しています。", '', '操作時間はツール呼び出しの実測時間またはスクリプト内の経過時間です。調査・判断・コード作成・呼び出し間の時間を含まず、人間が手作業した場合の所要時間としては使えません。未計測は「—」と表示します。', '',
-              '## 操作明細', '', '| # | 製品 | 作業 | 実行手段 | 設定書込 | 再読込 | ブラウザ操作 | 実測秒 |', '|---:|---|---|---|---:|---:|---:|---:|']
+    lines += ['', f"Auxiliary connection containers were started {sum(r.get('environment_helper_starts',0) for r in operations)} times. Configuration retries caused by temporary script errors are retained in the ledger and are not classified as product defects."]
+    lines += ['', f"The local Suite verification environment was restarted {sum(r.get('suite_restarts',0) for r in operations)} times, and forwarding containers {sum(r.get('forward_restarts',0) for r in operations)} times. These are counted separately from product configuration operations.", '', 'Operation durations are measured tool-call durations or script elapsed times. They exclude investigation, decisions, code authoring, and time between calls, and do not estimate human manual effort. Unmeasured durations are shown as an em dash.', '',
+              '## Operation details', '', '| # | Product | Operation | Execution method | Configuration writes | Reloads | Browser actions | Measured seconds |', '|---:|---|---|---|---:|---:|---:|---:|']
     for i,r in enumerate(operations,1):
         duration=r.get('duration_seconds')
         if r.get('duration_seconds_measured') is False: duration=None
         seconds='—' if duration is None else f'{duration:.1f}'
-        lines.append(f"| {i} | {NAMES.get(r['product'],r['product'])} | {r['description'].replace('|','/')} | {r.get('execution','—')} | {r.get('configuration_writes',0)} | {r.get('service_reloads',0)} | {r.get('browser_actions',0)} | {seconds} | <!--g1-literal-->")
-    lines += ['', '## 判定が変わったケース', '', '| 製品 | Profile | Test | 前 | 後 | 根拠コード |', '|---|---|---|---|---|---|']
+        lines.append(f"| {i} | {NAMES.get(r['product'],r['product'])} | {description_en(r['description']).replace('|','/')} | {r.get('execution','—')} | {r.get('configuration_writes',0)} | {r.get('service_reloads',0)} | {r.get('browser_actions',0)} | {seconds} | <!--g1-literal-->")
+    lines += ['', '## Cases with changed conclusions', '', '| Product | Profile | Test | Before | After | Reason code |', '|---|---|---|---|---|---|']
     for product,profile,key,old,new,reason in transitions:
         lines.append(f'| {NAMES[product]} | {profile} | `{key}` | {old} | {new} | `{reason}` |')
     if notes is not None:
         output.write_text('\n'.join(lines) + '\n' + notes.read_text())
         (root/'result-delta.json').write_text(json.dumps({'totals':totals,'transitions':transitions},ensure_ascii=False,indent=2)+'\n')
         return
-    lines += ['', '## 作業削減に直結する課題', '',
-              '| 優先度 | 課題 | 今回確認できたこと | 改善案 |', '|---|---|---|---|',
-              '| 高 | 操作しても判定できない項目が操作待ちに見える | BrowserEvidenceTestCaseは完了操作後もoracle-unavailableを返す。CONFIGの一部は自己申告へ進む | 開始前に自動判定・証拠確認・未実装を表示し、判定できない設定作業を要求しない |',
-              '| 高 | メタデータ取得待ちの順序 | ネイティブHTTP取得が動いていても、試験開始後の取得より応答が先に到着するとSuiteが400で止まる | 試験開始→取得確認→要求送信の順をSuiteで制御する。固定の待ち時間に依存しない |',
-              '| 高 | メタデータ手動取り込みの証拠が判定に接続されない | 一括取り込み後の応答があっても、手動downloadはfetched証拠に数えられない | 取り込んだファイルdigestと対象側の取り込み記録を結び、HTTP取得と異なる証拠種別で扱う |',
-              '| 高 | リダイレクト後の鍵が一致しない | tokenのない安定URLからのリダイレクト先が通常鍵を返し、polling用の要求署名と不一致になる | 取得URLにtokenを明示して試験継続。Suite側でモードを正しく引き継ぎ、追加設定をなくす |',
-              '| 中 | localhostの意味がホストとコンテナで異なる | リダイレクト先へ接続できず補助転送が必要になった | ブラウザ・製品・Suiteで共通の到達可能ホスト名を使う検証構成にする |',
-              '| 中 | 途中エラーで連続試験が停止する | SimpleSAMLphpのKeyValue-onlyで停止し、後続試験への継続が1回必要 | エラー証拠を保存し、独立した後続試験を再開できるようにする |',
-              '| 修正済み | メタデータ方式の切り替えで古い要求IDを優先する | 一括取り込み後のHTTP更新で正しい応答をSuiteが誤って相関不一致にした | 発行済み要求の対応付けを修正。回帰テスト後に検証イメージへ反映し、同じRunで継続完了 |',
-              '| 中 | 同じ正常系の追加実行・設定往復 | 追加SSOでAudienceの反復観測と非暗号化Assertionの署名確認が進む | 必要な正常系を初回の実行計画にまとめ、設定のスナップショット・復元を製品アダプタで扱う |',
-              '| 中 | IdP起点SSOを受信できない | 通常受信経路が既存AuthnRequestのInResponseTo一致を要求する | 明示的に許可されたRun専用のIdP起点受信経路と正負対照を設計する |', '',
-              'ShibbolethのHTTP取得方式は[公式のFileBackedHTTPMetadataProvider資料](https://shibboleth.atlassian.net/wiki/spaces/IDP5/pages/3199506865)を参照しました。「修正済み」と明記した要求IDの対応付け以外は、今回の実測・コード調査からの改善提案です。', '',
-              '## 検証と残る範囲', '',
-              '今回変更した製品設定は復元済みです。要求IDの対応付け修正はSpPeerRoundTripTestに同じvariantが両方式に存在する回帰条件を加えて検証し、ローカル検証イメージに反映しました。ケース定義や判定レベルは変更していません。実行前後のHTML/JSON一致と、新たなPASSが参照するTranscriptの存在も検証しました。', '',
-              '未検証項目は残っています。操作だけで解消できない自動判定未実装、拒否の証明が不足する試験、運用・設定の裏付けが必要な自己申告などを含みます。追加の試行を完了したことと、全試験・製品全体の適合確認が完了したことは区別します。', '',
-              '## 証拠と再生成', '',
-              '操作台帳、設定の変更前バックアップ、実行前後のresult.json、試験スクリプトはローカルの `build/acceptance/reference-20260914/interaction-followup/` に保存しています。設定バックアップは公開・コミット対象にしません。', '',
-              '再生成: `.venv/bin/python dev/reference-acceptance/generate_interaction_report.py --evidence-root build/acceptance/reference-20260914/interaction-followup`。', '']
+    lines += ['', '## Issues directly affecting workload', '',
+              '| Priority | Issue | Observed in this follow-up | Proposed improvement |', '|---|---|---|---|',
+              '| High | Unevaluable items appear to be waiting for operations | BrowserEvidenceTestCase returns oracle-unavailable after completion; some CONFIG cases proceed to attestation | Show automated evaluation, evidence verification, and unimplemented paths before startup; do not request configuration work that cannot be evaluated |',
+              '| High | Ordering while waiting for metadata fetch | Even with native HTTP fetching active, a response arriving before the post-start fetch causes the Suite to stop with 400 | Let the Suite enforce start, confirmed fetch, then request transmission; avoid fixed delays |',
+              '| High | Manual metadata import evidence does not reach evaluation | Responses follow batch import, but manual download is not counted as fetched evidence | Bind the imported file digest to target import records using an evidence kind distinct from HTTP fetch |',
+              '| High | Key mismatch after redirect | A redirect from a stable URL without a token returns the normal key, mismatching the polling request signature | Continue testing with an explicit token in the fetch URL; preserve the mode correctly in the Suite to remove extra configuration |',
+              '| Medium | localhost means different hosts on the host and in containers | The redirect target was unreachable, requiring auxiliary forwarding | Use a verification configuration with a hostname reachable by the browser, product, and Suite |',
+              '| Medium | Intermediate errors stop consecutive tests | SimpleSAMLphp stopped on KeyValue-only; continuing subsequent tests required one intervention | Save error evidence and allow independent subsequent tests to resume |',
+              '| Fixed | Switching metadata modes prioritizes an old request ID | The Suite incorrectly rejected a valid response as uncorrelated during HTTP update after batch import | Corrected issued-request correlation, deployed the verification image after regression tests, and completed continuation in the same Run |',
+              '| Medium | Repeated positive tests and configuration round trips | Additional SSO advances repeated Audience observations and signature checks of unencrypted Assertions | Include required positive controls in the initial execution plan; use product adapters for configuration snapshots and restoration |',
+              '| Medium | IdP-initiated SSO cannot be received | Normal reception requires InResponseTo to match an existing AuthnRequest | Design an explicitly permitted Run-specific IdP-initiated reception path with positive and negative controls |', '',
+              'The Shibboleth HTTP fetch path was checked against the [official FileBackedHTTPMetadataProvider documentation](https://shibboleth.atlassian.net/wiki/spaces/IDP5/pages/3199506865). Except for request-ID correlation explicitly marked Fixed, these improvements are proposals based on measurements and source inspection in this follow-up.', '',
+              '## Verification and remaining scope', '',
+              'Product configuration changes from this follow-up were restored. The request-ID correlation fix was verified with a SpPeerRoundTripTest regression covering the same variant in both modes and deployed to the local verification image. Case definitions and judgment levels are unchanged. HTML/JSON equality before and after execution and the existence of Transcripts referenced by new PASS conclusions were also verified.', '',
+              'Unverified observations remain, including missing automated evaluation that operations alone cannot resolve, tests with insufficient rejection evidence, and attestations requiring operational or configuration support. Completing additional attempts does not establish completion of all tests or whole-product conformance.', '',
+              '## Evidence and regeneration', '',
+              'The operation ledger, configuration backups, before/after result.json files, and test scripts are stored locally in `build/acceptance/reference-20260914/interaction-followup/`. Configuration backups are excluded from publication and commits.', '',
+              'Regenerate: `.venv/bin/python dev/reference-acceptance/generate_interaction_report.py --evidence-root build/acceptance/reference-20260914/interaction-followup`.', '']
     output.write_text('\n'.join(lines))
     (root/'result-delta.json').write_text(json.dumps({'totals':totals,'transitions':transitions},ensure_ascii=False,indent=2)+'\n')
 

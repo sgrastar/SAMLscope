@@ -1,61 +1,61 @@
-# NameID省略の証拠検査と比較処理
+# NameID-omission evidence checks and comparison
 
-`IIP-IDP11-a-idp-01`の承認済み義務は、Subject内にNameIDを含まないAssertionを生成できること。既存のCONFIG確認だけでは実測から判定できないため、原本検査と内部比較を追加した。現段階ではRunnerへの登録・ネイティブ準備記録・製品での省略設定実証は未接続であり、正式な判定確定ではない。
+Approved `IIP-IDP11-a-idp-01` requires the ability to generate an Assertion whose Subject contains no NameID. Existing CONFIG confirmation cannot establish this from observations, so original checks/internal comparison were added. Runner registration, native preparation records and measured product omission configuration are not connected at this stage; no formal conclusion is established.
 
-## 原本検査
+## Original checks
 
-`VerifiedResponseAssertion`へ既存属性比較の署名・復号処理を抽出した。Response署名、Assertion署名がある場合の検証、対象issuer、準備済みSPメタデータと暗号化鍵の一致、単一Assertionを維持する。要求相関を指定した呼出しではDestination、InResponseTo、Audience、bearer Recipientも検査する。従来属性比較の任意相関呼出しは動作を変更しない。
+Extracted existing attribute-comparison signature/decryption processing into `VerifiedResponseAssertion`. It retains Response signature verification, verification of any Assertion signature, target issuer, matching prepared-SP encryption keys and a single Assertion. Calls requiring request correlation also check Destination, InResponseTo, Audience and bearer Recipient. Existing optional-correlation attribute calls retain their behavior.
 
-`NameIdOmissionResponseEvidence`は相関入力を必須にし、検証済みAssertionの単一Subjectを検査する。NameID、BaseID、完全省略を区別する。EncryptedIDは準備済み鍵で復号し、NameIDが隠れている場合を省略とは認めない。Subject欠落、識別子重複、復号不能、署名不正や要求不一致は証拠不成立とする。識別子の値や暗号処理の例外原因は外へ返さない。
+`NameIdOmissionResponseEvidence` requires correlation inputs and checks one Subject in the verified Assertion. It distinguishes NameID, BaseID and complete omission. EncryptedID is decrypted with prepared keys; a concealed NameID is not omission. Missing Subject, duplicate identifiers, failed decryption, invalid signatures or mismatched requests invalidate evidence. Identifier values/cryptographic exception causes are not returned externally.
 
-`NameIdOmissionComparison`は、同一実験・同一SP・固定したログイン入力と比較外入力の下で、通常のNameIDあり応答から完全省略応答への順序付き比較を要求する。各交換の原本参照は一意とする。これが揃えばSATISFIED、それ以外はNOT_VERIFIEDを返す。設定・実行経路がないことを製品FAILに変換しない。BaseIDを使う構成の適否は、この完全省略の実証経路から推定しない。
+`NameIdOmissionComparison` requires ordered normal-NameID to complete-omission responses within the same experiment/SP, fixed login inputs and fixed unrelated inputs. Original references for each exchange must be unique. Complete evidence returns SATISFIED; otherwise NOT_VERIFIED. Missing configuration/execution paths do not become product FAIL. This complete-omission path does not determine the acceptability of BaseID configurations.
 
-## 残る接続と検証
+## Remaining integration and validation
 
-内部Sampleは、ネイティブ準備記録と原本collectorによる結合後にのみ作成する設計である。HTTP自己申告を証拠へ変換する経路は追加していない。次は製品の標準設定による省略経路、前後設定・復元の記録、要求原本と応答原本の照合、CONFIGケース接続を追加する。
+Internal Samples are constructed only after native preparation/original-collector binding. No HTTP-attestation-to-evidence path was added. Next are a standard product omission path, before/after/restoration records, original request/response matching and CONFIG integration.
 
-<!--g1-literal--> 追加した境界テストは、平文／暗号化Assertionと平文／暗号化NameID、完全省略、Subject欠落、重複、鍵欠落、相関不一致、署名改変、入力混在、証拠再利用を対象とする。テストソースまでコンパイル済み。実行テストはバッチ確認へ保留し、未検証463件／156ケースIDを維持する。
+<!--g1-literal--> Added boundary tests for plaintext/encrypted Assertions and NameIDs, complete omission, missing Subject, duplicates, absent keys, correlation mismatch, modified signatures, mixed inputs and reused evidence. Test sources compiled; execution awaits batch validation. Unverified observations remain 463 with 156 case IDs.
 
-<!--g1-literal--> 今回の製品操作はSimpleSAMLphpソース検索の読取2回のみ。製品設定書込・再読込・再起動・プロトコル往復・本人操作は0回。稼働製品のNameID生成経路を調べたが、この検索だけで省略機能の不存在は確定していない。
+<!--g1-literal--> Product operations were only 2 SimpleSAMLphp source-search reads. Configuration writes/reloads/restarts, protocol round trips and user interactions were 0. The running product's NameID generation path was inspected, but these searches do not establish absence of omission capability.
 
-既存の稼働イメージは変更していない。共通署名処理を抽出したため、バッチ検証時には属性比較の既存境界テストと原本リプレイも含める。G2の保護実装署名差分は未解消であり、リリース完了とは扱わない。
+The running image was unchanged. Because signature processing was extracted, batch validation must also cover existing attribute-comparison boundary tests/original replay. The protected-implementation G2 signed-source difference remains unresolved; release completion is not claimed.
 
-## 原本collectorと正式CONFIG接続
+## Original collector and formal CONFIG integration
 
-`NameIdOmissionProtocolEvidence`は、準備記録で指定したメタデータ・要求・応答の参照を、同一RunのRecorder原本に照合する。事前取込のMetadataFetchとMetadataPrepared、元XMLのダイジェスト、SP entityID、要求先、広告済みACS、要求ID、唯一の応答、時系列を検査してから署名・復号検査へ進む。無関係な直近の応答を拾うことはしない。
+`NameIdOmissionProtocolEvidence` matches preparation-selected metadata/request/response references against same-Run Recorder originals. It checks preloaded MetadataFetch/MetadataPrepared, original XML digest, SP entityID, request destination, advertised ACS, request ID, unique response and chronology before signature/decryption checks. It does not select unrelated recent responses.
 
-`NameIdOmissionExperimentBinding`は通常条件と省略条件を設定記録の参照へ一意に結合する。両条件で取込メタデータを固定し、AuthnRequestもID・IssueInstant・署名以外の原本内容を一致させる。NameIDPolicyや認証要求が同時に変わった比較は採用しない。設定による省略を証明するネイティブアダプターは別途必要である。
+`NameIdOmissionExperimentBinding` uniquely binds normal/omission conditions to configuration-record references. Both conditions fix imported metadata and match original AuthnRequest content except ID/IssueInstant/signature. Comparisons also changing NameIDPolicy or authentication requirements are not adopted. A native adapter proving configured omission is separately required.
 
-`NameIdOmissionPreparationFile`はローカルの`nameid-omission-preparations/<run>.json`だけを読み、Run・対象entityID・固定対象メタデータのSHA-256と全選択原本のハッシュを固定する。シンボリックリンク、過大ファイル、不完全な条件、重複参照を拒否する。準備記録のHTTP投稿経路はない。
+`NameIdOmissionPreparationFile` reads only local `nameid-omission-preparations/<run>.json`, binding Run, target entityID, fixed target-metadata SHA-256 and all selected-original hashes. Symlinks, oversized files, incomplete conditions and duplicate references are rejected. No HTTP preparation submission exists.
 
-`NameIdOmissionConfigurationTestCase`とM1 registryへの接続を追加した。CONFIG確認時に結合済み実証が揃った場合だけOutcomeを返し、不成立なら既存の確認経路を維持する。以前の未検証結果に新しい原本が加わった場合の再評価も、既存の履歴付き更新経路を使用する。誤った過去結果の上書きや、証拠を増やさない再評価による確定は行わない。
+Added `NameIdOmissionConfigurationTestCase` and M1 registry integration. CONFIG confirmation returns an Outcome only for complete bound evidence; otherwise existing confirmation remains. Reevaluation after new originals are added to an unverified case uses the existing history-preserving update path. Incorrect historical results are not overwritten, nor conclusions established by reevaluation without new evidence.
 
-<!--g1-literal--> API・テストソースまでコンパイル済み。結合処理の負の対照テストを追加し、実行はバッチ検証へ保留している。稼働イメージ未更新、製品実測未実施のため未検証463件を維持する。今回のShibboleth読取調査は設定検索・jar所在検索・API検索の3回。API検索は結果なしで終了し、機能不存在の根拠にはしていない。設定書込・再起動・本人操作は0回。
+<!--g1-literal--> API/test sources compiled. Added binding negative controls; execution awaits batch validation. With no image update/product measurement, unverified observations remain 463. Shibboleth read-only investigation made 3 searches: configuration, jar locations and API. The API search returned no results and is not evidence of feature absence. Writes, restarts and user interactions were 0.
 
-## 省略要求とShibboleth実行器の準備
+## Omission requests and Shibboleth driver preparation
 
-既存の事前取込要求はNameIDPolicyでtransient形式を明示的に要求していた。生成器を無効化する比較でこの要求を残すと、要求を満たせないエラーと省略能力を混同する。そのため`VALID_NO_NAMEID_POLICY`と専用`nameid-omission`事前取込variantを追加した。要求全体は引き続き署名し、通常条件と無効化条件の両方で同じ要求形式を使用する。既存variantの要求を変更しない。
+Existing preloaded requests explicitly requested transient NameIDPolicy. Retaining that request while disabling generators confuses inability to satisfy the request with omission capability. Added `VALID_NO_NAMEID_POLICY` and dedicated preloaded variant `nameid-omission`. Requests remain fully signed; normal/disabled conditions use identical request forms. Existing variants' requests were unchanged.
 
-`dev/shibboleth/nameid_omission_preparation.py`はネイティブの`shibboleth.SAML2NameIDGenerators`リストだけを空にする設定を生成する。生成前のリストが空、同じIDが複数、リスト以外の要素が変更された場合は拒否する。これは隔離した参照IdP全体のSAML2生成設定を一時変更する試験であり、SP限定の変更ではない。
+`dev/shibboleth/nameid_omission_preparation.py` generates configuration emptying only the native `shibboleth.SAML2NameIDGenerators` list. It rejects an initially empty list, duplicate IDs or changes outside the list. This temporarily changes SAML2 generation configuration for the entire isolated reference IdP, not only an SP.
 
-`nameid_omission_campaign.py`は専用メタデータの取込、通常ログイン、生成器設定の切替と再読込、同一要求でのログイン、設定の完全復元と再読込を記録する。前後の設定読戻し・原本参照・ログイン入力の固定記録を保持する。ACSの輸送完了を成功判定には使わない。標準設定で本当にNameIDなしの成功応答が得られるかは未実証であり、応答原本の検証後に判断する。
+`nameid_omission_campaign.py` records dedicated metadata import, normal login, generator switching/reload, same-request login, complete restoration/reload, before/after read-back, original references and fixed login inputs. ACS transport completion is not a successful determination. A successful NameID-free response under standard configuration is not yet established and requires original-response validation.
 
-<!--g1-literal--> 稼働Shibbolethの設定・jar所在・サービス資源を読取調査し、公開設定APIのjarを3ファイル取得した。継承元の調査中、存在しないクラス名と存在しないディレクトリの検索も発生した。実装クラスのNameIDFormatPrecedenceとネイティブ生成器リストの所在を確認したが、これだけでは省略能力を確定しない。生成器を使わない場合の挙動も未実行である。
+<!--g1-literal--> Read running Shibboleth configuration, jar locations and service resources, and retrieved 3 public-configuration API jar files. Parent-class investigation also searched nonexistent classes/directories. Located implementation NameIDFormatPrecedence/native generator lists, without establishing omission capability. Behavior without generators has not run either.
 
-新しい実行器はPython構文とJavaテストソースのコンパイルを確認した。実行テストはバッチ確認へ保留。専用variantは稼働イメージへ未反映のため、今回製品設定を書き換えず、台帳も据え置く。
+The new driver passed Python syntax/Java test-source compilation. Execution tests await batch validation. Dedicated variants are not deployed, so product configuration and inventory remain unchanged for this work.
 
-## Shibboleth実環境での正式採用
+## Formal adoption in Shibboleth
 
-<!--g1-literal--> 署名済み`bf6b46aa`を隔離ビルドし、`samlscope:reference-nameid-omission-v51`へ反映した。イメージdigestは`sha256:5800c4056621e3c66d36d509ba82f5c73b83305a41e2eab7b63ccf22b423fc1e`。既存データを保持し、Suiteと転送コンテナを更新してhealthを確認した。別件の作業ツリー変更は含めていない。
+<!--g1-literal--> Built signed `bf6b46aa` in isolation and deployed `samlscope:reference-nameid-omission-v51`; digest: `sha256:5800c4056621e3c66d36d509ba82f5c73b83305a41e2eab7b63ccf22b423fc1e`. Retained existing data, updated Suite/forwarder containers and verified health. Unrelated working-tree changes were excluded.
 
-<!--g1-literal--> Run `run_J7YRDB4T4J8FXKSRXG4K7ZNJ3Q`で、通常応答のNAME_IDと生成器無効化後のOMITTEDを確認した。両応答は正式collectorによる署名・復号・相関検証を通過し、要求の比較指紋も一致した。ネイティブ設定は元バイト列へ復元し、再読込と一時メタデータ削除を確認した。
+<!--g1-literal--> Run `run_J7YRDB4T4J8FXKSRXG4K7ZNJ3Q` established normal NAME_ID and OMITTED after generator disablement. Both responses passed formal-collector signature/decryption/correlation checks; request comparison fingerprints matched. Restored original native bytes, reloaded and checked temporary-metadata deletion.
 
-`export_nameid_omission_preparation.py`は生成器リスト以外の同一性、設定前後の読戻し、ログイン入力固定、原本ハッシュと参照、元メタデータ、プロトコル条件の一致を監査して準備記録を作る。`ObserveNameIdOmissionExperiment`は正式collector・比較処理を使用する読取専用の補助プログラムで、Runの結果自体を書き換えない。
+`export_nameid_omission_preparation.py` audits equality outside generator lists, before/after read-back, fixed login inputs, original hashes/references, original metadata and protocol conditions before preparing records. `ObserveNameIdOmissionExperiment` is a read-only helper using the formal collector/comparison; it does not rewrite Run results.
 
-<!--g1-literal--> 欠落・重複・別応答・ログイン入力混在・比較入力混在の5種類を実測から作った負の対照として拒否した。通常ログインの前提確認後、CONFIG確認で`SATISFIED/PASS`・`attested=false`となった。採用検証器が設定復元、配置した準備記録の読戻し、正式比較、結果の証拠参照6件と原本不変性を照合した。
+<!--g1-literal--> Rejected 5 measured-evidence controls: missing/duplicate evidence, different responses, mixed login inputs and mixed comparison inputs. After normal-login prerequisite confirmation, CONFIG confirmation returned `SATISFIED/PASS`, `attested=false`. Adoption verification matched restoration, installed-preparation read-back, formal comparison, 6 result references and unchanged originals.
 
-<!--g1-literal--> 未検証463→462件、ケースID156件は据え置き。他製品やECPプロファイルへは推定で採用していない。証拠は`build/acceptance/reference-20260918/shibboleth-nameid-omission/`、正式評価は`shibboleth-nameid-omission-evaluation/`。台帳と製品比較表は生成器から更新し、契約監査はエラーなし。
+<!--g1-literal--> Unverified observations decreased 463→462; case IDs remain 156. No inference was adopted for other products/ECP. Evidence: `build/acceptance/reference-20260918/shibboleth-nameid-omission/`; formal evaluation: `shibboleth-nameid-omission-evaluation/`. Inventory/product comparison were regenerated; contract audit had no errors.
 
-<!--g1-literal--> 比較実験と通常ログインの合計は、設定書込8回・再読込6回・一時ファイル削除2回・プロトコル往復3回。build1回、Suite／転送コンテナ再作成各1回、製品再起動・本人操作0回。補助プログラムの初回コンパイルは配布物パス指定を誤って失敗し、修正と負の対照追加後の再コンパイルを含め計3回実施した。失敗も操作台帳へ記録した。
+<!--g1-literal--> Combined comparison/normal-login operations: configuration writes 8; reloads 6; temporary-file deletions 2; protocol round trips 3. Build 1; Suite/forwarder recreations 1 each; product restarts/user interactions 0. Initial helper compilation failed with an incorrect distribution path; including corrected compilation and added controls, compilation ran 3 times. Failures are included in the operation ledger.
 
-実行テスト一式は引き続きバッチ確認へまとめる。今回の正式採用に必要な実製品原本・負の対照・生成台帳監査は実施した。既存のG2保護ソース署名差分は未解消であり、リリース完了ではない。
+Execution tests remain grouped into batch validation. Actual-product originals, negative controls and generated-inventory audit required for formal adoption were performed. The protected-source G2 signed difference remains unresolved; release is incomplete.

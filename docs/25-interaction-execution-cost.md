@@ -1,38 +1,38 @@
-# 追加試験と設定・操作コストの記録
+# Follow-up tests and configuration and operation costs
 
-この記録は2026-09-14の追加試験だけを計測対象にしています。それ以前の環境構築・試行の回数や時間は未計測であり、ゼロとは扱いません。既存Runに追加の証拠を集め、同じケース定義で判定の差分を比較しています。
+This record measures only follow-up tests on 2026-09-14. Earlier environment setup and attempts have unmeasured counts and durations, which are not treated as zero. Additional evidence is collected for existing Runs and conclusion deltas are compared under the same case definitions.
 
-ユーザー本人の操作、エージェントが代行したブラウザ操作、API・ファイルによる設定変更を別々に数えます。設定書き込みは復元も含めて1回ずつ数え、サービス再読み込みは別計上します。ブラウザ操作はページを開く・項目入力・クリック・手動継続をそれぞれ1回と数え、自動リダイレクトは含めません。スクリプトによる代行は、設定作業自体の消滅を意味しません。
+Human user actions, agent browser actions on behalf of the user, and API/file configuration changes are counted separately. Each configuration write, including restoration, counts once; service reloads are separate. Opening a page, entering a field, clicking, and manual continuation each count as one browser action; automatic redirects do not. Scripted execution does not eliminate the configuration work itself.
 
-## 判定の変化
+## Changes in conclusions
 
-| 製品 | Not verified：前 | 後 | 減少 |
+| Product | Not verified: before | After | Reduction |
 |---|---:|---:|---:|
 | Keycloak | 209 | 207 | 2 |
 | Shibboleth | 200 | 185 | 15 |
 | SimpleSAMLphp | 203 | 202 | 1 |
 
-上の差分は最初の追加試験の記録です。その後の全件監査では共通ケースを別Runで再試験し、追加で5件のSuccessを確認しました。さらに追加実装後の再試験で、現在の未検証件数は全件台帳で集計しています（[実装記録](27-additional-implementation.md)）。詳細と製品別の再試験結果は [全件台帳](26-unverified-case-inventory.md) を参照してください。以下の作業量・明細には、この再試験と不成功だった署名必須設定の試行も含めます。
+The deltas above record the first follow-up tests. A later complete audit retested common cases in separate Runs and confirmed 5 additional Success observations. Subsequent retests after additional implementation are reflected in the current unverified counts in the complete inventory ([implementation record](27-additional-implementation.md)). See the [complete inventory](26-unverified-case-inventory.md) for details and retest results by product. The workload and details below include these retests and unsuccessful attempts to require signatures.
 
-この件数は製品・プロファイル・ケース単位の延べ観測数です。操作や設定の回数とは異なります。
+These counts are observations per product, profile, and case. They are distinct from operation and configuration counts.
 
-## 作業量
+## Workload
 
-| 製品 | 設定書き込み（復元含む） | サービス再読込 | 代行ブラウザ操作 | ユーザー本人の操作 |
+| Product | Configuration writes (including restoration) | Service reloads | Agent browser actions | Human user actions |
 |---|---:|---:|---:|---:|
 | Keycloak | 5 | 0 | 4 | 0 |
 | Shibboleth | 27 | 16 | 7 | 0 |
 | SimpleSAMLphp | 7 | 0 | 6 | 0 |
 
-補助接続コンテナの起動は5回です。一時スクリプトの誤りによる設定再試行も台帳に含め、製品の不具合とは扱いません。
+Auxiliary connection containers were started 5 times. Configuration retries caused by temporary script errors are retained in the ledger and are not classified as product defects.
 
-Suiteのローカル検証環境の再起動は15回、転送コンテナの再起動は15回です。製品の設定操作とは別計上しています。
+The local Suite verification environment was restarted 15 times, and forwarding containers 15 times. These are counted separately from product configuration operations.
 
-操作時間はツール呼び出しの実測時間またはスクリプト内の経過時間です。調査・判断・コード作成・呼び出し間の時間を含まず、人間が手作業した場合の所要時間としては使えません。未計測は「—」と表示します。
+Operation durations are measured tool-call durations or script elapsed times. They exclude investigation, decisions, code authoring, and time between calls, and do not estimate human manual effort. Unmeasured durations are shown as an em dash.
 
-## 操作明細
+## Operation details
 
-| # | 製品 | 作業 | 実行手段 | 設定書込 | 再読込 | ブラウザ操作 | 実測秒 |
+| # | Product | Operation | Execution method | Configuration writes | Reloads | Browser actions | Measured seconds |
 |---:|---|---|---|---:|---:|---:|---:|
 | 1 | Keycloak | Signed plaintext assertion fixture; assertion and response signatures retained | api | 1 | 0 | 0 | 0.1 | <!--g1-literal-->
 | 2 | Keycloak | Signed plaintext assertion fixture; assertion and response signatures retained | api | 1 | 0 | 0 | 0.1 | <!--g1-literal-->
@@ -65,91 +65,91 @@ Suiteのローカル検証環境の再起動は15回、転送コンテナの再�
 | 29 | Shibboleth | Native HTTP refresh with protocol client; browser completion not claimed | protocol_client | 0 | 0 | 0 | 15.4 | <!--g1-literal-->
 | 30 | Shibboleth | Native HTTP metadata provider; automatic fixture refresh | file_and_service_reload | 1 | 1 | 0 | 0.5 | <!--g1-literal-->
 | 31 | environment | Stop temporary IdP loopback bridge after restoring original metadata provider configuration | docker | 0 | 0 | 0 | 1.1 | <!--g1-literal-->
-| 32 | Keycloak | 既存SLO Runの開始・再開を確認。期限切れ終了であり試験成功には計上しない | Suite API | 0 | 0 | 0 | — | <!--g1-literal-->
-| 33 | Keycloak | 新Runで共通ケースを再試験。製品設定変更なし | protocol_client | 0 | 0 | 0 | 3.5 | <!--g1-literal-->
-| 34 | Keycloak | 署名必須を一時設定。正常系開始で停止した不成功の試行。設定復元・readback済み | protocol_client_with_native_configuration | 2 | 0 | 0 | 0.1 | <!--g1-literal-->
-| 35 | Shibboleth | 既存SLO Runの開始・再開を確認。期限切れ終了であり試験成功には計上しない | Suite API | 0 | 0 | 0 | — | <!--g1-literal-->
-| 36 | Shibboleth | 新Runで共通ケースを再試験。製品設定変更なし | protocol_client | 0 | 0 | 0 | 3.3 | <!--g1-literal-->
-| 37 | SimpleSAMLphp | 既存SLO Runの開始・再開を確認。期限切れ終了であり試験成功には計上しない | Suite API | 0 | 0 | 0 | — | <!--g1-literal-->
-| 38 | SimpleSAMLphp | 新Runで共通ケースを再試験。製品設定変更なし | protocol_client | 0 | 0 | 0 | 3.8 | <!--g1-literal-->
-| 39 | SimpleSAMLphp | 署名必須を一時設定。正常系開始で停止した不成功の試行。設定復元・readback済み | protocol_client_with_native_configuration | 2 | 0 | 0 | 0.4 | <!--g1-literal-->
-| 40 | Keycloak | 追加実装の再試験。既存Planで新Runを作成し正常系と承認済み試験を実行 | protocol_client | 0 | 0 | 0 | 274.9 | <!--g1-literal-->
-| 41 | Keycloak | 追加実装の再試験。既存Planで新Runを作成し正常系と承認済み試験を実行 | protocol_client | 0 | 0 | 0 | 0.7 | <!--g1-literal-->
-| 42 | Shibboleth | 追加実装の再試験。既存Planで新Runを作成し正常系と承認済み試験を実行 | protocol_client | 0 | 0 | 0 | 274.2 | <!--g1-literal-->
-| 43 | Shibboleth | 追加実装の再試験。既存Planで新Runを作成し正常系と承認済み試験を実行 | protocol_client | 0 | 0 | 0 | 0.8 | <!--g1-literal-->
-| 44 | SimpleSAMLphp | 追加実装の再試験。既存Planで新Runを作成し正常系と承認済み試験を実行 | protocol_client | 0 | 0 | 0 | 62.3 | <!--g1-literal-->
-| 45 | SimpleSAMLphp | 追加実装の再試験。既存Planで新Runを作成し正常系と承認済み試験を実行 | protocol_client | 0 | 0 | 0 | 0.6 | <!--g1-literal-->
-| 46 | Shibboleth | 取得確認後に送信する連続メタデータ試験。追加URLトークン・送信後固定待機を除去。設定復元済み | native_http_provider_and_protocol_client | 2 | 2 | 0 | 10.0 | <!--g1-literal-->
-| 47 | suite | 変更クラス限定の検証イメージを配置。承認済み定義と旧コンテナを保持 | docker | 0 | 0 | 0 | 4.2 | <!--g1-literal-->
-| 48 | suite | 検証済み追加クラスのみ反映。ライブラリと埋め込みカタログの不変を照合 | docker | 0 | 0 | 0 | 4.3 | <!--g1-literal-->
-| 49 | Keycloak | 統合追加実装後のブラウザSSO試験列。プロトコルクライアントで実行 | protocol_client | 0 | 0 | 0 | 362.8 | <!--g1-literal-->
-| 50 | Shibboleth | 統合追加実装後のブラウザSSO試験列。プロトコルクライアントで実行 | protocol_client | 0 | 0 | 0 | 369.8 | <!--g1-literal-->
-| 51 | SimpleSAMLphp | 統合追加実装後のブラウザSSO試験列。プロトコルクライアントで実行 | protocol_client | 0 | 0 | 0 | 87.4 | <!--g1-literal-->
-| 52 | Shibboleth | メタデータ検証Run作成と正常系確認 | protocol_client | 0 | 0 | 0 | 0.4 | <!--g1-literal-->
-| 53 | Shibboleth | ネイティブHTTP取得でメタデータ46入力を連続実行。設定復元済み | native_http_provider_and_protocol_client | 2 | 2 | 0 | 97.7 | <!--g1-literal-->
-| 54 | Shibboleth | 拡張属性と既定ACSの17入力を連続実行。設定復元済み | native_http_provider_and_protocol_client | 2 | 2 | 0 | 37.2 | <!--g1-literal-->
-| 55 | suite | 暗号化・ECDSA・公開診断の統合クラスを反映。既存JARと承認済み定義の不変を確認 | docker | 0 | 0 | 0 | 4.2 | <!--g1-literal-->
-| 56 | SimpleSAMLphp | 暗号化Subject入力・公開診断を含む統合版SSO試験列 | protocol_client | 0 | 0 | 0 | 96.0 | <!--g1-literal-->
-| 57 | Keycloak | 暗号化Subject入力・公開診断を含む統合版SSO試験列 | protocol_client | 0 | 0 | 0 | 358.1 | <!--g1-literal-->
-| 58 | Shibboleth | 暗号化Subject入力・公開診断を含む統合版SSO試験列 | protocol_client | 0 | 0 | 0 | 436.9 | <!--g1-literal-->
-| 59 | Shibboleth | ECDSA正常・不正署名試行。不正署名でHTTP400停止、SAML拒否応答なし。設定復元済み | protocol_client | 2 | 2 | 0 | 8.2 | <!--g1-literal-->
-| 60 | suite | 文字列型観測と拡張入力の統合クラス・固定スキーマを反映。既存JARと承認済み定義の不変を確認 | docker | 0 | 0 | 0 | 4.2 | <!--g1-literal-->
-| 61 | SimpleSAMLphp | 拡張文字列入力・NameID型観測を含む統合版SSO試験列 | protocol_client | 0 | 0 | 0 | 116.5 | <!--g1-literal-->
-| 62 | Keycloak | 拡張文字列入力・NameID型観測を含む統合版SSO試験列 | protocol_client | 0 | 0 | 0 | 477.8 | <!--g1-literal-->
-| 63 | Shibboleth | 拡張文字列入力・NameID型観測を含む統合版SSO試験列 | protocol_client | 0 | 0 | 0 | 538.9 | <!--g1-literal-->
-| 64 | suite | 要求生成を実行順まで遅延する修正を反映。既存JARと承認済み定義の不変を確認 | docker | 0 | 0 | 0 | 4.3 | <!--g1-literal-->
-| 65 | SimpleSAMLphp | 要求生成タイミング修正後のSSO試験列 | protocol_client | 0 | 0 | 0 | 118.2 | <!--g1-literal-->
-| 66 | Keycloak | 要求生成タイミング修正後のSSO試験列 | protocol_client | 0 | 0 | 0 | 476.1 | <!--g1-literal-->
-| 67 | Shibboleth | 要求生成タイミング修正後のSSO試験列 | protocol_client | 0 | 0 | 0 | 574.5 | <!--g1-literal-->
-| 68 | suite | G02受理条件とリテラル文字列入力・署名保持を反映。既存JARと承認済み定義の不変を確認 | docker | 0 | 0 | 0 | 4.3 | <!--g1-literal-->
-| 69 | Keycloak | G02受理条件とリテラル文字列入力修正後のSSO試験列 | protocol_client | 0 | 0 | 0 | 511.1 | <!--g1-literal-->
-| 70 | Shibboleth | G02受理条件とリテラル文字列入力修正後のSSO試験列 | protocol_client | 0 | 0 | 0 | 617.5 | <!--g1-literal-->
-| 71 | SimpleSAMLphp | G02受理条件とリテラル文字列入力修正後のSSO試験列 | protocol_client | 0 | 0 | 0 | 124.2 | <!--g1-literal-->
-| 72 | suite | SLO証拠検査・要求生成・送受信接続・基本ケースを反映。既存JARと承認済み定義の不変を確認 | docker | 0 | 0 | 0 | 4.3 | <!--g1-literal-->
-| 73 | Keycloak | 旧Run固定のSLO応答先をPlan固定URLへ変更し、Runごとの設定変更を不要にする | Keycloak admin API | 1 | 0 | 0 | 0.1 | <!--g1-literal-->
-| 74 | suite | Status URI修正を反映。既存ライブラリー不変を検証 | docker | 0 | 0 | 0 | 4.3 | <!--g1-literal-->
-| 75 | Shibboleth | SP起点SLO基本シナリオ実行。途中停止も作業量へ含める | protocol_client | 0 | 0 | 0 | 3.5 | <!--g1-literal-->
-| 76 | SimpleSAMLphp | SP起点SLO基本シナリオ実行。途中停止も作業量へ含める | protocol_client | 0 | 0 | 0 | 4.4 | <!--g1-literal-->
-| 77 | Keycloak | SP起点SLO基本シナリオ実行。途中停止も作業量へ含める | protocol_client | 0 | 0 | 0 | 3.8 | <!--g1-literal-->
-| 78 | Shibboleth | SP起点SLO基本シナリオ実行。途中停止も作業量へ含める | protocol_client | 0 | 0 | 0 | 3.4 | <!--g1-literal-->
-| 79 | Keycloak | SP起点SLO基本シナリオ実行。途中停止も作業量へ含める | protocol_client | 0 | 0 | 0 | 2.8 | <!--g1-literal-->
-| 80 | Keycloak | SP起点SLO基本シナリオ実行。途中停止も作業量へ含める | protocol_client | 0 | 0 | 0 | 4.3 | <!--g1-literal-->
-| 81 | SimpleSAMLphp | 旧Run固定SLO応答先をPlan固定へ変更 | local metadata file | 1 | 0 | 0 | 0.3 | <!--g1-literal-->
-| 82 | Shibboleth | 旧Run固定SLO応答先をPlan固定へ変更しメタデータを再読込 | local metadata file and reload | 1 | 0 | 0 | 0.4 | <!--g1-literal-->
-| 83 | suite | 署名付きRedirect SLO送信を追加し稼働クラス・既存ライブラリー不変を検証 | docker | 0 | 0 | 0 | 3.3 | <!--g1-literal-->
-| 84 | SimpleSAMLphp | 署名を検証できるSLO試験前提として当該SPのsign.logoutを有効化。直後の読戻し解析エラー後、ハッシュ一致・PHP構文・設定値を再確認 | local metadata file | 1 | 0 | 0 | — | <!--g1-literal-->
-| 85 | Shibboleth | Redirect SLO追加後の実通信。途中停止も記録 | protocol_client | 0 | 0 | 0 | 2.6 | <!--g1-literal-->
-| 86 | Shibboleth | Redirect SLO追加後の実通信。途中停止も記録 | protocol_client | 0 | 0 | 0 | 3.5 | <!--g1-literal-->
-| 87 | SimpleSAMLphp | Redirect SLO追加後の実通信。途中停止も記録 | protocol_client | 0 | 0 | 0 | 3.0 | <!--g1-literal-->
-| 88 | SimpleSAMLphp | Redirect SLO追加後の実通信。途中停止も記録 | protocol_client | 0 | 0 | 0 | 4.6 | <!--g1-literal-->
-| 89 | suite | Redirect署名とSOAP本文範囲の修正を反映し稼働クラスを検証 | docker | 0 | 0 | 0 | 4.3 | <!--g1-literal-->
-| 90 | SimpleSAMLphp | Redirect応答署名の実通信試験のため当該SPのSLO応答方式をRedirectへ変更 | local metadata file | 1 | 0 | 0 | 0.7 | <!--g1-literal-->
-| 91 | SimpleSAMLphp | 署名付きRedirect LogoutResponseの実通信と関連受理ケースの確認 | protocol_client | 0 | 0 | 0 | 4.0 | <!--g1-literal-->
-| 92 | suite | 専用Redirect受理ケースを反映しクラス・ライブラリーを検証 | docker | 0 | 0 | 0 | 3.3 | <!--g1-literal-->
-| 93 | Keycloak | 基本SLOと専用Redirect受理ケースの連続実行 | protocol_client | 0 | 0 | 0 | 5.1 | <!--g1-literal-->
-| 94 | Shibboleth | 基本SLOと専用Redirect受理ケースの連続実行 | protocol_client | 0 | 0 | 0 | 5.1 | <!--g1-literal-->
-| 95 | SimpleSAMLphp | 基本SLOと専用Redirect受理ケースの連続実行 | protocol_client | 0 | 0 | 0 | 5.3 | <!--g1-literal-->
-| 96 | suite | EncryptedID復号確認ケースを反映し稼働クラスとライブラリーを検証 | docker | 0 | 0 | 0 | 4.3 | <!--g1-literal-->
-| 97 | Keycloak | EncryptedID復号対照を含むSLO連続実行 | protocol_client | 0 | 0 | 0 | 5.2 | <!--g1-literal-->
-| 98 | Shibboleth | EncryptedID復号対照を含むSLO連続実行 | protocol_client | 0 | 0 | 0 | 5.8 | <!--g1-literal-->
-| 99 | SimpleSAMLphp | EncryptedID復号対照を含むSLO連続実行 | protocol_client | 0 | 0 | 0 | 5.9 | <!--g1-literal-->
-| 100 | Shibboleth | 既存ロールオーバー設定で復号鍵を追加し公開メタデータへ掲載 | docker | 3 | 0 | 0 | 0.8 | <!--g1-literal-->
-| 101 | suite | 複数復号鍵のシナリオを反映し稼働クラスを確認 | docker | 0 | 0 | 0 | 4.3 | <!--g1-literal-->
-| 102 | Shibboleth | 非稼働インストールの変更を復元。最初の設定3ファイルは稼働IdPへ未適用だった | docker | 3 | 0 | 0 | — | <!--g1-literal-->
-| 103 | Shibboleth | 既存ロールオーバー設定で復号鍵を追加し公開メタデータへ掲載 | docker | 3 | 0 | 0 | 0.8 | <!--g1-literal-->
-| 104 | Shibboleth | 再起動時も試験用idp.homeを使用するよう起動設定へ明記 | docker | 1 | 0 | 0 | — | <!--g1-literal-->
-| 105 | Shibboleth | Tomcat停止ポート無効で旧プロセスが残ったため、確認した2プロセスを終了し正しいホームで起動 | docker | 0 | 0 | 0 | — | <!--g1-literal-->
-| 106 | Keycloak | 複数復号鍵の対照を含むSLO連続実行 | protocol_client | 0 | 0 | 0 | 4.8 | <!--g1-literal-->
-| 107 | Shibboleth | 複数復号鍵の対照を含むSLO連続実行 | protocol_client | 0 | 0 | 0 | 5.9 | <!--g1-literal-->
-| 108 | SimpleSAMLphp | 複数復号鍵の対照を含むSLO連続実行 | protocol_client | 0 | 0 | 0 | 4.7 | <!--g1-literal-->
-| 109 | suite | 設定能力確認・証拠整合性クラスの切替と検証 | docker | 0 | 0 | 0 | 4.3 | <!--g1-literal-->
-| 110 | Keycloak | 複数復号鍵の対照を含むSLO連続実行 | protocol_client | 0 | 0 | 0 | 4.9 | <!--g1-literal-->
-| 111 | Shibboleth | 複数復号鍵の対照を含むSLO連続実行 | protocol_client | 0 | 0 | 0 | 7.3 | <!--g1-literal-->
-| 112 | SimpleSAMLphp | 複数復号鍵の対照を含むSLO連続実行 | protocol_client | 0 | 0 | 0 | 5.2 | <!--g1-literal-->
+| 32 | Keycloak | Checked start/resume of existing SLO Runs. Expired completion is excluded from test success counts | Suite API | 0 | 0 | 0 | — | <!--g1-literal-->
+| 33 | Keycloak | Retested common cases in new Runs without product configuration changes | protocol_client | 0 | 0 | 0 | 3.5 | <!--g1-literal-->
+| 34 | Keycloak | Temporarily required signatures. Unsuccessful attempt stopped at positive-control startup. Configuration restored and read back | protocol_client_with_native_configuration | 2 | 0 | 0 | 0.1 | <!--g1-literal-->
+| 35 | Shibboleth | Checked start/resume of existing SLO Runs. Expired completion is excluded from test success counts | Suite API | 0 | 0 | 0 | — | <!--g1-literal-->
+| 36 | Shibboleth | Retested common cases in new Runs without product configuration changes | protocol_client | 0 | 0 | 0 | 3.3 | <!--g1-literal-->
+| 37 | SimpleSAMLphp | Checked start/resume of existing SLO Runs. Expired completion is excluded from test success counts | Suite API | 0 | 0 | 0 | — | <!--g1-literal-->
+| 38 | SimpleSAMLphp | Retested common cases in new Runs without product configuration changes | protocol_client | 0 | 0 | 0 | 3.8 | <!--g1-literal-->
+| 39 | SimpleSAMLphp | Temporarily required signatures. Unsuccessful attempt stopped at positive-control startup. Configuration restored and read back | protocol_client_with_native_configuration | 2 | 0 | 0 | 0.4 | <!--g1-literal-->
+| 40 | Keycloak | Retested additional implementation. Created new Runs in existing Plans and executed positive controls and approved tests | protocol_client | 0 | 0 | 0 | 274.9 | <!--g1-literal-->
+| 41 | Keycloak | Retested additional implementation. Created new Runs in existing Plans and executed positive controls and approved tests | protocol_client | 0 | 0 | 0 | 0.7 | <!--g1-literal-->
+| 42 | Shibboleth | Retested additional implementation. Created new Runs in existing Plans and executed positive controls and approved tests | protocol_client | 0 | 0 | 0 | 274.2 | <!--g1-literal-->
+| 43 | Shibboleth | Retested additional implementation. Created new Runs in existing Plans and executed positive controls and approved tests | protocol_client | 0 | 0 | 0 | 0.8 | <!--g1-literal-->
+| 44 | SimpleSAMLphp | Retested additional implementation. Created new Runs in existing Plans and executed positive controls and approved tests | protocol_client | 0 | 0 | 0 | 62.3 | <!--g1-literal-->
+| 45 | SimpleSAMLphp | Retested additional implementation. Created new Runs in existing Plans and executed positive controls and approved tests | protocol_client | 0 | 0 | 0 | 0.6 | <!--g1-literal-->
+| 46 | Shibboleth | Consecutive metadata tests send only after confirmed fetch. Removed extra URL tokens and fixed post-send delays. Configuration restored | native_http_provider_and_protocol_client | 2 | 2 | 0 | 10.0 | <!--g1-literal-->
+| 47 | suite | Deployed a verification image limited to changed classes, preserving approved definitions and the old container | docker | 0 | 0 | 0 | 4.2 | <!--g1-literal-->
+| 48 | suite | Deployed only verified additional classes and checked unchanged libraries and embedded catalogs | docker | 0 | 0 | 0 | 4.3 | <!--g1-literal-->
+| 49 | Keycloak | Browser SSO test sequence after integrated additional implementation, executed with a protocol client | protocol_client | 0 | 0 | 0 | 362.8 | <!--g1-literal-->
+| 50 | Shibboleth | Browser SSO test sequence after integrated additional implementation, executed with a protocol client | protocol_client | 0 | 0 | 0 | 369.8 | <!--g1-literal-->
+| 51 | SimpleSAMLphp | Browser SSO test sequence after integrated additional implementation, executed with a protocol client | protocol_client | 0 | 0 | 0 | 87.4 | <!--g1-literal-->
+| 52 | Shibboleth | Created metadata verification Runs and checked positive controls | protocol_client | 0 | 0 | 0 | 0.4 | <!--g1-literal-->
+| 53 | Shibboleth | Executed 46 consecutive metadata inputs through native HTTP fetch. Configuration restored | native_http_provider_and_protocol_client | 2 | 2 | 0 | 97.7 | <!--g1-literal-->
+| 54 | Shibboleth | Executed 17 consecutive extension-attribute and default-ACS inputs. Configuration restored | native_http_provider_and_protocol_client | 2 | 2 | 0 | 37.2 | <!--g1-literal-->
+| 55 | suite | Deployed integrated encryption, ECDSA, and public-diagnostic classes. Checked unchanged existing JARs and approved definitions | docker | 0 | 0 | 0 | 4.2 | <!--g1-literal-->
+| 56 | SimpleSAMLphp | Integrated SSO test sequence including encrypted Subject inputs and public diagnostics | protocol_client | 0 | 0 | 0 | 96.0 | <!--g1-literal-->
+| 57 | Keycloak | Integrated SSO test sequence including encrypted Subject inputs and public diagnostics | protocol_client | 0 | 0 | 0 | 358.1 | <!--g1-literal-->
+| 58 | Shibboleth | Integrated SSO test sequence including encrypted Subject inputs and public diagnostics | protocol_client | 0 | 0 | 0 | 436.9 | <!--g1-literal-->
+| 59 | Shibboleth | ECDSA valid/invalid-signature attempts. Invalid signature stopped with HTTP400 and no SAML rejection response. Configuration restored | protocol_client | 2 | 2 | 0 | 8.2 | <!--g1-literal-->
+| 60 | suite | Deployed integrated string-type observation and extension-input classes with pinned schemas. Checked unchanged existing JARs and approved definitions | docker | 0 | 0 | 0 | 4.2 | <!--g1-literal-->
+| 61 | SimpleSAMLphp | Integrated SSO test sequence including extension-string inputs and NameID type observation | protocol_client | 0 | 0 | 0 | 116.5 | <!--g1-literal-->
+| 62 | Keycloak | Integrated SSO test sequence including extension-string inputs and NameID type observation | protocol_client | 0 | 0 | 0 | 477.8 | <!--g1-literal-->
+| 63 | Shibboleth | Integrated SSO test sequence including extension-string inputs and NameID type observation | protocol_client | 0 | 0 | 0 | 538.9 | <!--g1-literal-->
+| 64 | suite | Deployed the fix deferring request generation until execution order. Checked unchanged existing JARs and approved definitions | docker | 0 | 0 | 0 | 4.3 | <!--g1-literal-->
+| 65 | SimpleSAMLphp | SSO test sequence after the request-generation timing fix | protocol_client | 0 | 0 | 0 | 118.2 | <!--g1-literal-->
+| 66 | Keycloak | SSO test sequence after the request-generation timing fix | protocol_client | 0 | 0 | 0 | 476.1 | <!--g1-literal-->
+| 67 | Shibboleth | SSO test sequence after the request-generation timing fix | protocol_client | 0 | 0 | 0 | 574.5 | <!--g1-literal-->
+| 68 | suite | Deployed G02 acceptance conditions, literal-string inputs, and signature preservation. Checked unchanged existing JARs and approved definitions | docker | 0 | 0 | 0 | 4.3 | <!--g1-literal-->
+| 69 | Keycloak | SSO test sequence after G02 acceptance-condition and literal-string input fixes | protocol_client | 0 | 0 | 0 | 511.1 | <!--g1-literal-->
+| 70 | Shibboleth | SSO test sequence after G02 acceptance-condition and literal-string input fixes | protocol_client | 0 | 0 | 0 | 617.5 | <!--g1-literal-->
+| 71 | SimpleSAMLphp | SSO test sequence after G02 acceptance-condition and literal-string input fixes | protocol_client | 0 | 0 | 0 | 124.2 | <!--g1-literal-->
+| 72 | suite | Deployed SLO evidence checking, request generation, send/receive integration, and basic cases. Checked unchanged existing JARs and approved definitions | docker | 0 | 0 | 0 | 4.3 | <!--g1-literal-->
+| 73 | Keycloak | Changed the SLO response destination from an old Run-specific URL to a Plan-specific URL, eliminating per-Run configuration changes | Keycloak admin API | 1 | 0 | 0 | 0.1 | <!--g1-literal-->
+| 74 | suite | Deployed Status URI fixes and verified unchanged existing libraries | docker | 0 | 0 | 0 | 4.3 | <!--g1-literal-->
+| 75 | Shibboleth | Executed basic SP-initiated SLO scenarios; workload includes interrupted attempts | protocol_client | 0 | 0 | 0 | 3.5 | <!--g1-literal-->
+| 76 | SimpleSAMLphp | Executed basic SP-initiated SLO scenarios; workload includes interrupted attempts | protocol_client | 0 | 0 | 0 | 4.4 | <!--g1-literal-->
+| 77 | Keycloak | Executed basic SP-initiated SLO scenarios; workload includes interrupted attempts | protocol_client | 0 | 0 | 0 | 3.8 | <!--g1-literal-->
+| 78 | Shibboleth | Executed basic SP-initiated SLO scenarios; workload includes interrupted attempts | protocol_client | 0 | 0 | 0 | 3.4 | <!--g1-literal-->
+| 79 | Keycloak | Executed basic SP-initiated SLO scenarios; workload includes interrupted attempts | protocol_client | 0 | 0 | 0 | 2.8 | <!--g1-literal-->
+| 80 | Keycloak | Executed basic SP-initiated SLO scenarios; workload includes interrupted attempts | protocol_client | 0 | 0 | 0 | 4.3 | <!--g1-literal-->
+| 81 | SimpleSAMLphp | Changed the old Run-specific SLO response destination to a Plan-specific destination | local metadata file | 1 | 0 | 0 | 0.3 | <!--g1-literal-->
+| 82 | Shibboleth | Changed the old Run-specific SLO response destination to a Plan-specific destination and reloaded metadata | local metadata file and reload | 1 | 0 | 0 | 0.4 | <!--g1-literal-->
+| 83 | suite | Added signed Redirect SLO transmission and verified runtime classes and unchanged existing libraries | docker | 0 | 0 | 0 | 3.3 | <!--g1-literal-->
+| 84 | SimpleSAMLphp | Enabled this SP sign.logout as a prerequisite for SLO signature verification. After an immediate read-back parse error, rechecked hash equality, PHP syntax, and configuration values | local metadata file | 1 | 0 | 0 | — | <!--g1-literal-->
+| 85 | Shibboleth | Actual communication after adding Redirect SLO; interrupted attempts are also recorded | protocol_client | 0 | 0 | 0 | 2.6 | <!--g1-literal-->
+| 86 | Shibboleth | Actual communication after adding Redirect SLO; interrupted attempts are also recorded | protocol_client | 0 | 0 | 0 | 3.5 | <!--g1-literal-->
+| 87 | SimpleSAMLphp | Actual communication after adding Redirect SLO; interrupted attempts are also recorded | protocol_client | 0 | 0 | 0 | 3.0 | <!--g1-literal-->
+| 88 | SimpleSAMLphp | Actual communication after adding Redirect SLO; interrupted attempts are also recorded | protocol_client | 0 | 0 | 0 | 4.6 | <!--g1-literal-->
+| 89 | suite | Deployed Redirect-signature and SOAP-body-range fixes and verified runtime classes | docker | 0 | 0 | 0 | 4.3 | <!--g1-literal-->
+| 90 | SimpleSAMLphp | Changed this SP SLO response mode to Redirect for actual Redirect-response signature testing | local metadata file | 1 | 0 | 0 | 0.7 | <!--g1-literal-->
+| 91 | SimpleSAMLphp | Actual signed Redirect LogoutResponse communication and verification of related acceptance cases | protocol_client | 0 | 0 | 0 | 4.0 | <!--g1-literal-->
+| 92 | suite | Deployed dedicated Redirect acceptance cases and verified classes and libraries | docker | 0 | 0 | 0 | 3.3 | <!--g1-literal-->
+| 93 | Keycloak | Consecutive execution of basic SLO and dedicated Redirect acceptance cases | protocol_client | 0 | 0 | 0 | 5.1 | <!--g1-literal-->
+| 94 | Shibboleth | Consecutive execution of basic SLO and dedicated Redirect acceptance cases | protocol_client | 0 | 0 | 0 | 5.1 | <!--g1-literal-->
+| 95 | SimpleSAMLphp | Consecutive execution of basic SLO and dedicated Redirect acceptance cases | protocol_client | 0 | 0 | 0 | 5.3 | <!--g1-literal-->
+| 96 | suite | Deployed the EncryptedID decryption verification case and verified runtime classes and libraries | docker | 0 | 0 | 0 | 4.3 | <!--g1-literal-->
+| 97 | Keycloak | Consecutive SLO execution including EncryptedID decryption controls | protocol_client | 0 | 0 | 0 | 5.2 | <!--g1-literal-->
+| 98 | Shibboleth | Consecutive SLO execution including EncryptedID decryption controls | protocol_client | 0 | 0 | 0 | 5.8 | <!--g1-literal-->
+| 99 | SimpleSAMLphp | Consecutive SLO execution including EncryptedID decryption controls | protocol_client | 0 | 0 | 0 | 5.9 | <!--g1-literal-->
+| 100 | Shibboleth | Added a decryption key through existing rollover configuration and published it in metadata | docker | 3 | 0 | 0 | 0.8 | <!--g1-literal-->
+| 101 | suite | Deployed multiple-decryption-key scenarios and checked runtime classes | docker | 0 | 0 | 0 | 4.3 | <!--g1-literal-->
+| 102 | Shibboleth | Restored changes to the inactive installation. The first 3 configuration files had not been applied to the running IdP | docker | 3 | 0 | 0 | — | <!--g1-literal-->
+| 103 | Shibboleth | Added a decryption key through existing rollover configuration and published it in metadata | docker | 3 | 0 | 0 | 0.8 | <!--g1-literal-->
+| 104 | Shibboleth | Recorded the test idp.home in startup configuration to preserve it across restarts | docker | 1 | 0 | 0 | — | <!--g1-literal-->
+| 105 | Shibboleth | The disabled Tomcat shutdown port left old processes running. Terminated the 2 identified processes and started with the correct home | docker | 0 | 0 | 0 | — | <!--g1-literal-->
+| 106 | Keycloak | Consecutive SLO execution including multiple-decryption-key controls | protocol_client | 0 | 0 | 0 | 4.8 | <!--g1-literal-->
+| 107 | Shibboleth | Consecutive SLO execution including multiple-decryption-key controls | protocol_client | 0 | 0 | 0 | 5.9 | <!--g1-literal-->
+| 108 | SimpleSAMLphp | Consecutive SLO execution including multiple-decryption-key controls | protocol_client | 0 | 0 | 0 | 4.7 | <!--g1-literal-->
+| 109 | suite | Switched and verified configuration-capability and evidence-integrity classes | docker | 0 | 0 | 0 | 4.3 | <!--g1-literal-->
+| 110 | Keycloak | Consecutive SLO execution including multiple-decryption-key controls | protocol_client | 0 | 0 | 0 | 4.9 | <!--g1-literal-->
+| 111 | Shibboleth | Consecutive SLO execution including multiple-decryption-key controls | protocol_client | 0 | 0 | 0 | 7.3 | <!--g1-literal-->
+| 112 | SimpleSAMLphp | Consecutive SLO execution including multiple-decryption-key controls | protocol_client | 0 | 0 | 0 | 5.2 | <!--g1-literal-->
 
-## 判定が変わったケース
+## Cases with changed conclusions
 
-| 製品 | Profile | Test | 前 | 後 | 根拠コード |
+| Product | Profile | Test | Before | After | Reason code |
 |---|---|---|---|---|---|
 | Keycloak | browser_sso_idp | `IIP-SSO01-m-idp-01` | NOT_VERIFIED | PASS | `browser.normal-flow.requester-audience-present` |
 | Keycloak | browser_sso_idp | `IIP-SSO01-es-idp-01` | NOT_VERIFIED | PASS | `browser.normal-flow.assertions-protected` |
@@ -170,30 +170,30 @@ Suiteのローカル検証環境の再起動は15回、転送コンテナの再�
 | Shibboleth | metadata_idp | `IIP-MD12-d-idp-01` | NOT_VERIFIED | PASS | `metadata.fixture-probe.satisfied` |
 | SimpleSAMLphp | browser_sso_idp | `IIP-SSO01-m-idp-01` | NOT_VERIFIED | PASS | `browser.normal-flow.requester-audience-present` |
 
-## 作業削減に直結する課題
+## Issues directly affecting workload
 
-| 優先度 | 課題 | 今回確認できたこと | 改善案 |
+| Priority | Issue | Observed in this follow-up | Proposed improvement |
 |---|---|---|---|
-| 高 | 操作しても判定できない項目が操作待ちに見える | BrowserEvidenceTestCaseは完了操作後もoracle-unavailableを返す。CONFIGの一部は自己申告へ進む | 開始前に自動判定・証拠確認・未実装を表示し、判定できない設定作業を要求しない |
-| 高 | メタデータ取得待ちの順序 | ネイティブHTTP取得が動いていても、試験開始後の取得より応答が先に到着するとSuiteが400で止まる | 試験開始→取得確認→要求送信の順をSuiteで制御する。固定の待ち時間に依存しない |
-| 高 | メタデータ手動取り込みの証拠が判定に接続されない | 一括取り込み後の応答があっても、手動downloadはfetched証拠に数えられない | 取り込んだファイルdigestと対象側の取り込み記録を結び、HTTP取得と異なる証拠種別で扱う |
-| 高 | リダイレクト後の鍵が一致しない | tokenのない安定URLからのリダイレクト先が通常鍵を返し、polling用の要求署名と不一致になる | 取得URLにtokenを明示して試験継続。Suite側でモードを正しく引き継ぎ、追加設定をなくす |
-| 中 | localhostの意味がホストとコンテナで異なる | リダイレクト先へ接続できず補助転送が必要になった | ブラウザ・製品・Suiteで共通の到達可能ホスト名を使う検証構成にする |
-| 中 | 途中エラーで連続試験が停止する | SimpleSAMLphpのKeyValue-onlyで停止し、後続試験への継続が1回必要 | エラー証拠を保存し、独立した後続試験を再開できるようにする |
-| 修正済み | メタデータ方式の切り替えで古い要求IDを優先する | 一括取り込み後のHTTP更新で正しい応答をSuiteが誤って相関不一致にした | 発行済み要求の対応付けを修正。回帰テスト後に検証イメージへ反映し、同じRunで継続完了 |
-| 中 | 同じ正常系の追加実行・設定往復 | 追加SSOでAudienceの反復観測と非暗号化Assertionの署名確認が進む | 必要な正常系を初回の実行計画にまとめ、設定のスナップショット・復元を製品アダプタで扱う |
-| 中 | IdP起点SSOを受信できない | 通常受信経路が既存AuthnRequestのInResponseTo一致を要求する | 明示的に許可されたRun専用のIdP起点受信経路と正負対照を設計する |
+| High | Unevaluable items appear to be waiting for operations | BrowserEvidenceTestCase returns oracle-unavailable after completion; some CONFIG cases proceed to attestation | Show automated evaluation, evidence verification, and unimplemented paths before startup; do not request configuration work that cannot be evaluated |
+| High | Ordering while waiting for metadata fetch | Even with native HTTP fetching active, a response arriving before the post-start fetch causes the Suite to stop with 400 | Let the Suite enforce start, confirmed fetch, then request transmission; avoid fixed delays |
+| High | Manual metadata import evidence does not reach evaluation | Responses follow batch import, but manual download is not counted as fetched evidence | Bind the imported file digest to target import records using an evidence kind distinct from HTTP fetch |
+| High | Key mismatch after redirect | A redirect from a stable URL without a token returns the normal key, mismatching the polling request signature | Continue testing with an explicit token in the fetch URL; preserve the mode correctly in the Suite to remove extra configuration |
+| Medium | localhost means different hosts on the host and in containers | The redirect target was unreachable, requiring auxiliary forwarding | Use a verification configuration with a hostname reachable by the browser, product, and Suite |
+| Medium | Intermediate errors stop consecutive tests | SimpleSAMLphp stopped on KeyValue-only; continuing subsequent tests required one intervention | Save error evidence and allow independent subsequent tests to resume |
+| Fixed | Switching metadata modes prioritizes an old request ID | The Suite incorrectly rejected a valid response as uncorrelated during HTTP update after batch import | Corrected issued-request correlation, deployed the verification image after regression tests, and completed continuation in the same Run |
+| Medium | Repeated positive tests and configuration round trips | Additional SSO advances repeated Audience observations and signature checks of unencrypted Assertions | Include required positive controls in the initial execution plan; use product adapters for configuration snapshots and restoration |
+| Medium | IdP-initiated SSO cannot be received | Normal reception requires InResponseTo to match an existing AuthnRequest | Design an explicitly permitted Run-specific IdP-initiated reception path with positive and negative controls |
 
-ShibbolethのHTTP取得方式は[公式のFileBackedHTTPMetadataProvider資料](https://shibboleth.atlassian.net/wiki/spaces/IDP5/pages/3199506865)を参照しました。「修正済み」と明記した要求IDの対応付け以外は、今回の実測・コード調査からの改善提案です。
+The Shibboleth HTTP fetch path was checked against the [official FileBackedHTTPMetadataProvider documentation](https://shibboleth.atlassian.net/wiki/spaces/IDP5/pages/3199506865). Except for request-ID correlation explicitly marked Fixed, these improvements are proposals based on measurements and source inspection in this follow-up.
 
-## 検証と残る範囲
+## Verification and remaining scope
 
-今回変更した製品設定は復元済みです。要求IDの対応付け修正はSpPeerRoundTripTestに同じvariantが両方式に存在する回帰条件を加えて検証し、ローカル検証イメージに反映しました。ケース定義や判定レベルは変更していません。実行前後のHTML/JSON一致と、新たなPASSが参照するTranscriptの存在も検証しました。
+Product configuration changes from this follow-up were restored. The request-ID correlation fix was verified with a SpPeerRoundTripTest regression covering the same variant in both modes and deployed to the local verification image. Case definitions and judgment levels are unchanged. HTML/JSON equality before and after execution and the existence of Transcripts referenced by new PASS conclusions were also verified.
 
-未検証項目は残っています。操作だけで解消できない自動判定未実装、拒否の証明が不足する試験、運用・設定の裏付けが必要な自己申告などを含みます。追加の試行を完了したことと、全試験・製品全体の適合確認が完了したことは区別します。
+Unverified observations remain, including missing automated evaluation that operations alone cannot resolve, tests with insufficient rejection evidence, and attestations requiring operational or configuration support. Completing additional attempts does not establish completion of all tests or whole-product conformance.
 
-## 証拠と再生成
+## Evidence and regeneration
 
-操作台帳、設定の変更前バックアップ、実行前後のresult.json、試験スクリプトはローカルの `build/acceptance/reference-20260914/interaction-followup/` に保存しています。設定バックアップは公開・コミット対象にしません。
+The operation ledger, configuration backups, before/after result.json files, and test scripts are stored locally in `build/acceptance/reference-20260914/interaction-followup/`. Configuration backups are excluded from publication and commits.
 
-再生成: `.venv/bin/python dev/reference-acceptance/generate_interaction_report.py --evidence-root build/acceptance/reference-20260914/interaction-followup`。
+Regenerate: `.venv/bin/python dev/reference-acceptance/generate_interaction_report.py --evidence-root build/acceptance/reference-20260914/interaction-followup`.

@@ -1,103 +1,103 @@
-# UIメタデータ消費の比較入力
+# Comparison inputs for UI metadata consumption
 
-表示名の優先順位とロゴの言語選択を観測するため、`MetadataUiConsumerFixtures`を通常およびpollingメタデータ生成へ接続した。承認済み定義は変更していない。入力生成の完成は、製品のブラウザ表示や判定処理の完成ではない。
+Connected `MetadataUiConsumerFixtures` to ordinary/polling metadata generation to observe display-name precedence and logo language selection. Approved definitions were unchanged. Completed input generation does not establish completed product-browser observation/evaluation.
 
-| 入力 | 対象ケース | 内容 |
+| Input | Case | Content |
 |---|---|---|
-| `ui-consumer-display-all` | `IIP-MD05-fj-idp-01` | UIInfo DisplayNameとServiceNameとentityIDが存在し、それぞれ区別できる |
-| `ui-consumer-display-service` | 同上 | DisplayNameなし、ServiceNameあり |
-| `ui-consumer-display-entity` | 同上 | DisplayNameとServiceNameなし |
-| `ui-consumer-logo-localized` | `IIP-MD05-f9-idp-01` | 言語なしの既定ロゴと英語ロゴ |
-| `ui-consumer-logo-fallback` | 同上 | 同じ既定ロゴと日本語ロゴ（初期実装のフランス語から修正。下記参照） |
+| `ui-consumer-display-all` | `IIP-MD05-fj-idp-01` | Distinguishable UIInfo DisplayName, ServiceName and entityID |
+| `ui-consumer-display-service` | Same case | No DisplayName; ServiceName present |
+| `ui-consumer-display-entity` | Same case | Neither DisplayName nor ServiceName |
+| `ui-consumer-logo-localized` | `IIP-MD05-f9-idp-01` | Language-neutral default logo and English logo |
+| `ui-consumer-logo-fallback` | Same case | Same default logo and Japanese logo, corrected from initial French; see below |
 
-UIInfoはSPSSODescriptorのExtensionsに配置する。ServiceNameを含むAttributeConsumingServiceには、スキーマ必須のRequestedAttributeを入れる。ロゴ比較では画像本体を変えず、ローカライズ候補の言語だけを変える。固定したdata SVGは外部通信・スクリプトを含まない。
+UIInfo belongs in SPSSODescriptor Extensions. AttributeConsumingService containing ServiceName includes schema-required RequestedAttribute. Logo comparisons keep image bytes fixed and vary only localized-candidate language. Fixed data SVG contains no external communication/scripts.
 
-ロゴの判定には、製品画面の実際の優先言語を固定・記録することが必要である。英語ロゴと既定ロゴをそれぞれ選ぶ差を期待できる構成で実行する。data画像が製品やCSPによって表示できない場合は、比較の前提が未成立であり言語選択の違反にはしない。別の到達可能な画像配信経路を準備する必要がある。
+Logo evaluation requires fixing/recording the product screen's actual preferred language and conditions that distinguish English/default selection. If product/CSP prevents data-image display, the comparison prerequisite fails; this is not a language-selection violation. Another reachable image transport is needed.
 
-表示名は画面全体の文字列検索だけで判断しない。設定画面、ソース、非表示DOMに候補が存在することと、利用者向けの対象SP表示に選ばれたことは異なる。対象entityID、元fixtureハッシュ、製品自身の取込結果、同じ画面・言語・セッション条件、表示要素と可視性、前後の対照を結び付けるブラウザ観測経路が必要である。最終フォールバックは承認済み定義に従いentityIDまたは端点ホスト名を許容する。
+Display-name evaluation cannot rely on page-wide string searches. Candidate presence in configuration/source/hidden DOM differs from selection in the user-visible target-SP display. Browser collection must bind target entityID, original fixture hash, native import, identical screen/language/session conditions, visible display elements and before/after controls. The approved final fallback permits entityID or endpoint hostname.
 
-## 未完了部分と検証の扱い
+## Incomplete work and validation
 
-今回追加したのは共通入力と、その配置・候補差・不存在・通常／polling双方を検査するテストコード。製品取込後のブラウザ観測、正負対照のオラクル、正式なRun判定への接続は未完了。DiscoveryHintとURLスキームのケースも今回の入力ではカバーしない。
+This addition supplies shared inputs and test code checking placement, candidate differences, absence and ordinary/polling paths. Product-browser observation, positive/negative oracle and formal Run integration remain incomplete. These inputs also do not cover DiscoveryHint/URL-scheme cases.
 
-### ブラウザ観測モジュールの追加
+### Browser-observation module
 
-`dev/reference-acceptance/ui_consumer_observation.mjs`は既存のPlaywright Pageを受け取り、製品アダプターが指定した表示要素を読み取る。画面のoriginとpath、ブラウザの優先言語、要素の一意性と可視性、画面内の配置、中央点の遮蔽を確認する。ロゴでは読み込み完了と自然寸法、currentSrcの候補一致を要求する。文字列は指定要素全体の表示テキストとの完全一致を使い、ページ全体の部分一致にはしない。
+`dev/reference-acceptance/ui_consumer_observation.mjs` accepts an existing Playwright Page and reads adapter-selected elements. It checks screen origin/path, preferred browser language, unique/visible elements, viewport placement and center-point occlusion. Logos require completed loading, natural dimensions and candidate-matching currentSrc. Text must exactly match the selected element's whole visible text, rather than a page-wide substring.
 
-保存するのは候補トークン、fixtureと取込記録のハッシュ、固定診断だけである。未知の表示テキスト、フォーム値、Cookie、通信本文、スクリーンショットは保存しない。例外の文字列もDOMやURLの機密情報を含み得るため保存しない。記録ファイルは排他的作成とし、既存証拠を上書きしない。
+Records contain candidate tokens, fixture/import-record hashes and fixed diagnostics only. Unknown display text, form values, Cookies, communication bodies and screenshots are not saved. Exception strings may expose DOM/URL secrets and are excluded. Record creation is exclusive and never overwrites evidence.
 
-モジュールが読んだ取込記録のハッシュは対応参照であり、取込成功やRunとの結合を検証したという意味ではない。`import_binding_verified=false`と`verdict_adopted=false`を付ける。ブラウザ言語が一致しても製品の保存済み言語設定まで証明したことにはならない。製品アダプターでの取込・言語設定・対象SP表示要素の確認、実際のSSO経路への接続、正負対照の比較、正式判定は引き続き未完了。
+Import-record hashes are correlation references, not verified import success/Run binding. Records include `import_binding_verified=false`, `verdict_adopted=false`. Matching browser language does not establish saved product-language settings. Adapter checks of import/language/target-SP display, actual SSO integration, controls and formal evaluation remain incomplete.
 
-負の対照を含むブラウザ境界テストコードを追加した。構文確認のみ実施し、実ブラウザでのテスト実行は統合バッチ待ち。プロジェクトルートにはPlaywrightの解決可能なインストールがなく、既存の参照ブラウザ環境への接続も実行前に必要である。未実行を成功として集計しない。
+Added browser-boundary test code including negative controls. Only syntax checks ran; real-browser tests await the integration batch. No resolvable Playwright installation exists at the project root; the reference browser environment must be connected before execution. Unexecuted tests are not counted as passed.
 
-### Shibboleth実画面への接続
+### Shibboleth screen integration
 
-`dev/shibboleth/ui_consumer_campaign.py`で元fixtureを一時FilesystemMetadataProviderへ渡し、読戻し・Resolver再読込後に`observe_ui_consumer.mjs`が製品の標準ログイン画面を開く。ブラウザは毎条件新しいコンテキストを使い、英語の優先言語で認証前に観測を止める。ログイン情報の投入やSSO完了の主張はしない。元のプロバイダー設定は完全一致で復元し、一時メタデータも削除する。
+`dev/shibboleth/ui_consumer_campaign.py` passes original fixtures through temporary FilesystemMetadataProvider; after read-back/Resolver reload, `observe_ui_consumer.mjs` opens standard product login. Each condition uses a fresh browser context with English preference and stops before authentication. No credentials are entered or completed SSO claimed. Provider configuration is restored byte-for-byte; temporary metadata is removed.
 
-参照環境のPlaywrightはCodex同梱依存を`SAMLSCOPE_PLAYWRIGHT_MODULE`で明示して接続した。製品テンプレートは`header h1`に固定英語接頭辞を付けたSP名を、`img.service-logo`にSPロゴを表示する。IdP自身のヘッダーロゴは選択しない。
+Reference Playwright uses Codex-bundled dependencies explicitly through `SAMLSCOPE_PLAYWRIGHT_MODULE`. The template displays SP names with a fixed English prefix in `header h1` and SP logos in `img.service-logo`; it does not select the IdP header logo.
 
-| 入力 | 実画面での観測 | 判定に残る条件 |
+| Input | Screen observation | Remaining evaluation condition |
 |---|---|---|
-| DisplayNameとServiceNameあり | DisplayNameを表示 | 取込・要求・画面の厳密相関と全条件の対照 |
-| DisplayNameなし | ServiceNameを表示 | 同上 |
-| 名前候補なし | 対象見出しが存在しない | 別の表示画面の調査。標準login.vmはSP IDを含む名前の見出しを抑止する |
-| 英語ロゴあり | 言語付きロゴを表示 | 製品側の実際の言語選択条件の確認 |
-| フランス語ロゴのみ＋言語なしロゴ | フランス語候補を表示 | 同上。ブラウザ優先言語だけで製品違反を確定しない |
+| DisplayName and ServiceName | DisplayName shown | Strict import/request/screen correlation and all controls |
+| No DisplayName | ServiceName shown | Same conditions |
+| No name candidates | Target heading absent | Investigate another display; standard login.vm suppresses headings containing SP ID |
+| English logo present | Localized logo shown | Establish actual product language-selection conditions |
+| French-only candidate plus neutral logo | French candidate shown | Same conditions; browser preference alone cannot establish violation |
 
-実測は`build/acceptance/reference-20260918/shibboleth-ui-consumer-campaign-v2/`、Runは`run_7HK04E50WDXFR6NH3QSN5EH0JA`。保存した画像候補値との完全一致を観測し、隠れたDOMの存在やimport成功のみを表示証拠にしていない。ただし観測モジュールは引き続き`import_binding_verified=false`であり、正式なケース判定には採用しない。
+Measurements: `build/acceptance/reference-20260918/shibboleth-ui-consumer-campaign-v2/`, Run `run_7HK04E50WDXFR6NH3QSN5EH0JA`. Observed exact equality to saved image candidates, not hidden DOM/import success alone. Observation still has `import_binding_verified=false` and is not adopted into formal evaluation.
 
-初回Run `run_NC94WEZVKV6P8Z75J6YKZE52FH`は`shibboleth-ui-consumer-campaign/`に保持。製品がPOST入口へ遷移したのに観測側がRedirect入口だけを許可していたため全条件を拒否した。固定参照メタデータに広告された両入口に限定して修正した。また、未評価Runにresult.jsonを要求した終了時のエラーを修正し、未生成の結果を作るためにケースを開始せず`evaluation-status.json`を記録するようにした。初回でも設定復元は完了していた。
+First Run `run_NC94WEZVKV6P8Z75J6YKZE52FH` remains in `shibboleth-ui-consumer-campaign/`. Every condition was rejected because the product used POST while observation allowed only Redirect. Corrected allowlisting to both entries advertised in fixed reference metadata. Also corrected completion-time result.json requirements for unevaluated Runs: record `evaluation-status.json` rather than start cases solely to generate absent results. Initial configuration restoration had completed.
 
-<!--g1-literal--> 実環境操作は各バッチで設定書込7回・一時ファイル削除1回・MetadataResolver再読込6回・ブラウザ起動5回。初回の失敗分込みで合計書込14回・削除2回・再読込12回・ブラウザ起動10回、Run/preflight各2回。SSO完了・本人操作・製品再起動は0回。各バッチのoperations.jsonとrestoration.jsonが原本である。
+<!--g1-literal--> Each batch: configuration writes 7; temporary deletions 1; MetadataResolver reloads 6; browser starts 5. Including initial failure: total writes 14, deletions 2, reloads 12, browser starts 10, Run/preflight 2 each. Completed SSO/user interactions/product restarts 0. Per-batch operations.json/restoration.json are originals.
 
-<!--g1-literal--> Suiteイメージbuild1回、Suite／転送コンテナ再作成各1回。`samlscope:reference-ui-consumer-v44`のdigestは`sha256:5631b8c2463afa95bbcedab550a2146b67f1687e6e5ac136c40b24fb7c07cee9`。署名済みのUI fixtureソースからSAML jarだけを更新し、別件のAPI作業ツリー変更は含めていない。ヘルスチェック成功。境界テスト一式は統合バッチ待ちであり、この実画面観測をその代わりの成功として数えない。
+<!--g1-literal--> Suite image build 1; Suite/forwarder recreations 1 each. `samlscope:reference-ui-consumer-v44` digest: `sha256:5631b8c2463afa95bbcedab550a2146b67f1687e6e5ac136c40b24fb7c07cee9`. Updated only SAML jar from signed UI-fixture source; unrelated API changes were excluded. Health passed. Boundary tests await integration; these screen observations do not substitute for passed tests.
 
-<!--g1-literal--> 今回も正式判定の追加はなく未検証467観測を維持する。G2の署名差分は未解消。
+<!--g1-literal--> No formal conclusions added; unverified observations remain 467. G2 signed-source difference remains unresolved.
 
-### 実送信要求と元fixtureの相関
+### Correlation of sent requests and original fixtures
 
-ブラウザアダプターに、対象IdPのSSO入口へメインフレームが送るSAMLRequestの観測を追加した。送信本文はメモリー内でのみデコードし、SHA-256とバイト長を保存する。RedirectのDEFLATEは出力上限を設ける。重複パラメーター、複数の候補要求、デコード失敗は相関不能とする。記録するヘッダーはAccept-Languageだけで、Cookie・Authorization・完全URL・要求本文は保存しない。
+The browser adapter now observes main-frame SAMLRequests to the target IdP SSO entry. Bodies are decoded only in memory; records retain SHA-256/byte length. Redirect DEFLATE has an output limit. Duplicate parameters, multiple candidate requests or decode errors invalidate correlation. Only Accept-Language is retained; Cookies, Authorization, full URLs/request bodies are excluded.
 
-`bind_ui_consumer_evidence.py`は、ブラウザの要求ハッシュと取得済みTranscript原本を照合する。Run・条件・Issuer/entityID・要求ID・Destination・HTTPメソッド・観測画面path・バイト長を検査し、同じ要求の再利用を拒否する。同じfixture原本のMetadataPrepared、そのMetadataFetch、AuthnRequest、画面観測の順序も検査する。native-importのハッシュと実際の設定書込／読戻し・Resolver再読込記録、完全復元を併せて要求する。
+`bind_ui_consumer_evidence.py` matches browser-request hashes to fetched Transcript originals. It checks Run/condition/Issuer/entityID/request ID/Destination/HTTP method/screen path/byte length and rejects request reuse. It also checks ordering of same-fixture MetadataPrepared, MetadataFetch, AuthnRequest and screen observation, requiring native-import hashes, actual writes/read-back/Resolver reloads and complete restoration.
 
-この結合はローカルアダプターの操作記録を信頼する。単独のファイルハッシュから製品の処理や管理者の真正性を証明するものではなく、比較判定・正負対照の代替でもない。元の観測記録は書き換えず、別の`ui-evidence-binding.json`へ`originals_bound=true`、`native_readback_bound=true`、`verdict_adopted=false`を記録する。
+Binding trusts local-adapter operation records. A file hash alone proves neither product processing nor administrator authenticity, and does not replace comparison/controls. Original observations remain unchanged; separate `ui-evidence-binding.json` records `originals_bound=true`, `native_readback_bound=true`, `verdict_adopted=false`.
 
-<!--g1-literal--> 新しい実測Runは`run_NHWX1F64WMGT7BMKZG5BQ7QTD2`。証拠は`build/acceptance/reference-20260918/shibboleth-ui-consumer-correlated/`。5条件で相関が成立し、各要求のAccept-Languageは`en-US`。HTMLルートのlangは記録可能な値がなくnullだった。観測された表示候補は前回と同じで、フォールバックの未解決条件も変わらない。
+<!--g1-literal--> New measured Run: `run_NHWX1F64WMGT7BMKZG5BQ7QTD2`. Evidence: `build/acceptance/reference-20260918/shibboleth-ui-consumer-correlated/`. All 5 conditions correlated; each request had Accept-Language `en-US`. HTML-root lang was unavailable and null. Display candidates/unresolved fallback conditions matched preceding observations.
 
-<!--g1-literal--> この追加バッチの操作は設定書込7回・一時ファイル削除1回・Resolver再読込6回・ブラウザ起動5回・Run/preflight各1回。認証情報投入・SSO完了・本人操作・コンテナ変更は0回。設定完全復元済み。機能テストの小刻みな再実行は行わず、実証と証拠結合を実施した。判定の正式採用前に負の対照を含む統合検証が必要。
+<!--g1-literal--> Additional batch: configuration writes 7; temporary deletions 1; Resolver reloads 6; browser starts 5; Run/preflight 1 each. Credential input/completed SSO/user interactions/container changes 0. Full restoration verified. No incremental functional-test reruns; measurements/binding ran. Formal adoption still requires integrated negative-control validation.
 
-### フォールバック入力の修正と切替実証
+### Corrected fallback input and observed switching
 
-稼働製品の`RelyingPartyUIContext`を同梱jarのbytecodeで確認したところ、ロゴ選択はブラウザ言語、設定済み代替言語、言語なしロゴの順で探索していた。参照製品のidp.propertiesには`idp.ui.fallbackLanguages=en,fr,de`がある。初期のフランス語fixtureは「優先・代替言語が利用できない」条件ではなく、これまでの観測から製品違反を確定できなかった原因はSuiteの入力条件にあった。
+Inspected running `RelyingPartyUIContext` bytecode: logo lookup uses browser language, configured alternatives, then neutral candidates. Reference idp.properties has `idp.ui.fallbackLanguages=en,fr,de`. Initial French fixtures did not establish unavailable preferred/alternative languages; the Suite input condition prevented a violation conclusion.
 
-fixtureの言語を代替言語リストに含まれない日本語へ変更した。製品の言語設定は変更していない。ドライバーは事前に代替言語を読み、fixtureとブラウザ優先言語との衝突を検査する。設定値が曖昧な場合や対応外の書式では開始を拒否し、終了時にも設定ファイル全体の不変を確認する。
+Changed fixture language to Japanese, absent from alternatives, without changing product settings. The driver reads alternatives before execution and checks collisions with fixture/browser languages. Ambiguous/unsupported settings reject start; complete settings-file equality is also checked at completion.
 
-新Run `run_GNBRVD9WSNFGHMXZEFN4BAH6NR`の`shibboleth-ui-consumer-language-control/`では、英語候補あり→localized、日本語候補のみ→defaultを実画面で観測した。要求・fixtureの原本結合も成立している。`logo_comparison`は同じ画像・寸法、異なる言語条件、区別可能な候補、送信されたAccept-Language、選択結果の差を検査し、`difference-observed`を返した。過去のfr条件の原本は保持する。
+New Run `run_GNBRVD9WSNFGHMXZEFN4BAH6NR`, `shibboleth-ui-consumer-language-control/`, observed localized with English candidates and default with Japanese-only candidates. Original request/fixture binding succeeded. `logo_comparison` checks identical images/dimensions, different language conditions, distinguishable candidates, sent Accept-Language and selection differences, returning `difference-observed`. Historical fr originals remain retained.
 
-この診断結果は正式なCaseOutcomeではない。ローカル設定ファイルの読戻しと稼働コンテキストの設定値読出しは区別し、後者は未実施と記録する。正式判定へのアダプター接続、常に同じロゴを返す実装を排除する対照を含む統合検証が残る。表示名が両方ない場合の見出し抑止も未解決。
+This diagnostic is not formal CaseOutcome. Local settings read-back is distinguished from runtime-context settings extraction; the latter is recorded as unperformed. Adapter/formal integration and controls excluding constant-logo implementations remain. Suppression of headings when both names are absent is unresolved.
 
-<!--g1-literal--> 追加操作は設定書込7回・削除1回・Resolver再読込6回・ブラウザ起動5回・Run/preflight各1回。言語設定書込・製品再起動・認証情報投入・本人操作は0回。原本の完全復元を確認済み。Suiteイメージbuild1回、Suite／転送コンテナ再作成各1回。稼働中の`samlscope:reference-ui-language-v45`のdigestは`sha256:34c8e0d536e755b867973c4da15cb3f4b0c48bb8532ca669b88750e618794d13`。SAMLモジュールのみ更新し、APIの別件変更は含めない。コンパイル・G1生成整合・構造検査成功。機能テストは統合バッチ待ち、未検証467観測は維持。
+<!--g1-literal--> Additional operations: writes 7; deletions 1; Resolver reloads 6; browser starts 5; Run/preflight 1 each. Language-setting writes/product restarts/credential input/user interactions 0. Complete restoration verified. Suite image build 1; Suite/forwarder recreations 1 each. Running `samlscope:reference-ui-language-v45` digest: `sha256:34c8e0d536e755b867973c4da15cb3f4b0c48bb8532ca669b88750e618794d13`. Updated SAML only, excluding unrelated API changes. Compilation/G1 generated consistency/structure passed. Functional tests await integration; unverified observations remain 467.
 
-### Runner側の比較処理
+### Runner comparison
 
-`UiLogoComparison`を追加した。原本を検証済みの内部Sampleを受け取り、優先言語あり／利用不可の両条件、同じRun・SP・固定入力、同じ画像本体と寸法を含む比較指紋、異なるメタデータ、要求から画面観測までの順序、重複のない原本参照を要求する。前者でlocalized、後者でdefaultが観測された場合のみSATISFIEDを返す。失敗や不足はNOT_VERIFIEDであり、製品違反には変換しない。Verdictは返さない。
+Added `UiLogoComparison` accepting original-validated internal Samples. It requires both preferred-language-present/unavailable conditions, same Run/SP/fixed inputs, comparison fingerprints including image bytes/dimensions, different metadata, request-to-screen ordering and unique originals. Only localized followed by default returns SATISFIED. Missing/failed evidence returns NOT_VERIFIED, never product violation or Verdict.
 
-Sampleはpackage-privateの内部契約であり、利用者が自己申告で条件や固定入力指紋を与えてよいDTOではない。条件は元メタデータと検証済み言語準備から、指紋は対象・ポリシー・SP・ブラウザ設定・画像と寸法・表示要素から収集側が計算する必要がある。収集側で原本が未結合、言語設定が不明、画像が未読込等であれば、正しい候補トークンがあってもSATISFIEDにしない。
+Sample is package-private, not a DTO for user-attested conditions/fingerprints. Conditions derive from original metadata/validated language preparation; collector fingerprints include target, policy, SP, browser settings, image/dimensions and display element. Unbound originals, unknown language settings or unloaded images cannot establish SATISFIED despite correct candidate tokens.
 
-常に同じ候補を返す場合、未観測、片方の条件しかない場合、別Run／SP、変更した画像・設定、同じ画像を別候補として扱う場合、同じメタデータ、順序の破綻、証拠再利用の負の対照コードを追加した。コンパイル成功、テスト実行は次の統合バッチ待ち。ローカル証拠から内部Sampleへ変換する収集処理とケース登録への接続は未完了であり、現時点の稼働Suiteや台帳へ新判定は反映していない。
+Added negative-control code for constant candidates, unobserved/missing conditions, different Runs/SPs, altered image/settings, treating one image as different candidates, identical metadata, invalid ordering and reused evidence. Compilation passed; tests await integration. Local-evidence collection into Samples and case registration remain incomplete; no new running-Suite/inventory conclusions were adopted.
 
-### 原本再検査・ケース登録と統合検証
+### Original rechecks, case registration and integrated validation
 
-`export_ui_logo_receipt.py`は元fixtureのロゴとブラウザへ渡した候補対応表を照合し、ローカルアダプター用receiptを排他的作成する。receiptは固定対象メタデータのハッシュ、native準備、原本参照とハッシュ、ブラウザ観測原本を含み、OutcomeやVerdictを含まない。
+`export_ui_logo_receipt.py` matches original-fixture logos to browser-candidate mappings and exclusively creates local-adapter receipts. Receipts contain fixed-target metadata hash, native preparation, original references/hashes and original browser observations, without Outcome/Verdict.
 
-`UiLogoEvidenceFile`はデータディレクトリの`ui-logo-evidence/<run>.json`を読む。HTTP投稿経路はない。Runごとの通常ファイルに限定し、サイズ上限とシンボリックリンク拒否を設ける。原本TranscriptのRun・型・条件・参照・ハッシュ・順序、対象メタデータの広告SSO入口、実送信要求のIssuer・ID・Destination、ブラウザ要求ハッシュ・送信言語・画面pathを再検査する。元XMLからロゴの言語・画像・寸法を読み、固定入力指紋と比較Sampleを作る。言語照合は地域付き優先言語から一般言語へのlookupを使う。
+`UiLogoEvidenceFile` reads data-directory `ui-logo-evidence/<run>.json`; no HTTP submission exists. Files must be regular and Run-specific, bounded in size and nonsymlink. It rechecks original Transcript Run/type/condition/reference/hash/order, advertised target SSO entries, actual request Issuer/ID/Destination and browser hash/sent language/screen path. Original XML supplies logo language/image/dimensions for fixed-input fingerprints/Samples. Language matching looks up regional preference then general language.
 
-ブラウザ観測とnative準備の真正性はローカルアダプターの信頼境界にある。読み戻した設定を使って指定条件が製品の表示選択に反映された比較実験として扱い、管理者が証拠自体を捏造する場合まで製品署名で検出できるとは主張しない。JVM内設定の直接読出しを実施したという主張も追加しない。
+Browser/native-preparation authenticity belongs to the local-adapter trust boundary. The experiment uses read-back settings and observed product selection; product signatures are not claimed to detect administrator-fabricated evidence. No direct JVM-settings extraction is claimed.
 
-`UiLogoBrowserEvidenceTestCase`をM2ブラウザレジストリへ接続した。評価開始時と外部証拠確認時に比較処理を呼ぶ。証拠不足の場合はNOT_VERIFIEDであり、完了クリックや自己申告で補完できない。
+Connected `UiLogoBrowserEvidenceTestCase` to the M2 browser registry, evaluating at start/external evidence confirmation. Missing evidence remains NOT_VERIFIED and cannot be supplied by completion clicks/attestation.
 
-<!--g1-literal--> 保留分をまとめた検証でJavaの比較／fixture計4テストとPlaywrightの境界テスト1件が成功。保存済み実測の本番収集・比較処理の再生もSATISFIEDとなり、receiptを変異させた7対照（常にdefault、常にlocalized、非表示、別対象、別要求、重複、欠落）はすべてNOT_VERIFIED。再生報告は`shibboleth-ui-consumer-language-control/production-logo-comparison.json`。これはRunの正式結果採用前の実装検証である。
+<!--g1-literal--> Batched deferred validation passed 4 Java comparison/fixture tests and 1 Playwright boundary test. Production replay of measured originals returned SATISFIED; all 7 mutated receipts—constant default, constant localized, hidden element, different target/request, duplicates/missing evidence—returned NOT_VERIFIED. Replay report: `shibboleth-ui-consumer-language-control/production-logo-comparison.json`. This validates implementation before formal Run adoption.
 
-<!--g1-literal--> コンパイルは成功。追加した2テストの実行は次の統合バッチまで保留し、成功扱いにしていない。ユーザー指定に従い、小さな追加のたびに機能テストを再実行しない。G1生成確認と構造検査は変更ごとの必須確認として実行する。
+<!--g1-literal--> Compilation passed. Execution of 2 added tests remains deferred to integration, not claimed as success. Following user direction, small additions do not each trigger functional reruns. G1 generated-document/structural checks remain mandatory per change.
 
-<!--g1-literal--> 未検証467観測／157ケースIDを維持。製品設定書込・コンテナ変更・プロトコル実行・本人操作は0回。新fixtureは作業ソースに追加した段階で、稼働中のイメージには未反映。
+<!--g1-literal--> Unverified observations remain 467 with 157 case IDs. Product writes/container changes/protocol execution/user interactions 0. New fixtures exist in working source but are not in the running image.

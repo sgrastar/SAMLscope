@@ -1,101 +1,101 @@
-# UI URLスキームの比較入力
+# Comparison inputs for UI URL schemes
 
-## ネイティブgetterの個別診断
+## Individual native-getter diagnosis
 
-`dev/shibboleth/NativeUiUrlProbe.java`と`probe_ui_url_getters.py`を追加した。元fixtureを実機のOpenSAMLで読み、実機と同じ`RelyingPartyUIContext`へ渡して標準getterを呼ぶ。Suiteでスキーム選択処理を代作しない。実行クラスを含むJARと入力XMLのハッシュを記録する。公開fixtureと診断コードだけを一時領域へ置き、終了時に削除する。製品設定やテンプレートは変更しない。
+Added `dev/shibboleth/NativeUiUrlProbe.java` and `probe_ui_url_getters.py`. The product's OpenSAML reads original fixtures and passes them to the same native `RelyingPartyUIContext` for standard getters. The Suite does not implement scheme selection in its place. Records retain hashes of input XML and the JAR containing executed classes. Only public fixtures/diagnostics enter temporary storage, removed at completion; product configuration/templates remain unchanged.
 
-| URL要素 | http / https | data | javascript / file |
+| URL element | http / https | data | javascript / file |
 |---|---|---|---|
-| Logo | 候補を返す | 候補を返す | null |
-| InformationURL | 候補を返す | null | null |
-| PrivacyStatementURL | 候補を返す | null | null |
+| Logo | Candidate returned | Candidate returned | null |
+| InformationURL | Candidate returned | null | null |
+| PrivacyStatementURL | Candidate returned | null | null |
 
-この結果はgetter単独の実行であり、認証要求に結び付くブラウザ実行や不使用イベントの証明ではない。出力に`browser_execution_verified=false`、`request_bound_nonuse_verified=false`、`verdict_adopted=false`を明記した。現在のネイティブログインテンプレートはLogoとDescriptionを表示する一方、InformationURL／PrivacyStatementURLの表示箇所がないことも読み取りで確認した。これらの診断を、画面上の不在だけによる合格判定へ転用しない。
+These are isolated getter calls, not request-bound browser execution or nonuse events. Output explicitly includes `browser_execution_verified=false`, `request_bound_nonuse_verified=false`, `verdict_adopted=false`. Read-only inspection also showed the native login template displays Logo/Description but has no InformationURL/PrivacyStatementURL display. Neither diagnosis establishes a pass from screen absence alone.
 
-dataがリンクのgetterで除外されたことも、それだけで違反とはしない。承認済み定義はdataの一律拒否を要求せず、URLを使わない場合の扱いを別途定めている。次の実行経路で必要なのは、同じ要求に結び付く製品側判断と実際の表示箇所の証拠である。
+Excluding data from link getters does not alone establish violation. Approved definitions do not require blanket data rejection and separately govern unused URLs. The next execution path needs product decisions bound to the same request and actual display-location evidence.
 
-<!--g1-literal--> 15条件の診断が完了した。初回コンパイルは実機Javaで`List.getFirst()`を利用できず失敗し、`get(0)`へ変更して再実行した。コンパイル試行2、getter診断プロセス1、一時領域作成・削除各2。製品設定書込、再読込、再起動、プロトコル送信、本人操作はいずれも0。失敗を含む証拠は`shibboleth-native-ui-getter-diagnosis/`と`shibboleth-native-ui-getter-diagnosis-v2/`に保持する。未検証429観測は据え置き。
+<!--g1-literal--> Completed 15 diagnostic conditions. Initial product-Java compilation lacked `List.getFirst()`; changed to `get(0)` and reran. Compilation attempts 2; getter process 1; temporary-area creations/deletions 2 each. Product writes/reloads/restarts, protocol sends and user interactions 0. Failure evidence remains in `shibboleth-native-ui-getter-diagnosis/` and `shibboleth-native-ui-getter-diagnosis-v2/`. Unverified observations remain 429.
 
-## 次の統合バッチ: 消費判定と固定入力
+## Next integration batch: consumption evaluation and fixed inputs
 
-`UiUrlComparison`を追加した。ロゴ・InformationURL・PrivacyStatementURLについて、元fixture、要求、ブラウザ観測が一意に結び付いた比較入力を扱う。http・https・dataの利用は許可し、javascript・fileの実利用は`violated`とする。対象ケースのSHOULD_NOTからWARNINGへの変換はEvaluatorの責務であり、比較処理はVerdictを返さない。
+Added `UiUrlComparison` for uniquely bound original-fixture/request/browser inputs for Logo, InformationURL and PrivacyStatementURL. http/https/data use is permitted; actual javascript/file use returns `violated`. Evaluator converts the case's SHOULD_NOT level to WARNING; comparison returns no Verdict.
 
-URLの未観測、要素の不在、画像読込失敗、ブラウザによるスキーム遮断は不使用の証明にしない。不使用を確定するには、ブラウザ観測に加え、同じ要求に結び付く製品側ポリシーの証拠を必要とする。許可スキームについて不使用を証明できた場合は、承認済み解釈に従って`satisfied_with_note`を返す。禁止スキームの不使用と許可スキームの利用が揃った通常の適合比較は`satisfied`とする。条件不足、異なるRunやSP、設定変化、証拠の重複、前後関係の不整合は未検証に残す。
+Unobserved URLs, absent elements, unloaded images or browser scheme blocking do not establish nonuse. Nonuse requires browser observation plus product-policy evidence bound to the same request. Established nonuse of allowed schemes returns approved `satisfied_with_note`; ordinary comparisons combining prohibited-scheme nonuse with allowed-scheme use return `satisfied`. Missing conditions, different Runs/SPs, changed settings, duplicate evidence or invalid ordering remain unverified.
 
-任意のブラウザJSONから不使用を申告できるAPIは追加していない。後続で`UiUrlEvidenceFile`と`UiUrlBrowserEvidenceTestCase`を実装し、M2のRunnerレジストリーへ接続した。入力はローカルの`ui-url-evidence/<run>.json`だけで、`export_ui_url_receipt.py`が原本・ネイティブ取込・設定復元を照合して生成する。メタデータとAuthnRequestの署名、Runと対象、ブラウザの送信要求、観測時刻、候補URLを再照合する。条件間の固定入力指紋には信頼鍵とポリシーを残し、変化させたURL要素と正確なキャンペーン識別子だけを正規化する。
+No API accepting arbitrary browser-JSON nonuse declarations was added. Later `UiUrlEvidenceFile` and `UiUrlBrowserEvidenceTestCase` were connected to the M2 Runner registry. Input is only local `ui-url-evidence/<run>.json`, generated by `export_ui_url_receipt.py` after matching originals/native import/restoration. It rechecks metadata/AuthnRequest signatures, Run/target, actual browser request, observation time and candidate URL. Fixed-input fingerprints retain trust keys/policy and normalize only varied URL elements/exact campaign identity.
 
-現行の採取方式で実利用を識別できるのはネイティブロゴ要素への可視・読込済み候補の表示である。候補URLだけで検索したリンクは意味上の表示位置が未確定なので未観測に残す。製品側の不使用イベントを採るアダプターは未実装であり、入力に`use`・`nativeNonuse`・`outcome`を追加しても確定できない。既存の画面上の不在を`VERIFIED_NONUSE`へ変換しない。比較診断はこれらの不足条件を列挙する。保存済み証拠による再評価と、未送信で待機しているケースからの純粋な証拠評価にも対応するが、完了操作自体は判定根拠にならない。
+Current collection identifies actual use only through visible, loaded candidates in native logo elements. Candidate-URL-only link searches do not establish semantic display locations and remain unobserved. No product nonuse-event adapter exists; adding `use`, `nativeNonuse` or `outcome` to input cannot establish a conclusion. Existing screen absence is not promoted to `VERIFIED_NONUSE`. Diagnostics enumerate these gaps. Saved-evidence reevaluation and pure evidence evaluation from unsent waiting cases are supported; completion actions are not evidence.
 
-この接続は証明書・属性処理とまとめて`reference-config-ui-v64`へ反映した。比較・入力境界とfixtureのチェックは成功したが、URLケースの実機での確定は未完了である。テンプレート不変の記録がない古いキャンペーンへ、現在の設定を遡って埋めることも禁止する。既存の証拠結合診断では、比較処理の不在という総称から、ネイティブ消費／不使用証拠の不足へ理由を具体化した。
+Deployed this integration with certificate/attribute work in `reference-config-ui-v64`. Comparison/input-boundary/fixture checks passed; product-level URL conclusions remain incomplete. Current settings must not be backfilled into old campaigns lacking unchanged-template records. Binding diagnosis now identifies missing native-consumption/nonuse evidence rather than generic absent comparison processing.
 
-polling fixtureのUI URL比較で条件ごとに信頼鍵が変わっていたため、URL比較の範囲では同じ鍵を使用するよう修正した。この比較のネイティブアダプターはメタデータを明示的に再読込しており、未知鍵による更新を前提にしない。他のpolling試験の鍵選択は維持する。既存実測へ新しい固定入力条件を遡って適用しない。
+Polling UI URL conditions previously changed trust keys. Corrected this scope to share a key; its native adapter explicitly reloads metadata and does not rely on unknown-key refresh. Other polling key selection remains unchanged. New fixed-input conditions are not applied retroactively to saved observations.
 
-<!--g1-literal--> 比較の負の対照として、禁止スキームの各要素での利用、15条件それぞれの欠落・未観測、不使用の根拠欠落、Run・SP・設定・時刻・原本・参照の混在をテストコードへ追加した。fixture検査にも15条件の鍵一致とその鍵によるメタデータ署名検証を追加した。これらはv64の統合バッチで成功した。receipt入力境界のチェックは欠落・自己申告・symlinkの拒否を確認したもので、ネイティブ不使用イベントの採取成功を意味しない。
+<!--g1-literal--> Added controls for prohibited-scheme use in every element, each of 15 missing/unobserved conditions, missing nonuse evidence and mixed Run/SP/configuration/time/original/references. Fixture checks cover key equality/signature verification across 15 conditions. They passed in the v64 batch. Receipt-boundary checks reject missing evidence, attestation and symlinks; they do not establish successful native nonuse-event collection.
 
-`IIP-MD05-fh-idp-01`の承認済み条件に対応する入力を追加した。Logo、InformationURL、PrivacyStatementURLを個別に変え、各要素へhttp、https、data、javascript、fileを指定する。他のURL要素を同時に変更せず、どの要素が製品で使われたかを区別できる構成にする。
+Added inputs for approved `IIP-MD05-fh-idp-01`: vary Logo, InformationURL and PrivacyStatementURL independently over http, https, data, javascript and file. Other URL elements remain fixed so product use can be attributed to an element.
 
-<!--g1-literal--> 共通入力は3要素×5スキームの15種類。`ui-url-{logo|information|privacy}-{http|https|data|javascript|file}`で通常・polling双方のメタデータ生成から利用できる。UIInfoはSPロールのExtensionsへ配置し、固定DisplayNameを画面の対象SP識別用に添える。fixtureを生成・取り込めたことだけではケースを解消しない。
+<!--g1-literal--> Shared inputs: 3 elements × 5 schemes, 15 variants. `ui-url-{logo|information|privacy}-{http|https|data|javascript|file}` works in ordinary/polling metadata. UIInfo is in SP-role Extensions with a fixed DisplayName identifying the target SP. Generation/import alone does not resolve cases.
 
-data入力とネットワーク画像は同一の固定SVGを使う。`/metadata-lab/ui-fixture.svg`へ専用の固定配信ルートを追加した。ファイル名や入力本文を受け取らず、ファイルシステム参照・リダイレクト・スクリプトはない。画像Content-Type、nosniff、制限したCSPを返す。
+Data/network images share fixed SVG bytes. Dedicated `/metadata-lab/ui-fixture.svg` serves a fixed asset with no filename/body input, filesystem lookup, redirects or scripts; it returns image Content-Type, nosniff and restricted CSP.
 
-http／httpsのURLはSuiteの公開ホストとポートから組み立てる。両方の到達性は別途準備・検証が必要で、ローカルHTTPポートをhttpsに書き換えてもTLSが有効になるわけではない。追加当初は参照環境のHTTPS配信経路が未整備だったが、下記の専用配信経路で実証した。ネットワーク失敗やCSPによる未読込を、対象製品のURLスキーム判断の違反にしない。
+http/https URLs derive from public Suite host/port. Both require independent reachability preparation/checks; rewriting a local HTTP port as https does not enable TLS. HTTPS was initially unavailable and later proven below. Network/CSP loading failures do not become product scheme-policy violations.
 
-後続実装で、`SAMLSCOPE_UI_ASSET_HTTP_URL`と`SAMLSCOPE_UI_ASSET_HTTPS_URL`による独立した配信先指定を追加した。両方を指定する場合だけ上書きし、片方のみ・スキーム不一致・ユーザー情報・query・fragment・固定画像以外のpathは拒否する。通常とpollingのMetadataServiceへ同じ設定を渡す。未指定時は上記の公開ホスト／ポートを使うが、到達性を自動的に証明した扱いにはしない。
+Later added independent `SAMLSCOPE_UI_ASSET_HTTP_URL` and `SAMLSCOPE_UI_ASSET_HTTPS_URL`. Overrides require both; one missing, scheme mismatch, user information, query, fragment or nonfixed-image path are rejected. Ordinary/polling MetadataService receives identical settings. Defaults use public host/port without implying proven reachability.
 
-javascript入力は`javascript:void(0)`、file入力は存在を想定しない専用パスを使う。XSSペイロード実行のケースとは別である。ブラウザ観測にlink種別を追加し、表示されたアンカーの宛先を候補と照合するが、クリックもスキームハンドラーの実行も行わない。製品ページの全文や認証情報は保存しない。
+javascript uses `javascript:void(0)`; file uses a dedicated path assumed nonexistent. These are separate from XSS payload execution. Browser observation adds link type and matches displayed anchor destinations without clicks/scheme-handler execution. Entire pages/credentials are not saved.
 
-## 判定へ接続する際の条件
+## Conditions for evaluation integration
 
-承認済み定義ではdataを一律拒否する必要はなく、URLを使用しないRunはsatisfied_with_noteである。ただし単に対象要素が見つからないことを、URLの不使用が証明できたことに置き換えない。対象画面・SP・取込原本の結合、利用可能な対照、対象要素の使用／抑止の観測を整備する必要がある。現時点ではこの入力からOutcomeを返す処理は追加していない。
+Approved definitions allow data and yield satisfied_with_note for Runs not using URLs. Element absence cannot stand in for proven nonuse. Required evidence includes screen/SP/imported-original binding, available controls and observed use/suppression. At this input stage no Outcome-producing path was added.
 
-UIリンクの消費と画像の描画は別に観測する。リンクが示すURLを確認するためにそのリンクを開く必要はない。一方、画像の正の対照はURL文字列がDOMにあることだけでは足りず、配信・読込・可視性を確認する。
+UI-link consumption and image rendering are observed separately. Reading a link destination needs no navigation. Positive image controls require delivery/loading/visibility, not only DOM URL presence.
 
-<!--g1-literal--> Javaの入力網羅・配信ルートの検証コードと、Playwrightの非クリック観測検証を追加した。コンパイル・構文確認成功、機能テスト実行は次の統合バッチ待ち。初回コンパイルで登録引数をJavalin本体としていた誤りを修正し、既存のJavalinConfig形式へ合わせた。
+<!--g1-literal--> Added Java input/delivery-route checks and Playwright nonclick observation checks. Compilation/syntax passed; functional execution awaits integration. Corrected the initial registration argument from Javalin itself to existing JavalinConfig.
 
-<!--g1-literal--> 未検証は466観測のまま。稼働イメージへの反映・製品設定書込・本人操作は0回。この入力追加時点の稼働版はv46だった。後続のv47反映は下記参照。
+<!--g1-literal--> Unverified observations remain 466. Deployment/product writes/user interactions 0. Running version at input addition was v46; subsequent v47 deployment is below.
 
-## ループバックでの配信実証
+## Loopback delivery proof
 
-`ui_asset_server.mjs`は固定画像だけをループバックHTTP/TLSで配信する。別々の非特権ポートを使い、固定pathのGET/HEAD以外は拒否する。要求のURL・ヘッダー・本文・利用者情報はログに出さず、画像取得回数だけを記録する。停止シグナルで両リスナーを閉じる。
+`ui_asset_server.mjs` serves only fixed images through loopback HTTP/TLS on separate unprivileged ports. It rejects all except fixed-path GET/HEAD. URLs/headers/bodies/user information are not logged; only image-fetch counts remain. Stop signals close both listeners.
 
-`verify_ui_asset_transport.py`で、提供した証明書とホスト名を検証したHTTPS取得、およびHTTP取得が、Javaの固定画像本体と完全一致することを確認した。検証を無効化したTLS取得ではない。さらにChromeで両画像の自然寸法・読込完了・応答バイト一致を確認した。Chromeの自己署名証明書例外は生成した専用証明書のSPKIハッシュに限定し、汎用の証明書エラー無視は使っていない。
+`verify_ui_asset_transport.py` verified HTTP and HTTPS with provided certificate/hostname against identical Java asset bytes; TLS verification was not disabled. Chrome also checked natural dimensions, loading and response-byte equality for both. Chrome's self-signed exception was restricted to the dedicated generated certificate SPKI; generic certificate-error bypass was not used.
 
-証拠は`build/acceptance/reference-20260918/ui-asset-transport/transport-proof.json`と`browser-proof.json`。証明書・秘密鍵はGit対象外のローカル試験ファイルである。画像のSHA-256は`db4b28bd16f9a91bfe96c1e17a503b2396c37aafcd2b14f41c6c1e378f417a00`。この配信実証を製品のSuccessとして採用しない。
+Evidence: `build/acceptance/reference-20260918/ui-asset-transport/transport-proof.json`, `browser-proof.json`. Certificates/private keys are ignored local test files. Image SHA-256: `db4b28bd16f9a91bfe96c1e17a503b2396c37aafcd2b14f41c6c1e378f417a00`. Transport proof is not adopted as product Success.
 
-Shibbolethブラウザアダプターにも任意の`SAMLSCOPE_UI_ASSET_SPKI`を追加した。指定形式を検査し、使ったpinを観測記録に残す。今後のURLスキーム比較では証明書の取扱いも入力条件として固定する必要がある。
+Added optional `SAMLSCOPE_UI_ASSET_SPKI` to Shibboleth browser adapters, validating format and recording the pin. Future scheme comparisons must fix certificate handling as an input condition.
 
-<!--g1-literal--> 専用画像サーバー起動・停止各1回、HTTP/HTTPS取得各2回（証明書検証付きクライアントとChrome）、Chrome起動1回。製品設定変更・Suiteコンテナ変更・本人操作は0回。配信サーバーは確認後に停止済み。設定検証のテストコードを追加し、JavaコンパイルとJavaScript構文確認は成功。機能テスト群は次の統合バッチ待ち。
+<!--g1-literal--> Dedicated server start/stop 1 each; HTTP/HTTPS fetches 2 each, by verified client/Chrome; Chrome start 1. Product/Suite-container changes/user interactions 0. Server stopped after verification. Added settings tests; Java compilation/JavaScript syntax passed. Functional tests await integration.
 
-## Shibbolethの実画面への接続
+## Shibboleth screen integration
 
-<!--g1-literal--> `samlscope:reference-ui-url-v47`へ反映し、Run `run_5YP6SFER5ZAXEGPBJ2K32WZ35E`で15条件を一括実行した。イメージは署名済み`570d78eb`の隔離チェックアウトからビルドし、作業ツリーにある別件のSOAP変更を含めていない。イメージdigestは`sha256:fc83fc2c70d94a894fe1e814b2ee2c58094c9d468e60cc56b77981ca7216ef8f`。
+<!--g1-literal--> Deployed `samlscope:reference-ui-url-v47`; ran all 15 conditions in Run `run_5YP6SFER5ZAXEGPBJ2K32WZ35E`. Built from isolated signed `570d78eb`, excluding unrelated SOAP changes. Digest: `sha256:fc83fc2c70d94a894fe1e814b2ee2c58094c9d468e60cc56b77981ca7216ef8f`.
 
-| URL要素 | http | https | data | javascript | file |
+| URL element | http | https | data | javascript | file |
 |---|---|---|---|---|---|
-| Logo | 描画確認 | 描画確認 | 描画確認 | 要素未観測 | 要素未観測 |
-| InformationURL | 要素未観測 | 要素未観測 | 要素未観測 | 要素未観測 | 要素未観測 |
-| PrivacyStatementURL | 要素未観測 | 要素未観測 | 要素未観測 | 要素未観測 | 要素未観測 |
+| Logo | Rendering verified | Rendering verified | Rendering verified | Element unobserved | Element unobserved |
+| InformationURL | Element unobserved | Element unobserved | Element unobserved | Element unobserved | Element unobserved |
+| PrivacyStatementURL | Element unobserved | Element unobserved | Element unobserved | Element unobserved | Element unobserved |
 
-表は画面観測であり、ケースのSuccess/Failedではない。ロゴは可視性・読込完了・自然寸法・候補URLを確認した。全条件で固定DisplayNameの見出しを確認し、ブラウザが実際に送信したAuthnRequestをRecorder原本と照合した。画像待機のタイムアウトは運用上の上限であり、仕様上の違反条件にしない。
+These are screen observations, not Success/Failed. Logos were checked for visibility/loading/natural dimensions/candidate URL. Fixed DisplayName headings were checked in all conditions; actual browser AuthnRequests matched Recorder originals. Image-wait timeout is operational, not a normative violation threshold.
 
-`bind_ui_consumer_evidence.py --url-schemes`は既存の原本照合へ、対象URL要素・スキーム・候補URL・観測種別・対象画面の見出しを追加する。要素未観測は不使用の証明に昇格させない。javascriptのリンクは汎用的な値なので、将来の判定では無関係な同値アンカーとの区別も必要である。現状はクリックせず、診断としてのみ保存する。
+`bind_ui_consumer_evidence.py --url-schemes` adds URL element/scheme/candidate/type/target-screen heading to existing matching. Unobserved elements do not prove nonuse. javascript link values are generic and future evaluation must distinguish unrelated equal-valued anchors. No clicks occur; current records remain diagnostic.
 
-<!--g1-literal--> 全15観測のfixture・取込読戻し・MetadataFetch/Prepared・送信要求・ブラウザ記録を結合した。候補URL改変、見出し不成立、別要求、観測種別改変、不使用証明の偽装という5負の対照を拒否した。証拠は`build/acceptance/reference-20260918/shibboleth-ui-url-scheme-campaign/`の`ui-evidence-binding.json`と`binding-controls.json`。この照合検証は判定oracleの完成やG2承認の代わりではない。
+<!--g1-literal--> Bound fixtures, import read-back, MetadataFetch/Prepared, requests and browser records for all 15 observations. Rejected 5 controls: altered candidate URL, missing heading, different request, changed observation type and fabricated nonuse proof. Evidence: `build/acceptance/reference-20260918/shibboleth-ui-url-scheme-campaign/`, `ui-evidence-binding.json`, `binding-controls.json`. Binding verification replaces neither completed oracle nor G2 approval.
 
-<!--g1-literal--> 操作はイメージbuild 1、Suite/転送コンテナ再作成各1、Run/preflight各1、製品側ファイル書込17（復元を含む）、一時ファイル削除1、Resolver再読込16、ブラウザ開始15、本人操作0。専用画像サーバー起動・停止各1。製品設定は元のSHA-256へ完全復元し、言語設定に変更がないことも確認済み。これらの設定操作はスクリプトで自動実行した。
+<!--g1-literal--> Operations: image build 1; Suite/forwarder recreations 1 each; Run/preflight 1 each; product file writes 17 including restoration; temporary deletion 1; Resolver reloads 16; browser starts 15; user interactions 0. Dedicated server start/stop 1 each. Product settings restored to original SHA-256; language settings unchanged. Scripts automated configuration operations.
 
-<!--g1-literal--> 未検証は466観測・157ケースIDのまま。Logoで許可スキームを利用できる証拠は得られたが、残るURL要素の消費範囲と負の対照を含む正式oracleが未完成であり、台帳から削除しない。次はこの範囲を確定して判定へ接続する。G1生成一致・構造46/46を確認。URL入力のJava機能テスト群は引き続き統合バッチ待ち。
+<!--g1-literal--> Unverified observations remain 466 with 157 case IDs. Allowed Logo use was observed, but remaining URL-consumption scope/formal negative-control oracle are incomplete; inventory entries remain. Next is scope confirmation/integration. G1 generated-document consistency/structure 46/46. Java URL functional tests still await integration.
 
-## URL設定と描画を分ける追加観測
+## Additional observations distinguishing URL assignment from rendering
 
-描画確認だけでは、禁止スキームをそのまま画像のsrcへ渡す製品でもブラウザの読込失敗により「未観測」になる。`observeUiUrlConsumer`を追加し、可視性・画像読込とは独立して、指定したネイティブ要素のsrc/hrefが既知の候補と一致するかを記録する。未知の属性値は保存せず、クリック・URL実行も行わない。
+Rendering alone may miss products passing prohibited schemes directly as image src, because browser loading fails. Added `observeUiUrlConsumer` to record native element src/href matches independently of visibility/loading. Unknown attributes are not saved; URLs are not clicked/executed.
 
-未配置、複数要素、未知の割当、候補の割当、観測不能を区別する。画像はネイティブのロゴ要素を指定する。リンクは候補URLによる検索であり、ネイティブ表示位置が確定した扱いにしない。どの状態も単独では消費／不使用の判定根拠にしない。証拠結合はこの区別と採取時刻を保持し、要素ごとに正常対照不足と正式oracle不足を診断する。
+Distinguishes unassigned, multiple elements, unknown assignments, candidate assignments and unobservable states. Images use native logo elements. Links are searched by candidate URL; native display position remains unestablished. No state alone establishes consumption/nonuse. Binding retains distinctions/timestamps and diagnoses missing normal controls/formal oracles per element.
 
-<!--g1-literal--> Run `run_XV5F7Z0A6B4W8Q9KPYFEJ122S0`で15条件を追加観測。Logoのhttp/https/dataはURL割当と描画を確認、javascript/fileは画像要素が採取時点に存在しなかった。InformationURL/PrivacyStatementURLは全条件で候補リンクが存在せず、利用可能な正常対照がない。正式Verdictは変更していない。
+<!--g1-literal--> Additional Run `run_XV5F7Z0A6B4W8Q9KPYFEJ122S0` observed 15 conditions. Logo http/https/data assignment/rendering were confirmed; javascript/file image elements were absent at collection. InformationURL/PrivacyStatementURL had no candidate links or usable normal controls in any condition. Formal Verdicts were unchanged.
 
-証拠は`build/acceptance/reference-20260918/shibboleth-ui-url-assignment-campaign/ui-evidence-binding.json`。URL描画だけでなく割当の結果も原本ハッシュへ結合した。未読込・非表示・複数要素・未知URL・別ページを区別するブラウザ検証コードを追加し、構文検査を実施。機能テスト群の実行は統合バッチへ保留する。
+Evidence: `build/acceptance/reference-20260918/shibboleth-ui-url-assignment-campaign/ui-evidence-binding.json`. Assignment/rendering results both bind to original hashes. Added browser checks distinguishing unloaded/hidden/multiple elements, unknown URLs and different pages; syntax passed, functional execution awaits integration.
 
-<!--g1-literal--> 追加操作はRun/preflight各1、製品側書込17（復元を含む）、削除1、Resolver再読込16、ブラウザ開始15、画像サーバー起動・停止各1、HTTP/HTTPS画像取得各1、本人操作0。build・Suite再作成は0。全製品設定を元のハッシュへ復元済み。
+<!--g1-literal--> Additional operations: Run/preflight 1 each; product writes 17 including restoration; deletion 1; Resolver reloads 16; browser starts 15; server start/stop 1 each; HTTP/HTTPS image fetches 1 each; user interactions 0. Builds/Suite recreations 0. All product settings restored to original hashes.
 
-<!--g1-literal--> 未検証台帳の定期監査では466観測・157ケース、承認済み410variant・310controlとの対応と実結果原本を照合し、不整合0。これは実装完成の証明ではない。未検証件数を維持する。
+<!--g1-literal--> Periodic unverified audit matched 466 observations/157 cases to approved 410 variants/310 controls and actual originals, with 0 inconsistencies. This does not establish completed implementation; unverified counts remain unchanged.

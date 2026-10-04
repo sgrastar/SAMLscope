@@ -1,34 +1,34 @@
-# Shibbolethのネイティブ読込経路と方式選択の実証
+# Native Shibboleth loading and algorithm-selection validation
 
-## 実行経路
+## Execution path
 
-`dev/shibboleth/import_metadata_batch.py`を追加した。元fixtureを一時的な専用ファイルへそのまま保存し、Shibboleth標準の`FilesystemMetadataProvider`で読み込ませる。SuiteのXML→製品属性変換を挟まない。各条件でファイルのバイト一致とサービス再読込を確認し、Suite発行の正常要求・無効署名対照を実行する。
+`dev/shibboleth/import_metadata_batch.py` writes original fixtures unchanged to a dedicated temporary file for Shibboleth's standard `FilesystemMetadataProvider`. No Suite XML-to-product-attribute conversion is involved. Each condition checks byte equality and service reload, then executes Suite-issued normal and invalid-signature controls.
 
-終了時には元の`metadata-providers.xml`をバイト単位で復元・再読込し、一時ファイルを削除する。失敗経路も`finally`で復元する。既存のSPメタデータファイルは変更しない。新しい実行経路は、以降のメタデータ試験にも利用できる。
+The original `metadata-providers.xml` is restored byte for byte and reloaded on exit, and temporary files are deleted. Failure paths restore through `finally`. Existing SP metadata files are unchanged. This path can also serve later metadata campaigns.
 
-## 実機の結果
+## Runtime results
 
-<!--g1-literal--> Run `run_XZ4CY23XHSV2NPFTDW2H0EVZCS`で13条件の読込・正常SSO・復元が完了。Suite保存原本と製品投入XMLの一致、およびRun固定IdP鍵によるResponse署名を全13条件で検証した。
+<!--g1-literal--> Run `run_XZ4CY23XHSV2NPFTDW2H0EVZCS` completed loading, normal SSO, and restoration for thirteen conditions. Suite originals matched product input XML, and Response signatures verified under the Run-fixed IdP key in every condition.
 
-| ケース | 判定 | 実測 |
+| Case | Result | Observation |
 |---|---|---|
-| IIP-MD05-ea-idp-01 | Success | Entity／Roleの広告順を交換すると、署名方式・Digest方式も先頭のSHA256系／SHA384系へ切り替わる。単一方式条件も確認した。 |
-| IIP-MD05-eb-idp-01 | Success | 競合時は方式ごとにRole側が優先される。Role側に片方の方式だけを指定した条件でも、もう片方のEntity側情報を維持する。逆向きの競合条件も確認した。 |
+| IIP-MD05-ea-idp-01 | Success | Reversing Entity/Role advertisement order switched signature and digest selection to the first SHA256/SHA384 algorithms. Single-algorithm conditions were also verified. |
+| IIP-MD05-eb-idp-01 | Success | Conflicts were resolved in favor of Role information for each type. A Role advertising only one type preserved Entity information for the other. Reverse conflicts were also verified. |
 
-<!--g1-literal--> 台帳は481→479観測、異なるケースIDは159→158。MD05.ebは参照3製品すべてに実測の確定判定が揃った。元の594観測から115観測を確定したが、残り全体の完走には至っていない。
+<!--g1-literal--> Unverified observations changed from 481 to 479; distinct case IDs changed from 159 to 158. MD05.eb now had measured conclusions for all three reference products. Of the original 594 observations, 115 were concluded; the remaining inventory was not completed.
 
-判定は前回までと同じ共通の原本相関・署名検証付き実装を利用した。無効署名対照の一部でクライアントが`unhandled location`と出力したのはSuiteのACS終了画面であり、正常要求の成否はこの表示から判定していない。保存済み要求IDに相関するSAML Successを別途確認している。
+The existing common evaluator correlated originals and verified signatures. Some invalid-signature controls reported `unhandled location` at the Suite ACS completion page; that UI output was not used to determine normal-request success. Correlated SAML Success responses were checked separately using saved request IDs.
 
-## 証拠・検証
+## Evidence and validation
 
-元XML、フロー、サービス再読込記録、復元記録は`build/acceptance/reference-20260918/shibboleth-algorithm-metadata/`。準備確認と評価後結果は`shibboleth-algorithm-evaluation/`に分けて保存した。取込時点の結果を上書きしていない。
+Original XML, flows, service reloads, and restoration are in `build/acceptance/reference-20260918/shibboleth-algorithm-metadata/`. Preparation confirmations and post-evaluation results are in `shibboleth-algorithm-evaluation/`; import-time results were preserved.
 
-`native_algorithm_preparation.py`へFilesystemMetadataProviderの読戻し・再読込・元設定ハッシュ・一時ファイル削除確認を追加した。`verify_metadata_algorithm_outcomes.py`が原本・準備記録・署名検証記録・ケース証拠参照を照合し、対象ケースだけを台帳へ採用する。製品ごとの期待結果は受入監査側にあり、共通判定コードには製品名による分岐を追加していない。
+`native_algorithm_preparation.py` now checks FilesystemMetadataProvider read-back/reload, original configuration hashes, and temporary-file removal. `verify_metadata_algorithm_outcomes.py` compares originals, preparation, signature verification, and case evidence references before adoption. Product-specific expected results reside in acceptance audits, not product-name branches in the common evaluator.
 
-Java実装は前回の検証済み稼働版を再利用した。今回は証拠監査、生成台帳の整合監査、G1生成一致・構造検証を実施。G2の既存署名差分は残っている。
+The verified Java runtime was reused. Evidence audits, generated inventory consistency, G1 generation, and structural validation ran. The existing G2 signature difference remained unresolved.
 
-## 操作回数
+## Operation counts
 
-<!--g1-literal--> メタデータファイル書込13、読込先設定の投入・復元2、一時ファイル削除1（製品書込操作16）、メタデータサービス再読込14。正常SSO試行13・無効署名対照試行13、Run作成1、preflight1、準備確認2。Docker build0、Suite再作成0、製品再起動0、本人操作0。
+<!--g1-literal--> Metadata file writes: 13; provider application/restoration writes: 2; temporary-file deletion: 1 (16 product write operations); metadata-service reloads: 14. Normal SSO attempts: 13; invalid-signature controls: 13; Run creation: 1; preflight: 1; preparation confirmations: 2. Docker builds: 0; Suite recreations: 0; product restarts: 0; user interactions: 0.
 
-回数は`shibboleth-algorithm-evaluation/operations.json`に保存した。サービス再読込はまだ条件ごとに必要なので、今後HTTP更新経路でまとめて実行する際の削減対象として残る。
+Counts are in `shibboleth-algorithm-evaluation/operations.json`. Per-condition service reloads remain a target for reduction in future batched HTTP-refresh campaigns.

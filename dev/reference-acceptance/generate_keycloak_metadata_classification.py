@@ -35,9 +35,9 @@ def main():
     counts = Counter(next(iter(value)) for value in classified.values())
     lines = [
         START,
-        f'対象一意一覧: {len(cases)}ケースID（台帳のKeycloak metadata_idpは{len(rows)}観測、重複なし）。',
+        f'Unique scope: {len(cases)} case IDs ({len(rows)} Keycloak metadata_idp ledger observations, without duplicates).',
         '',
-        '| # | ケース | 義務 | 分類 | 理由コード |',
+        '| # | Case | Obligation | Classification | Reason code |',
         '|---:|---|---|---|---|',
     ]
     for index, case in enumerate(cases, 1):
@@ -46,19 +46,19 @@ def main():
         lines.append(f"| {index} | `{case}` | {obligation} | `{row['capability_diagnosis']}` | `{row['reason_code']}` |")
     lines += [
         '',
-        '分類の合計: ' + ' / '.join(f"`{key}` {counts[key]}" for key in sorted(counts)) + f" = {sum(counts.values())}。",
+        'Classification totals: ' + ' / '.join(f"`{key}` {counts[key]}" for key in sorted(counts)) + f" = {sum(counts.values())}.",
         '',
-        f"メタデータ分類の合計は `suite-observation-gap` {counts.get('suite-observation-gap', 0)} + "
+        f"Metadata classification totals are `suite-observation-gap` {counts.get('suite-observation-gap', 0)} + "
         f"`operator-attestation-available` {counts.get('operator-attestation-available', 0)} + "
         f"`feature-absent` {counts.get('feature-absent', 0)} = "
-        f"{counts.get('suite-observation-gap', 0) + counts.get('operator-attestation-available', 0) + counts.get('feature-absent', 0)}で、"
-        f"残り{counts.get('role-inapplicable', 0) + counts.get('evidence-form-mismatch', 0)}件は同プロファイル内の"
-        f"非メタデータケース（`role-inapplicable` {counts.get('role-inapplicable', 0)} = `IIP-EXT01-b/c`、"
-        f"`evidence-form-mismatch` {counts.get('evidence-form-mismatch', 0)} = `IIP-ALG01/02`）です。",
+        f"{counts.get('suite-observation-gap', 0) + counts.get('operator-attestation-available', 0) + counts.get('feature-absent', 0)}. "
+        f"The remaining {counts.get('role-inapplicable', 0) + counts.get('evidence-form-mismatch', 0)} observations are "
+        f"non-metadata cases in the same profile (`role-inapplicable` {counts.get('role-inapplicable', 0)} = `IIP-EXT01-b/c`, "
+        f"`evidence-form-mismatch` {counts.get('evidence-form-mismatch', 0)} = `IIP-ALG01/02`).",
         '',
-        '不存在が未確認の61ケースは`suite-observation-gap`へ移しました（`absence_basis=not-confirmed-investigated-path`）。'
-        '`feature-absent`の7件はmdui公開要素で、Suite自身が取得した対象公開メタデータで不存在を確認済みです。'
-        '`IIP-MD05.aw`は取込観測側（`suite-observation-gap`）にのみ属し、旧分類の重複は解消しています。',
+        'The 61 cases whose absence was unconfirmed were moved to `suite-observation-gap` (`absence_basis=not-confirmed-investigated-path`). '
+        'The 7 `feature-absent` cases concern published mdui elements; absence was confirmed from target public metadata fetched by the Suite. '
+        '`IIP-MD05.aw` belongs only to import observation (`suite-observation-gap`), resolving the previous classification overlap.',
         END,
     ]
     document = args.output.read_text()

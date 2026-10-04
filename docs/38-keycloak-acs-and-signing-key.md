@@ -1,54 +1,54 @@
-# Keycloak既定ACSの実証と署名鍵の一意性判定
+# Keycloak default ACS evidence and unique signing-key observation
 
-## 台帳へ反映した結果
+## Adopted results
 
-<!--g1-literal--> 未検証は489→485観測、異なるケースIDは161→159。追加はWarning3、Failed1、Success0。適合性の確定と、製品が成功した件数は区別する。
+<!--g1-literal--> Unverified observations 489→485; distinct IDs 161→159. Added Warning 3, Failed 1, Success 0. Concluded conformance observations are not the same as product successes.
 
-| ケース | Keycloak | Shibboleth | SimpleSAMLphp |
+| Case | Keycloak | Shibboleth | SimpleSAMLphp |
 |---|---|---|---|
-| IIP-MD05.ae：署名鍵の識別 | Warning（署名鍵が一意） | Warning（署名鍵が一意） | Warning（署名鍵が一意） |
-| IIP-IDP12.c：既定ACSへの応答 | Failed（今回確認したネイティブ取込経路） | 既存結果を保持 | 既存結果を保持 |
+| IIP-MD05.ae: signing-key identification | Warning: unique signing key | Warning: unique signing key | Warning: unique signing key |
+| IIP-IDP12.c: default ACS response | Failed in the investigated native import path | Existing result retained | Existing result retained |
 
-## 署名鍵が一意である場合
+## Unique signing-key branch
 
-承認済み定義は、候補鍵が単独なら識別の前提が自明に満たされると明記している。この分岐をTargetMetadataObservationへ追加し、既存のCONFIG実行経路に接続した。
+The approved definition explicitly makes identification trivial with one candidate. TargetMetadataObservation now implements this through the existing CONFIG path.
 
-単独EntityDescriptorの対象IdPロールにあるsigning／use省略のKeyDescriptorを検査する。証明書から取り出した公開鍵の値で重複を除く。encryption専用鍵は署名候補に加えない。署名鍵なし、複数の異なる鍵、未知の鍵表現、KeyValueとの併記、解析不能、対象ロール不在では既存の未検証経路を維持する。複数候補があるときの実署名と鍵の対応付けは今回の実装範囲外。
+Inspect signing/use-omitted KeyDescriptors in the target IdP role of a single EntityDescriptor. Deduplicate actual certificate public-key values; encryption-only keys are excluded. Missing or multiple distinct keys, unknown representations, accompanying KeyValue, parsing failure or absent target role preserve the unresolved path. Matching real signatures to multiple candidates is outside this batch.
 
-証拠の原本SHA-256・entityID・Run・結果を照合し、採用検証器ではJava側とは別にOpenSSLで証明書の公開鍵を抽出した。証明書名や証明書オブジェクトの等価性を一意性の根拠にしていない。
+Original SHA-256, entityID, Run and result are checked. The adopter independently extracts certificate public keys with OpenSSL, rather than inferring uniqueness from names or certificate-object equality.
 
-## Keycloakの差異を製品側と判定した根拠
+## Why the Keycloak difference is product behavior
 
-元fixtureをKeycloak自身のImport clientへ投入し、製品が保存した設定を読み戻した後、Suiteの署名付きAuthnRequestからACS URL・index・ProtocolBindingをすべて省略して実行した。元fixtureのSHA-256、作成クライアント、要求ID、応答InResponseTo、実際の受信URLを対応付けた。
+The original fixture was imported by Keycloak Import client and saved settings read back. Suite then emitted a signed AuthnRequest with ACS URL, index and ProtocolBinding all omitted. Fixture SHA-256, temporary client, request ID, Response InResponseTo and actual reception URL are bound together.
 
-| 入力 | メタデータで選ばれるACS index | 実際の応答先index |
+| Input | Metadata-selected ACS index | Actual response index |
 |---|---|---|
-| 最初がisDefault=true | 0 | 0 |
-| 次のACSがisDefault=true | 1 | 0 |
-| すべて省略 | 0 | 0 |
-| 最初がfalse、次が省略 | 1 | 0 |
-| すべてfalse | 0 | 0 |
-| 複数がtrue | 0 | 0 |
+| First isDefault=true | 0 | 0 |
+| Next ACS isDefault=true | 1 | 0 |
+| All omitted | 0 | 0 |
+| First false, next omitted | 1 | 0 |
+| All false | 0 | 0 |
+| Multiple true | 0 | 0 |
 
-通常系対照は成功している。変更後fixtureの固有URLと署名鍵が実際に取り込まれ、正常な署名付き要求に応答していることを確認したため、未取込・古い設定・無応答・到達不能を違反と取り違えていない。既定indexを切り替えたときの誤応答が対象の違反であり、単なる署名失敗や設定失敗ではない。
+Normal controls succeed. Unique updated fixture URLs and signing keys were actually imported and valid signed requests answered, excluding stale configuration, failed import, silence and unreachable endpoints. The violation is the wrong response destination when the default index changes, not signature/configuration failure.
 
-さらに、稼働中のKeycloakから取得したkeycloak-servicesのEntityDescriptorDescriptionConverterを確認した。getServiceURLはACSのBindingが一致した最初のLocationを返し、isDefaultを参照しない。この選択が、取込後の `saml_assertion_consumer_url_post` と実応答に一致する。バイトコードだけをVerdictの根拠にせず、実測で確認した発生箇所の裏付けとして使用した。
+Running keycloak-services EntityDescriptorDescriptionConverter bytecode corroborates the measured location: getServiceURL selects the first matching-binding ACS Location without consulting isDefault. This matches imported saml_assertion_consumer_url_post and actual responses. Bytecode is corroboration, not the sole Verdict basis.
 
-<!--g1-literal--> 判定範囲はKeycloak 26.7.2、今回の管理コンソール経由のネイティブメタデータ取込と参照構成に限定する。他バージョン・手動設定・別取込方式へ一般化しない。IIP-MD05.avなど別の義務へ同じ結果を転記しない。
+<!--g1-literal--> Scope is Keycloak 26.7.2, this console-native import path and reference configuration. Do not generalize to other versions, manual settings or import methods, or transfer the result to separate obligations such as IIP-MD05.av.
 
-## 原本・操作記録
+## Originals and operations
 
-基点は `build/acceptance/reference-20260918/`。
+Root: build/acceptance/reference-20260918/.
 
-| 試験 | Run | 証拠フォルダー |
+| Trial | Run | Folder |
 |---|---|---|
-| Keycloak既定ACS | run_ZZQH3B5136N955F9W1NAMJ4GSG | keycloak-default-acs |
-| Keycloak署名鍵 | run_J5EY454Z5ZD3J7Q89SWCFNJNHD | single-signing-key/keycloak |
-| Shibboleth署名鍵 | run_2893MAJ9X84M3TVFWRNY5CAPK4 | single-signing-key/shibboleth |
-| SimpleSAMLphp署名鍵 | run_816C536YJ0JK4DB1KCMG2QQNH5 | single-signing-key/simplesamlphp |
+| Keycloak default ACS | run_ZZQH3B5136N955F9W1NAMJ4GSG | keycloak-default-acs |
+| Keycloak signing key | run_J5EY454Z5ZD3J7Q89SWCFNJNHD | single-signing-key/keycloak |
+| Shibboleth signing key | run_2893MAJ9X84M3TVFWRNY5CAPK4 | single-signing-key/shibboleth |
+| SimpleSAMLphp signing key | run_816C536YJ0JK4DB1KCMG2QQNH5 | single-signing-key/simplesamlphp |
 
-Keycloakのfixture・UI成功・API読み戻し・削除確認・要求応答原本・ハッシュmanifest・稼働JARとクラスのハッシュを保存した。`audit_keycloak_default_acs.py` と `verify_single_signing_key_batch.py` を通過した対象結果のみ、生成器で比較表と台帳へ採用する。
+Fixture, UI success, API read-back, deletion, request/response originals, manifest and running JAR/class hashes are retained. Only results passing audit_keycloak_default_acs.py and verify_single_signing_key_batch.py are adopted by generators.
 
-<!--g1-literal--> 今回の操作はKeycloak取込7、設定書込14（クライアント作成7・削除7）、Run作成4、preflight4、Suite／転送コンテナ再作成各1、Docker build1。本人操作0、製品再起動0。作成したクライアントはすべて削除後の不存在をAPIで確認した。署名鍵の受動確認では製品設定を書き換えていない。
+<!--g1-literal--> Costs: Keycloak imports 7; setting writes 14 (7 creates/7 deletes); Runs 4; preflight 4; Suite/forward recreations 1 each; docker build 1; user actions 0; product restarts 0. API absence verified for every deleted client. Passive key observation changed no product configuration.
 
-稼働Suiteは `samlscope:reference-single-key-v28`、digestは `sha256:1153608d19ca6901efaefd94f1fa6ce7d09ce860a3701a4c02b73d88a5750cae`。Runner全体の回帰検証は成功。G1生成一致・構造検証を実施し、G2の既存署名差分は未解消のまま扱う。
+Image: samlscope:reference-single-key-v28; digest sha256:1153608d19ca6901efaefd94f1fa6ce7d09ce860a3701a4c02b73d88a5750cae. Runner regression passed; G1 generation/structure verified. Existing G2 signed-source differences remained unresolved.

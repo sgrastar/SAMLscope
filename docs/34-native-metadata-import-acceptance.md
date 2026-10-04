@@ -1,59 +1,59 @@
-# 製品コンソール取込後のメタデータ挙動観測
+# Metadata behavior after native console import
 
-## 今回の確定
+## Adopted conclusions
 
-<!--g1-literal--> Keycloakのmetadata_idpで、未検証517観測から6観測をSuccessに確定し、511観測になりました。異なる未検証ケースIDは170のままです。採用Runは `run_23BNMTA3K9G83SMEN2F2HFRMGK` です。
+<!--g1-literal--> Six Keycloak metadata_idp observations became Success: unresolved observations fell from 517 to 511, with 170 distinct case IDs unchanged. Adopted Run: run_23BNMTA3K9G83SMEN2F2HFRMGK.
 
-| ケース | 確認した条件 |
+| Case | Conditions observed |
 |---|---|
-| IIP-MD02-c | EntityDescriptorとEntitiesDescriptorを製品自身のコンソールで取り込み、相関するSSOに使用 |
-| IIP-MD05-a4 | 上記の文書ルート形式 |
-| IIP-MD05-a5 | cacheDuration、validUntil、単一・集合ルートの必要な組合せ |
-| IIP-MD05-g | 未知の名前空間の拡張とmdrpi:RegistrationInfoを別々に取り込んで使用 |
-| IIP-MD12-a | 自己署名証明書、複数証明書のfixture、長い有効期間の証明書 |
-| IIP-MD12-c | SHA-1署名とSHA-512署名の証明書を、それぞれ鍵情報として取り込んで使用 |
+| IIP-MD02-c | EntityDescriptor and EntitiesDescriptor imported through the product console and used in correlated SSO |
+| IIP-MD05-a4 | These document-root forms |
+| IIP-MD05-a5 | Required combinations of cacheDuration, validUntil and single/aggregate roots |
+| IIP-MD05-g | Unknown-namespace extensions and mdrpi:RegistrationInfo separately imported and used |
+| IIP-MD12-a | Self-signed, multiple-certificate and long-validity fixtures |
+| IIP-MD12-c | SHA-1-signed and SHA-512-signed certificates separately imported and used as key information |
 
-Suiteが生成した元XMLを加工せず、KeycloakのImport clientへ投入しました。コンソールが対象entityIDを解析したこと、保存先のクライアントID、管理APIによる読み戻し、署名検証が有効であることを記録しています。その後、Suiteが発行した署名付きAuthnRequestに対する相関済みSuccess Responseを取得し、各クライアントを削除して不在を確認しました。保存成功だけでケースを確定していません。
+The original Suite XML was passed unchanged to Keycloak Import client. Records identify parsed entityID, saved client ID, administration-API read-back and enabled signature verification. Correlated Success Responses to Suite-signed AuthnRequests followed; each temporary client was deleted and absence read back. Saving alone does not conclude a case.
 
-試験用の専用Planを作り、既存クライアントを変更しない方式です。Suiteの既存metadata campaignをfixtureの生成・要求発行・応答相関に使っています。モード名はautomatic pollingですが、今回の取得は試験ドライバによるファイル取得とコンソール取込です。製品のHTTP再取得能力を証明したものではなく、HTTP取得・再取得を要求する義務の解消には数えていません。
+Dedicated Plans avoid changing existing clients. Existing metadata campaigns provide fixtures, requests and response correlation. Although called automatic polling, this batch uses driver file retrieval and console import. It does not prove product HTTP refresh and is not counted toward HTTP acquisition/refresh obligations.
 
-## 採用しなかった結果
+## Results not adopted
 
-<!--g1-literal--> Suiteの元resultにはMD05.cdとMD06.a7もPASSとして出ましたが、この2件は採用しません。KeyValue-only文書の取込後、Keycloakの `saml.client.signature` がfalseで、署名用証明書も登録されていませんでした。SSOが成功しても、KeyValueで署名を検証した証明にはなりません。現在の `MetadataFixtureObservationTestCase` はこの差を観測できないため、Suite側の判定不足として未検証を維持します。原本resultは変更していません。今後は鍵の消費を問うケースに対し、不正署名を識別する対照とその証拠相関が必要です。
+<!--g1-literal--> Original results also reported MD05.cd and MD06.a7 PASS; neither was adopted. KeyValue-only import left saml.client.signature=false and no signing certificate. SSO success therefore does not establish KeyValue signature verification. MetadataFixtureObservationTestCase could not distinguish this, so the Suite gap remains unverified. Original result.json is unchanged. Key-consumption cases need correlated invalid-signature controls.
 
-期限切れ・開始前証明書はコンソール取込に成功しましたが、SSOでInvalid requesterになりました。対象に相関するSAML拒否応答が揃わないため、今回は製品Failedとはしません。複数エンティティ、入れ子、一部の複数鍵の条件も、必要な挙動が揃わないため未検証です。ACS選択の既存fixtureも実行しましたが、承認済み条件の全体をまだカバーしないためケース全体は確定していません。
+Expired/not-yet-valid certificates imported but SSO returned Invalid requester. Without correlated SAML rejection Responses, no product Failed conclusion was adopted. Multiple entities, nesting and some multiple-key conditions also lack required behavior. Existing ACS fixtures were run, but not all approved conditions were covered.
 
-## 実装
+## Implementation
 
-- `dev/keycloak/import_metadata_batch.py`: 専用Plan/Runの作成、fixture取得、製品取込、相関SSO、失敗時の判定を伴わない続行、結果と操作の保存。同一Runへの追加キャンペーンに対応。
-- `dev/keycloak/console_import.mjs`: コンソールの非同期XML解析完了を待ってから保存。複数entityの対象IDを明示し、既存クライアントの上書きを拒否。未保存の失敗時も不在を確認。
-- `dev/keycloak/reference_flow.py`: 既存のローカルフォームドライバを追跡可能なソースへ移動。認証情報・Cookieはメモリ内のみ。JavaScriptが必要なWebflowの代替には使わない。
-- `dev/reference-acceptance/verify_keycloak_import_batch.py`: 採用対象を限定し、元fixtureのSHA-256、製品保存、署名検証設定、相関SSO、削除、RunとTranscript参照を検査。台帳生成時にも実行。
+- dev/keycloak/import_metadata_batch.py: dedicated Plan/Run, fixture retrieval, native import, correlated SSO, continuation without conclusions after failures, result/cost capture and additional campaigns in one Run.
+- dev/keycloak/console_import.mjs: waits for asynchronous XML parsing before saving, selects explicit entity IDs in aggregates, prevents client overwrite and checks absence after unsaved failures.
+- dev/keycloak/reference_flow.py: tracked version of the local form driver. Credentials/cookies remain in memory; this is not a substitute for JavaScript Webflow execution.
+- dev/reference-acceptance/verify_keycloak_import_batch.py: limits adoption and checks original fixture SHA-256, native save, signature setting, SSO, deletion and Run/Transcript references during ledger generation.
 
-<!--g1-literal--> 採用証拠の検証では、署名検証無効、削除未確認、fixtureハッシュ不一致、entity不一致、製品保存未確認の5種類の改変を拒否することを確認しました。これは新しい製品確定件数には数えません。
+<!--g1-literal--> Five altered-evidence controls were rejected: signature verification disabled, deletion unconfirmed, fixture hash mismatch, entity mismatch and native save unconfirmed. These are verifier tests, not new product conclusions.
 
-## 操作コストと失敗試行
+## Cost and failed attempts
 
-<!--g1-literal--> 保存記録の合計は取込試行45回、保存クリック40回、作成確認39回、削除確認39回、後続SSO試行39回、ドライバの相関成功32回です。製品設定書き込みは確認済み作成・削除の計78回で、これと別に保存成功を確認できなかったクリック1回があります。本人操作は0回です。ブラウザの全クリック・入力数と全管理API読取数はこのバッチでは未計測で、ゼロとは扱いません。
+<!--g1-literal--> Totals: 45 import attempts, 40 save clicks, 39 confirmed creates/deletes and follow-up SSO attempts, 32 driver-correlated successes. Confirmed product writes: 78 creates/deletes; one additional click had unconfirmed save. Direct user operations: zero. All browser clicks/inputs and administration reads were unmeasured, not zero.
 
-最初のChrome起動はsandbox内で失敗し、権限を追加して再実行しました。さらに、ファイル選択直後の保存が製品の解析完了より早い問題、Suiteの開始準備より前にfixtureを取得した問題、集合メタデータ内の先頭entityを対象と誤認した問題を検出・修正しました。不成功の記録も保存しています。環境復旧としてDocker Desktopと停止済み検証コンテナを起動し、ShibbolethのTomcatも起動しました。稼働Suiteイメージは変更していません。
+Chrome initially failed under the sandbox and was retried with permission. Corrected save-before-parse, fixture retrieval before Suite preparation, and choosing the first aggregate entity incorrectly. Failed records are retained. Recovery started Docker Desktop, stopped test containers and Shibboleth Tomcat. The running Suite image did not change.
 
-## 証拠
+## Evidence
 
-`build/acceptance/reference-20260917/keycloak-import-batch-5/` と `keycloak-import-batch-7/` に元XML、製品の取込・削除記録、SSO記録を保存しています。最終result、Transcript、復号前のSAML XMLコピーとハッシュ一覧は後者です。同じ親ディレクトリの `operations-summary.json`、`cleanup-verification.json`、`import-adoption-verification.json` が集計・最終削除確認・証拠検証記録です。証拠ディレクトリはGit管理対象外です。
+Original XML, import/deletion records and SSO are in build/acceptance/reference-20260917/keycloak-import-batch-5/ and keycloak-import-batch-7/. The latter holds final result, Transcript, pre-decryption SAML copies and hash list. operations-summary.json, cleanup-verification.json and import-adoption-verification.json in the parent hold counts, final cleanup and verification. Evidence is ignored by Git.
 
-## 署名対照を加えた再検証
+## Retest with signature controls
 
-<!--g1-literal--> 続行バッチでは、異なるfixture 30条件を延べ36回取り込み試験しました。新規に確定できるケースはなく、未検証は511観測のままです。既採用6件は正負署名対照付きの `run_J7HCGRMNJHC614BA103CNGMVZ5` の証拠へ更新しました。条件数・SSO成功数をケースの解消数として数えていません。
+<!--g1-literal--> Thirty distinct fixtures were tested through 36 imports. No new case conclusions; unresolved remained 511. The six prior adopted observations were replaced with positive/negative-signature evidence from run_J7HCGRMNJHC614BA103CNGMVZ5. Conditions or SSO successes are not counted as resolved cases.
 
-`--signature-control` を追加し、同じ取込設定で破損署名の要求を先に試し、正常署名の要求で相関するSuccess Responseが得られることを確認します。署名値だけを変更し、SignedInfoや署名対象のXML、Redirectの他のクエリ要素は元のバイト列を保持します。XMLの改行文字参照にも対応しています。署名が見つからない・複数ある場合は試験を失敗として止めます。
+--signature-control tests a damaged signature first under identical imported settings, then requires correlated Success with a valid signature. Only SignatureValue changes; SignedInfo, signed XML and other Redirect query bytes remain original. XML newline character references are supported. Missing/multiple signatures stop the trial as a Suite failure.
 
-<!--g1-literal--> 破損署名の送信を31回記録し、そのうちKeyValue-onlyとuse省略の複数鍵の両条件、計3回では相関するSuccess Responseが返りました。これらは鍵消費の成功として採用していません。通常の証明書取込では破損署名にInvalid requesterが返り、正常署名は成功しました。画面エラーや無応答だけから製品FAILや拒否義務のSuccessを新たに確定してはいません。
+<!--g1-literal--> Thirty-one damaged signatures were sent. Three correlated Success Responses occurred across KeyValue-only and multiple-key/use-omitted conditions; these were not adopted as successful key consumption. Ordinary certificate imports returned Invalid requester for damaged signatures and Success for valid signatures. UI errors/silence alone establish neither product FAIL nor successful rejection obligations.
 
-Suiteの汎用メタデータ判定では、KeyValue-onlyのSSO成功だけで鍵消費を確定しないようにしました。署名の正負を識別する相関証拠を要求し、現在のTranscript契約にはその経路がないため未検証を維持します。参照ドライバの外部記録をSuite内の自動判定へ接続する部分は未実装です。これを実装するまで、ドライバの成功記録だけでこの保留を解除しません。
+The generic Suite observer no longer concludes KeyValue consumption from SSO alone. It requires correlated signature discrimination, absent from the current Transcript contract, and remains unverified. Connecting external driver records to automatic Suite judgments is unfinished; driver success alone cannot release the gate.
 
-<!--g1-literal--> Runner全473テストと署名変異のPythonテスト4件が成功しました。ローカルイメージ `samlscope:reference-keyvalue-guard-v23` にRunnerのみ反映し、JARのSHA-256一致を確認しました。既存の未コミットAPI差分は取り込んでいません。反映後の `run_Q702A3RAKW9S48CPYZZFCA4GV5` で正常SSOが成立してもMD05.cdとMD06.a7はNOT_VERIFIEDに留まり、protocol-evidenceで不足する署名対照が公開されることを確認しました。
+<!--g1-literal--> All 473 Runner tests and four Python signature-mutation tests passed. Only Runner was overlaid into samlscope:reference-keyvalue-guard-v23; JAR SHA-256 matched. Earlier uncommitted API changes were excluded. In run_Q702A3RAKW9S48CPYZZFCA4GV5, normal SSO succeeded but MD05.cd/MD06.a7 stayed NOT_VERIFIED, exposing missing signature controls through protocol-evidence.
 
-<!--g1-literal--> 操作は取込試行36、保存クリック35、作成35・削除35（製品設定書き込み70）、後続フロー呼出35、正常系の相関成功26でした。全試行の削除または未作成を読み戻し確認済みです。Docker build 1、Suiteと転送コンテナの再作成各1、製品再起動0、本人操作0です。全UI操作数と全管理API読取数は未計測です。最初の署名中の改行文字参照処理の失敗試行も含めています。
+<!--g1-literal--> Costs: 36 import attempts, 35 saves/creates/deletes, 70 confirmed product writes, 35 follow-up flows and 26 correlated normal successes. Every attempt's deletion/non-creation was read back. Docker build 1, Suite/forward recreation 1 each, product restarts 0 and direct user actions 0. Total UI/API operations were unmeasured. The initial newline-character-reference processing failure is included.
 
-証拠は同じ親ディレクトリの `keycloak-signature-control-1/`、`keycloak-signature-control-2/`、`keycloak-signature-control-3/`、`keycloak-keyvalue-guard-smoke/`、集計は `signature-control-operations.json`、実環境の更新・JAR照合は `keyvalue-guard-runtime/` に保存しています。台帳採用検査も正常系・破損署名・取込・削除の全記録を要求するよう更新しました。既存の証拠ディレクトリを上書きする再実行は拒否します。
+Evidence folders: keycloak-signature-control-1/, keycloak-signature-control-2/, keycloak-signature-control-3/ and keycloak-keyvalue-guard-smoke/ under the same parent. Counts: signature-control-operations.json; deployment/JAR checks: keyvalue-guard-runtime/. Adoption requires all normal/damaged-signature/import/deletion records. Reruns cannot overwrite existing evidence directories.

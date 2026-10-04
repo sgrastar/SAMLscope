@@ -1,29 +1,29 @@
-# UIロゴ言語選択の正式判定
+# Formal evaluation of UI logo language selection
 
-[比較入力・ブラウザ観測・原本相関](58-ui-consumer-fixtures.md)をRunnerのケースへ接続し、Shibbolethの`IIP-MD05-f9-idp-01`を正式RunでSuccessと確認した。優先言語のロゴがあればそれを選び、優先・代替言語に該当する候補がなければ言語なしロゴへ切り替わる実画面の差が根拠である。
+Connected [comparison inputs, browser observations and original correlation](58-ui-consumer-fixtures.md) to Runner cases and established Shibboleth `IIP-MD05-f9-idp-01` as Success in a formal Run. Evidence is the actual-screen difference: the preferred-language logo is selected when present; when no candidate matches preferred/alternative languages, selection switches to the language-neutral logo.
 
-| 製品／プロファイル | 対象ケース | 正式結果 |
+| Product/profile | Case | Formal result |
 |---|---|---|
-| Shibboleth／metadata_idp | IIP-MD05-f9-idp-01 | SATISFIED／PASS、attested=false |
+| Shibboleth/metadata_idp | IIP-MD05-f9-idp-01 | SATISFIED/PASS, attested=false |
 
-<!--g1-literal--> 未検証は467→466観測、異なるケースIDは157のまま。生成した比較表と台帳へこの観測のみを採用し、他製品の結果を推定していない。台帳監査の不整合は0件、inventory SHA-256は`22f622b87a2f9ba13568196755517d95f1d35bb5453fafac3a5c42492b1cf7e8`。
+<!--g1-literal--> Unverified observations decreased 467→466; distinct case IDs remain 157. Only this observation was adopted into generated comparison/inventory; other products were not inferred. Inventory-audit inconsistencies 0; inventory SHA-256: `22f622b87a2f9ba13568196755517d95f1d35bb5453fafac3a5c42492b1cf7e8`.
 
-## 採用した証拠
+## Adopted evidence
 
-Runは`run_GNBRVD9WSNFGHMXZEFN4BAH6NR`。元実測は`build/acceptance/reference-20260918/shibboleth-ui-consumer-language-control/`、正式評価は同親ディレクトリの`shibboleth-ui-logo-evaluation/`。
+Run: `run_GNBRVD9WSNFGHMXZEFN4BAH6NR`. Original observations: `build/acceptance/reference-20260918/shibboleth-ui-consumer-language-control/`; formal evaluation in sibling `shibboleth-ui-logo-evaluation/`.
 
-`verify_ui_logo_acceptance.py`は、元XMLとブラウザ候補対応表、原本Transcript、ローカルreceipt、配置先の読戻し、Runner再生結果と負の対照、設定復元、固定対象メタデータ、正式CaseOutcomeの参照一致を再検査して台帳へ渡す。正式理由は`browser.ui-logo.language-fallback-observed`。候補トークンだけや設定確認だけを合格根拠にしない。
+`verify_ui_logo_acceptance.py` rechecks original XML/browser-candidate mappings, original Transcripts, local receipts, installed-record read-back, Runner replay/negative controls, restored configuration, fixed target metadata and formal CaseOutcome references before inventory adoption. Formal reason: `browser.ui-logo.language-fallback-observed`. Candidate tokens or configuration confirmation alone cannot establish a pass.
 
-ブラウザ観測とnative準備は信頼されたローカルアダプターから受け取る。HTTPから証拠を任意に投稿する仕組みは追加していない。画面観測は製品の署名付きSAML応答ではなく、Suite管理下のブラウザ観測である。要求の原本相関、固定対象、実画面要素、言語条件、対照の差を組み合わせて評価している。
+Browser observations/native preparation come from a trusted local adapter; no arbitrary HTTP evidence-submission mechanism was added. Screen evidence is Suite-managed browser observation, not a product-signed SAML response. Evaluation combines original-request correlation, fixed target, actual screen elements, language conditions and control differences.
 
-初回のtests/startは通常ログインが未完了のため拒否された。認証前画面の観測から始めたRunに必要な前提であり、判定条件を緩めず、同じRunで通常ログインを実施してから再評価した。`complete_run_baseline.py`を追加し、ネイティブメタデータ取込・通常往復・設定完全復元までを再利用できるようにした。
+Initial tests/start was rejected because normal login was incomplete. This is a required prerequisite for a Run starting with unauthenticated-screen observations. Without weakening conditions, performed normal login in the same Run before reevaluation. Added `complete_run_baseline.py` for reusable native metadata import, normal round trip and complete restoration.
 
-## 検証と費用
+## Validation and costs
 
-<!--g1-literal--> 蓄積した比較／fixtureのJava4テスト、Playwright境界1テストが成功。実測原本を本番収集・比較コードへ渡した再生でSATISFIEDを確認し、7つの変異対照はすべてNOT_VERIFIED。コンパイル・隔離配布ビルド成功。G1生成一致・構造46/46。G2は20/21、G2-30の保護ソース署名差分は未解消であり、リリース完了とは扱わない。
+<!--g1-literal--> 4 accumulated Java comparison/fixture tests and 1 Playwright boundary test passed. Replaying measured originals through production collection/comparison established SATISFIED; all 7 mutant controls were NOT_VERIFIED. Compilation/isolated distribution build passed. G1 generated-document consistency/structural checks 46/46. G2 remains 20/21 with protected-source signed difference G2-30 unresolved; release completion is not claimed.
 
-署名済みチェックポイント`e8174820`から隔離ビルドした。稼働イメージは`samlscope:reference-ui-logo-oracle-v46`、digestは`sha256:0f04f7c9844540cdce76177c83c064613ad511f348b5490f4840c1f1f32088d5`。別件の未コミットAPI変更は含めていない。
+Built in isolation from signed checkpoint `e8174820`. Running image: `samlscope:reference-ui-logo-oracle-v46`; digest: `sha256:0f04f7c9844540cdce76177c83c064613ad511f348b5490f4840c1f1f32088d5`. Unrelated uncommitted API changes were excluded.
 
-<!--g1-literal--> 正式評価の追加操作はreceipt配置1回、tests/startの試行3回（通常ログイン不足で拒否2回、成功1回）、通常ログイン1往復（追加Transcriptは要求／応答の2件）、通常ログイン用設定書込3回・削除1回・Resolver再読込2回。設定は完全復元済み。本人操作・製品再起動は0回。Suiteイメージbuild1回、Suite／転送コンテナ再作成各1回。前段のUI観測バッチ費用は[58](58-ui-consumer-fixtures.md)に記録済みで、ここへ二重計上しない。
+<!--g1-literal--> Additional formal-evaluation operations: receipt installation 1; tests/start attempts 3, with 2 rejected for incomplete normal login and 1 success; normal-login round trip 1, adding 2 request/response Transcripts; normal-login configuration writes 3/deletion 1/Resolver reloads 2. Configuration fully restored. User interactions/product restarts 0. Suite image build 1; Suite/forwarder recreations 1 each. Earlier UI-observation batch costs are recorded in [58](58-ui-consumer-fixtures.md) and not counted again here.
 
-表示名の最終フォールバック、他製品のUI表示、DiscoveryHintとURLスキームの判定は引き続き未完了である。
+Final display-name fallback, other products' UI displays, DiscoveryHint and URL-scheme evaluations remain incomplete.

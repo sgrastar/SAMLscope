@@ -147,6 +147,13 @@ public final class MetadataService {
     private final XmlSigner signer;
     private final Clock clock;
     private final MetadataUiAssetLocations uiAssets;
+    private final BoundedMetadataFixtureCache<PreloadedFixtureKey> preloadedFixtures =
+            new BoundedMetadataFixtureCache<>(128, 16L * 1024 * 1024);
+
+    private record PreloadedFixtureKey(
+            String planId, TestPlan.Parameters parameters, String runId,
+            List<Variant> variants, String signingCertificateSha256,
+            List<String> storedRoleCertificateSha256) {}
 
     public MetadataService(URI peerBase, FilePlanKeyStore keyStore, XmlSigner signer, Clock clock) {
         this(peerBase, keyStore, signer, clock, MetadataUiAssetLocations.forPeer(peerBase));
@@ -208,6 +215,54 @@ public final class MetadataService {
             throw new IllegalArgumentException("Invalid preloaded campaign subset");
         }
         if (runId == null || runId.isBlank()) throw new IllegalArgumentException("runId is required");
+        var scope = List.copyOf(variants);
+        var credentials = keyStore.getOrCreate(plan.id());
+        var key = new PreloadedFixtureKey(plan.id(), plan.parameters(), runId, scope,
+                signingCertificateSha256(credentials), storedPreloadedCertificateIdentities(plan, credentials, scope));
+        // A capability token authorizes access; it is not part of the fixture's identity.
+        // Keep the original validity timestamps and certificate fixtures when the same
+        // inputs are requested again. An expired fixture is not renewed by rearming it.
+        return preloadedFixtures.getOrCompute(key,
+                () -> buildPreloadedCampaign(plan, runId, scope, credentials));
+    }
+
+    private String signingCertificateSha256(PlanCredentials credentials) {
+        try {
+            return java.util.HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
+                    .digest(credentials.certificate().getEncoded()));
+        } catch (java.security.GeneralSecurityException invalid) {
+            throw new IllegalStateException("Cannot identify the metadata signing certificate", invalid);
+        }
+    }
+
+    /** Fingerprint stored role keys actually advertised by the selected metadata fixtures. */
+    private List<String> storedPreloadedCertificateIdentities(
+            TestPlan plan, PlanCredentials primary, List<Variant> variants) {
+        boolean second = false;
+        boolean third = false;
+        boolean ec = false;
+        for (var variant : variants) {
+            switch (variant) {
+                case MULTIPLE_SIGNING_KEYS, MULTIPLE_SIGNING_KEYS_UNADVERTISED,
+                        MULTIPLE_SIGNING_KEYS_FIRST, MULTIPLE_OMITTED_KEYS_FIRST,
+                        MULTIPLE_OMITTED_KEYS_SECOND -> second = true;
+                case THREE_SIGNING_KEYS, THREE_SIGNING_KEYS_FIRST, THREE_SIGNING_KEYS_SECOND -> {
+                    second = true;
+                    third = true;
+                }
+                case ECDSA_SHA256 -> ec = true;
+                default -> { }
+            }
+        }
+        var identities = new java.util.ArrayList<String>();
+        if (second) identities.add(signingCertificateSha256(rolloverCredentials(plan, primary, 2)));
+        if (third) identities.add(signingCertificateSha256(rolloverCredentials(plan, primary, 3)));
+        if (ec) identities.add(signingCertificateSha256(ecCredentials(plan, primary)));
+        return List.copyOf(identities);
+    }
+
+    private byte[] buildPreloadedCampaign(
+            TestPlan plan, String runId, List<Variant> variants, PlanCredentials credentials) {
         var document = SecureXml.newDocument();
         var root = element(document, MD, "md:EntitiesDescriptor");
         root.setAttributeNS(XMLConstants.XMLNS_ATTRIBUTE_NS_URI, "xmlns:md", MD);
@@ -218,14 +273,14 @@ public final class MetadataService {
         document.appendChild(root);
 
         for (var variant : variants) {
-            var fixture = SecureXml.parse(generate(plan, variant, runId));
+            var fixture = SecureXml.parse(generate(plan, variant, runId, credentials));
             var fixtureRoot = fixture.getDocumentElement();
             removeSignatures(fixtureRoot);
             rewritePreloadedIdentity(fixtureRoot, plan, variant);
             markSignedRequestsRequired(fixtureRoot);
             root.appendChild(document.importNode(fixtureRoot, true));
         }
-        signer.sign(root, keyStore.getOrCreate(plan.id()),
+        signer.sign(root, credentials,
                 root.getFirstChild() instanceof Element child ? child : null,
                 XmlSigner.SignatureOptions.standard());
         return SecureXml.serialize(document);

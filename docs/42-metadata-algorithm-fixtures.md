@@ -1,46 +1,46 @@
-# メタデータのアルゴリズム順序・Role優先の実行条件
+# Execution fixtures for metadata algorithm order and Role precedence
 
-## 追加した入力と適用範囲
+## Inputs and scope
 
-承認済みIIP-MD05.ea／ebと、参照仕様SAML2MetaAlgSupのMetadata Consumers節を確認し、メタデータキャンペーンへ方式選択の入力を追加した。署名方式とDigest方式を別々に扱う。Role側にDigestMethodだけがある場合、Entity側のSigningMethodまで無視する実装を見逃さないための条件も含む。
+The approved IIP-MD05.ea/eb definitions and the Metadata Consumers section of SAML2MetaAlgSup were reviewed before adding algorithm-selection inputs to the metadata campaign. Signature and digest algorithms are handled separately. A Role advertising only DigestMethod must not cause an implementation to discard the Entity-level SigningMethod.
 
-<!--g1-literal--> 追加したfixtureは12種類。通常のcontrolと合わせて13条件を一括実行できる。HTTP取込と事前配置の両生成経路へ接続した。判定オラクルへの登録はまだ行っておらず、SSO成立だけで該当義務をSuccessにしない。
+<!--g1-literal--> Twelve fixtures were added. Together with the normal control, they provide thirteen batch conditions through both HTTP import and preloaded generation. They were not yet registered with an oracle at this stage; successful SSO alone does not establish these obligations.
 
-| fixture接尾辞（共通接頭辞 `algorithm-`） | 入力 |
+| Fixture suffix (common prefix `algorithm-`) | Input |
 |---|---|
-| entity-sha256／entity-sha384 | 単独の署名・Digest方式の対照 |
-| entity-order-256-384／entity-order-384-256 | Entity側で両方式の順序を入替え |
-| role-order-256-384／role-order-384-256 | SP Role側で両方式の順序を入替え |
-| role-signing-384 | Entity側はSHA256、Role側は署名方式だけSHA384 |
-| role-digest-384 | Entity側はSHA256、Role側はDigest方式だけSHA384 |
-| role-both-384／role-both-256 | EntityとRoleで相反する方式を広告 |
-| unsupported-first | 未知方式の後ろに既知のSHA256方式 |
-| absent | 両方式の宣言がない対照。非対応とは解釈しない |
+| entity-sha256 / entity-sha384 | Single signature and digest algorithm controls |
+| entity-order-256-384 / entity-order-384-256 | Reversed Entity-level algorithm order |
+| role-order-256-384 / role-order-384-256 | Reversed SP Role-level algorithm order |
+| role-signing-384 | Entity uses SHA256; Role overrides only the signature algorithm with SHA384 |
+| role-digest-384 | Entity uses SHA256; Role overrides only the digest algorithm with SHA384 |
+| role-both-384 / role-both-256 | Conflicting Entity and Role advertisements |
+| unsupported-first | Unknown algorithm followed by supported SHA256 |
+| absent | No advertisement of either type; absence does not establish lack of support |
 
-SAML層の回帰テストをまとめて実施した。既存の全variant署名検証により署名整合も検査し、順序入替え・片側だけのRole上書き・宣言なしの差を検証した。G1の承認済み定義は変更していない。
+SAML regression tests covered signature integrity for every existing variant, reversed order, overrides of only one algorithm type, and absent declarations. Approved G1 definitions were unchanged.
 
-## 製品自身の取込による観測
+## Observation through the product's own importer
 
-SimpleSAMLphpで新Run `run_EF53BKR660XSH9Q27R8D4K1B41` を実行した。製品自身のメタデータパーサへ元fixtureを渡し、署名必須設定の読戻し、Suite発行の署名対照、通常AuthnRequestに相関するResponse、元設定への復元を記録した。
+SimpleSAMLphp Run `run_EF53BKR660XSH9Q27R8D4K1B41` passed original fixtures to the native metadata parser. It recorded signature-required configuration read-back, Suite-issued signature controls, Responses correlated to normal AuthnRequests, and restoration of the original configuration.
 
-<!--g1-literal--> 全13条件で相関するSuccess Responseが観測された。ResponseとAssertionのSignedInfoはどの条件でもRSA-SHA256／SHA256を広告していた。SHA384を単独で指定した条件や、Role側だけで指定した条件でも変化しなかった。
+<!--g1-literal--> All thirteen conditions produced correlated Success Responses. Both Response and Assertion SignedInfo advertised RSA-SHA256/SHA256 throughout, including conditions advertising SHA384 alone or only at Role level.
 
-`dev/reference-acceptance/observe_metadata_algorithm_batch.py`を追加した。元XMLとハッシュを保存し、正常要求のIDとの相関、fixtureのハッシュ、取込・復元記録を照合して、Entity／SP Roleの広告方式と応答SignedInfoを対応付ける。不正署名の対照要求への応答を正常観測へ混ぜない。出力は`signature_verified: false`と`affects_verdict: false`を明記した診断であり、暗号学的な検証や適合判定の代替ではない。
+`dev/reference-acceptance/observe_metadata_algorithm_batch.py` saves original XML and hashes, verifies normal request-ID correlation, fixture hashes, import records and restoration, and compares Entity/SP Role advertisements with response SignedInfo. Responses to invalid-signature controls are excluded from normal observations. Its diagnostic output explicitly sets `signature_verified: false` and `affects_verdict: false`; it does not replace cryptographic verification or conformance evaluation.
 
-証拠は`build/acceptance/reference-20260918/simplesamlphp-algorithm-metadata/`。この観測だけから、製品全体のSHA384非対応、方式順序違反、Role優先違反はまだ確定しない。特に順序選択は承認済み定義のローカルポリシー例外を尊重する必要がある。
+Evidence is in `build/acceptance/reference-20260918/simplesamlphp-algorithm-metadata/`. These observations alone do not establish product-wide SHA384 absence, ordering violations, or Role-precedence violations. Ordering must respect the approved local-policy exception.
 
-## 次の判定接続
+## Remaining oracle integration
 
-- Runの対象メタデータにある信頼鍵で、対象Response／Assertionの署名を検証してからSignedInfoを観測する。
-- メタデータを取得・取込した条件と、その条件に相関する要求応答の証拠を同一キャンペーン内で束ねる。
-- MD05.eaでは単独方式の対照と順序入替え、ローカルポリシーの扱いを判定へ接続する。
-- MD05.ebでは署名方式・Digest方式を別々に評価し、Role側に当該種類がある場合だけEntity側からの継承を止める。
-- MD05.e全体のEncryptionMethod、KeySize、アルゴリズム固有拡張の条件は本fixture群では網羅していない。別途追加する。
+- Verify Response/Assertion signatures using trust keys in the Run's target metadata before observing SignedInfo.
+- Bind metadata retrieval and native import to the corresponding request/response evidence within one campaign.
+- For MD05.ea, evaluate single-algorithm controls, reversed order, and local policy.
+- For MD05.eb, evaluate signature and digest algorithms independently. Stop Entity inheritance only when the Role advertises that same type.
+- These fixtures do not cover all MD05.e EncryptionMethod, KeySize, or algorithm-specific extensions; add those separately.
 
-## 作業コストと状態
+## Operation cost and status
 
-<!--g1-literal--> ネイティブ取込13、Run作成1、preflight1、製品設定書込27（各投入・復元と最後の復元）、署名対照要求13、通常要求13、Docker build1、Suite／転送コンテナ再作成各1、本人操作0、製品再起動0。全設定の復元をSHA-256一致で確認した。
+<!--g1-literal--> Native imports: 13; Run creation: 1; preflight: 1; product configuration writes: 27 (each application/restoration plus final restoration); signature-control requests: 13; normal requests: 13; Docker builds: 1; Suite/forwarder recreations: 1 each; user interactions: 0; product restarts: 0. SHA-256 equality confirmed complete restoration.
 
-稼働イメージは`samlscope:reference-algorithm-metadata-v32`、digestは`sha256:40595feb47f0d34de4cdfeffa4315f27700b78b93211f1d8d32836cbc051fc08`。前の共有鍵入力イメージへSAML JARだけを重ねた。配備記録は`build/acceptance/reference-20260918/algorithm-metadata-runtime/`。
+The deployed image was `samlscope:reference-algorithm-metadata-v32`, digest `sha256:40595feb47f0d34de4cdfeffa4315f27700b78b93211f1d8d32836cbc051fc08`. Only the SAML JAR was overlaid onto the previous shared-key-input image. Deployment records are in `build/acceptance/reference-20260918/algorithm-metadata-runtime/`.
 
-<!--g1-literal--> 本バッチの判定確定は0件。未検証は483観測・159ケースIDを維持する。G1生成一致・構造46/46を確認。G2の既存署名差分は未解消のままとし、リリース承認を意味しない。
+<!--g1-literal--> This batch adopted zero conclusions. The inventory remained at 483 unverified observations and 159 case IDs. G1 generation matched and structural validation passed 46/46. The existing G2 signature difference remained unresolved; this record is not release approval.

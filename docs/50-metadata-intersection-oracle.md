@@ -1,35 +1,35 @@
-# メタデータの暗号・署名・パラメーター共通部分の判定
+# Evaluating shared metadata algorithms and parameters
 
-## 正式判定へ接続した範囲
+## Formal evaluation scope
 
-`IIP-MD05-e8-idp-01`をM2 CONFIGの実測判定へ接続した。`MetadataAlgorithmEvidence`から原本メタデータ、取得記録、送信要求、検証済みResponseを関連付けた交換記録を取り出し、`MetadataIntersectionEvidence`で承認済みの暗号方式、署名方式、Digest、鍵長／方式固有パラメーターを照合する。
+`IIP-MD05-e8-idp-01` was connected to measured M2 CONFIG evaluation. `MetadataAlgorithmEvidence` supplies exchanges binding original metadata, retrieval records, outbound requests, and verified Responses. `MetadataIntersectionEvidence` checks approved encryption, signature, digest, key-size, and algorithm-specific parameter intersections.
 
-取込の準備確認は製品自身の経路へfixtureを投入した事実の確認に限る。確認操作そのものやXML取込成功をSuccessにはしない。応答署名はRun固定の対象メタデータの鍵で検証し、fixture別の復号鍵は元SPメタデータの公開鍵と照合する。暗号化Assertionを実際に復号し、内包する署名があればそれも検証する。秘密鍵や復号平文は証拠へ保存しない。
+Preparation confirmation establishes only that native import received the fixture. Confirmation or successful XML import alone cannot yield Success. Response signatures use Run-fixed target metadata keys; fixture decryption keys must match original SP public keys. Encrypted Assertions are actually decrypted, and contained signatures are verified if present. Neither private keys nor decrypted plaintext are stored in evidence.
 
-<!--g1-literal--> 必須fixtureは対照を含む13条件。SHA256/384の署名・Digest、AES128/256 GCM、明示KeySize付きCBC、旧／新RSA-OAEPのSHA1/SHA256とMGF、MaxKeySizeによる署名候補の除外を同一キャンペーンで要求する。
+<!--g1-literal--> Thirteen required conditions, including controls, cover SHA256/384 signatures and digests, AES128/256 GCM, CBC with explicit KeySize, old/new RSA-OAEP with SHA1/SHA256 and MGF, and signature-candidate exclusion through MaxKeySize in one campaign.
 
-異なるキャンペーンの部分証拠は合成しない。原本不一致、署名未検証、復号不成立、条件不足、対照不足はNOT_VERIFIED。SHA256/384の生成能力が実測で成立することも確認し、能力未確認を製品の違反へ変換しない。鍵サイズの除外値は試験入力であり、Suite独自の安全性しきい値ではない。CaseはOutcomeを返し、Verdictへの変換は既存Evaluatorに任せる。
+Partial evidence from different campaigns is not combined. Original mismatch, unverified signatures, unsuccessful decryption, missing conditions, or missing controls yield NOT_VERIFIED. Measured SHA256/384 generation capability is also required; unknown capability is not converted to product violation. Exclusion key sizes are test inputs, not Suite-defined security thresholds. Cases return Outcome; the existing Evaluator converts it to Verdict.
 
-## 実機結果と台帳
+## Runtime results and inventory
 
-Shibboleth Run `run_6E5BWBMYHJFZS31AKS9Q1WCP72`、Plan `plan_G5ZG6VA64WK6T2RTS6ACYCCT50`で元fixtureを一時FilesystemMetadataProviderへ投入し、各条件のSSOを実行した。読込先と元設定は復元済みで、一時ファイルの削除と元設定ハッシュ一致を確認した。
+Shibboleth Run `run_6E5BWBMYHJFZS31AKS9Q1WCP72`, Plan `plan_G5ZG6VA64WK6T2RTS6ACYCCT50`, passed original fixtures to a temporary FilesystemMetadataProvider and ran SSO per condition. Provider and configuration were restored; temporary-file absence and original configuration hashes were confirmed.
 
-<!--g1-literal--> 全13条件で原本・署名・対応鍵復号を確認した。別鍵による復号は全13条件で拒否された。判定の不足条件・証拠問題・選択不一致は空で、MD05.e8は`SATISFIED / PASS`、理由は`metadata.algorithms.intersection-observed`となった。
+<!--g1-literal--> Originals, signatures, and correct-key decryption were confirmed for all thirteen conditions. Wrong-key decryption was rejected in all thirteen. Missing conditions, evidence problems, and selection mismatches were empty. MD05.e8 produced `SATISFIED / PASS`, reason `metadata.algorithms.intersection-observed`.
 
-証拠は`build/acceptance/reference-20260918/shibboleth-intersection-metadata/`、正式結果と準備確認根拠は隣接する`shibboleth-intersection-evaluation/`。元結果を上書きせず、判定前後を保存した。`verify_metadata_intersection.py`が原本ハッシュ、ネイティブ取込・復元、署名、復号、全条件、結果参照を確認してから台帳へ採用する。
+Evidence is in `build/acceptance/reference-20260918/shibboleth-intersection-metadata/`; formal results and preparation grounds are in adjacent `shibboleth-intersection-evaluation/`. Originals were preserved alongside before/after evaluations. `verify_metadata_intersection.py` checks hashes, native import/restoration, signatures, decryption, every condition, and result references before adoption.
 
-<!--g1-literal--> 未検証は475から474観測へ減少、異なるケースIDは157のまま。条件数や追加テスト数を解消件数として数えていない。新たな製品FAILはない。
+<!--g1-literal--> Unverified observations changed from 475 to 474; distinct case IDs remained 157. Conditions and added tests are not resolved-observation counts. No new product FAIL was recorded.
 
-## 検証と操作負担
+## Validation and operator effort
 
-判定テストで完全な対照、鍵長制限を無視するmutant、条件欠落、キャンペーン混在、破損入力、異なる鍵、誤ったOAEPパラメーターを検査した。既存の署名方式／Role優先の判定回帰も実施。APIテストではM2への登録と、証拠なしの準備確認だけではSuccessにならないことを検査した。
+Tests cover complete controls, a mutant ignoring key-size restrictions, missing conditions, mixed campaigns, corrupt inputs, wrong keys, and incorrect OAEP parameters. Existing signature-algorithm/Role-precedence regressions also ran. API tests verify M2 registration and that preparation confirmation without evidence cannot yield Success.
 
-<!--g1-literal--> 製品メタデータ書込13、読込先の投入・復元2、一時ファイル削除1、合計16書込操作。サービス再読込14、正常SSO試行13、無効署名試行13。Run作成・preflight各1。Docker build1、Suite／転送コンテナ再作成各1、製品再起動0、本人操作0。復号検査1回、準備確認POST1回。結果読取URLの誤りによる404を1回記録し、正しいURLへ修正した。
+<!--g1-literal--> Product metadata writes: 13; provider application/restoration writes: 2; temporary-file deletion: 1; total write operations: 16. Service reloads: 14; normal SSO attempts: 13; invalid-signature attempts: 13. Run creation/preflight: 1 each. Docker builds: 1; Suite/forwarder recreations: 1 each; product restarts: 0; user interactions: 0. Decryption verification: 1; preparation confirmation POST: 1. One result-read request returned 404 because of an incorrect URL; that URL was corrected.
 
-実行イメージは`samlscope:reference-intersection-v39`、digestは`sha256:17c47a45e48bcefde75e45b500a4f823248a41f124e39cb0428cab9d699ee31a`。既存の未コミットSOAP変更は実行イメージから除外した。
+Runtime was `samlscope:reference-intersection-v39`, digest `sha256:17c47a45e48bcefde75e45b500a4f823248a41f124e39cb0428cab9d699ee31a`. Existing uncommitted SOAP changes were excluded from the image.
 
-<!--g1-literal--> 対象Runnerテスト12・APIテスト8が成功。G1生成一致・構造46/46、台帳監査エラーなし。G2は20/21で、既存のG2-30署名差分のみが残る。
+<!--g1-literal--> Targeted Runner tests: 12; API tests: 8; all passed. G1 generation matched and structural validation passed 46/46; the inventory audit reported no errors. G2 passed 20/21, with only the existing G2-30 signature difference outstanding.
 
-## 継続対象
+## Continuing work
 
-この判定はメタデータ消費側の共通部分選択を対象にする。MD05.eの全拡張点、別製品への展開、ALG04/06の該当ブラウザ／ECPプロファイルでの判定接続を解消済みとは扱わない。G2の既存保護ソース署名差分は残り、リリース可能とはしていない。
+This evaluation covers the consumer's shared metadata algorithm selection. Full MD05.e extension coverage, other products, and ALG04/06 integration in applicable browser/ECP profiles were not considered resolved. The existing protected G2 source-signature difference remained outstanding; release readiness was not claimed.

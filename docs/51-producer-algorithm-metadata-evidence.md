@@ -1,80 +1,80 @@
-# 暗号方式生成能力の条件別証拠とMGF省略の監査
+# Condition-specific evidence of encryption generation capability and omitted-MGF audit
 
-## 実装
+## Implementation
 
-ALG04/06のブラウザ証拠判定へ`MetadataEncryptionAlgorithmEvidence`を接続した。既存の通常SSO証拠に加え、同じRun内のメタデータキャンペーンで得た署名付き応答を使用できる。元メタデータ・取得記録・送信要求・署名応答の相関は共通コレクターで検証する。
+Connected `MetadataEncryptionAlgorithmEvidence` to the ALG04/06 browser-evidence evaluation. In addition to existing ordinary SSO evidence, it can use signed responses from a metadata campaign in the same Run. The shared collector verifies correlation among original metadata, fetch records, outgoing requests and signed responses.
 
-`MetadataEncryptionProof`へ鍵照合・Assertion復号・内包署名検証を抽出し、MD05.e8と共有した。fixture別の秘密鍵と元メタデータ内の公開鍵の一致を検査する。復号平文の型・Issuerを確認し、証拠不足・異なる鍵・署名不正・曖昧な構造は確定に使わない。秘密鍵と復号平文は保存しない。
+Extracted key matching, Assertion decryption and enclosed-signature verification into `MetadataEncryptionProof`, shared with MD05.e8. It checks that the fixture-specific private key matches the public key in the original metadata, and verifies the decrypted plaintext type and Issuer. Missing evidence, different keys, invalid signatures and ambiguous structures cannot establish a conclusion. Private keys and decrypted plaintext are not saved.
 
-生成能力を判定するため、広告内容だけではSuccessにならない。実際に生成された暗号方式・OAEPパラメーターを復号成立後に観測する。メタデータの消費義務への適合を、この生成能力判定から推論しない。
+Declarations alone cannot establish Success for generation capability. The generated encryption algorithm and OAEP parameters are observed after successful decryption. Conformance to metadata-consumption obligations is not inferred from this generation-capability evaluation.
 
-Shibboleth自動実行スクリプトにブラウザSSOプロファイルを追加した。メタデータ用Runの結果を別プロファイルへ流用せず、該当プロファイルの新しいRunで試験する。
+Added the browser SSO profile to the Shibboleth automation script. Results from a metadata Run are not reused for another profile; tests use a new Run for the relevant profile.
 
-## 実機結果
+## Product results
 
-Run `run_0TMTHFWK5HEM14WFNJ10RD5D1X`、Plan `plan_989BVXEKC7VCVDY56VR4H5SQJR`で実行した。
+Executed with Run `run_0TMTHFWK5HEM14WFNJ10RD5D1X`, Plan `plan_989BVXEKC7VCVDY56VR4H5SQJR`.
 
-<!--g1-literal--> 対照、AES128/256 GCM、旧／新RSA-OAEP×SHA1/SHA256、MGF省略広告の計8条件を実行した。元fixtureの取込・署名検証・対応鍵復号・別鍵拒否を全条件で確認し、製品設定を復元した。
+<!--g1-literal--> Executed 8 conditions: control, AES128/256 GCM, old/new RSA-OAEP × SHA1/SHA256, and declarations omitting MGF. Verified original-fixture import, signature verification, decryption with the matching key and rejection with another key for every condition, then restored product configuration.
 
-| ケース | 今回の正式結果 | 確認した事実 |
+| Case | Formal result in this campaign | Established observation |
 |---|---|---|
-| IIP-ALG04-b-idp-01 | PASS | AES256-GCMの生成と復号 |
-| IIP-ALG06-b-idp-01 | PASS | rsa-oaepの生成と復号 |
-| IIP-ALG06-c-idp-01 | PASS | 両OAEP方式とSHA1/SHA256の全組合せ |
-| IIP-ALG06-d-idp-01 | NOT_VERIFIED | 応答はMGFを明示し、省略形の証拠がない |
+| IIP-ALG04-b-idp-01 | PASS | AES256-GCM generation and decryption |
+| IIP-ALG06-b-idp-01 | PASS | rsa-oaep generation and decryption |
+| IIP-ALG06-c-idp-01 | PASS | Both OAEP methods with all SHA1/SHA256 combinations |
+| IIP-ALG06-d-idp-01 | NOT_VERIFIED | Responses explicitly specify MGF; no omitted-form evidence |
 
-ALG04.aとALG06.aもPASSだが既に確定していたため新規解消には数えない。原本は`build/acceptance/reference-20260918/shibboleth-producer-algorithms/`、正式評価結果は`shibboleth-producer-evaluation/`へ保存した。`verify_producer_algorithms.py`でプロファイル、原本、署名、復号、対照、全組合せ、ケースの証拠参照を検査してから採用する。
+ALG04.a and ALG06.a also passed but were already established, so they are not counted as newly resolved. Originals were saved in `build/acceptance/reference-20260918/shibboleth-producer-algorithms/`, and formal evaluation results in `shibboleth-producer-evaluation/`. Adoption requires `verify_producer_algorithms.py` to check the profile, originals, signatures, decryption, controls, all combinations and case evidence references.
 
-## MGF省略の判定修正と旧確定の撤回
+## Omitted-MGF evaluation correction and withdrawal of an earlier conclusion
 
-承認済みALG06.dのvariantはMGFを明示しない既定動作を対象にしている。旧コードはMGF1-SHA1の明示指定もSuccessにしていた。判定を省略形に限定し、同じSHA1でも明示指定だけでは未検証になる対照を追加した。G1/G2の承認済み定義は変更していない。
+The approved ALG06.d variant concerns default behavior with no explicit MGF. Earlier code also treated explicit MGF1-SHA1 as Success. Evaluation now requires the omitted form, with a control showing that an explicit specification alone remains unverified even for the same SHA1. Approved G1/G2 definitions were not changed.
 
-Keycloakの旧Run `run_6AD6T3VS8H87WQQBB1T2DEB3MX`を監査した。採用済みALG06.dの原本応答では、rsa-oaepのMGFは常に明示されていた。MGF要素のない応答は旧rsa-oaep-mgf1pであり、この条件を満たさない。旧確定は現在の比較表・未検証台帳への採用対象から外し、未検証へ戻した。過去Runの保存結果は監査のため保持しており、正しい確定として再採用しない。
+Audited the earlier Keycloak Run `run_6AD6T3VS8H87WQQBB1T2DEB3MX`. Every adopted original ALG06.d response explicitly specified MGF for rsa-oaep. Responses without an MGF element used the old rsa-oaep-mgf1p method and did not satisfy this condition. The earlier conclusion was excluded from adoption into the current comparison and unverified inventory and returned to unverified. Saved historical Run results remain for audit and must not be readopted as a valid conclusion.
 
-監査原本とハッシュは`keycloak-default-mgf-audit/`に保存した。台帳生成時に`verify_default_mgf_withdrawal`が、旧結果の全採用応答とMGF原本を検査する。単に既存の結果ラベルを書き換えたものではない。
+Audit originals and hashes were saved in `keycloak-default-mgf-audit/`. During inventory generation, `verify_default_mgf_withdrawal` checks every adopted response in the earlier result against the original MGF evidence. This was not merely relabeling an existing result.
 
-<!--g1-literal--> 新規PASS3件、旧確定撤回1件で、未検証は474から472観測へ減少した。異なるケースIDは157のまま。製品FAILの追加はない。
+<!--g1-literal--> 3 new PASS observations and 1 withdrawn conclusion reduced unverified observations from 474 to 472. Distinct case IDs remain 157. No product FAIL was added.
 
-## 検証・操作負担
+## Validation and operation burden
 
-暗号方式の正負対照、全組合せ不足、明示MGFと省略の区別、署名・原本・条件別鍵の相関、前回の共通部分選択判定の回帰をまとめて検証した。個別観測ごとの全テスト反復は行っていない。G1生成一致・構造検証と台帳監査も実施した。G2の既存保護ソース署名差分は残る。
+Validated positive/negative encryption controls, missing combinations, explicit versus omitted MGF, signature/original/condition-specific key correlation, and regression coverage for the preceding intersection-selection evaluation together. The entire test suite was not repeated for each observation. G1 generated-document consistency, structural validation and inventory audit were also performed. The existing signed-source difference for G2-protected implementation remains.
 
-<!--g1-literal--> メタデータ書込8、読込先設定の投入・復元2、一時ファイル削除1、製品書込計11。サービス再読込9、正常SSO8、無効署名試行8、Run作成・preflight各1。Docker build1、Suite／転送コンテナ再作成各1、製品再起動0、本人操作0。復号検査1回、別鍵対照8件。採用監査の初回はプロファイル名の大小文字の想定違いで停止し、APIの小文字表記に合わせて修正後に成功した。
+<!--g1-literal--> Metadata writes 8; ingestion-configuration application/restoration 2; temporary-file deletion 1; total product writes 11. Service reloads 9; normal SSO 8; invalid-signature attempts 8; Run creation and preflight 1 each. Docker build 1; Suite/forwarder container recreation 1 each; product restarts 0; user interactions 0. Decryption inspection 1 execution; other-key controls 8. The first adoption audit stopped because of an assumed difference in profile-name capitalization; it succeeded after matching the API's lowercase spelling.
 
-実行イメージは`samlscope:reference-producer-metadata-v40`、digestは`sha256:cc159b10d6721a300e79756ff7d4342067466cdc37ccba2e2a2916b8e5582f67`。無関係な未コミットSOAP変更は含めていない。
+Execution image: `samlscope:reference-producer-metadata-v40`; digest: `sha256:cc159b10d6721a300e79756ff7d4342067466cdc37ccba2e2a2916b8e5582f67`. Unrelated uncommitted SOAP changes were excluded.
 
-<!--g1-literal--> 対象Runnerテスト20件成功、G1構造46/46、台帳監査エラーなし。G2は20/21で既存G2-30の署名差分のみが残る。
+<!--g1-literal--> 20 targeted Runner tests passed; G1 structural checks 46/46; no inventory-audit errors. G2 remained 20/21, with only the existing G2-30 signed-source difference unresolved.
 
-## 継続対象
+## Remaining work
 
-他製品、ECP固有経路、MGF省略応答の生成経路は未完了。部分的な能力観測、広告、管理画面の成功、キャンペーン終了だけで判定を確定しない。
+Other products, ECP-specific paths and paths generating omitted-MGF responses remain incomplete. Partial capability observations, declarations, successful administration screens or campaign completion alone do not establish a conclusion.
 
-## ECPプロファイルへの生成能力観測の追加
+## Additional generation-capability observations for the ECP profile
 
-Run `run_SSWFM7EX1V67WPRXPK975NW52B`、Plan `plan_0T6SEXB43B3RGP5WFP6F1CSMHP`で追加実行した。プロファイルは `ecp_idp` だが、今回の生成能力の観測経路はブラウザSSOである。PAOS固有の適合性をこの結果から推論しない。共通暗号方式ケースを同じRun内の実測証拠で評価し、他プロファイルの結果をコピーしていない。
+Executed with Run `run_SSWFM7EX1V67WPRXPK975NW52B`, Plan `plan_0T6SEXB43B3RGP5WFP6F1CSMHP`. The profile is `ecp_idp`, but this campaign observed generation capability through browser SSO. PAOS-specific conformance is not inferred from the result. Shared encryption cases were evaluated using measured evidence in the same Run; another profile's results were not copied.
 
-<!--g1-literal--> 元fixture取込8条件、署名応答8件、対応鍵復号8件、別鍵拒否8件を確認した。正常ログイン前提も同じRunで完了させ、プロトコル証拠評価APIで正式評価した。新規PASSはALG04.b・ALG06.b・ALG06.cの3観測。ALG06.dはMGF明示のため未検証を維持する。
+<!--g1-literal--> Verified original-fixture import for 8 conditions, 8 signed responses, 8 matching-key decryptions and 8 other-key rejections. Completed the normal-login prerequisite in the same Run and formally evaluated through the protocol-evidence evaluation API. The 3 new PASS observations were ALG04.b, ALG06.b and ALG06.c. ALG06.d remains unverified because MGF is explicit.
 
-採用検証をプロファイル別に拡張し、Run、プロファイル、取込原本、復元、署名、復号、全条件、ケースの証拠参照を照合する。重複した条件・原本IDと必要条件の欠落も拒否する。旧ブラウザプロファイルの採用証拠も同じ検証に通ることを確認した。
+Extended adoption validation per profile to match the Run, profile, imported originals, restoration, signatures, decryption, all conditions and case evidence references. Duplicate conditions/original IDs and missing required conditions are rejected. Confirmed that the earlier browser-profile adoption evidence passes the same validation.
 
-原本は `shibboleth-producer-algorithms-ecp/`、正式結果は `shibboleth-producer-evaluation-ecp/` に保存。未検証台帳と比較表は生成器で更新し、未検証契約監査でエラーなしを確認した。
+Originals were saved in `shibboleth-producer-algorithms-ecp/`; formal results in `shibboleth-producer-evaluation-ecp/`. Regenerated the unverified inventory and comparison, and confirmed no unresolved-contract audit errors.
 
-<!--g1-literal--> 未検証438→435観測、異なるケースID154は不変。元応答のMGF省略条件や未観測ケースを推定で解消していない。
+<!--g1-literal--> Unverified observations decreased 438→435; distinct case IDs remain 154. Omitted-MGF conditions in original responses and unobserved cases were not resolved by inference.
 
-<!--g1-literal--> 操作はメタデータ等の書込13（復元含む）、一時ファイル削除2、サービス再読込11、Run作成・preflight各1。送信AuthnRequest17件（通常ログイン1、条件別正常要求8、無効署名試行8）、受信Response9件。製品再起動0、Docker build0、Suite/転送再作成0、本人操作0。復号検査コンテナ1回はネットワーク無効・Suite鍵領域読取専用で実行し、秘密鍵・復号平文は保存していない。
+<!--g1-literal--> Operations: metadata and related writes 13, including restoration; temporary-file deletions 2; service reloads 11; Run creation/preflight 1 each. AuthnRequests sent 17: ordinary login 1, condition-specific normal requests 8, invalid-signature attempts 8. Responses received 9. Product restarts 0; Docker builds 0; Suite/forwarder recreations 0; user interactions 0. 1 decryption-inspection container execution used disabled networking and a read-only Suite key area; private keys and decrypted plaintext were not saved.
 
-必要な証拠検査のみ実施し、Java/Web全体のテストは反復していない。新しく追加した表示名・TLS観測コードの一括試験と実環境反映は引き続き別途必要である。
+Only required evidence checks were performed; the full Java/Web tests were not repeated. Batch validation and deployment of the newly added display-name/TLS observation code remain separate work.
 
-## Keycloakの生成設定切替を自動化
+## Automated Keycloak generation-setting changes
 
-`dev/keycloak/producer_algorithm_campaign.py`を追加し、Run専用のクライアントを新規作成して暗号生成設定を切り替える経路を実装した。各段階で設定を読み戻し、既存クライアントを変更せず、終了時に作成したDB IDのクライアントだけを削除して不存在を確認する。管理トークンは操作ごとに取得し、記録しない。この経路は明示設定による生成能力の確認であり、製品のメタデータ解釈の証拠として扱わない。
+Added `dev/keycloak/producer_algorithm_campaign.py` to create a Run-specific client and switch encryption-generation settings. It reads back configuration at every stage, leaves existing clients intact, and deletes only the client with the DB ID created by this campaign at completion, checking its absence. Administration tokens are obtained per operation and are not recorded. This path establishes generation capability through explicit settings; it is not evidence of the product's metadata interpretation.
 
-Run `run_BCJDFCFSWYMHVSESDMZCMBNAKA`で実行。プロファイルは `ecp_idp`、実際の生成観測はブラウザSSOである。原本と正式結果は `keycloak-producer-algorithms-ecp/` に保持した。
+Executed in Run `run_BCJDFCFSWYMHVSESDMZCMBNAKA`. The profile is `ecp_idp`; actual generation observations use browser SSO. Originals and formal results are retained in `keycloak-producer-algorithms-ecp/`.
 
-<!--g1-literal--> AES256/128 GCMと旧／新OAEP・SHA1/SHA256を組み合わせた5段階を完走。元Redirectクエリの署名と送信XMLの一致、応答署名、Assertion復号・署名・Issuer、別鍵拒否、改変応答拒否を検査した。秘密鍵・復号平文は保存しない。ALG06.cを新規PASSとして採用し、未検証435→434観測、異なるケースID154は不変。
+<!--g1-literal--> Completed 5 stages combining AES256/128 GCM, old/new OAEP and SHA1/SHA256. Checked the original Redirect-query signature and equality with sent XML, Response signature, Assertion decryption/signature/Issuer, other-key rejection and rejection of modified responses. Private keys and decrypted plaintext are not saved. Adopted ALG06.c as a new PASS; unverified observations decreased 435→434, with distinct case IDs unchanged at 154.
 
-`VerifyNativeProducerAlgorithms.java`と`verify_native_producer_acceptance.py`で、原本一覧・Transcript・fixture・設定操作のハッシュを固定し、正式結果の証拠参照まで照合する。ALG06.dは新OAEPのMGFが明示されるため未検証のまま。単に管理APIが設定を受け付けたことは確定根拠にしていない。
+`VerifyNativeProducerAlgorithms.java` and `verify_native_producer_acceptance.py` bind hashes of the original inventory, Transcripts, fixtures and configuration operations, checking through to evidence references in formal results. ALG06.d remains unverified because the new OAEP explicitly specifies MGF. Administration API acceptance alone does not establish a conclusion.
 
-<!--g1-literal--> 管理APIはGET16、POST1、PUT5、DELETE1（設定書込計7）、トークン取得23、ブラウザSSO5。製品再起動・Suite再作成・Docker build・本人操作はいずれも0。読取専用の復号検査コンテナは3試行。初回は検証ツールがRedirect署名をXML署名と誤って想定して停止し、元クエリ検証へ修正した。後続は正常完了し、最終回で採用証拠の原本ハッシュ結合も固定した。失敗試行と操作数は`operation-summary.json`に記録済み。
+<!--g1-literal--> Administration API operations: GET 16, POST 1, PUT 5, DELETE 1, for 7 configuration writes; token acquisitions 23; browser SSO 5. Product restarts, Suite recreations, Docker builds and user interactions were all 0. Read-only decryption-inspection containers had 3 attempts. The first stopped because the verifier incorrectly assumed an XML signature for the Redirect signature; verification was corrected to use the original query. Subsequent attempts completed normally, and the final attempt also bound original adoption-evidence hashes. Failed attempts and operation counts are recorded in `operation-summary.json`.
 
-台帳と比較表を再生成し、未検証契約監査はエラーなし。Java/Web全体テストの反復やコミットは行っていない。
+Regenerated the inventory and comparison; the unresolved-contract audit had no errors. Full Java/Web tests were not repeated, and no commit was made.

@@ -1,29 +1,29 @@
-# KeycloakのSP別属性解放の実証
+# Keycloak evidence of SP-specific attribute release
 
-`IIP-IDP02-a-idp-01`はSPのentityIDに応じた属性解放設定の義務であり、メタデータを製品自身が解釈する義務ではない。今回の準備は管理APIでネイティブのクライアントとUser Property mapperを設定する。SuiteがXMLから設定値を取り出した事実を、Keycloakによるメタデータ解釈の証拠とは扱わない。
+`IIP-IDP02-a-idp-01` requires attribute-release configuration according to SP entityID, not product-native metadata interpretation. Preparation configures native clients/User Property mappers through the administration API. Suite extraction of XML configuration values is not evidence of Keycloak metadata interpretation.
 
-## 準備と原本の対応
+## Matching preparation to originals
 
-`dev/keycloak/relying_party_attribute_campaign.py`は必要なSPだけの事前取込用集約からentityID・POST ACS・公開鍵を取得する。既存クライアントの上書きを拒否し、試験専用クライアントを作成する。各クライアントの標準`saml-user-property-mapper`は共通の`firstName`をanchorとSP専用属性へコピーする。クライアントスコープは空に固定し、要求署名必須・応答署名・Assertion署名・暗号化を有効にする。
+`dev/keycloak/relying_party_attribute_campaign.py` obtains entityID, POST ACS and public keys from a scoped preload aggregate. It rejects overwriting existing clients and creates test-only clients. Standard `saml-user-property-mapper` copies shared `firstName` to anchor/SP-specific attributes. Client scopes are fixed empty; request signatures, Response signatures, Assertion signatures and encryption are enabled.
 
-A/B/Aの各要求の前後で、管理APIからネイティブ設定を読み戻して同一性を確認する。ログイン入力はメモリ内で固定する。元の集約・要求・応答はRecorderの原本に照合し、既存の署名・復号・要求相関・Audience・Recipient検証を再利用する。属性値や資格情報を公開診断へ保存しない。
+Native configuration is read back through the administration API before/after each A/B/A request to check equality. Login input is fixed in memory. Original aggregate/requests/responses match Recorder originals, reusing signature/decryption/request correlation/Audience/Recipient checks. Attribute values/credentials are not saved in public diagnostics.
 
-準備記録の検証は、原本から期待する鍵とACSを再導出し、mapperの意味・実クライアントID・削除したIDを照合する。設定ハッシュには実際の属性入力元`firstName`を含める。ShibbolethとSimpleSAMLphpの`uid`を使った既存準備記録は同じバイト列のまま再生成・検証できる。
+Preparation validation rederives expected keys/ACS from originals and matches mapper semantics, actual client IDs and deleted IDs. Configuration hashes include actual input source `firstName`. Existing Shibboleth/SimpleSAMLphp records using `uid` can still be regenerated/validated byte-for-byte unchanged.
 
-## 正式採用
+## Formal adoption
 
-<!--g1-literal--> Run `run_EEAG5F4CFPVHYP90GGDZXB8VN4`のA/B/A応答3件を正式collectorで検証した。比較処理の負の対照6種と、ネイティブ設定検証の負の対照4種を拒否した。通常ログインも実施し、正式CONFIGケースが`SATISFIED/PASS`、`attested=false`を返した。証拠参照8件の原本不変性を採用検証器で確認した。
+<!--g1-literal--> Validated 3 A/B/A responses from Run `run_EEAG5F4CFPVHYP90GGDZXB8VN4` through the formal collector. Rejected 6 comparison controls and 4 native-configuration controls. Normal login also completed; the formal CONFIG case returned `SATISFIED/PASS`, `attested=false`. Adoption verification checked unchanged originals for 8 evidence references.
 
-<!--g1-literal--> 台帳は未検証464→463、異なるケースID157→156。これにより、このケースは3製品ともSuccessとなった。製品間で別Runの実証をケース単位に採用したものであり、単一Runの完走を意味しない。
+<!--g1-literal--> Unverified inventory decreased 464→463; distinct case IDs 157→156. This case is now Success for all 3 products. Per-case adoption combines separate product Runs; it does not represent one complete Run.
 
-証拠は`build/acceptance/reference-20260918/keycloak-relying-party-attributes/`、正式評価は`keycloak-relying-party-attribute-evaluation/`。集計は生成器から更新する。
+Evidence: `build/acceptance/reference-20260918/keycloak-relying-party-attributes/`; formal evaluation: `keycloak-relying-party-attribute-evaluation/`. Aggregates are updated through generators.
 
-## 操作と復元
+## Operations and restoration
 
-<!--g1-literal--> 属性比較用クライアント作成2・削除2、通常ログイン用作成1・削除1で、製品設定書込は合計6回。管理API読取27回、事前のserverinfo読取1回、メモリ内トークン取得3回、プロトコル往復4回。準備記録配置・試験開始・CONFIG確認は各1回。ビルド・コンテナ再作成・製品再起動・サービス再読込・本人操作はすべて0回。
+<!--g1-literal--> Attribute-comparison client creation 2/deletion 2; normal-login client creation 1/deletion 1; total product writes 6. Administration API reads 27; preliminary serverinfo read 1; in-memory token acquisitions 3; protocol round trips 4. Preparation installation/test start/CONFIG confirmation 1 each. Builds, container recreation, product restarts, service reloads and user interactions were all 0.
 
-作成に成功した直後の応答や検索が失敗した場合も、作成前に存在しなかった試験固有entityIDから回収して削除する。既存設定は上書きしない。削除後の検索で不存在を確認し、失敗時は復元完了として扱わない。
+If the creation response or subsequent search fails after successful creation, recovery searches the test-specific entityID absent before creation and deletes the client. Existing configuration is never overwritten. Post-delete absence is checked; failure cannot be recorded as completed restoration.
 
-## 検証範囲
+## Validation scope
 
-<!--g1-literal--> 実製品の原本検証、比較処理とネイティブ設定の負の対照、既存2製品の採用再検証、台帳契約監査を実施した。Java判定コードと稼働イメージは変更していない。大規模な統合テストはバッチ実装後の確認へまとめる。G1生成一致・構造検査を実施し、G2-30の保護実装署名差分は未解消のまま維持する。
+<!--g1-literal--> Performed actual-product original verification, comparison/native-configuration negative controls, readoption checks for the existing 2 products, and inventory-contract audit. Java evaluation code/running image were unchanged. Broad integration tests are deferred to batch implementation validation. G1 generated-document consistency/structural checks ran; the existing protected-source signed difference G2-30 remains unresolved.

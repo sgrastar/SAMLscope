@@ -1,27 +1,27 @@
-# メタデータ原本のRun内記録
+# Recording metadata originals within a Run
 
-## 実装
+## Implementation
 
-試験用メタデータの生成時に、HTTP応答へ渡すものと同一のバイト列をTranscriptへ保存する。`MetadataResponseEvidence`が`MetadataPrepared`を記録し、取得／エクスポート記録のID、variant、feed、原本のSHA-256を保持する。decodedSamlRefから元XMLを読めるため、variant名から配信内容を推定する必要がなくなる。
+Test metadata generation now records the exact bytes passed to the HTTP response in the Transcript. `MetadataResponseEvidence` records `MetadataPrepared` with the retrieval/export entry ID, variant, feed, and original SHA-256. decodedSamlRef gives access to the original XML, avoiding inference from variant names.
 
-<!--g1-literal--> 対象はvariant指定のmetadata、live、live/content、preloaded、preloaded/downloadの5経路。Runへ結び付かない通常のメタデータ取得を任意のRunへ割り当てない。リダイレクトだけの応答にはXML原本を記録せず、後続のcontent取得へ紐付ける。エクスポートと取得はsourceTypeで区別する。
+<!--g1-literal--> Five paths are covered: variant metadata, live, live/content, preloaded, and preloaded/download. Ordinary metadata retrieval unbound to a Run is not assigned to an arbitrary Run. Redirect-only responses do not record XML originals; subsequent content retrieval does. sourceType distinguishes exports from fetches.
 
-記録時点はServletが送信する前なので、deliveryを`PREPARED`とする。保存に成功しただけでは、HTTP配送成功・製品による取込・メタデータ消費を確定しない。要求のAuthorization／Cookieなどをこの応答記録へコピーしない。
+Recording occurs before Servlet delivery, so delivery is `PREPARED`. Saving bytes does not establish successful HTTP delivery, native import, or metadata consumption. Authorization/Cookie headers from requests are not copied into these response records.
 
-## 実機での照合
+## Runtime verification
 
-新Run `run_ZTEB6PCRWXJM0CZ6QWCZRR966T`で、SimpleSAMLphpのアルゴリズム広告条件を一括実行した。`verify_prepared_metadata_batch.py`により、Suite原本、取得記録、製品自身のパーサへ渡したfixture、設定読戻し、復元を照合した。
+SimpleSAMLphp algorithm-advertisement conditions were executed in new Run `run_ZTEB6PCRWXJM0CZ6QWCZRR966T`. `verify_prepared_metadata_batch.py` compared Suite originals, retrieval records, fixtures supplied to the native parser, configuration read-back, and restoration.
 
-<!--g1-literal--> 全13条件の元XMLがバイト単位で一致した。Run固定のIdP鍵によるResponse署名も13条件すべてで検証できた。広告と異なるSHA256選択の観測は再現したが、case判定への接続が残るため、未検証は483観測・159ケースIDのまま。
+<!--g1-literal--> Original XML matched byte for byte in all thirteen conditions. Response signatures verified under the Run-fixed IdP key for all thirteen. SHA256 selection despite different advertisements reproduced, but case integration remained unfinished: 483 observations and 159 case IDs stayed unverified.
 
-証拠は`build/acceptance/reference-20260918/simplesamlphp-algorithm-recorded-metadata/`。`prepared-metadata-verification.json`、`verified-algorithm-signatures.json`、`algorithm-selection-diagnosis.json`を保存し、MD05.ea／ebの追加観測をこの新Runへ更新した。既存ケースのVerdictは変更していない。
+Evidence is in `build/acceptance/reference-20260918/simplesamlphp-algorithm-recorded-metadata/`: `prepared-metadata-verification.json`, `verified-algorithm-signatures.json`, and `algorithm-selection-diagnosis.json`. Additional observations for MD05.ea/eb were updated to this Run; existing case Verdicts were unchanged.
 
-保存済みRunに原本と相関を揃えたため、今後の判定処理追加ではこの証拠を再評価できる。製品設定・ログインを毎回やり直すことを前提にしない。
+Originals and correlation in the saved Run allow later evaluators to replay this evidence. Product configuration and login do not need to be repeated for every new evidence reader.
 
-## 検証と配備
+## Validation and deployment
 
-APIの回帰テストを実施し、HTTPで受信したバイト列と保存原本の一致、SHA-256、取得記録への参照、OUTBOUND方向、PREPARED状態、リダイレクトだけの記録との区別を確認した。G1生成一致・構造検証と台帳監査も確認した。G2の既存署名差分は未解消。
+API regressions verified equality between received HTTP bytes and saved originals, SHA-256, references to retrieval entries, OUTBOUND direction, PREPARED delivery, and separation from redirect-only records. G1 generation, structural validation, and inventory auditing were also checked. The existing G2 signature difference remained unresolved.
 
-稼働イメージは`samlscope:reference-metadata-response-v33`、digestは`sha256:009c94ba10599f298720703560592652ac4fb0e2384dde12049edfa897dd74e0`。今回のApplication変更を含め、以前からの無関係なSOAP差分だけを除いたソースからApplicationクラスを再コンパイルした。原本とJARのハッシュは`build/acceptance/reference-20260918/metadata-response-runtime/`に保存した。
+The deployed image was `samlscope:reference-metadata-response-v33`, digest `sha256:009c94ba10599f298720703560592652ac4fb0e2384dde12049edfa897dd74e0`. Application was recompiled with this change while excluding only the pre-existing unrelated SOAP differences. Source and JAR hashes are in `build/acceptance/reference-20260918/metadata-response-runtime/`.
 
-<!--g1-literal--> 今回のネイティブ取込13、製品設定書込27（投入・復元と最後の復元）、Run作成1、preflight1、署名対照要求13、通常要求13、Docker build1、Suite／転送コンテナ再作成各1、本人操作0、製品再起動0。全設定の復元をSHA-256一致で確認した。
+<!--g1-literal--> Native imports: 13; product configuration writes: 27 (application/restoration plus final restoration); Run creation: 1; preflight: 1; signature-control requests: 13; normal requests: 13; Docker builds: 1; Suite/forwarder recreations: 1 each; user interactions: 0; product restarts: 0. Original configuration SHA-256 confirmed complete restoration.

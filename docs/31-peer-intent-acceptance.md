@@ -1,62 +1,61 @@
-# 対象起点メッセージの受入記録（2026-09-15）
+# Target-initiated message acceptance (2026-09-15)
 
-対象は、Suiteから直接起動できないIdP起点SSOとtarget-initiated logoutの証拠生成です。基準コミットは `f653393413204cf9549e4175695ddc09f9598d56` で、ALG04/06の生成側判定バッチ（`eec07cdd`）の後続です。実装・検証・検証環境への反映はローカルで行い、公開やpushはしていません。
+This batch creates evidence for IdP-initiated SSO and target-initiated logout, which the Suite cannot initiate directly. It follows the ALG04/06 producer-oracle batch (`eec07cdd`) and baseline commit `f653393413204cf9549e4175695ddc09f9598d56`. Implementation, verification and deployment were local; no publication or push occurred in this batch.
 
-## 実装
+## Implementation
 
-- `TargetInitiatedIntents`: 単一使用の準備intent（`UNSOLICITED_SSO` / `TARGET_LOGOUT`）。Run単位の消費、TTL、プラン内で一意なRunの解決、曖昧時の拒否、プロセス再起動での失効。
-- `SpPeerService`: 準備済みintentがある場合だけ、RelayStateなしのunsolicited Response、または単一待機Runへのプラン解決を受け付けます。Issuer・Destination・Success・単一使用を検証し、未準備では従来どおり拒否します。
-- `SloPeerService`: Run相関のないtarget-initiated LogoutRequestを、プラン内で唯一の`TARGET_LOGOUT` intentがある場合だけ受け付けます。Issuerを検証し、intentを消費します。
-- API: `GET/POST /api/runs/{id}/target-initiated`（状態・準備、no-store、既存のRun認可・CSRF）。
-- 画面: `browser_sso_idp`と`single_logout_idp`のRun workspaceに準備パネルとRelayState・待機状態を表示。
-- `LogoutBrowserEvidenceTestCase`: 完了後のNOT_VERIFIEDを、新しいTranscript証拠が付いた場合に再評価できるようにしました。
-- SLO判定の復号: 暗号化Assertion内のNameID/SessionIndexをRun鍵で復号してから照合します（暗号化されたログイン応答でもIDP17-n/uが判定可能）。
-- 正常系観測の分離: DOCTYPE付きの敵対的**送信要求**が正常系観測全体を停止させないようにし、解析不能な**受信応答**は従来どおり不確定として扱います。
+- `TargetInitiatedIntents`: single-use preparation intents (`UNSOLICITED_SSO` / `TARGET_LOGOUT`), Run consumption, TTL, unique Run resolution within a Plan, rejection of ambiguity and expiry on process restart.
+- `SpPeerService`: accepts unsolicited Responses without RelayState, or resolves a Plan to its sole waiting Run, only with a prepared intent. Validates Issuer, Destination, Success and single use; otherwise preserves rejection.
+- `SloPeerService`: accepts a target-initiated LogoutRequest without Run correlation only when the Plan has exactly one `TARGET_LOGOUT` intent. Validates Issuer and consumes the intent.
+- API: `GET/POST /api/runs/{id}/target-initiated`, state/preparation, no-store, existing Run authorization and CSRF.
+- UI: preparation panel, RelayState and waiting state in browser_sso_idp and single_logout_idp workspaces.
+- `LogoutBrowserEvidenceTestCase`: completed NOT_VERIFIED cases can be reevaluated after new Transcript evidence.
+- SLO observation decrypts NameID/SessionIndex from encrypted Assertions with Run keys before comparison, enabling IDP17-n/u observation after encrypted login.
+- Adversarial outbound requests containing DOCTYPE no longer stop all normal-flow observation. Unparseable inbound responses still produce uncertainty.
 
-## 実証結果
+## Observed results
 
-| ケース | 製品 | 結果 | 根拠 |
+| Case | Product | Result | Evidence |
 |---|---|---|---|
-| `IIP-SSO01-g` | Keycloak / Shibboleth | Success | SP起点とIdP起点の両方の成功応答にAssertionがある |
-| `IIP-SSO01-z` | Keycloak / Shibboleth | Warning | unsolicited成功応答を観測 |
-| `IIP-SSO01-k` | Shibboleth | Success | 異なるACS宛のBearer確認（レシピエントと期限） |
-| `IIP-IDP17-j/k/l/m` | Shibboleth | Success | 対象発行LogoutRequestのIssuer数・値・形式・署名 |
-| `IIP-IDP17-t` | Shibboleth | Failed (Product) | 対象発行LogoutRequestのNotOnOrAfterがセッション失効より前（承認済みの既知FAIL） |
-| `IIP-IDP17-n` | Shibboleth | Not verified | 復号しても識別子のstrong matchを証明できない |
-| `IIP-IDP17-u` | Shibboleth | Not verified | NotOnOrAfterとセッション失効の対応を証明できない |
+| IIP-SSO01-g | Keycloak / Shibboleth | Success | Assertions in both SP-initiated and IdP-initiated successful Responses |
+| IIP-SSO01-z | Keycloak / Shibboleth | Warning | Observed unsolicited successful Response |
+| IIP-SSO01-k | Shibboleth | Success | Bearer confirmation at another ACS, including recipient and expiry |
+| IIP-IDP17-j/k/l/m | Shibboleth | Success | Target LogoutRequest Issuer count/value/format/signature |
+| IIP-IDP17-t | Shibboleth | Failed (Product) | Target LogoutRequest NotOnOrAfter precedes session expiry; approved known FAIL |
+| IIP-IDP17-n | Shibboleth | Not verified | Identifier strong match remains unproven after decryption |
+| IIP-IDP17-u | Shibboleth | Not verified | NotOnOrAfter/session-expiry correlation remains unproven |
 
-未検証は559から**546**へ減少しました（異なるケースID 180→179）。内訳は、browser_sso_idpの6観測（Keycloak: ALG04.a/ALG06.a/ALG06.c/ALG06.d/SSO01-g/SSO01-z）と3観測（Shibboleth: SSO01-g/k/z）、ecp_idpの2観測（Keycloak: ALG04.a/ALG06.a、クライアント属性をAES128-GCM + rsa-oaep-mgf1pへ変更してPAOS宛先を登録し、観測後に既定値へ復元）、SimpleSAMLphpの2観測（browser/ECPのALG06.a: Suite SPメタデータに`assertion.encryption=true`を設定してRSA-OAEP-MGF1Pの鍵輸送を観測。内容暗号はCBCのままのためALG04は未検証を維持し、設定は復元）です。ShibbolethのIDP17-j/k/l/m/tは台帳の未検証集合に含まれていなかったため、解消数には算入していません。
+<!--g1-literal--> Unverified observations fell from 559 to 546; distinct IDs from 180 to 179. This includes six Keycloak browser observations (ALG04.a/ALG06.a/ALG06.c/ALG06.d/SSO01-g/SSO01-z), three Shibboleth browser observations (SSO01-g/k/z), two Keycloak ECP observations (ALG04.a/ALG06.a after AES128-GCM + rsa-oaep-mgf1p configuration and PAOS registration, restored afterward), and two SimpleSAMLphp ALG06.a browser/ECP observations (assertion.encryption=true in Suite SP metadata, RSA-OAEP-MGF1P key transport; CBC content encryption leaves ALG04 unresolved; configuration restored). Shibboleth IDP17-j/k/l/m/t were not in the baseline unresolved set and are not counted as reductions.
 
-ShibbolethのAES256-GCM + rsa-oaep(1.1)は、カスタムEncryptionConfigurationをglobal.xmlへ追加して再起動する試行を行いましたが、Tomcatの多重起動で新旧プロセスが競合し、観測は既定のAES128-GCMのままでした。プロセスを整理して設定を復元し、IdPがメタデータ200で稼働することを確認済みです。この経路の追加観測は計上していません。
+A Shibboleth AES256-GCM + rsa-oaep(1.1) trial added custom EncryptionConfiguration to global.xml and restarted Tomcat, but old/new Tomcat processes conflicted and observation stayed at AES128-GCM. Processes and settings were restored; metadata HTTP 200 confirmed health. No additional conclusion was counted.
 
-## 製品の問題とSuiteの問題の区別
+## Product behavior and Suite gaps
 
-- 製品側（未検証のまま維持）:
-  - Keycloak: IdP起点SSOは管理APIのURL名登録と`RelayState`で起動でき、`IIP-SSO01-g/z`に成功しました。一方、target-initiated logoutは管理APIのセッション終了とOIDCログアウトのどちらでもSAML LogoutRequestがSuiteへ到達せず、未検証のままです。クライアントのSLO URLをコンテナ到達可能なSOAP URLへ変更して試行しましたが到達しませんでした。
-  - SimpleSAMLphp: IdP起点SSOの開始URLは提供されておらず（AuthnRequestを必要とする実装）、target-initiated logoutもSuiteへのLogoutRequestに到達しませんでした。
-- Suite側（本バッチで解消）: 対象起点メッセージの受信相関、単一使用intent、完了後NOT_VERIFIEDの再評価、暗号化Assertionの復号、DOCTYPE要求による観測停止。
-- 残るSuite側の課題: Keycloakのtarget-initiated logout到達性（製品側のログアウト伝播を切り分ける必要）、SimpleSAMLphpのIdP起点経路の有無確認。
+- Keycloak IdP-initiated SSO starts through an administration-API URL-name registration and RelayState; `IIP-SSO01-g/z` passed. Neither administration-session termination nor OIDC logout delivered a SAML LogoutRequest to Suite. A container-reachable SOAP SLO URL also did not establish delivery, so target-initiated logout remains unverified.
+- SimpleSAMLphp provided no IdP-initiated SSO start URL in the investigated implementation, which requires AuthnRequest. Its target-initiated logout also did not reach Suite.
+- Suite gaps resolved here: incoming target-message correlation, single-use intents, completed-NOT_VERIFIED reevaluation, encrypted-Assertion decryption and DOCTYPE-request isolation.
+- Remaining investigations: Keycloak target-initiated logout reachability/product propagation, and availability of a SimpleSAMLphp IdP-initiated path.
 
-## 操作量
+## Operation accounting
 
-計測は2026-09-15の本バッチのみです。Dockerの再起動が1回発生し、Suite/転送コンテナの再作成は実装修正ごとに実施しました（約6回、うち初回のフルビルドはDocker Desktop再起動に伴い破損したため不採用）。製品設定は次のとおりです。
+Only this 2026-09-15 batch was measured. Docker restarted once; Suite/forward containers were recreated after implementation changes approximately six times. The first full build was corrupted during Docker Desktop restart and not adopted.
 
-| 製品 | 設定書き込み | 復元 | 再読込 | 内容 |
+| Product | Setting writes | Restorations | Reloads | Changes |
 |---|---:|---:|---:|---|
-| Keycloak | 11 | 2 | 0 | 暗号アルゴリズム属性のフェーズ設定・既定値復元・IdP起点URL名・SOAP SLO URL |
-| Shibboleth | 4 | 2 | 1 | persistent NameID生成の一時有効化と復元（saml-nameid.properties）、NameIdentifierGenerationService再読込とTomcat再起動 |
-| SimpleSAMLphp | 0 | 0 | 0 | なし |
+| Keycloak | 11 | 2 | 0 | Algorithm phases/default restoration, IdP-initiated URL name and SOAP SLO URL |
+| Shibboleth | 4 | 2 | 1 | Temporary persistent NameID settings/restoration in saml-nameid.properties, NameIdentifierGenerationService reload and Tomcat restart |
+| SimpleSAMLphp | 0 | 0 | 0 | None |
 
-Keycloakの暗号属性は個別削除が反映されないため、事前観測と同じ既定値（AES256-GCM / rsa-oaep / sha256 / mgf1sha256）を明示して復元しました。`saml_idp_initiated_sso_url_name`とSOAP SLO URLは残置し、目的と現在値を`build/acceptance/reference-20260915/peer-intent/keycloak/`のクライアント記録に保存しています。ユーザー本人の操作は0回です。
+Keycloak attribute deletion did not take effect, so original observed defaults were explicitly restored: AES256-GCM / rsa-oaep / sha256 / mgf1sha256. saml_idp_initiated_sso_url_name and the SOAP SLO URL remain registered; their purpose/current values are recorded under `build/acceptance/reference-20260915/peer-intent/keycloak/`. Direct user operations: zero.
 
-## Shibboleth persistent NameIDの試行
+## Shibboleth persistent NameID trial
 
-`IIP-SSO05-a` / `IIP-SSO05-a2` はpersistent形式の成功応答を必要としますが、Shibbolethの既定構成ではpersistent要求が`Requester`で拒否されます。`saml-nameid.properties`の`idp.persistentId.sourceAttribute=uid`と`useUnfilteredAttributes=true`を一時設定し、NameID生成サービスの再読込とTomcat再起動（プロパティ読込をログで確認）後にブラウザ経路を2回再試験しました。しかしpersistent要求3件はいずれも`SubjectCanonicalizationError`（subject canonicalization flow不在）で拒否され、成功応答は得られませんでした。設定は`before`へ復元し、再起動後にIdPのメタデータ200を確認済みです。SSO05-a/a2は未検証のまま理由を「c14n前提の整備後に再試験」へ更新し、製品FAILとは扱いません。試行の記録は`build/acceptance/reference-20260915/peer-intent/shib-config/diagnosis.json`に保存しています。
+`IIP-SSO05-a` / `IIP-SSO05-a2` require successful persistent responses; defaults reject these requests with Requester. Temporarily set idp.persistentId.sourceAttribute=uid and useUnfilteredAttributes=true in saml-nameid.properties, reloaded the generation service and restarted Tomcat, confirming property loading. Two browser retests still rejected all three persistent requests with SubjectCanonicalizationError because the subject canonicalization flow was absent. Restored the before configuration and confirmed metadata HTTP 200 after restart. Both cases remain unverified, with the next action to establish c14n prerequisites before retesting; no product FAIL. Evidence: `build/acceptance/reference-20260915/peer-intent/shib-config/diagnosis.json`.
 
-## SLOブラウザoracleの未実装範囲
+## Unimplemented SLO browser oracles at this checkpoint
 
-SLO系には、Suite側の観測実装がまだないため`browser.oracle-unavailable`で終わるケースがあります。3製品のsingle_logout_idpで、`IIP-IDP17-b/b1/b2/c/r/s/x/y/z/aa/al`と`IIP-IDP18-b/c/d`の14ケース（製品別）です。非同期SLO要求、誤ったDestination、無効署名の受理、伝播タイムアウト、Redirect限定のSLOエンドポイントなど、Suiteが能動的に送る必要がある入力が対象で、IdP側の応答待ちや操作不足ではありません。製品FAILとは扱わず、Suite側の実装計画（suite-observation-gap）として台帳の理由を更新しました。Shibbolethの`IIP-IDP17-n/u`は対象メッセージまで観測できているため、識別子のstrong matchとNotOnOrAfterの対応付けという残条件を理由として記録しています。
+The fourteen product-specific cases `IIP-IDP17-b/b1/b2/c/r/s/x/y/z/aa/al` and `IIP-IDP18-b/c/d` in each product's single_logout_idp lacked Suite observations and ended browser.oracle-unavailable. They require Suite-generated asynchronous SLO, wrong Destination, invalid-signature acceptance controls, propagation timeout and Redirect-only SLO advertisements. These are implementation gaps, not missing IdP responses or user actions. Reasons were classified suite-observation-gap, not product FAIL. Shibboleth `IIP-IDP17-n/u` had target messages; remaining reasons identify strong match and NotOnOrAfter correlation.
 
-## 証拠と限界
+## Evidence and limits
 
-Runのresult.json・report.html・transcript・ログ・設定バックアップは `build/acceptance/reference-20260915/peer-intent/` に保存しています（Git管理対象外）。G2-30は未解消のままで、この作業は独立承認ではありません。[全件台帳](26-unverified-case-inventory.md)と[比較表](23-reference-test-comparison.md)を生成器で更新しています。
+result.json, report.html, transcripts, logs and configuration backups are under ignored `build/acceptance/reference-20260915/peer-intent/`. G2-30 remained unresolved; this batch is not independent approval. The [complete inventory](26-unverified-case-inventory.md) and [comparison](23-reference-test-comparison.md) were updated through their generators.

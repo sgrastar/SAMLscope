@@ -1,33 +1,33 @@
-# 方式選択の署名検証付き証拠
+# Signature-verified evidence for algorithm selection
 
-## 共通処理と実機証拠
+## Shared verification and runtime evidence
 
-`VerifiedSignatureAlgorithms`を追加した。SAML Responseと直下のAssertionについて、期待したIssuerとRunの信頼鍵に合致し、当該要素を直接参照する署名が検証できた場合だけ、署名方式・Digest方式・検証鍵のSHA-256を返す。メッセージのKeyInfoを信頼鍵として採用しない。
+`VerifiedSignatureAlgorithms` returns signature and digest algorithms and the verification key's SHA-256 only when a signature on the SAML Response or a direct child Assertion matches the expected Issuer, uses a Run trust key, and directly references the selected element. Message KeyInfo is never adopted as a trust anchor.
 
-重複ID、別Issuer、誤鍵、署名後の改変、SignatureMethodの改変、XPathによる部分署名を証拠から除外する。Assertionにしか署名がない場合、その署名をResponse全体の署名として扱わない。許可した変換で検証できないことは製品の違反ではなく、観測できないこととして扱う。
+Duplicate IDs, another Issuer, wrong keys, modification after signing, changed SignatureMethod, and partial XPath signatures are excluded. An Assertion-only signature does not cover the whole Response. Failure to verify with permitted transforms is an observation limitation, not a product violation.
 
-保存済みのSimpleSAMLphp Run `run_EF53BKR660XSH9Q27R8D4K1B41`を再検証した。対象メタデータのSHA-256をresult.jsonのmetadata_digestと照合し、対象entityのSAML IdP Roleにある署名用／use省略の証明書だけを信頼鍵として使用した。元XMLのハッシュと要求応答相関も確認した。
+Saved SimpleSAMLphp Run `run_EF53BKR660XSH9Q27R8D4K1B41` was rechecked. Target metadata SHA-256 matched result.json metadata_digest. Only signing or unspecified-use certificates from the target entity's SAML IdP Role were trusted. Original XML hashes and request/response correlation were also checked.
 
-<!--g1-literal--> 全13条件でResponse署名が検証できた。直下のAssertion署名も検証でき、いずれもRSA-SHA256／SHA256だった。新しい製品設定変更やSSOは実行せず、元証拠の再解析だけで確認した。
+<!--g1-literal--> Response and direct child Assertion signatures verified for all thirteen conditions; every condition used RSA-SHA256/SHA256. No additional product settings or SSO operations were performed: this was analysis of existing evidence.
 
-実行用ツールは`dev/reference-acceptance/VerifyMetadataAlgorithmSignatures.java`。新しいSAML JARと既存配布物の依存ライブラリをclasspathへ指定して実行する。出力`verified-algorithm-signatures.json`は、選択した要素の署名と相関に限定した証拠であり、適合判定を直接変更しない。
+`dev/reference-acceptance/VerifyMetadataAlgorithmSignatures.java` runs with the new SAML JAR and existing distribution dependencies on its classpath. Its `verified-algorithm-signatures.json` output covers only verified elements and their correlation; it does not directly change conformance verdicts.
 
-## 広告値との比較
+## Comparison with advertised algorithms
 
-`diagnose_metadata_algorithm_selection.py`で署名検証済みの値を元fixtureの広告値と比較する。署名方式とDigest方式を独立に扱い、Role側に当該種類がある場合だけEntity側の同種の情報を上書きする。宣言なしは非対応と推論しない。
+`diagnose_metadata_algorithm_selection.py` compares verified algorithms with original fixture advertisements. Signature and digest selection are independent. A Role overrides Entity information only for the same advertised type. Missing declarations do not establish lack of support.
 
-<!--g1-literal--> 署名方式とDigest方式を別々に数えた26観測では、広告なし4、先頭方式を選択10、広告リスト外の方式を選択6、後方方式を選択6となった。これはケースの確定数ではない。後方選択にはローカルポリシー未確認を明記し、すべてaffects_verdict=falseとしている。
+<!--g1-literal--> Counting signature and digest separately gave 26 observations: 4 without advertisements, 10 selecting the first algorithm, 6 selecting an unadvertised algorithm, and 6 selecting a later algorithm. These are not concluded-case counts. Later selection explicitly records unconfirmed local policy; all diagnostics set affects_verdict=false.
 
-SimpleSAMLphpのMD05.ea／ebの台帳へ、この追加観測のRun・証拠パス・ダイジェストを紐付け、次アクションを更新した。元ケース結果のRunやVerdictを置き換えていない。
+The additional Run, evidence paths, digests, and next actions were linked to SimpleSAMLphp MD05.ea/eb inventory entries. Original case-result Runs and Verdicts were not replaced.
 
-## 残る判定接続
+## Remaining evaluation work
 
-SuiteのMetadataFetch記録は現状、取得したvariantを記録するが、配信したメタデータXML自体をdecodedSamlRefとして保存していない。この不足を、外部ドライバが保存したfixtureと取込記録で補っている。Suite内部の自動判定へ移す際は、実際に配信したXML・取得・製品消費・同一条件の要求応答を結び付ける必要がある。variant名だけで配信内容を推定して判定しない。
+At this stage Suite MetadataFetch recorded variants but did not store delivered metadata XML as decodedSamlRef. External driver fixture originals and import records supplied that missing evidence. Internal automation must bind actual delivered XML, retrieval, native consumption, and the request/response for that same condition. Variant names alone cannot establish delivered contents.
 
-承認済みMD05.eaのローカルポリシー例外、MD05.ebの種類ごとのRole優先、正負対照を含むcase実装と登録は残る。今回の署名検証結果だけでSuccess／Failedへ変更しない。
+Case implementation and registration still needed the approved MD05.ea local-policy exception, MD05.eb precedence per algorithm type, and positive/negative controls. Signature verification alone did not change results to Success/Failed.
 
-## 検証と状態
+## Validation and status
 
-SAML回帰テストと追加の負の対照を実施した。初回は新規テストの鍵保管用Plan IDが形式制約に合わず失敗したため、既存形式に修正し、失敗した新規テストを再実行して成功を確認した。実環境イメージは前回のv32のままで、新しい処理はオフライン証拠検証に使用した。
+SAML regressions and additional negative controls were run. The first new test used a keystore Plan ID outside the permitted format; it was corrected to the existing format and the failed tests were rerun successfully. Runtime remained on v32; the new processing verified evidence offline.
 
-<!--g1-literal--> 未検証は483観測・159ケースIDを維持。追加の製品設定変更0、Run作成0、本人操作0。G1生成一致・構造46/46、台帳監査のエラー0を確認した。G2の既存署名差分は未解消であり、全体完了とはしていない。
+<!--g1-literal--> The inventory remained at 483 unverified observations and 159 case IDs. Additional product configuration writes: 0; new Runs: 0; user interactions: 0. G1 generation matched, structural validation passed 46/46, and the inventory audit reported zero errors. The existing G2 signature difference remained unresolved; overall completion was not claimed.

@@ -27,7 +27,7 @@ class SamlLogoutRequestFactoryTest {
         var credentials = keys.getOrCreate("plan_0123456789ABCDEFGHJKMNPQRS");
         var verifier = new XmlSignatureVerifier();
         for (var format : List.of("persistent", "transient")) {
-            for (var value : List.of("user", " User & <😀>\t\n", "界".repeat(256))) {
+            for (var value : List.of("user", " User & <😀>\t\n", "\u754c".repeat(256))) {
                 var nameId = identifier(format, value);
                 var before = SecureXml.serialize(nameId.getOwnerDocument());
                 for (var indexes : List.of(List.<String>of(), List.of("session"), List.of("one", "two", "three"))) {

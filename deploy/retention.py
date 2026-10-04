@@ -12,7 +12,23 @@ import re
 import shutil
 import sqlite3
 
-SUPPORTED_SCHEMA_VERSION = 12
+SUPPORTED_SCHEMA_VERSION = 14
+SUPPORTED_MIGRATIONS = (1, 2, 3, 4, 5, 6, 7, 8, 11, 12, 13, 14)
+
+
+def validate_schema(db):
+    versions = tuple(row[0] for row in db.execute("SELECT version FROM schema_migrations ORDER BY version"))
+    if versions != SUPPORTED_MIGRATIONS:
+        raise ValueError("Unsupported database schema; migrate with the matching application first")
+    # These inputs belong to a Run, including published Runs. Deleting their parent
+    # must remove them; expiring only published Transcripts must preserve them.
+    for table, value in (("supplemental_decryption_keys", "document_json"),
+                         ("run_shared_key_commitments", "key_sha256")):
+        db.execute(f"SELECT run_id, {value} FROM {table} LIMIT 0")
+        foreign_keys = db.execute(f"PRAGMA foreign_key_list({table})").fetchall()
+        if len(foreign_keys) != 1 or foreign_keys[0][2:5] != ("runs", "run_id", "id") \
+                or foreign_keys[0][6] != "CASCADE":
+            raise ValueError("Unsupported Run input ownership; cascade deletion required")
 
 
 def instant(value):
@@ -57,8 +73,7 @@ def maintain(data_directory, now, *, apply=False, service_stopped=False, anonymo
     with sqlite3.connect(database.as_uri() + "?mode=" + mode, uri=True) as db:
         db.execute("PRAGMA foreign_keys = ON")
         db.execute("BEGIN IMMEDIATE" if apply else "BEGIN")
-        if db.execute("SELECT MAX(version) FROM schema_migrations").fetchone()[0] != SUPPORTED_SCHEMA_VERSION:
-            raise ValueError("Unsupported database schema; migrate with the matching application first")
+        validate_schema(db)
         db.execute("SELECT run_id, entry_count, stored_bytes FROM transcript_usage LIMIT 0")
         db.execute("SELECT singleton, entry_count, stored_bytes FROM transcript_global_usage LIMIT 0")
         # A current provider check must be supplied by a trusted operator/integration.
