@@ -9,6 +9,7 @@ import tempfile
 import xml.etree.ElementTree as ET
 import zipfile
 
+from acceptance_dependency_discovery import runtime_classpath
 from verify_ssp_metadata_signature_acceptance import replay_production_reader
 
 if not __debug__:
@@ -33,17 +34,7 @@ def replay_helpers(folder, runtime):
     repository = Path(__file__).resolve().parents[2]
     with tempfile.TemporaryDirectory(prefix='samlscope-ssp-consumer-replay-') as temporary:
         temporary = Path(temporary)
-        init = temporary / 'classpath.gradle'
-        init.write_text('''gradle.projectsEvaluated {
-  def p = gradle.rootProject.project(":api")
-  p.tasks.register("printSignatureConsumerClasspath") {
-    doLast { println(p.configurations.runtimeClasspath.asPath) }
-  }
-}
-''')
-        dependencies = subprocess.run([str(repository / 'gradlew'), '-q', '-I', str(init),
-            ':api:printSignatureConsumerClasspath'], cwd=repository, capture_output=True,
-            text=True, check=True).stdout.strip()
+        dependencies = runtime_classpath(repository, project=':api')
         assert dependencies
         classpath = str(runtime / 'runtime-runner.jar') + ':' + dependencies
         classes = temporary / 'classes'
