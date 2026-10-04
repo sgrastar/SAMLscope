@@ -17,6 +17,8 @@ public final class SamlSignedRequestFactory {
 
     public enum Fixture {
         VALID,
+        VALID_NO_NAMEID_POLICY,
+        DEFAULT_ACS,
         TAMPERED_ACS,
         BAD_REFERENCE,
         BAD_SIGNATURE_VALUE,
@@ -41,8 +43,25 @@ public final class SamlSignedRequestFactory {
             URI acs,
             Instant issueInstant,
             PlanCredentials credentials) {
+        return build(fixture, requestId, destination, issuer, acs, issueInstant, credentials, null);
+    }
+
+    /** The attribute service selector is part of the signed request, not a post-signature mutation. */
+    public byte[] build(
+            Fixture fixture,
+            String requestId,
+            URI destination,
+            String issuer,
+            URI acs,
+            Instant issueInstant,
+            PlanCredentials credentials,
+            Integer attributeConsumingServiceIndex) {
         java.util.Objects.requireNonNull(fixture, "fixture");
         java.util.Objects.requireNonNull(credentials, "credentials");
+        if (attributeConsumingServiceIndex != null
+                && (attributeConsumingServiceIndex < 0 || attributeConsumingServiceIndex > 65535)) {
+            throw new IllegalArgumentException("AttributeConsumingServiceIndex must be an unsigned short");
+        }
         if (requestId == null || requestId.isBlank()) throw new IllegalArgumentException("requestId is required");
         if (issuer == null || issuer.isBlank()) throw new IllegalArgumentException("issuer is required");
         var document = SecureXml.newDocument();
@@ -54,23 +73,28 @@ public final class SamlSignedRequestFactory {
         request.setAttribute("Version", "2.0");
         request.setAttribute("IssueInstant", DateTimeFormatter.ISO_INSTANT.format(issueInstant));
         request.setAttribute("Destination", destination.toString());
-        request.setAttribute("AssertionConsumerServiceURL", acs.toString());
-        request.setAttribute("ProtocolBinding", "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST");
+        if (attributeConsumingServiceIndex != null) {
+            request.setAttribute("AttributeConsumingServiceIndex", attributeConsumingServiceIndex.toString());
+        }
+        if (fixture != Fixture.DEFAULT_ACS) {
+            request.setAttribute("AssertionConsumerServiceURL", acs.toString());
+            request.setAttribute("ProtocolBinding", "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST");
+        }
         document.appendChild(request);
         var issuerElement = document.createElementNS(ASSERTION, "saml:Issuer");
         issuerElement.setTextContent(issuer);
         request.appendChild(issuerElement);
         var policy = document.createElementNS(PROTOCOL, "samlp:NameIDPolicy");
         policy.setAttribute("Format", "urn:oasis:names:tc:SAML:2.0:nameid-format:transient");
-        request.appendChild(policy);
+        if (fixture != Fixture.VALID_NO_NAMEID_POLICY) request.appendChild(policy);
         if (fixture == Fixture.XPATH_EXCLUDE_SCOPING) {
             var scoping = document.createElementNS(PROTOCOL, "samlp:Scoping");
             scoping.setAttribute("ProxyCount", "1");
             request.appendChild(scoping);
         }
-        signer.sign(request, credentials, policy, signatureOptions(fixture));
+        signer.sign(request, credentials, fixture == Fixture.VALID_NO_NAMEID_POLICY ? null : policy, signatureOptions(fixture));
         switch (fixture) {
-            case VALID -> { }
+            case VALID, VALID_NO_NAMEID_POLICY, DEFAULT_ACS -> { }
             case TAMPERED_ACS -> request.setAttribute(
                     "AssertionConsumerServiceURL", alternateAcs(acs).toString());
             case BAD_REFERENCE -> {

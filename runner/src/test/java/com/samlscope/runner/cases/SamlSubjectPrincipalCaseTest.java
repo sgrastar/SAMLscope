@@ -9,6 +9,15 @@ import com.samlscope.core.evaluation.Outcome;
 
 class SamlSubjectPrincipalCaseTest {
     @Test
+    void anOpaqueEncryptedAssertionDoesNotProveAbsenceOfSubjectPrincipals() {
+        var encrypted = "<samlp:Response xmlns:samlp='urn:oasis:names:tc:SAML:2.0:protocol' xmlns:saml='urn:oasis:names:tc:SAML:2.0:assertion'><saml:EncryptedAssertion/></samlp:Response>";
+        var outcome = rule(identifier -> PrincipalIdentityResolver.Resolution.resolved("principal-1"))
+                .evaluate("run", List.of(message(encrypted)));
+        assertEquals(Outcome.NOT_VERIFIED, outcome.outcome());
+        assertEquals("saml.subject-principal.undetermined", outcome.reasonCode());
+    }
+
+    @Test
     void differentFormatsForTheSameKnownPrincipalAreNotAStringComparisonViolation() {
         var outcome = rule(identifier -> {
             if (identifier.kind().startsWith("Attribute:role")) return PrincipalIdentityResolver.Resolution.notSubjectIdentifying();

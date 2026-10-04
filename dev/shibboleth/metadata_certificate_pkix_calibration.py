@@ -1,0 +1,24 @@
+#!/usr/bin/env python3
+"""Native JCA diagnostics, kept separate from the real product protocol conclusions."""
+import argparse,hashlib,json,pathlib,secrets,subprocess,sys,xml.etree.ElementTree as E
+REPO=pathlib.Path(__file__).resolve().parents[2]
+CONTAINER='samlscope-reference-shibboleth';JAVA=REPO/'dev/shibboleth/MetadataCertificatePkixCalibration.java'
+SHA=lambda b:hashlib.sha256(b).hexdigest()
+READ=lambda p:json.loads(pathlib.Path(p).read_bytes())
+def command(args,timeout=90):return subprocess.run(args,capture_output=True,check=True,timeout=timeout)
+def main():
+ p=argparse.ArgumentParser(description=__doc__);p.add_argument('folder',type=pathlib.Path);a=p.parse_args();folder=a.folder.resolve();out=folder/'pkix-calibration';out.mkdir(exist_ok=False);receipt=folder/'receipt';manifest=READ(receipt/'manifest.json');run=manifest['runId'];decoded={r['id']:r for r in READ(folder/'decoded-manifest.json')};inputs=[]
+ for epoch in manifest['observations']:
+  variant=epoch['variant'];exchange=epoch['exchanges'][0];file=variant+'-request.xml';row=decoded[exchange['requestReference']];raw=(folder/row['file']).read_bytes();assert SHA(raw)==row['sha256'];assert E.fromstring(raw).get('ID')==epoch['exchanges'][0]['nativeHttp'][0]['requestId'];(out/file).write_bytes(raw);md=variant+'-fixture.xml';(out/md).write_bytes((receipt/md).read_bytes());inputs.append(dict(variant=variant,metadataFile=md,requestFile=file))
+ (out/'manifest.json').write_text(json.dumps(dict(schema='samlscope-native-pkix-calibration-input-v1',runId=run,inputs=inputs),indent=2)+'\n');source=out/'MetadataCertificatePkixCalibration.java';source.write_bytes(JAVA.read_bytes());remote='/tmp/certificate-pkix-calibration-'+secrets.token_hex(6);classpath='/usr/local/tomcat/webapps/idp/WEB-INF/lib/*';runtime_before=command(['docker','inspect','--format','{{.Id}} {{.Image}} {{.State.StartedAt}}',CONTAINER]).stdout;(out/'native-runtime-before.txt').write_bytes(runtime_before);classpath_before=command(['docker','exec',CONTAINER,'sh','-c','sha256sum /usr/local/tomcat/webapps/idp/WEB-INF/lib/*.jar']).stdout;(out/'native-classpath-before.txt').write_bytes(classpath_before);jvm=command(['docker','exec',CONTAINER,'java','-version']);(out/'native-java-version.txt').write_bytes(jvm.stdout+jvm.stderr)
+ command(['docker','exec',CONTAINER,'mkdir',remote])
+ try:
+  command(['docker','cp',str(out)+ '/.',CONTAINER+':'+remote]);compile=command(['docker','exec',CONTAINER,'javac','-cp',classpath,'-d',remote,remote+'/MetadataCertificatePkixCalibration.java']);(out/'native-compile-stdout.txt').write_bytes(compile.stdout);(out/'native-compile-stderr.txt').write_bytes(compile.stderr);producer=command(['docker','exec',CONTAINER,'java','-cp',remote+':'+classpath,'MetadataCertificatePkixCalibration',remote,remote+'/output'],timeout=45);(out/'native-producer-stdout.txt').write_bytes(producer.stdout);(out/'native-producer-stderr.txt').write_bytes(producer.stderr);command(['docker','cp',CONTAINER+':'+remote+'/output',str(out/'output')])
+ finally:command(['docker','exec',CONTAINER,'rm','-rf',remote])
+ runtime_after=command(['docker','inspect','--format','{{.Id}} {{.Image}} {{.State.StartedAt}}',CONTAINER]).stdout;classpath_after=command(['docker','exec',CONTAINER,'sh','-c','sha256sum /usr/local/tomcat/webapps/idp/WEB-INF/lib/*.jar']).stdout;(out/'native-runtime-after.txt').write_bytes(runtime_after);(out/'native-classpath-after.txt').write_bytes(classpath_after);assert runtime_before==runtime_after and classpath_before==classpath_after
+ diagnostic=READ(out/'output/native-pkix-diagnostic.json');expected={'control':None,'certificate-critical-extension':'UNRECOGNIZED_CRIT_EXT','certificate-unknown-ca':'NO_TRUST_ANCHOR','certificate-revoked':'REVOKED','certificate-revocation-unreachable':'UNDETERMINED_REVOCATION_STATUS'};assert len(diagnostic['records'])==5
+ for row in diagnostic['records']:
+  assert row['variant'] in expected and row['accepted']==(row['variant']=='control')
+  if row['variant']!='control':assert row['reason']==expected[row['variant']] and SHA((out/'output'/row['exceptionTraceFile']).read_bytes())==row['exceptionTraceSha256']
+ original_hashes={str(f.relative_to(folder)):SHA(f.read_bytes()) for f in out.rglob('*') if f.is_file()};audit=dict(schema='samlscope-certificate-runtime-diagnostic-operation-v1',nativeProducerInvocations=1,nativeCompilerInvocations=1,nativeCertPathValidations=5,nativeRuntimeReads=2,nativeClasspathReads=2,nativeJavaVersionReads=1,productConfigurationWrites=0,protocolSubmissions=0,credentialPosts=0,productRestarts=0,personOperations=0,privateKeysExported=False,controlsAdopted=False,diagnosticIsProductFinding=False,sourceSha256=SHA(source.read_bytes()),sources=original_hashes);(folder/'diagnostic-operation-audit.json').write_text(json.dumps(audit,indent=2)+'\n');print('Native JCA diagnostics complete; product findings unchanged; 1 compiler / 1 producer / 5 CertPath checks',flush=True)
+if __name__=='__main__':main()

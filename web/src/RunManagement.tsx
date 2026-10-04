@@ -3,13 +3,15 @@ import { FormEvent, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import {
   api, type ActiveProbeStatus, type BootstrapContract, type MetadataLab, type PendingInteraction, type Plan,
-  type ProtocolEvidenceStatus, type CampaignReport, type Run,
+  type ProtocolEvidenceStatus, type CampaignReport, type Run, type SupplementalDecryptionKeyStatus,
+  type TargetInitiatedIntent,
 } from './api'
 import { formatDate, humanize } from './format'
 import { idpRoundTripReady, idpRoundTripUrl } from './peerUrls'
 import { PeerRegistration } from './PeerRegistration'
 import { RoundTripLink } from './RoundTripLink'
 import { PreflightSummary } from './PreflightSummary'
+import { SupplementalDecryptionKeyPanel } from './SupplementalDecryptionKeyPanel'
 
 export function RunManagement({ runId, csrfToken, focusCaseId, navigateTo }: {
   runId: string
@@ -47,6 +49,9 @@ export function RunManagement({ runId, csrfToken, focusCaseId, navigateTo }: {
   })
   const [selectedCaseId, setSelectedCaseId] = useState<string>()
   const [caseDrawerOpen, setCaseDrawerOpen] = useState(false)
+  const [supplementalKeys, setSupplementalKeys] = useState<SupplementalDecryptionKeyStatus>()
+  const [supplementalKeysError, setSupplementalKeysError] = useState('')
+  const [targetInitiated, setTargetInitiated] = useState<TargetInitiatedIntent | null>(null)
   const caseDrawerRef = useRef<HTMLElement | null>(null)
   const caseDrawerCloseRef = useRef<HTMLButtonElement>(null)
   const lastCaseTriggerRef = useRef<HTMLButtonElement | null>(null)
@@ -100,6 +105,12 @@ export function RunManagement({ runId, csrfToken, focusCaseId, navigateTo }: {
     : undefined
   const selectedCaseCampaign = campaigns?.campaigns.find(value => value.id === selectedCase?.campaignId)
   const selectedInteraction = interactions.find(value => value.caseId === selectedCase?.caseId)
+  const selectedCaseActions = selectedCaseCampaign?.actions?.filter(action =>
+    action.caseIds.includes(selectedCase?.caseId ?? '')) ?? []
+  const selectedCaseHasNoQueuedAction = !selectedInteraction && !!selectedCase && !!selectedCaseCampaign
+    && (selectedCase.actionKind === 'NONE' || selectedCaseCampaign.remainingUserActions === 0
+      || (selectedCaseActions.length > 0 && selectedCaseActions.every(action =>
+        !action.remainingCaseIds.includes(selectedCase.caseId))))
   const hasActiveProbe = activeProbe?.state === 'READY' || activeProbe?.state === 'AWAITING_RESPONSE'
 
   const refresh = async () => {
@@ -121,6 +132,24 @@ export function RunManagement({ runId, csrfToken, focusCaseId, navigateTo }: {
     const selectedPlan = plans.find(value => value.plan.id === run.planId)
     setPlan(selectedPlan)
     setProfile(selectedPlan?.plan.profile ?? '')
+    if (selectedPlan?.plan.profile === 'single_logout_idp') {
+      try {
+        setSupplementalKeys(await api.supplementalDecryptionKeys(runId))
+        setSupplementalKeysError('')
+      } catch (cause) {
+        // Run preflight or metadata retrieval can still be pending; it must not block the workspace.
+        setSupplementalKeys(undefined)
+        setSupplementalKeysError((cause as Error).message)
+      }
+    } else {
+      setSupplementalKeys(undefined)
+      setSupplementalKeysError('')
+    }
+    if (selectedPlan?.plan.profile === 'browser_sso_idp' || selectedPlan?.plan.profile === 'single_logout_idp') {
+      setTargetInitiated(await api.targetInitiated(runId).catch(() => null))
+    } else {
+      setTargetInitiated(null)
+    }
     setMode(health.mode)
   }
 
@@ -308,6 +337,21 @@ export function RunManagement({ runId, csrfToken, focusCaseId, navigateTo }: {
     }
   }
 
+  const prepareTargetInitiated = async (kind: TargetInitiatedIntent['kind']) => {
+    setBusy('target-initiated')
+    setError('')
+    try {
+      setTargetInitiated(await api.prepareTargetInitiated(runId, kind, csrfToken))
+      setNotice(kind === 'UNSOLICITED_SSO'
+        ? 'Waiting for one IdP-initiated Response. Open the target start URL with the displayed RelayState.'
+        : 'Waiting for one target-initiated LogoutRequest. Sign out at the target using the displayed session.')
+    } catch (cause) {
+      setError((cause as Error).message)
+    } finally {
+      setBusy('')
+    }
+  }
+
   const startTests = async () => {
     setBusy('start-tests')
     setError('')
@@ -322,6 +366,25 @@ export function RunManagement({ runId, csrfToken, focusCaseId, navigateTo }: {
       setNotice('')
       setError((cause as Error).message)
       await refresh().catch(() => undefined)
+    } finally {
+      setBusy('')
+    }
+  }
+
+  const submitSupplementalKeys = async (sourceUri: string, publicKeysSpkiBase64: string[]) => {
+    if (!supplementalKeys) return
+    setBusy('supplemental-keys')
+    setError('')
+    try {
+      await api.submitSupplementalDecryptionKeys(runId, {
+        targetEntityId: supplementalKeys.targetEntityId,
+        metadataSha256: supplementalKeys.metadataSha256,
+        sourceUri, publicKeysSpkiBase64,
+      }, csrfToken)
+      setNotice('Supplemental decryption key input is fixed for this Run. Start or resume the profile tests when ready.')
+      await refresh()
+    } catch (cause) {
+      setError((cause as Error).message)
     } finally {
       setBusy('')
     }
@@ -627,7 +690,7 @@ export function RunManagement({ runId, csrfToken, focusCaseId, navigateTo }: {
       <button type="button" className={`plan-progress-card plan-${value.plan.toLowerCase()}${planFilter === value.plan ? ' selected' : ''}`}
         aria-pressed={planFilter === value.plan} onClick={() => setPlanFilter(value.plan)} key={value.plan}>
         <span>{assistanceLabel(value.plan)}</span><strong>{value.remainingUserActions}</strong>
-        <small>actions remaining · {value.estimatedMinutesMin}-{value.estimatedMinutesMax} min</small>
+        <small>planned steps remaining · {value.estimatedMinutesMin}-{value.estimatedMinutesMax} min</small>
         <progress max={Math.max(value.deliberateUserActions, 1)}
           value={Math.max(value.deliberateUserActions - value.remainingUserActions, 0)} />
       </button>)}</nav>}
@@ -663,6 +726,31 @@ export function RunManagement({ runId, csrfToken, focusCaseId, navigateTo }: {
       </div>
     </div>
     {activeProbePanel}
+    {profile === 'browser_sso_idp' && <article className="interaction target-initiated">
+      <header><strong>IdP-initiated SSO check</strong><span>{targetInitiated ? 'WAITING' : 'PREPARE FIRST'}</span></header>
+      <p>Prepare one single-use intent, then open the target's IdP-initiated SSO endpoint with
+        RelayState set to this Run ID. SAMLscope accepts exactly one unsolicited, signed-in-target
+        Response and records it as transcript evidence; without a prepared intent it is rejected.</p>
+      {targetInitiated
+        ? <p className="notice">Waiting until {formatDate(targetInitiated.expiresAt, 'Unknown')}. RelayState: <code>{targetInitiated.runId}</code></p>
+        : <button disabled={busy !== ''} onClick={() => void prepareTargetInitiated('UNSOLICITED_SSO')}>
+            Prepare one IdP-initiated check</button>}
+    </article>}
+    {profile === 'single_logout_idp' && <article className="interaction target-initiated">
+      <header><strong>Target-initiated logout check</strong><span>{targetInitiated ? 'WAITING' : 'PREPARE FIRST'}</span></header>
+      <p>Prepare one single-use intent, then sign out at the target in the same session.
+        SAMLscope accepts one target-issued LogoutRequest for this Run and records it as transcript evidence.</p>
+      {targetInitiated
+        ? <p className="notice">Waiting until {formatDate(targetInitiated.expiresAt, 'Unknown')}.</p>
+        : <button disabled={busy !== ''} onClick={() => void prepareTargetInitiated('TARGET_LOGOUT')}>
+            Prepare one target-initiated logout check</button>}
+    </article>}
+    {supplementalKeys
+      ? <SupplementalDecryptionKeyPanel status={supplementalKeys} busy={busy === 'supplemental-keys'}
+          error={supplementalKeysError} onSubmit={submitSupplementalKeys} />
+      : profile === 'single_logout_idp' && supplementalKeysError
+        ? <aside className="notice notice-error" role="alert">{supplementalKeysError}</aside>
+        : null}
     {error && <aside className="notice notice-error" role="alert">{error}</aside>}
     {notice && <aside className="notice notice-success" role="status">{notice}</aside>}
     {plan && <PeerRegistration plan={plan} />}
@@ -776,24 +864,26 @@ export function RunManagement({ runId, csrfToken, focusCaseId, navigateTo }: {
     {!focusCaseId && campaigns && <section className="campaign-overview">
       <p className="eyebrow">Run plans</p>
       <h2>Choose evidence depth, not individual cases</h2>
-      <p>Cases share Transcripts, metadata fetches, and configuration campaigns. Counts below are deliberate user actions, not case counts.</p>
+      <p>Related cases share campaigns. Follow each queued step once. Counts are planned campaign steps, not measured sign-ins or configuration changes.</p>
       <div className="contract-list">{campaigns.plans.map(value => <article className="contract" key={value.plan}>
         <header><div><strong>{assistanceLabel(value.plan)}</strong><p>{planDescription(value.plan)}</p></div>
           <span>{value.budgetMet ? 'WITHIN BUDGET' : 'OVER BUDGET'}</span></header>
         <dl>
           <dt>Cases</dt><dd>{value.cases}</dd>
-          <dt>Actions</dt><dd>{value.deliberateUserActions} total / {value.remainingUserActions} remaining (budget {value.actionBudget})</dd>
+          <dt>Planned steps</dt><dd>{value.deliberateUserActions} total / {value.remainingUserActions} remaining (budget {value.actionBudget})</dd>
           <dt>Estimated time</dt><dd>{value.estimatedMinutesMin}-{value.estimatedMinutesMax} minutes</dd>
-          <dt>Action mix</dt><dd>{value.loginActions} browser campaign, {value.configurationActions} configuration, {value.metadataRefreshActions} metadata refresh</dd>
+          <dt>Test-user browser steps</dt><dd>{value.loginActions}</dd>
+          <dt>Administrator setup</dt><dd>{value.configurationActions} configuration, {value.metadataRefreshActions} metadata refresh</dd>
           {value.plan === 'FULL' && <><dt>Self-check sections</dt><dd>{value.selfAttestationSections}</dd></>}
         </dl>
       </article>)}</div>
+      <p>The test user performs browser steps. Target configuration and metadata refresh require the target administrator. Actual sign-ins and time spent preparing evidence are not measured here.</p>
       <p><strong>Externally verified:</strong> {campaigns.externallyVerifiedCases} · <strong>Self-attested:</strong> {campaigns.selfAttestedCases} · <strong>Not verified:</strong> {campaigns.notVerifiedCases}</p>
       <details><summary>Evidence campaigns and shared cases</summary>
         <div className="contract-list">{campaigns.campaigns.map(campaign => <article
           className={`contract evidence-panel evidence-${campaign.evidenceClass.toLowerCase()}`} key={campaign.id}>
-          <header><div><strong>{campaign.title}</strong><p>{humanize(campaign.evidenceClass)}</p></div><span>{campaign.remainingUserActions} action{campaign.remainingUserActions === 1 ? '' : 's'} remaining</span></header>
-          {campaign.freshSessionRequired && <p>A fresh target session is required at the campaign boundary.</p>}
+          <header><div><strong>{campaign.title}</strong><p>{humanize(campaign.evidenceClass)}</p></div><span>{campaign.remainingUserActions} planned step{campaign.remainingUserActions === 1 ? '' : 's'} remaining</span></header>
+          {campaign.freshSessionRequired && campaign.remainingUserActions > 0 && <p>A fresh target session is required at the campaign boundary.</p>}
           {campaign.expectedTranscriptEvidence.length > 0 && <p>Expected evidence: {campaign.expectedTranscriptEvidence.join(', ')}</p>}
           <p>{campaign.caseIds.length} cases share this campaign; {campaign.remainingCaseIds.length} remain unresolved.</p>
         </article>)}</div>
@@ -857,12 +947,17 @@ export function RunManagement({ runId, csrfToken, focusCaseId, navigateTo }: {
           <dt>Evidence</dt><dd><span className={`evidence-label evidence-${selectedCase.evidenceClass.toLowerCase()}`}>
             {humanize(selectedCase.evidenceClass)}</span></dd>
           <dt>Outcome</dt><dd>{selectedCase.outcome ? humanize(selectedCase.outcome) : selectedCase.resolved ? 'Resolved' : 'Pending evidence'}</dd>
-          <dt>User action</dt><dd>{humanize(selectedCase.actionKind)}</dd>
-          <dt>Fresh session</dt><dd>{selectedCase.freshSessionRequired ? 'Required' : 'Not required'}</dd></dl>
+          <dt>Next step</dt><dd>{selectedCaseHasNoQueuedAction ? 'No browser action queued' : humanize(selectedCase.actionKind)}</dd>
+          <dt>Fresh session</dt><dd>{selectedCaseHasNoQueuedAction ? 'Not requested'
+            : selectedCase.freshSessionRequired ? 'Required' : 'Not required'}</dd></dl>
         {selectedCase.expectedTranscriptEvidence.length > 0 && <><h3>Expected Transcript evidence</h3>
           <ul>{selectedCase.expectedTranscriptEvidence.map(value => <li key={value}><code>{value}</code></li>)}</ul></>}
         {selectedInteraction ? <div className="case-drawer-interaction">{interactionCard(selectedInteraction)}</div>
           : selectedCase.resolved ? <p className="quiet-success">This case already has a recorded outcome.</p>
+            : selectedCaseHasNoQueuedAction ? <div className="notice"><strong>No further browser step is requested</strong>
+              <p>There is no queued input for this case. Repeating login or setup is not requested. Required evidence is still missing, so the unresolved outcome is retained.</p>
+              {selectedCase.evidenceClass !== 'PROTOCOL_OBSERVED' && <p>Ask the target administrator or evidence reviewer to check the required evidence. Additional logins cannot replace that evidence.</p>}
+              <a href={`/reports/${runId}`}>View recorded result</a></div>
             : <div className="notice"><strong>No direct input is requested</strong>
               <p>Continue its campaign or protocol fixture from the Run workspace. A missing observation remains not verified.</p>
               <a className="button button-secondary" href={`/browser/${runId}/${selectedCase.caseId}`}>Open focused case</a></div>}
@@ -960,7 +1055,8 @@ export function RunManagement({ runId, csrfToken, focusCaseId, navigateTo }: {
           : 'No pending interactions.'}
     </p> :
       <div className="interaction-list">{visibleInteractions.map(interactionCard)}</div>}
-    {mode === 'hosted' && <div className="actions"><button disabled={busy === 'publish'} onClick={() => void publish()}>Publish hosted result</button></div>}
+    {mode === 'hosted' && <><p>For anonymous accounts, published reports also expire after 30 days without application use. Expired public links stop working.</p>
+      <div className="actions"><button disabled={busy === 'publish'} onClick={() => void publish()}>Publish hosted result</button></div></>}
   </section>
 }
 

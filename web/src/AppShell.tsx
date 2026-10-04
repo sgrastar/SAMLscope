@@ -1,7 +1,7 @@
 import { ReactNode, useEffect, useState } from 'react'
 import { api, type AuthSession } from './api'
 
-type CurrentSurface = 'plans' | 'run' | 'report' | 'access' | 'licenses'
+type CurrentSurface = 'plans' | 'run' | 'report' | 'access' | 'licenses' | 'admin'
 
 export function AppShell({
   children,
@@ -89,6 +89,7 @@ function LoginStatus() {
   }
   return <div className="login-status">
     {session.authenticated ? <>
+      {session.role === 'ADMIN' && <a href="/admin">Admin</a>}
       <span className="login-name" title={session.displayName ?? undefined}>{session.displayName}</span>
       <button className="button-secondary" onClick={() => void logout()} disabled={busy}>Sign out</button>
     </> : <a className="button button-secondary" href="/auth/login">Sign in</a>}

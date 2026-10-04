@@ -11,9 +11,9 @@ import com.samlscope.saml.crypto.SamlXmlDecrypter;
 
 class TranscriptConfigurationObservationTest {
     @Test
-    void encryptedAssertionProvesCapabilityAndCorrectReplacement() {
+    void emptyEncryptedWrapperDoesNotProveCapabilityButItsPlacementCanBeObserved() {
         var message = response("<saml:EncryptedAssertion/>");
-        assertOutcome("IIP-IDP09-a-idp-01", Outcome.SATISFIED, message);
+        assertTrue(evaluate("IIP-IDP09-a-idp-01", message).isEmpty());
         assertOutcome("IIP-SSO01-ez-idp-01", Outcome.SATISFIED, message);
         assertOutcome("IIP-SSO01-ez-idp-01", Outcome.VIOLATED,
                 response("<saml:Assertion/><saml:EncryptedAssertion/>"));

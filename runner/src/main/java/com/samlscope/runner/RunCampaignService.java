@@ -67,8 +67,8 @@ public final class RunCampaignService implements RunCampaignQuery {
         var context = contexts.contextFor(runId);
         var classified = executions.list(runId).stream()
                 // ECP send fixtures carry evidence, but are not approved evaluative cases.
-                .filter(execution -> !com.samlscope.runner.outbox.EcpProbeService.requiredFixtureIds()
-                        .contains(execution.caseId()))
+                .filter(execution -> !com.samlscope.runner.outbox.EcpProbeService
+                        .isKnownNonEvaluativeFixture(execution.caseId()))
                 .map(execution -> classify(execution, context))
                 .toList();
 
@@ -76,6 +76,13 @@ public final class RunCampaignService implements RunCampaignQuery {
         for (var value : classified) {
             grouped.computeIfAbsent(value.campaignId(), ignored -> new MutableCampaign(value))
                     .add(value);
+            var implementation = registry.find(value.caseId()).orElse(null);
+            if (implementation instanceof EvidenceCampaignCase source) {
+                for (var supplemental : source.supplementalEvidenceCampaigns()) {
+                    var extra = supplemental(value, supplemental, context);
+                    grouped.computeIfAbsent(extra.campaignId(), ignored -> new MutableCampaign(extra)).add(extra);
+                }
+            }
         }
         var campaigns = grouped.values().stream().map(MutableCampaign::freeze).toList();
         campaigns = optimizeMetadataActions(runId, campaigns);
@@ -101,6 +108,20 @@ public final class RunCampaignService implements RunCampaignQuery {
                         value.actionKind(), value.freshSessionRequired(), value.resolved(),
                         value.outcome(), value.expectedEvidence())).toList(),
                 externallyVerified, selfAttested, notVerified);
+    }
+
+    private ClassifiedCase supplemental(ClassifiedCase owner, EvidenceCampaignCase source, CaseContext context) {
+        var evidence = source instanceof ProtocolEvidenceCase protocol ? protocol.evidenceStatus(context) : null;
+        var evidenceClass = EvidenceClass.OPERATOR_ASSISTED;
+        var kind = source.evidenceActionKind();
+        var shared = source.sharesDeliberateAction();
+        var campaignId = evidenceClass.name().toLowerCase(java.util.Locale.ROOT) + "-"
+                + kind.name().toLowerCase(java.util.Locale.ROOT) + "-" + (shared ? "shared-" : "") + source.evidenceCampaignId();
+        boolean ready = evidence != null && evidence.ready();
+        return new ClassifiedCase(owner.caseId(), evidenceClass, Plan.STANDARD, campaignId,
+                source.evidenceCampaignTitle(), kind, false, shared, kind == ActionKind.NONE ? 0 : 1,
+                source.evidenceActionKeys(), ready, ready, owner.outcome(),
+                evidence == null ? List.of() : evidence.requiredObservations());
     }
 
     private List<Campaign> optimizeMetadataActions(String runId, List<Campaign> campaigns) {
@@ -151,7 +172,7 @@ public final class RunCampaignService implements RunCampaignQuery {
             case OPERATOR_ASSISTED -> Plan.STANDARD;
             case SELF_ATTESTED -> Plan.FULL;
         };
-        var campaign = campaign(definition, testCase, evidenceClass);
+        var campaign = campaign(definition, testCase, evidenceClass, execution);
         var shareableAction = evidenceClass == EvidenceClass.SELF_ATTESTED
                 || testCase instanceof EvidenceCampaignCase source && source.sharesDeliberateAction()
                 || testCase instanceof ProtocolEvidenceCase
@@ -195,10 +216,12 @@ public final class RunCampaignService implements RunCampaignQuery {
             CaseExecution execution) {
         if (definition.mode() == ExecutionMode.AUTOMATED) return EvidenceClass.PROTOCOL_OBSERVED;
         if (testCase instanceof FallbackEvidenceCase fallback) {
-            return fallback.resolvedFromExternalEvidence(execution)
-                    ? EvidenceClass.PROTOCOL_OBSERVED : EvidenceClass.SELF_ATTESTED;
+            return fallback.evidenceClass(execution);
         }
-        if (testCase instanceof OperatorAssistedCase) return EvidenceClass.OPERATOR_ASSISTED;
+        if (testCase instanceof OperatorAssistedCase
+                || testCase instanceof EvidenceCampaignCase source && !source.supplementalEvidenceCampaigns().isEmpty()) {
+            return EvidenceClass.OPERATOR_ASSISTED;
+        }
         if (definition.mode() == ExecutionMode.CONFIG && testCase instanceof ProtocolEvidenceCase) {
             return EvidenceClass.OPERATOR_ASSISTED;
         }
@@ -224,13 +247,14 @@ public final class RunCampaignService implements RunCampaignQuery {
     private CampaignSeed campaign(
             CaseDefinition definition,
             com.samlscope.core.caseexec.TestCase testCase,
-            EvidenceClass evidenceClass) {
+            EvidenceClass evidenceClass,
+            CaseExecution execution) {
         if (definition.mode() == ExecutionMode.AUTOMATED) {
             return new CampaignSeed("automatic-evaluation", "Automatic protocol and metadata evaluation", ActionKind.NONE);
         }
         if (testCase instanceof EvidenceCampaignCase source) {
             return new CampaignSeed(
-                    source.evidenceCampaignId(), source.evidenceCampaignTitle(), source.evidenceActionKind());
+                    source.evidenceCampaignId(), source.evidenceCampaignTitle(), source.evidenceActionKind(execution));
         }
         if (evidenceClass == EvidenceClass.PROTOCOL_OBSERVED
                 && !(testCase instanceof com.samlscope.runner.cases.BrowserPrompt)
@@ -389,7 +413,9 @@ public final class RunCampaignService implements RunCampaignQuery {
                 throw new IllegalStateException("Campaign mixes incompatible evidence: " + id);
             }
             caseIds.add(value.caseId());
-            if (!value.finished()) remainingCaseIds.add(value.caseId());
+            // A terminal NOT_VERIFIED still lacks a conclusion. Keep it visible without
+            // planning another operator action or restarting the finished execution.
+            if (!value.resolved()) remainingCaseIds.add(value.caseId());
             if (actionKind != ActionKind.NONE) {
                 totalActionUnits += value.actionUnits();
                 if (!value.finished()) remainingActionUnits += value.actionUnits();

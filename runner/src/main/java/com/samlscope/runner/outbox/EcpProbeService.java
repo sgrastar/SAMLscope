@@ -86,8 +86,37 @@ public final class EcpProbeService {
         }
     }
 
+    /** A metadata collection action cannot silently reuse an intent from a different epoch. */
+    public Result executeMetadata(
+            String runId, String fixtureId, URI endpoint, byte[] envelope, byte[] ephemeralCredential) {
+        validateMetadata(runId, fixtureId, endpoint, envelope);
+        return execute(runId, fixtureId, endpoint, envelope, ephemeralCredential);
+    }
+
+    /** Preflights a complete metadata group before any of its members is dispatched. */
+    public void validateMetadata(String runId, String fixtureId, URI endpoint, byte[] envelope) {
+        if (!com.samlscope.saml.ecp.MetadataApplicationEcpProbeFactory.FIXTURES.contains(fixtureId)) {
+            throw new IllegalArgumentException("Unknown metadata ECP fixture");
+        }
+        String id = ActionIds.derive(runId, fixtureId, PHASE, 0);
+        var existing = repository.findOutbox(id);
+        if (existing.isPresent()) {
+            var action = existing.orElseThrow().action();
+            if (action.kind() != OutboundKind.ECP_SOAP || !action.requiresEphemeralCredential()
+                    || !endpoint.equals(action.target()) || !java.util.Arrays.equals(envelope, action.payload())) {
+                throw new IllegalArgumentException("Metadata ECP intent does not match the original epoch");
+            }
+        }
+    }
+
     public static List<String> requiredFixtureIds() {
         return REQUIRED_FIXTURE_IDS;
+    }
+
+    /** Exact non-evaluative inventory; unknown fixture IDs still fail closed in case projection. */
+    public static boolean isKnownNonEvaluativeFixture(String id) {
+        return REQUIRED_FIXTURE_IDS.contains(id)
+                || com.samlscope.saml.ecp.MetadataApplicationEcpProbeFactory.FIXTURES.contains(id);
     }
 
     public static String actionId(String runId, String fixtureId) {

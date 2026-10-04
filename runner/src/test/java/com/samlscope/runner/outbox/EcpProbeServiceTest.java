@@ -11,6 +11,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.Map;
+import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -110,5 +111,37 @@ class EcpProbeServiceTest {
                 .allMatch(actionId -> repository.findOutbox(actionId)
                         .map(entry -> entry.status() == OutboxStatus.SENT)
                         .orElse(false)));
+    }
+
+    @Test
+    void phaseFixturesPersistSeparateDeterministicActions() {
+        var secret = "alice:secret".getBytes(StandardCharsets.UTF_8);
+        var sender = (OutboundSender) (runId, action, credential) ->
+                new OutboundSender.SendResult(false, Map.of("status", 200), "tx-" + action.actionId());
+        var dispatcher = new OutboundDispatcher(repository, sender, credentials,
+                new OutboundPolicy(true), Clock.fixed(NOW, ZoneOffset.UTC));
+        var service = new EcpProbeService(repository, credentials, dispatcher,
+                Clock.fixed(NOW, ZoneOffset.UTC));
+        var endpoint = URI.create("https://idp.example/ecp");
+        var envelope = "<Envelope/>".getBytes(StandardCharsets.UTF_8);
+        var baseline = service.execute(RUN, endpoint, envelope, secret);
+        var repeated = service.execute(RUN, endpoint, envelope, secret);
+        assertEquals(baseline.actionId(), repeated.actionId());
+        var phases = List.of("allowed-before", "blocked", "allowed-after").stream()
+                .map(phase -> service.execute(RUN, "fixture-ecp-algorithm-prevention-" + phase,
+                        endpoint, envelope, secret).actionId()).toList();
+        assertEquals(3, phases.stream().distinct().count());
+        assertFalse(phases.contains(baseline.actionId()));
+        assertTrue(phases.stream().allMatch(action -> repository.findOutbox(action).isPresent()));
+    }
+
+    @Test void theNonEvaluativeInventoryIsExactAndDoesNotChangeTheEcpMilestone() {
+        for (var id : com.samlscope.saml.ecp.MetadataApplicationEcpProbeFactory.FIXTURES)
+            assertTrue(EcpProbeService.isKnownNonEvaluativeFixture(id));
+        for (var id : EcpProbeService.requiredFixtureIds())
+            assertTrue(EcpProbeService.isKnownNonEvaluativeFixture(id));
+        assertFalse(EcpProbeService.isKnownNonEvaluativeFixture("fixture-ecp-metadata-unknown"));
+        assertFalse(EcpProbeService.isKnownNonEvaluativeFixture("IIP-MD06-a-idp-01"));
+        assertEquals(7, EcpProbeService.requiredFixtureIds().size());
     }
 }

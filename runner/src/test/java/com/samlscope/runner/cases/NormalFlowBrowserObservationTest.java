@@ -98,22 +98,25 @@ class NormalFlowBrowserObservationTest {
     }
 
     @Test
-    void multipleCorrelatedErrorPathsProvePostErrorResponseSupport() {
+    void oneCorrelatedPostErrorWithNormalSuccessProvesApprovedIdpVariant() {
         var passive = message("POST", "https://idp.example/sso", """
                 <samlp:AuthnRequest xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol"
                   ID="_passive" Version="2.0" IsPassive="true"/>
                 """);
-        var format = message("POST", "https://idp.example/sso", """
+        var normal = message("POST", "https://idp.example/sso", """
                 <samlp:AuthnRequest xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol"
-                  ID="_format" Version="2.0"><samlp:NameIDPolicy
-                  Format="urn:samlscope:probe:unknown-nameid-format:test"/></samlp:AuthnRequest>
+                  ID="_normal" Version="2.0"/>
                 """);
-        assertEmpty("IIP-SSO03-b-idp-01", passive,
-                errorResponse("POST", "_passive"));
+        var success = response("POST", "https://suite.example/acs", "2.0", "_normal",
+                assertion("issuer", null, null));
         assertOutcome("IIP-SSO03-b-idp-01", Outcome.SATISFIED,
-                passive, errorResponse("POST", "_passive"), format, errorResponse("POST", "_format"));
+                normal, success, passive, errorResponse("POST", "_passive"));
+        assertEmpty("IIP-SSO03-b-idp-01", passive, errorResponse("POST", "_passive"));
+        assertEmpty("IIP-SSO03-b-idp-01", normal, success);
+        assertEmpty("IIP-SSO03-b-idp-01", normal, success, passive,
+                errorResponse("POST", "_other-run-request"));
         assertOutcome("IIP-SSO03-b-idp-01", Outcome.VIOLATED,
-                passive, errorResponse("GET", "_passive"), format, errorResponse("POST", "_format"));
+                normal, success, passive, errorResponse("GET", "_passive"));
     }
 
     @Test
@@ -518,6 +521,31 @@ class NormalFlowBrowserObservationTest {
         assertEmpty("IIP-SSO01-x-idp-01",
                 response("POST", "https://suite.example/acs", "2.0", "_request", assertion("issuer", null, null)),
                 message("POST", "https://suite.example/acs", "<broken"));
+    }
+
+    @Test
+    void malformedOutboundProbesDoNotDisableUnrelatedNormalFlowObservations() {
+        var malformedOutbound = new NormalFlowBrowserObservation.Message(
+                "doctype-probe", "POST", "https://idp.example/sso",
+                Instant.parse("2026-08-30T00:00:01Z"),
+                "<!DOCTYPE AuthnRequest [<!ELEMENT AuthnRequest EMPTY>]><AuthnRequest/>"
+                        .getBytes(StandardCharsets.UTF_8), false);
+        assertOutcome("IIP-SSO01-a-idp-01", Outcome.SATISFIED,
+                request("https://idp.example/sso", "2.0", "_request"),
+                response("POST", "https://suite.example/acs", "2.0", "_request",
+                        assertion("issuer", null, null)),
+                malformedOutbound);
+
+        var malformedInbound = new NormalFlowBrowserObservation.Message(
+                "malformed-response", "POST", "https://suite.example/acs",
+                Instant.parse("2026-08-30T00:00:01Z"),
+                "<!DOCTYPE Response [<!ELEMENT Response EMPTY>]><Response/>"
+                        .getBytes(StandardCharsets.UTF_8), true);
+        assertEmpty("IIP-SSO01-a-idp-01",
+                request("https://idp.example/sso", "2.0", "_request"),
+                response("POST", "https://suite.example/acs", "2.0", "_request",
+                        assertion("issuer", null, null)),
+                malformedInbound);
     }
 
     private void assertOutcome(String caseId, Outcome expected, NormalFlowBrowserObservation.Message... messages) {

@@ -131,6 +131,42 @@ public final class FixtureScenarioTestCase implements TestCase {
             return finishScenario(violations, violatingActionIds, unverifiable, evidence,
                     Map.of("unavailable_reason", unavailable.reason()));
         }
+        if (event instanceof CaseEvent.BrowserObservation browser) {
+            if (!matchesScenario(state)) {
+                return new CaseStep.Finish(notVerified(
+                        state, "scenario_definition_changed", "scenario.definition-changed", Map.of()));
+            }
+            var index = fixtureIndex(state);
+            var fixture = fixtures.get(index);
+            var observation = browser.evidence() == null
+                    ? FixtureObservation.NOT_VERIFIED
+                    : fixture.observeBrowser(
+                            string(state, "expected_response_correlation"),
+                            browser.httpStatus(), browser.url(), browser.body());
+            if (observation == null) throw new IllegalStateException("Fixture returned no browser observation");
+            var violations = strings(state, "violations");
+            var violatingActionIds = optionalStrings(state, "violating_action_ids");
+            var unverifiable = strings(state, "unverifiable");
+            var evidence = strings(state, "evidence");
+            if (browser.evidence() != null) evidence.add(browser.evidence().reference());
+            if (observation == FixtureObservation.CONTROL_FAILED) {
+                return new CaseStep.Finish(new CaseOutcome(
+                        Outcome.NOT_VERIFIED, "control_failed", "control_failed",
+                        vocabulary.controlFailedMessageKey(), refs(evidence),
+                        Map.of("failed_control", fixture.id(), "browser_http_status", browser.httpStatus())));
+            }
+            if (observation == FixtureObservation.VIOLATED) {
+                violations.add(fixture.id());
+                violatingActionIds.add(ActionIds.derive(context.runId(), id, state.phase(), 0));
+            }
+            if (observation == FixtureObservation.NOT_VERIFIED) unverifiable.add(fixture.id());
+            if (index + 1 < fixtures.size()) {
+                return awaitFixture(
+                        context, index + 1, 0, violations, violatingActionIds, unverifiable, evidence);
+            }
+            return finishScenario(violations, violatingActionIds, unverifiable, evidence,
+                    Map.of("browser_http_status", browser.httpStatus()));
+        }
         if (!(event instanceof CaseEvent.InboundMessage inbound)) {
             throw new IllegalArgumentException("Fixture scenario requires an inbound message");
         }

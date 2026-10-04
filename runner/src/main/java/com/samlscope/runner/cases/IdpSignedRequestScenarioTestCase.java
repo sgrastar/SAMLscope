@@ -15,6 +15,7 @@ import com.samlscope.runner.BrowserFrontChannelScenario;
 import com.samlscope.runner.scenario.FixtureObservation;
 import com.samlscope.runner.scenario.FixtureScenarioTestCase;
 import com.samlscope.runner.scenario.ScenarioFixture;
+import com.samlscope.runner.scenario.TargetHttpObservation;
 import com.samlscope.saml.crypto.PlanCredentials;
 import com.samlscope.saml.normal.SamlException;
 import com.samlscope.saml.normal.SamlSignedRequestFactory;
@@ -24,7 +25,8 @@ import org.w3c.dom.Element;
 
 /** Signed AuthnRequest matrix proving verification and target-side SHA-256 creation. */
 public final class IdpSignedRequestScenarioTestCase
-        implements TestCase, BrowserFrontChannelScenario, BrowserPrompt {
+        implements TestCase, BrowserFrontChannelScenario, BrowserPrompt, ProtocolEvidenceCase,
+        com.samlscope.runner.RecordedEvidenceReevaluation {
     public static final String VERIFY_CASE = "IIP-SSO01-ai-idp-01";
     public static final String RELIANCE_CASE = "IIP-SSO01-aj-idp-01";
     public static final String ERROR_CASE = "IIP-SSO01-ak-idp-01";
@@ -45,6 +47,18 @@ public final class IdpSignedRequestScenarioTestCase
     private final java.util.function.Function<String, IdpErrorProbeConfiguration> configurations;
     private final SamlPlanCredentialsProvider credentials;
     private final SamlSignedRequestFactory requests;
+    private final java.util.function.Function<CaseContext,java.util.Optional<com.samlscope.core.evaluation.CaseOutcome>> nativeEvidence;
+
+    public IdpSignedRequestScenarioTestCase withNativeEvidence(
+            java.util.function.Function<CaseContext,java.util.Optional<com.samlscope.core.evaluation.CaseOutcome>> observer) {
+        if(!NativeSignedRequestEvidence.supports(id))throw new IllegalArgumentException("Unsupported native algorithm case");
+        return new IdpSignedRequestScenarioTestCase(id,configurations,credentials,requests,observer);
+    }
+    public IdpSignedRequestScenarioTestCase withNativeEvidence(
+            java.nio.file.Path directory,com.samlscope.core.transcript.TranscriptContentReader content,
+            java.util.function.Function<String,byte[]> metadata) {
+        return withNativeEvidence(new NativeSignedRequestEvidence(id,directory,content,metadata,configurations,credentials));
+    }
 
     public IdpSignedRequestScenarioTestCase(
             String id,
@@ -58,11 +72,19 @@ public final class IdpSignedRequestScenarioTestCase
             java.util.function.Function<String, IdpErrorProbeConfiguration> configurations,
             SamlPlanCredentialsProvider credentials,
             SamlSignedRequestFactory requests) {
+        this(id,configurations,credentials,requests,ignored->java.util.Optional.empty());
+    }
+
+    private IdpSignedRequestScenarioTestCase(String id,
+            java.util.function.Function<String,IdpErrorProbeConfiguration> configurations,
+            SamlPlanCredentialsProvider credentials,SamlSignedRequestFactory requests,
+            java.util.function.Function<CaseContext,java.util.Optional<com.samlscope.core.evaluation.CaseOutcome>> nativeEvidence) {
         if (!CASES.contains(id)) throw new IllegalArgumentException("Unsupported signed-request case: " + id);
         this.id = id;
         this.configurations = java.util.Objects.requireNonNull(configurations, "configurations");
         this.credentials = java.util.Objects.requireNonNull(credentials, "credentials");
         this.requests = java.util.Objects.requireNonNull(requests, "requests");
+        this.nativeEvidence = java.util.Objects.requireNonNull(nativeEvidence,"nativeEvidence");
     }
 
     private FixtureScenarioTestCase scenario(String runId) {
@@ -97,7 +119,29 @@ public final class IdpSignedRequestScenarioTestCase
     @Override public TargetRole role() { return TargetRole.IDP; }
     @Override public CaseStep start(CaseContext context) { return scenario(context.runId()).start(context); }
     @Override public CaseStep resume(CaseContext context, CaseState state, CaseEvent event) {
+        if(event instanceof CaseEvent.TranscriptReady) {
+            var observed=nativeEvidence.apply(context);
+            if(observed.isPresent() && observed.orElseThrow().outcome()==com.samlscope.core.evaluation.Outcome.SATISFIED)
+                return new CaseStep.Finish(observed.orElseThrow());
+        }
         return scenario(context.runId()).resume(context, state, event);
+    }
+    @Override public EvidenceStatus evidenceStatus(CaseContext context) {
+        var outcome=nativeEvidence.apply(context);
+        var required=List.of("VALID","TAMPERED_ACS","BAD_REFERENCE","BAD_SIGNATURE_VALUE");
+        boolean ready=outcome.isPresent() && outcome.orElseThrow().outcome()==com.samlscope.core.evaluation.Outcome.SATISFIED;
+        return new EvidenceStatus(ready,required,ready?required:List.of(),outcome.map(com.samlscope.core.evaluation.CaseOutcome::details).orElse(java.util.Map.of()));
+    }
+    @Override public boolean supportsRecordedEvidenceReevaluation(com.samlscope.core.evaluation.CaseOutcome previous) {
+        return NativeSignedRequestEvidence.supports(id) && previous!=null
+            && previous.outcome()==com.samlscope.core.evaluation.Outcome.NOT_VERIFIED
+            && Set.of("idp.signed-request.inconclusive","idp.signed-request.delivery-unknown","idp.signed-request.aborted")
+                .contains(String.valueOf(previous.reasonCode()));
+    }
+    @Override public java.util.Optional<com.samlscope.core.evaluation.CaseOutcome> reevaluateRecordedEvidence(
+            CaseContext context,com.samlscope.core.evaluation.CaseOutcome previous) {
+        if(!supportsRecordedEvidenceReevaluation(previous))return java.util.Optional.empty();
+        return nativeEvidence.apply(context).flatMap(next->com.samlscope.runner.RecordedEvidenceReevaluation.conclusiveUpdate(previous,next));
     }
     @Override public String browserInstructionsEn() {
         return "Log in for the valid XML-signed AuthnRequest control. SAMLscope then sends content-tampered, reference-tampered, and SignatureValue-tampered requests. It derives the outcome from correlated Responses and target-generated signature algorithms; do not enter a verdict.";
@@ -169,14 +213,30 @@ public final class IdpSignedRequestScenarioTestCase
             }
         }
 
+        @Override public FixtureObservation observeBrowser(
+                String requestId, int httpStatus, String url, String body) {
+            if (!TargetHttpObservation.isSameOriginError(
+                    configuration.ssoEndpoint(), httpStatus, url)) {
+                return FixtureObservation.NOT_VERIFIED;
+            }
+            if (fixture == Fixture.VALID) return FixtureObservation.CONTROL_FAILED;
+            // IIP-SSO01.ak explicitly requires a SAML error Response. A local HTTP error does
+            // not satisfy the SHOULD. Other signed-request cases remain inconclusive here.
+            return ERROR_CASE.equals(caseId)
+                    ? FixtureObservation.VIOLATED : FixtureObservation.NOT_VERIFIED;
+        }
+
         @Override public FixtureObservation observeUnavailable(String reason) {
+            // Absence of a callback does not establish algorithm verification. A native
+            // rejection may be used only by a request-bound evidence adapter, not this event.
+            if (SHA256_DIGEST_CASE.equals(caseId) || RSA_SHA256_CASE.equals(caseId)) {
+                return FixtureObservation.NOT_VERIFIED;
+            }
             if (!"operator-reported-no-saml-response".equals(reason)) {
                 return FixtureObservation.NOT_VERIFIED;
             }
             return fixture == Fixture.VALID
                     ? FixtureObservation.CONTROL_FAILED
-                    : SHA256_DIGEST_CASE.equals(caseId) || RSA_SHA256_CASE.equals(caseId)
-                            ? FixtureObservation.SATISFIED
                     : ERROR_CASE.equals(caseId)
                             ? FixtureObservation.NOT_VERIFIED : FixtureObservation.SATISFIED;
         }
@@ -193,7 +253,9 @@ public final class IdpSignedRequestScenarioTestCase
         @Override public String definitionKey() {
             var certificate = credentials == null ? "missing" : credentials.certificate().getSerialNumber().toString(16);
             return String.join("|", caseId, fixture.name(), configuration.ssoEndpoint().toString(),
-                    configuration.registeredAcs().toString(), certificate, "signed-request-v1");
+                    configuration.registeredAcs().toString(), certificate,
+                    NativeSignedRequestEvidence.supports(caseId)
+                            ? "signed-request-algorithm-v2" : "signed-request-recorder-terminal-http-v2");
         }
     }
 }

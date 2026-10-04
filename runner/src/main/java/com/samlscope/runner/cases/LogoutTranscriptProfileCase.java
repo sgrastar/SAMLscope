@@ -32,7 +32,8 @@ public final class LogoutTranscriptProfileCase {
         RESPONSE_ISSUER_COUNT, RESPONSE_ISSUER_VALUE, RESPONSE_ISSUER_FORMAT, RESPONSE_SIGNATURE,
         REQUEST_ISSUER_COUNT, REQUEST_ISSUER_VALUE, REQUEST_ISSUER_FORMAT, REQUEST_SIGNATURE,
         REQUEST_NOT_ON_OR_AFTER, REQUEST_IDENTIFIER_MATCH, REQUEST_NOT_ON_OR_AFTER_BOUND,
-        REDIRECT_LOGOUT_REQUEST_ACCEPTED
+        REDIRECT_LOGOUT_REQUEST_ACCEPTED, TARGET_REDIRECT_LOGOUT_REQUEST, TARGET_REDIRECT_RESPONSE_CONSUMED,
+        INFORMATIONAL_PROPAGATION, TARGET_PROPAGATION_CONTINUE, TARGET_PARTIAL_LOGOUT
     }
 
     private static final String PROTOCOL = "urn:oasis:names:tc:SAML:2.0:protocol";
@@ -40,6 +41,7 @@ public final class LogoutTranscriptProfileCase {
     private static final String DS = "http://www.w3.org/2000/09/xmldsig#";
     private static final String ASYNC = "urn:oasis:names:tc:SAML:2.0:protocol:ext:async-slo";
     private static final String STATUS_SUCCESS = "urn:oasis:names:tc:SAML:2.0:status:Success";
+    private static final String PARTIAL_LOGOUT_STATUS = "urn:oasis:names:tc:SAML:2.0:status:PartialLogout";
     private static final Set<String> TOP_STATUS = Set.of(
             STATUS_SUCCESS,
             "urn:oasis:names:tc:SAML:2.0:status:Requester",
@@ -48,6 +50,7 @@ public final class LogoutTranscriptProfileCase {
     private final Rule rule;
     private final List<X509Certificate> verificationKeys;
     private final String expectedTargetEntityId;
+    private final java.security.PrivateKey decryptionKey;
     private final XmlSignatureVerifier xmlSignatures = new XmlSignatureVerifier();
     private final RedirectSignatureVerifier redirectSignatures = new RedirectSignatureVerifier();
 
@@ -57,14 +60,25 @@ public final class LogoutTranscriptProfileCase {
 
     public LogoutTranscriptProfileCase(
             Rule rule, List<X509Certificate> verificationKeys, String expectedTargetEntityId) {
+        this(rule, verificationKeys, expectedTargetEntityId, null);
+    }
+
+    public LogoutTranscriptProfileCase(Rule rule, List<X509Certificate> verificationKeys,
+            String expectedTargetEntityId, java.security.PrivateKey decryptionKey) {
         this.rule = java.util.Objects.requireNonNull(rule, "rule");
         this.verificationKeys = List.copyOf(verificationKeys == null ? List.of() : verificationKeys);
         this.expectedTargetEntityId = expectedTargetEntityId;
+        this.decryptionKey = decryptionKey;
     }
 
     public CaseOutcome evaluate(
             String runId, TranscriptRecorder transcript, TranscriptContentReader content) {
-        var all = messages(runId, transcript, content);
+        var snapshot = messages(runId, transcript, content);
+        if (!snapshot.issues().isEmpty()) return new CaseOutcome(
+                Outcome.NOT_VERIFIED, "logout_evidence_incomplete",
+                "slo.evidence.incomplete", "slo.evidence.incomplete",
+                snapshot.evidence(), Map.of("evidence_issues", snapshot.issues()));
+        var all = snapshot.messages();
         var target = all.stream().filter(value -> value.entry().direction() == Direction.INBOUND).toList();
         var targetLogout = target.stream().filter(value -> value.logout() != null).toList();
         if (targetLogout.isEmpty()) return absent();
@@ -92,7 +106,18 @@ public final class LogoutTranscriptProfileCase {
             case REQUEST_IDENTIFIER_MATCH -> requestIdentifierMatches(targetLogout, all);
             case REQUEST_NOT_ON_OR_AFTER_BOUND -> requestNotOnOrAfterBound(targetLogout, all);
             case REDIRECT_LOGOUT_REQUEST_ACCEPTED -> redirectLogoutRequestAccepted(targetLogout, all);
+            case TARGET_REDIRECT_LOGOUT_REQUEST -> targetRedirectLogoutRequest(targetLogout);
+            case TARGET_REDIRECT_RESPONSE_CONSUMED -> targetRedirectResponseConsumed(targetLogout, all);
+            case INFORMATIONAL_PROPAGATION -> informationalPropagation(targetLogout);
+            case TARGET_PROPAGATION_CONTINUE -> targetPropagationContinue(targetLogout, all);
+            case TARGET_PARTIAL_LOGOUT -> targetPartialLogout(targetLogout, all);
         };
+    }
+
+    static CaseOutcome incompleteHistory() {
+        return new CaseOutcome(Outcome.NOT_VERIFIED, "logout_evidence_incomplete",
+                "slo.evidence.incomplete", "slo.evidence.incomplete", List.of(),
+                Map.of("evidence_issues", List.of("history_incomplete")));
     }
 
     private CaseOutcome requestIdentifierMatches(List<Message> targetLogout, List<Message> all) {
@@ -155,7 +180,7 @@ public final class LogoutTranscriptProfileCase {
 
     private CaseOutcome requestNotOnOrAfterBound(List<Message> targetLogout, List<Message> all) {
         var issued = issuedNameIds(all);
-        if (issued.isEmpty()) return CaseOutcome.notVerified(
+        if (issued.isEmpty()) return notVerifiedWithEvidence(targetLogout,
                 "issued_session_expiry_unavailable", "slo.not-on-or-after.assertion-unavailable");
         var inspected = new ArrayList<Message>();
         var violations = new ArrayList<String>();
@@ -173,7 +198,7 @@ public final class LogoutTranscriptProfileCase {
                 violations.add(request.reference());
             }
         }
-        if (inspected.isEmpty()) return CaseOutcome.notVerified(
+        if (inspected.isEmpty()) return notVerifiedWithEvidence(targetLogout,
                 "logout_session_expiry_correlation_unavailable", "slo.not-on-or-after.correlation-unavailable");
         return outcome(inspected, violations, "slo.logout-request.not-on-or-after-bound");
     }
@@ -311,7 +336,7 @@ public final class LogoutTranscriptProfileCase {
         var unverifiable = new ArrayList<String>();
         for (var message : scoped) {
             var xml = direct(message.logout(), DS, "Signature") != null;
-            var redirect = message.entry().rawQuery() != null
+            var redirect = "GET".equalsIgnoreCase(message.entry().method()) && message.entry().rawQuery() != null
                     && message.entry().rawQuery().matches("(^|.*&)Signature=[^&]+(&.*|$)");
             if (!xml && !redirect) {
                 violations.add(message.reference());
@@ -323,7 +348,7 @@ public final class LogoutTranscriptProfileCase {
             }
             var valid = verificationKeys.stream().anyMatch(certificate ->
                     xml && xmlSignatures.hasValidEnvelopedSignature(message.logout(), certificate)
-                            || redirect && redirectSignatures.isValid(message.entry().rawQuery(), certificate));
+                            || redirect && redirectSignatures.isValidForMessage(message.entry().rawQuery(), certificate, message.xml()));
             if (!valid) violations.add(message.reference());
         }
         if (violations.isEmpty() && !unverifiable.isEmpty()) return new CaseOutcome(
@@ -383,7 +408,7 @@ public final class LogoutTranscriptProfileCase {
         var unverifiable = new ArrayList<String>();
         for (var message : scoped) {
             var xmlSignature = message.logout().getElementsByTagNameNS(DS, "Signature").getLength() > 0;
-            var bindingSignature = message.entry().rawQuery() != null
+            var bindingSignature = "GET".equalsIgnoreCase(message.entry().method()) && message.entry().rawQuery() != null
                     && message.entry().rawQuery().matches("(^|.*&)Signature=[^&]+(&.*|$)");
             if (!xmlSignature && !bindingSignature) {
                 violations.add(message.reference());
@@ -396,7 +421,7 @@ public final class LogoutTranscriptProfileCase {
             var xmlValid = xmlSignature && verificationKeys.stream().anyMatch(
                     certificate -> xmlSignatures.hasValidEnvelopedSignature(message.logout(), certificate));
             var redirectValid = bindingSignature && verificationKeys.stream().anyMatch(
-                    certificate -> redirectSignatures.isValid(message.entry().rawQuery(), certificate));
+                    certificate -> redirectSignatures.isValidForMessage(message.entry().rawQuery(), certificate, message.xml()));
             if (!xmlValid && !redirectValid) violations.add(message.reference());
         }
         if (violations.isEmpty() && !unverifiable.isEmpty()) return new CaseOutcome(
@@ -536,8 +561,287 @@ public final class LogoutTranscriptProfileCase {
     private CaseOutcome absent() {
         return switch (rule) {
             case ASYNC_CHOICE -> informationalAsync(List.of());
+            case TARGET_REDIRECT_LOGOUT_REQUEST -> notVerifiedWithEvidence(List.of(),
+                    "slo.redirect-request.not-observed", "slo.redirect-request.not-observed");
+            case TARGET_REDIRECT_RESPONSE_CONSUMED -> notVerifiedWithEvidence(List.of(),
+                    "slo.redirect-response.not-observed", "slo.redirect-response.not-observed");
+            case INFORMATIONAL_PROPAGATION -> notVerifiedWithEvidence(List.of(),
+                    "slo.propagation.not-observed", "slo.propagation.not-observed");
+            case TARGET_PROPAGATION_CONTINUE -> notVerifiedWithEvidence(List.of(),
+                    "slo.propagation.not-observed", "slo.propagation.not-observed");
+            case TARGET_PARTIAL_LOGOUT -> notVerifiedWithEvidence(List.of(),
+                    "slo.partial-logout.not-observed", "slo.partial-logout.not-observed");
             default -> optionalNotObserved("slo.target-message.not-observed");
         };
+    }
+
+    private CaseOutcome targetPropagationContinue(List<Message> targetLogout, List<Message> all) {
+        var initiators = all.stream()
+                .filter(value -> value.entry().direction() == Direction.OUTBOUND)
+                .filter(value -> is(value.logout(), "LogoutRequest"))
+                .toList();
+        if (initiators.isEmpty()) {
+            // A Run alone does not delimit a target-initiated local logout processing.
+            // Without a recorded initiating request and its final response, later activity
+            // may belong to a different session or browser operation.
+            return notVerified("slo.propagation.initiator-response-unavailable",
+                    "slo.propagation.initiator-response-unavailable");
+        }
+        // Each initiating request defines one logout processing bounded by its correlated final
+        // response. Evidence outside the window, or windows that cannot be attributed separately,
+        // must never combine into a Success.
+        var windows = new java.util.ArrayList<Processing>();
+        for (var initiator : initiators) {
+            var responses = all.stream()
+                    .filter(value -> value.entry().direction() == Direction.INBOUND)
+                    .filter(value -> is(value.logout(), "LogoutResponse"))
+                    .filter(value -> initiator.logout().getAttribute("ID")
+                            .equals(value.logout().getAttribute("InResponseTo")))
+                    .toList();
+            if (responses.isEmpty()) {
+                return notVerified("slo.propagation.initiator-response-unavailable",
+                        "slo.propagation.initiator-response-unavailable");
+            }
+            if (responses.size() != 1) {
+                return notVerified("slo.propagation.processing-ambiguous",
+                        "slo.propagation.processing-ambiguous");
+            }
+            var end = responses.stream().map(value -> value.entry().timestamp())
+                    .max(java.util.Comparator.naturalOrder()).orElseThrow();
+            windows.add(new Processing(initiator, responses, initiator.entry().timestamp(), end));
+        }
+        if (windows.isEmpty()) {
+            return notVerified("slo.propagation.initiator-response-unavailable",
+                    "slo.propagation.initiator-response-unavailable");
+        }
+        for (var processing : windows) {
+            if (!processing.start().isBefore(processing.end())
+                    || windows.stream().anyMatch(other -> other != processing && processing.overlaps(other))) {
+                return notVerified("slo.propagation.processing-ambiguous",
+                        "slo.propagation.processing-ambiguous");
+            }
+        }
+        // An endpoint shared by different processings can receive delayed traffic from the
+        // previous operation. Allocate participant endpoints per processing until the recorder
+        // exposes a stronger operation identity.
+        var endpointsByProcessing = new java.util.ArrayList<java.util.Set<String>>();
+        for (var processing : windows) {
+            var endpoints = targetLogout.stream()
+                    .filter(value -> is(value.logout(), "LogoutRequest"))
+                    .filter(value -> !value.entry().timestamp().isBefore(processing.start())
+                            && !value.entry().timestamp().isAfter(processing.end()))
+                    .map(value -> endpoint(value.entry().url())).filter(java.util.Objects::nonNull)
+                    .collect(java.util.stream.Collectors.toSet());
+            if (endpointsByProcessing.stream().anyMatch(previous -> previous.stream().anyMatch(endpoints::contains))) {
+                return notVerified("slo.propagation.processing-ambiguous",
+                        "slo.propagation.processing-ambiguous");
+            }
+            endpointsByProcessing.add(endpoints);
+        }
+        var completedEvidence = new java.util.ArrayList<EvidenceRef>();
+        var completedDiagnostics = new java.util.ArrayList<Map<String, Object>>();
+        var bestReason = "slo.propagation.not-observed";
+        var bestEvidence = new java.util.ArrayList<EvidenceRef>();
+        for (var processing : windows) {
+            if (!processing.start().isBefore(processing.end())) {
+                bestReason = "slo.propagation.processing-ambiguous";
+                continue;
+            }
+            var within = targetLogout.stream()
+                    .filter(value -> !value.entry().timestamp().isBefore(processing.start()))
+                    .filter(value -> !value.entry().timestamp().isAfter(processing.end()))
+                    .toList();
+            // The failure evidence is the Suite's issued failure response, not the arrival time.
+            var failing = within.stream()
+                    .filter(value -> "SloFailParticipant".equals(value.entry().samlSummary().get("type")))
+                    .filter(value -> Integer.valueOf(500)
+                            .equals(value.entry().samlSummary().get("http_status")))
+                    .filter(value -> Integer.valueOf(500).equals(value.entry().status()))
+                    .filter(this::requestEndpointRecorded)
+                    .toList();
+            if (failing.isEmpty()) {
+                bestReason = "slo.propagation.failure-induction-unavailable";
+                bestEvidence = new java.util.ArrayList<>(evidence(within));
+                continue;
+            }
+            var failureAt = failing.stream().map(value -> value.entry().timestamp())
+                    .max(java.util.Comparator.naturalOrder()).orElseThrow();
+            var failingEndpoints = failing.stream().map(value -> endpoint(value.entry().url()))
+                    .collect(java.util.stream.Collectors.toSet());
+            var continuation = within.stream()
+                    .filter(value -> is(value.logout(), "LogoutRequest"))
+                    .filter(value -> !"SloFailParticipant".equals(value.entry().samlSummary().get("type")))
+                    .filter(this::requestEndpointRecorded)
+                    .filter(value -> !failingEndpoints.contains(endpoint(value.entry().url())))
+                    .filter(value -> value.entry().timestamp().isAfter(failureAt))
+                    .toList();
+            if (continuation.isEmpty()) {
+                bestReason = "slo.propagation.continuation-unobserved";
+                bestEvidence = new java.util.ArrayList<>(evidence(within));
+                continue;
+            }
+            // The response must answer this participant's request, not merely occur later.
+            var answered = continuation.stream().flatMap(value -> all.stream()
+                    .filter(candidate -> candidate.entry().direction() == Direction.OUTBOUND)
+                    .filter(candidate -> is(candidate.logout(), "LogoutResponse"))
+                    .filter(candidate -> !value.logout().getAttribute("ID").isBlank()
+                            && value.logout().getAttribute("ID")
+                                    .equals(candidate.logout().getAttribute("InResponseTo")))
+                    .filter(candidate -> all.stream().filter(request -> is(request.logout(), "LogoutRequest"))
+                            .filter(request -> value.logout().getAttribute("ID")
+                                    .equals(request.logout().getAttribute("ID"))).count() == 1)
+                    .filter(candidate -> endpoint(candidate.entry().url()) != null
+                            && endpoint(candidate.entry().url())
+                                    .equals(endpoint(candidate.logout().getAttribute("Destination"))))
+                    .filter(candidate -> !candidate.entry().timestamp().isBefore(value.entry().timestamp())
+                            && !candidate.entry().timestamp().isAfter(processing.end())))
+                    .distinct().toList();
+            if (answered.isEmpty()) {
+                bestReason = "slo.propagation.continuation-response-unavailable";
+                bestEvidence = new java.util.ArrayList<>(evidence(continuation));
+                continue;
+            }
+            var satisfiedEvidence = new java.util.ArrayList<EvidenceRef>();
+            satisfiedEvidence.addAll(evidence(List.of(processing.initiator())));
+            satisfiedEvidence.addAll(evidence(processing.responses()));
+            satisfiedEvidence.addAll(evidence(failing));
+            satisfiedEvidence.addAll(evidence(continuation));
+            satisfiedEvidence.addAll(evidence(answered));
+            completedEvidence.addAll(satisfiedEvidence);
+            completedDiagnostics.add(Map.of("processing_start", processing.start().toString(),
+                            "processing_end", processing.end().toString(),
+                            "failing_attempts", failing.size(),
+                            "remaining_endpoints", continuation.stream()
+                                    .map(value -> endpoint(value.entry().url())).distinct().count(),
+                            "partial_logout_final", processing.responses().stream().anyMatch(value ->
+                                    PARTIAL_LOGOUT_STATUS.equals(secondaryStatus(value.logout())))));
+        }
+        if (!completedDiagnostics.isEmpty()) {
+            return new CaseOutcome(Outcome.SATISFIED, null, "slo.propagation.continue-after-failure",
+                    "slo.propagation.continue-after-failure", completedEvidence.stream().distinct().toList(),
+                    Map.of("processings", List.copyOf(completedDiagnostics)));
+        }
+        return new CaseOutcome(Outcome.NOT_VERIFIED, bestReason, bestReason, bestReason,
+                bestEvidence, Map.of());
+    }
+
+    private boolean requestEndpointRecorded(Message message) {
+        var recorded = endpoint(message.entry().url());
+        return recorded != null && recorded.equals(endpoint(message.logout().getAttribute("Destination")));
+    }
+
+    private String endpoint(String value) {
+        if (value == null || value.isBlank()) return null;
+        try {
+            var uri = java.net.URI.create(value);
+            if (uri.getScheme() == null || uri.getRawAuthority() == null) return null;
+            // SAML binding parameters do not identify the participant endpoint.
+            return uri.getScheme().toLowerCase(java.util.Locale.ROOT) + "://"
+                    + uri.getRawAuthority().toLowerCase(java.util.Locale.ROOT) + uri.getRawPath();
+        } catch (IllegalArgumentException invalid) { return null; }
+    }
+
+    private CaseOutcome notVerified(String reasonCode, String detail) {
+        return new CaseOutcome(Outcome.NOT_VERIFIED, detail, reasonCode, reasonCode, List.of(), Map.of());
+    }
+
+    private record Processing(Message initiator, List<Message> responses,
+            java.time.Instant start, java.time.Instant end) {
+        boolean overlaps(Processing other) {
+            return start.isBefore(other.end) && other.start.isBefore(end);
+        }
+    }
+
+    private java.util.Set<String> sessionIndexes(Element request) {
+        var values = new java.util.LinkedHashSet<String>();
+        for (var index : elements(request, PROTOCOL, "SessionIndex")) {
+            var text = index.getTextContent();
+            if (text != null && !text.isBlank()) values.add(text.trim());
+        }
+        return values;
+    }
+
+    private CaseOutcome targetPartialLogout(List<Message> targetLogout, List<Message> all) {
+        var requests = targetLogout.stream().filter(value -> is(value.logout(), "LogoutRequest")).toList();
+        if (requests.isEmpty()) {
+            return notVerifiedWithEvidence(List.of(), "slo.partial-logout.not-observed",
+                    "slo.partial-logout.not-observed");
+        }
+        var responses = all.stream()
+                .filter(value -> value.entry().direction() == Direction.INBOUND)
+                .filter(value -> is(value.logout(), "LogoutResponse")).toList();
+        var partial = responses.stream()
+                .filter(value -> PARTIAL_LOGOUT_STATUS.equals(secondaryStatus(value.logout()))).toList();
+        if (!partial.isEmpty()) {
+            return new CaseOutcome(Outcome.SATISFIED, null, "slo.partial-logout.observed",
+                    "slo.partial-logout.observed", evidence(partial),
+                    Map.of("partial_logout_responses", partial.size()));
+        }
+        return notVerifiedWithEvidence(responses.isEmpty() ? requests : responses,
+                "slo.partial-logout.unobserved", "slo.partial-logout.unobserved");
+    }
+
+    private CaseOutcome informationalPropagation(List<Message> targetLogout) {
+        var requests = targetLogout.stream().filter(value -> is(value.logout(), "LogoutRequest")).toList();
+        return new CaseOutcome(Outcome.SATISFIED_WITH_NOTE, null, "slo.propagation.choice-recorded",
+                "slo.propagation.choice-recorded", evidence(requests),
+                Map.of("propagated", !requests.isEmpty(), "observed_requests", requests.size()));
+    }
+
+    private CaseOutcome targetRedirectLogoutRequest(List<Message> targetLogout) {
+        var requests = targetLogout.stream().filter(value -> is(value.logout(), "LogoutRequest")).toList();
+        if (requests.isEmpty()) {
+            return notVerifiedWithEvidence(List.of(), "slo.redirect-request.not-observed",
+                    "slo.redirect-request.not-observed");
+        }
+        var methods = new java.util.LinkedHashSet<String>();
+        for (var message : requests) {
+            methods.add(String.valueOf(message.entry().method()).toUpperCase(java.util.Locale.ROOT));
+        }
+        var misleading = requests.stream()
+                .filter(value -> !"GET".equalsIgnoreCase(value.entry().method()))
+                .map(Message::reference).toList();
+        return new CaseOutcome(misleading.isEmpty() ? Outcome.SATISFIED : Outcome.VIOLATED, null,
+                misleading.isEmpty() ? "slo.redirect-request.observed" : "slo.redirect-request.binding-violated",
+                misleading.isEmpty() ? "slo.redirect-request.observed" : "slo.redirect-request.binding-violated",
+                evidence(requests), Map.of("methods", List.copyOf(methods), "violations", misleading));
+    }
+
+    private CaseOutcome targetRedirectResponseConsumed(List<Message> targetLogout, List<Message> all) {
+        var requests = targetLogout.stream().filter(value -> is(value.logout(), "LogoutRequest")).toList();
+        if (requests.isEmpty()) {
+            return notVerifiedWithEvidence(List.of(), "slo.redirect-response.not-observed",
+                    "slo.redirect-response.not-observed");
+        }
+        var ids = requests.stream().map(value -> value.logout().getAttribute("ID"))
+                .collect(java.util.stream.Collectors.toSet());
+        var responses = all.stream()
+                .filter(value -> value.entry().direction() == Direction.OUTBOUND)
+                .filter(value -> is(value.logout(), "LogoutResponse"))
+                .filter(value -> ids.contains(value.logout().getAttribute("InResponseTo")))
+                .toList();
+        if (responses.isEmpty()) {
+            return notVerifiedWithEvidence(requests, "slo.redirect-response.unavailable",
+                    "slo.redirect-response.unavailable");
+        }
+        var nonRedirect = responses.stream().filter(value -> !String.valueOf(
+                        value.entry().samlSummary().getOrDefault("binding", "")).endsWith(":HTTP-Redirect"))
+                .map(Message::reference).toList();
+        if (!nonRedirect.isEmpty()) {
+            // The Suite selects its outbound binding. A POST response does not exercise
+            // the target's ability to consume Redirect and cannot prove a target violation.
+            return new CaseOutcome(Outcome.NOT_VERIFIED, "suite_logout_response_not_redirect",
+                    "slo.redirect-response.fixture-binding-unavailable",
+                    "slo.redirect-response.fixture-binding-unavailable", evidence(responses),
+                    Map.of("suite_non_redirect_responses", nonRedirect));
+        }
+        // BrowserResponseObservation records a landing page, HTTP status and generic error
+        // keywords. Even a later failed page on the target has neither a unique binding to
+        // this LogoutResponse nor product-native evidence of refusing that exact response.
+        // There is currently no supported native refusal receipt for this passive rule.
+        // Both apparent success and apparent failure therefore leave consumption unproven.
+        return notVerifiedWithEvidence(responses, "slo.redirect-response.consumption-unobserved",
+                "slo.redirect-response.consumption-unobserved");
     }
 
     private CaseOutcome optionalNotObserved(String reasonCode) {
@@ -551,6 +855,11 @@ public final class LogoutTranscriptProfileCase {
                 violations.isEmpty() ? code + ".satisfied" : code + ".violated",
                 violations.isEmpty() ? code + ".satisfied" : code + ".violated",
                 evidence(messages), Map.of("observed", messages.size(), "violations", List.copyOf(violations)));
+    }
+
+    /** A rule-level "cannot prove" result must stay reviewable instead of waiting forever. */
+    private CaseOutcome notVerifiedWithEvidence(List<Message> messages, String detail, String code) {
+        return new CaseOutcome(Outcome.NOT_VERIFIED, detail, code, code, evidence(messages), Map.of());
     }
 
     private List<EvidenceRef> evidence(List<Message> messages) {
@@ -592,30 +901,125 @@ public final class LogoutTranscriptProfileCase {
         catch (RuntimeException invalid) { return new int[] {-1}; }
     }
 
-    private List<Message> messages(String runId, TranscriptRecorder transcript, TranscriptContentReader content) {
+    private Snapshot messages(String runId, TranscriptRecorder transcript, TranscriptContentReader content) {
         var result = new ArrayList<Message>();
-        for (var entry : transcript.list(runId)) {
-            if (entry.decodedSamlRef() == null || entry.decodedSamlBytes() == 0) continue;
+        var issues = new java.util.LinkedHashSet<String>();
+        var refs = new ArrayList<EvidenceRef>();
+        final List<TranscriptEntry> entries;
+        try { entries = List.copyOf(transcript.list(runId)); }
+        catch (RuntimeException unavailable) {
+            return new Snapshot(List.of(), List.of("history_unavailable"), List.of(), List.of());
+        }
+        var ids = new java.util.HashSet<String>();
+        for (var entry : entries) {
+            if (!runId.equals(entry.runId())) { issues.add("run_mismatch"); continue; }
+            if (entry.id() == null || entry.id().isBlank() || !ids.add(entry.id())) {
+                issues.add("ambiguous_entry_id"); continue;
+            }
+            if ("SOAP".equals(entry.samlSummary().get("transport"))
+                    && "invalid-soap-message-scope".equals(entry.samlSummary().get("parseStatus"))) {
+                refs.add(new EvidenceRef("transcript", "transcript:" + entry.id()));
+                issues.add("logout_message_scope_unresolved"); continue;
+            }
+            if ("BrowserResponseObservation".equals(entry.samlSummary().get("type"))) continue;
+            var recordedType = entry.samlSummary().get("type");
+            boolean recordedLogout = "LogoutRequest".equals(recordedType) || "LogoutResponse".equals(recordedType);
+            if (entry.decodedSamlRef() == null && entry.decodedSamlBytes() == 0 && !recordedLogout) continue;
+            refs.add(new EvidenceRef("transcript", "transcript:" + entry.id()));
+            if (entry.decodedSamlRef() == null || entry.decodedSamlBytes() <= 0) {
+                issues.add("decoded_content_missing"); continue;
+            }
             try {
                 var xml = content.readDecodedSaml(entry);
+                if (xml == null || xml.length != entry.decodedSamlBytes()) {
+                    issues.add("decoded_content_size_mismatch"); continue;
+                }
+                if ("GET".equalsIgnoreCase(entry.method()) && entry.rawQuery() != null
+                        && entry.rawQuery().matches("(^|.*&)(SAMLRequest|SAMLResponse)=.*")
+                        && !redirectSignatures.matchesMessage(entry.rawQuery(), xml)) {
+                    issues.add("redirect_message_mismatch"); continue;
+                }
                 var document = SecureXml.parse(xml);
+                if (decryptionKey != null) {
+                    decryptAssertions(document);
+                    decryptIdentifiers(document);
+                }
                 Element logout = null;
                 var root = document.getDocumentElement();
-                if (PROTOCOL.equals(root.getNamespaceURI())
-                        && ("LogoutRequest".equals(root.getLocalName()) || "LogoutResponse".equals(root.getLocalName()))) {
+                if (is(root, "LogoutRequest") || is(root, "LogoutResponse")) {
                     logout = root;
                 } else {
-                    var requests = document.getElementsByTagNameNS(PROTOCOL, "LogoutRequest");
-                    var responses = document.getElementsByTagNameNS(PROTOCOL, "LogoutResponse");
-                    if (requests.getLength() > 0) logout = (Element) requests.item(0);
-                    else if (responses.getLength() > 0) logout = (Element) responses.item(0);
+                    // A descendant of an arbitrary extension/Advice/header is not an exchanged message.
+                    var soap = root.getNamespaceURI();
+                    if ("Envelope".equals(root.getLocalName()) &&
+                            ("http://schemas.xmlsoap.org/soap/envelope/".equals(soap)
+                            || "http://www.w3.org/2003/05/soap-envelope".equals(soap))) {
+                        var bodies = directElements(root, soap, "Body");
+                        if (bodies.size() == 1) {
+                            var children = new ArrayList<Element>();
+                            for (var node = bodies.getFirst().getFirstChild(); node != null; node = node.getNextSibling())
+                                if (node instanceof Element element) children.add(element);
+                            if (children.size() == 1 && (is(children.getFirst(), "LogoutRequest")
+                                    || is(children.getFirst(), "LogoutResponse"))) logout = children.getFirst();
+                        }
+                    }
+                    if (logout == null && (recordedLogout
+                            || document.getElementsByTagNameNS(PROTOCOL, "LogoutRequest").getLength() > 0
+                            || document.getElementsByTagNameNS(PROTOCOL, "LogoutResponse").getLength() > 0)) {
+                        issues.add("logout_message_scope_unresolved"); continue;
+                    }
                 }
-                result.add(new Message(entry, document, logout, "transcript:" + entry.id(), sha256(xml)));
+                if (recordedLogout && logout != null && !recordedType.equals(logout.getLocalName())) {
+                    issues.add("logout_type_mismatch"); continue;
+                }
+                result.add(new Message(entry, document, logout, "transcript:" + entry.id(), sha256(xml), xml.clone()));
             } catch (RuntimeException unreadable) {
-                // Another passive case owns malformed non-SLO messages.
+                // Missing/unparseable evidence cannot silently disappear from a successful snapshot.
+                issues.add("decoded_content_unreadable");
             }
         }
-        return List.copyOf(result);
+        return new Snapshot(List.copyOf(result), List.copyOf(issues), List.copyOf(refs), List.copyOf(entries));
+    }
+
+    /** In-memory view only: identifiers inside an encrypted login Assertion must be readable. */
+    private void decryptAssertions(org.w3c.dom.Document document) {
+        var wrappers = document.getElementsByTagNameNS(ASSERTION, "EncryptedAssertion");
+        var pending = new ArrayList<Element>();
+        for (var index = 0; index < wrappers.getLength(); index++) {
+            pending.add((Element) wrappers.item(index));
+        }
+        for (var wrapper : pending) {
+            try {
+                var plaintext = new com.samlscope.saml.crypto.SamlXmlDecrypter()
+                        .decrypt(wrapper, decryptionKey);
+                wrapper.getParentNode().replaceChild(document.importNode(plaintext, true), wrapper);
+            } catch (RuntimeException undecryptable) {
+                // Leave the wrapper in place; the rule reports the identifiers as unavailable.
+            }
+        }
+    }
+
+    /**
+     * In-memory view only: a target-emitted LogoutRequest may carry the principal as an
+     * EncryptedID addressed to the Suite participant. The Suite holds that key, so decrypt it
+     * here; the identifier-strong-match rule must judge the plaintext NameID, not treat the
+     * encrypted choice as inherently unobservable.
+     */
+    private void decryptIdentifiers(org.w3c.dom.Document document) {
+        var wrappers = document.getElementsByTagNameNS(ASSERTION, "EncryptedID");
+        var pending = new ArrayList<Element>();
+        for (var index = 0; index < wrappers.getLength(); index++) {
+            pending.add((Element) wrappers.item(index));
+        }
+        for (var wrapper : pending) {
+            try {
+                var plaintext = new com.samlscope.saml.crypto.SamlXmlDecrypter()
+                        .decrypt(wrapper, decryptionKey);
+                wrapper.getParentNode().replaceChild(document.importNode(plaintext, true), wrapper);
+            } catch (RuntimeException undecryptable) {
+                // Leave the wrapper in place; the rule reports the identifiers as unavailable.
+            }
+        }
     }
 
     private Element direct(Element parent, String namespace, String localName) {
@@ -644,6 +1048,9 @@ public final class LogoutTranscriptProfileCase {
     }
 
     private record Message(
-            TranscriptEntry entry, org.w3c.dom.Document document, Element logout, String reference, String digest) {}
+            TranscriptEntry entry, org.w3c.dom.Document document, Element logout, String reference, String digest, byte[] xml) {}
+    private record Snapshot(
+            List<Message> messages, List<String> issues, List<EvidenceRef> evidence,
+            List<TranscriptEntry> entries) {}
     private record IssuedSessionIdentifier(String identifierKey, Set<String> sessionIndexes) {}
 }

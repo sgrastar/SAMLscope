@@ -33,6 +33,9 @@ class RetentionTest(unittest.TestCase):
                            (run, "plan_" + "A" * 26, created, created))
                 for ref in (f"results/{run}/result.json", f"target-metadata/{run}.xml"):
                     self.write(ref)
+                db.execute("INSERT INTO supplemental_decryption_keys VALUES (?, ?)",
+                           (run, json.dumps({"fixture": run})))
+                db.execute("INSERT INTO run_shared_key_commitments VALUES (?, ?)", (run, "a" * 64))
             db.execute("INSERT INTO published_runs VALUES (?, ?)", (self.published, NOW.isoformat()))
             for letter, run, age in (("A", self.old, 30), ("B", self.fresh, 1),
                                      ("C", self.published, 90), ("D", self.published, 1)):
@@ -60,6 +63,62 @@ class RetentionTest(unittest.TestCase):
         return {str(p.relative_to(self.root)): p.read_bytes()
                 for p in self.root.rglob("*") if p.is_file()}
 
+    def anonymous(self, days=31):
+        identifier = "oidc:" + "a" * 64
+        used = (NOW - dt.timedelta(days=days)).isoformat()
+        with self.connect() as db:
+            db.execute("INSERT INTO application_users(id, role, created_at, last_used_at, enrolled) "
+                       "VALUES (?, 'ANONYMOUS', ?, ?, 1)", (identifier, used, used))
+            for (plan,) in db.execute("SELECT id FROM plans").fetchall():
+                db.execute("INSERT OR REPLACE INTO hosted_plan_owners(plan_id, owner_id) VALUES (?, ?)", (plan, identifier))
+                self.write(f"keys/{plan}/private.pem")
+                self.write(f"target-metadata/{plan}.xml")
+            db.execute("INSERT INTO target_connections VALUES ('target', ?, '{}')", (identifier,))
+            db.execute("INSERT INTO target_metadata_revisions VALUES ('target', 'revision', '{}', '{}')")
+        return {"id": identifier, "version": 0, "lastUsedAt": used,
+                "isAnonymous": True, "verifiedAt": NOW.isoformat()}
+
+    def test_anonymous_expiry_without_provider_confirmation_is_preview_only(self):
+        self.anonymous()
+        report = maintain(self.root, NOW, apply=True, service_stopped=True)
+        self.assertEqual(1, len(report["anonymousExpiryCandidates"]))
+        self.assertEqual([], report["expiredAnonymousUsers"])
+        self.assertEqual([], report["privateRuns"])
+        self.assertTrue((self.root / "results" / self.old).exists())
+        self.assertTrue((self.root / "results" / self.published).exists())
+
+    def test_confirmed_expiry_removes_entire_account_including_public_reports(self):
+        confirmation = self.anonymous()
+        report = maintain(self.root, NOW, apply=True, service_stopped=True,
+                          anonymous_confirmations=[confirmation])
+        self.assertEqual([confirmation["id"]], report["expiredAnonymousUsers"])
+        with self.connect() as db:
+            for table in ("application_users", "plans", "runs", "published_runs", "transcript_entries",
+                          "target_connections", "target_metadata_revisions", "hosted_plan_owners",
+                          "supplemental_decryption_keys", "run_shared_key_commitments"):
+                self.assertEqual(0, db.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0], table)
+            self.assertEqual([], db.execute("PRAGMA foreign_key_check").fetchall())
+        self.assertFalse((self.root / "results" / self.published).exists())
+        self.assertFalse(any((self.root / "keys").glob("*/private.pem")))
+
+    def test_expiry_rejects_stale_state_upgrade_activity_and_unverified_status(self):
+        confirmation = self.anonymous()
+        for bad in ({**confirmation, "verifiedAt": (NOW - dt.timedelta(minutes=6)).isoformat()},
+                    {**confirmation, "version": 1}, {**confirmation, "isAnonymous": False},
+                    {**confirmation, "lastUsedAt": NOW.isoformat()}):
+            before = self.snapshot()
+            with self.assertRaises(ValueError):
+                maintain(self.root, NOW, apply=True, service_stopped=True, anonymous_confirmations=[bad])
+            self.assertEqual(before, self.snapshot())
+        with self.connect() as db:
+            db.execute("UPDATE application_users SET role='USER', version=1")
+        with self.assertRaises(ValueError):
+            maintain(self.root, NOW, apply=True, service_stopped=True, anonymous_confirmations=[confirmation])
+        with self.connect() as db:
+            db.execute("UPDATE application_users SET role='ANONYMOUS', version=0, last_used_at=?", (NOW.isoformat(),))
+        with self.assertRaises(ValueError):
+            maintain(self.root, NOW, apply=True, service_stopped=True, anonymous_confirmations=[confirmation])
+
     def test_preview_does_not_modify_data(self):
         before = self.snapshot()
         report = maintain(self.root, NOW)
@@ -80,6 +139,9 @@ class RetentionTest(unittest.TestCase):
             self.assertEqual((1, 7), db.execute(
                 "SELECT entry_count, stored_bytes FROM transcript_usage WHERE run_id=?",
                 (self.published,)).fetchone())
+            for table in ("supplemental_decryption_keys", "run_shared_key_commitments"):
+                self.assertEqual({self.fresh, self.published},
+                                 {row[0] for row in db.execute(f"SELECT run_id FROM {table}")}, table)
             self.assertEqual([], db.execute("PRAGMA foreign_key_check").fetchall())
         second = maintain(self.root, NOW, apply=True, service_stopped=True)
         self.assertEqual([], second["privateRuns"])
@@ -91,12 +153,58 @@ class RetentionTest(unittest.TestCase):
 
     def test_unknown_schema_is_rejected_before_file_deletion(self):
         with self.connect() as db:
+            next_version = db.execute("SELECT MAX(version) + 1 FROM schema_migrations").fetchone()[0]
             db.execute("INSERT INTO schema_migrations VALUES (?, ?)",
-                       (SUPPORTED_SCHEMA_VERSION + 1, NOW.isoformat()))
+                       (next_version, NOW.isoformat()))
         before = self.snapshot()
         with self.assertRaises(ValueError):
             maintain(self.root, NOW, apply=True, service_stopped=True)
         self.assertEqual(before, self.snapshot())
+
+    def test_supported_schema_matches_the_current_application_migrations(self):
+        with self.connect() as db:
+            self.assertEqual(SUPPORTED_SCHEMA_VERSION,
+                             db.execute("SELECT MAX(version) FROM schema_migrations").fetchone()[0])
+        maintain(self.root, NOW)
+
+    def test_missing_or_unknown_earlier_migration_is_rejected(self):
+        for sql in ("DELETE FROM schema_migrations WHERE version=13",
+                    "INSERT INTO schema_migrations VALUES (9, '2026-09-07T00:00:00Z')"):
+            with self.connect() as db:
+                db.execute(sql)
+            before = self.snapshot()
+            with self.assertRaises(ValueError):
+                maintain(self.root, NOW, apply=True, service_stopped=True)
+            self.assertEqual(before, self.snapshot())
+            with self.connect() as db:
+                db.execute("INSERT OR IGNORE INTO schema_migrations VALUES (13, ?)", (NOW.isoformat(),))
+                db.execute("DELETE FROM schema_migrations WHERE version=9")
+
+    def test_run_input_without_cascade_is_rejected_before_deleting_files(self):
+        with self.connect() as db:
+            db.execute("DROP TABLE supplemental_decryption_keys")
+            db.execute("CREATE TABLE supplemental_decryption_keys ("
+                       "run_id TEXT PRIMARY KEY REFERENCES runs(id), document_json TEXT NOT NULL)")
+        before = self.snapshot()
+        with self.assertRaises(ValueError):
+            maintain(self.root, NOW, apply=True, service_stopped=True)
+        self.assertEqual(before, self.snapshot())
+
+    def test_retention_keeps_administrator_account_and_its_published_inputs(self):
+        identifier = "oidc:" + "b" * 64
+        with self.connect() as db:
+            db.execute("INSERT INTO application_users(id, role, created_at, enrolled, version) "
+                       "VALUES (?, 'ADMIN', ?, 1, 4)", (identifier, (NOW - dt.timedelta(days=100)).isoformat()))
+            db.execute("INSERT INTO hosted_plan_owners VALUES (?, ?)", ("plan_" + "A" * 26, identifier))
+        report = maintain(self.root, NOW, apply=True, service_stopped=True)
+        self.assertEqual([], report["expiredAnonymousUsers"])
+        self.assertEqual([], report["anonymousExpiryCandidates"])
+        with self.connect() as db:
+            self.assertEqual(("ADMIN", "ACTIVE", 1, 4), db.execute(
+                "SELECT role, status, enrolled, version FROM application_users WHERE id=?", (identifier,)).fetchone())
+            for table in ("supplemental_decryption_keys", "run_shared_key_commitments"):
+                self.assertEqual(1, db.execute(f"SELECT COUNT(*) FROM {table} WHERE run_id=?",
+                                             (self.published,)).fetchone()[0])
 
     def test_unsafe_reference_aborts_before_any_deletion(self):
         with self.connect() as db:

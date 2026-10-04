@@ -439,3 +439,13 @@ button.case-drawer-backdrop:hover:not(:disabled) { transform: none; border: 0; b
 .login-status { display: flex; align-items: center; gap: .65rem; }
 .login-name { max-width: 12rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 @media (max-width: 700px) { .login-name { display: none; } }
+
+.admin-search { display: block; max-width: 32rem; margin: 1.5rem 0; }
+.admin-table-wrap { overflow-x: auto; }
+.admin-table-wrap table { width: 100%; border-collapse: collapse; text-align: left; }
+.admin-table-wrap th, .admin-table-wrap td { padding: 1rem .75rem; vertical-align: top; border-bottom: 1px solid var(--line); }
+.admin-table-wrap caption { text-align: left; font-weight: 600; padding: .5rem .75rem; }
+.admin-table-wrap code { display: block; overflow-wrap: anywhere; max-width: 24rem; font-size: .75rem; margin-top: .35rem; }
+.admin-table-wrap td > span { display: block; }
+.admin-editor { border: 1px solid var(--line); padding: 1.5rem; margin-top: 1.5rem; }
+.admin-editor label { display: block; max-width: 32rem; margin: 1rem 0; }

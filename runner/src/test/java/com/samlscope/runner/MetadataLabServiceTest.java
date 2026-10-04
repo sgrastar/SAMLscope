@@ -27,6 +27,30 @@ class MetadataLabServiceTest {
     private static final Instant NOW = Instant.parse("2026-08-31T00:00:00Z");
 
     @Test
+    void preloadedSubsetScopesGenerationAndFlowAndInvalidatesOldToken() {
+        var service = fixture().service();
+        var selected = List.of("attribute-policy-entity-absent", "attribute-policy-requested-absent");
+        var first = service.startPreloadedCampaign("run", selected);
+        var token = query(first.preloadedMetadataUrl(), "preload");
+        assertEquals(selected, first.preloadedVariants());
+        assertEquals(selected, service.authorizePreloadedFetch("run", "plan", token));
+        assertEquals(selected, service.authorizePreloadedDownload("run", "plan", token));
+        assertEquals(selected, service.recordPreloadedFetch("run", "plan", token));
+        assertEquals(selected.get(1), service.requirePreloadedFlow("run", "plan", token, 1).variant().id());
+        assertEquals(false, service.requirePreloadedFlow("run", "plan", token, 1).hasNext());
+        assertThrows(IllegalArgumentException.class, () -> service.requirePreloadedFlow("run", "plan", token, 2));
+        assertThrows(IllegalArgumentException.class, () -> service.startPreloadedCampaign("run", List.of()));
+        assertThrows(IllegalArgumentException.class, () -> service.startPreloadedCampaign("run", List.of(selected.getFirst(), selected.getFirst())));
+        // URL-safety negative fixtures are now supported preloaded inputs. The
+        // complete UI configuration fixture remains outside that browser inventory.
+        assertTrue(com.samlscope.saml.metadata.MetadataService.preloadedCampaignVariants()
+                .contains(com.samlscope.saml.metadata.MetadataService.Variant.UI_URL_LOGO_JAVASCRIPT));
+        assertThrows(IllegalArgumentException.class, () -> service.startPreloadedCampaign("run", List.of("full-ui-info")));
+        service.startPreloadedCampaign("run", List.of(selected.getLast()));
+        assertThrows(IllegalArgumentException.class, () -> service.authorizePreloadedFetch("run", "plan", token));
+    }
+
+    @Test
     void automaticPollingAdvancesOnlyAfterTheSelectedFixtureWasFetched() {
         var fixture = fixture();
         var service = fixture.service();
@@ -46,6 +70,7 @@ class MetadataLabServiceTest {
                 () -> service.requireAutomaticCompletedFlow("run", "plan", token, 0),
                 "a fetch before the signed browser attempt must not be correlated");
         var firstFlow = service.requireAutomaticStartFlow("run", "plan", token, 0);
+        assertEquals(false, service.automaticStartReady("run", "plan", token, 0));
         assertEquals("control", firstFlow.variant().id());
         assertEquals(17, firstFlow.pollingDelaySeconds());
         assertThrows(IllegalArgumentException.class,
@@ -59,6 +84,10 @@ class MetadataLabServiceTest {
         assertEquals(0, untrusted.campaignIndex());
 
         var fetched = service.recordLiveFetch("run", "plan", "control", null);
+        assertEquals(true, service.automaticStartReady("run", "plan", token, 0));
+        service.requireAutomaticStartFlow("run", "plan", token, 0);
+        assertEquals(true, service.automaticStartReady("run", "plan", token, 0),
+                "refreshing the waiting page must preserve retrieval evidence");
         assertEquals("control", fetched.selectedVariant());
         assertEquals(0, fetched.campaignIndex());
         var duplicateFetch = service.recordLiveFetch("run", "plan", "control", null);
@@ -74,6 +103,8 @@ class MetadataLabServiceTest {
         assertEquals(1, second.campaignIndex());
         assertEquals("expired", service.requireAutomaticStartFlow(
                 "run", "plan", token, 1).variant().id());
+        assertEquals(false, service.automaticStartReady("run", "plan", token, 1),
+                "the previous fixture's retrieval cannot release the next request");
         assertThrows(IllegalArgumentException.class,
                 () -> service.requireAutomaticStartFlow("run", "plan", token, 0));
 

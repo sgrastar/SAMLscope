@@ -54,6 +54,7 @@ public final class IdpAcsSelectionScenarioTestCase
         var configuration = java.util.Objects.requireNonNull(configurations.apply(runId));
         var defaultAcs = configuration.registeredAcs();
         var secondaryAcs = defaultAcs.resolve("1");
+        var otherEntityAcs = SamlAcsSelectionRequestFactory.otherEntityAcs(defaultAcs);
         var fixtures = switch (id) {
             case INDEX_CASE -> List.<ScenarioFixture>of(
                     fixture("default-control", Fixture.DEFAULT, Expectation.SUCCESS_AT_DEFAULT,
@@ -69,10 +70,38 @@ public final class IdpAcsSelectionScenarioTestCase
                     fixture("unsupported-binding", Fixture.UNSUPPORTED_BINDING, Expectation.ERROR_AT_DEFAULT,
                             configuration, defaultAcs, secondaryAcs));
             case UNREGISTERED_URL_CASE -> List.<ScenarioFixture>of(
-                    fixture("registered-url-control", Fixture.URL_ONE, Expectation.SUCCESS_AT_SECONDARY,
-                            configuration, defaultAcs, secondaryAcs),
-                    fixture("unregistered-url", Fixture.UNKNOWN_URL, Expectation.DEFAULT_OR_ERROR,
-                            configuration, defaultAcs, secondaryAcs));
+                    fixture("registered-url-signed-control", Fixture.URL_ONE,
+                            Expectation.SUCCESS_AT_SECONDARY,
+                            OutboundAction.RequestSigning.REQUIRE, null,
+                            configuration, defaultAcs, secondaryAcs, otherEntityAcs),
+                    fixture("registered-url-unsigned", Fixture.URL_ONE,
+                            Expectation.SUCCESS_AT_SECONDARY,
+                            OutboundAction.RequestSigning.OMIT_FOR_IDP12_B, null,
+                            configuration, defaultAcs, secondaryAcs, otherEntityAcs),
+                    fixture("unregistered-url-signed", Fixture.UNKNOWN_URL,
+                            Expectation.UNREGISTERED_URL_SAFE,
+                            OutboundAction.RequestSigning.REQUIRE, defaultAcs.resolve("999999"),
+                            configuration, defaultAcs, secondaryAcs, otherEntityAcs),
+                    fixture("unregistered-url-unsigned", Fixture.UNKNOWN_URL,
+                            Expectation.UNREGISTERED_URL_SAFE,
+                            OutboundAction.RequestSigning.OMIT_FOR_IDP12_B, defaultAcs.resolve("999999"),
+                            configuration, defaultAcs, secondaryAcs, otherEntityAcs),
+                    fixture("other-entity-url-signed", Fixture.OTHER_ENTITY_URL,
+                            Expectation.ASSOCIATED_OR_LOCAL_REJECTION,
+                            OutboundAction.RequestSigning.REQUIRE, otherEntityAcs,
+                            configuration, defaultAcs, secondaryAcs, otherEntityAcs),
+                    fixture("other-entity-url-unsigned", Fixture.OTHER_ENTITY_URL,
+                            Expectation.ASSOCIATED_OR_LOCAL_REJECTION,
+                            OutboundAction.RequestSigning.OMIT_FOR_IDP12_B, otherEntityAcs,
+                            configuration, defaultAcs, secondaryAcs, otherEntityAcs),
+                    fixture("unknown-index-signed", Fixture.UNKNOWN_INDEX,
+                            Expectation.ASSOCIATED_OR_LOCAL_REJECTION,
+                            OutboundAction.RequestSigning.REQUIRE, null,
+                            configuration, defaultAcs, secondaryAcs, otherEntityAcs),
+                    fixture("unknown-index-unsigned", Fixture.UNKNOWN_INDEX,
+                            Expectation.ASSOCIATED_OR_LOCAL_REJECTION,
+                            OutboundAction.RequestSigning.OMIT_FOR_IDP12_B, null,
+                            configuration, defaultAcs, secondaryAcs, otherEntityAcs));
             case UNKNOWN_INDEX_CASE -> List.<ScenarioFixture>of(
                     fixture("unknown-index", Fixture.UNKNOWN_INDEX, Expectation.DEFAULT_OR_ERROR,
                             configuration, defaultAcs, secondaryAcs));
@@ -111,29 +140,56 @@ public final class IdpAcsSelectionScenarioTestCase
             IdpErrorProbeConfiguration configuration,
             URI defaultAcs,
             URI secondaryAcs) {
-        return new AcsFixture(
-                fixtureId, fixture, expectation, configuration, defaultAcs, secondaryAcs, requests);
+        return fixture(
+                fixtureId, fixture, expectation, OutboundAction.RequestSigning.PLAN_DEFAULT, null,
+                configuration, defaultAcs, secondaryAcs,
+                SamlAcsSelectionRequestFactory.otherEntityAcs(defaultAcs));
     }
 
-    private enum Expectation { SUCCESS_AT_DEFAULT, SUCCESS_AT_SECONDARY, ERROR_AT_DEFAULT, DEFAULT_OR_ERROR }
+    private ScenarioFixture fixture(
+            String fixtureId,
+            Fixture fixture,
+            Expectation expectation,
+            OutboundAction.RequestSigning requestSigning,
+            URI hostileAcs,
+            IdpErrorProbeConfiguration configuration,
+            URI defaultAcs,
+            URI secondaryAcs,
+            URI otherEntityAcs) {
+        return new AcsFixture(
+                fixtureId, fixture, expectation, requestSigning, hostileAcs,
+                configuration, defaultAcs, secondaryAcs, otherEntityAcs, requests);
+    }
+
+    private enum Expectation {
+        SUCCESS_AT_DEFAULT,
+        SUCCESS_AT_SECONDARY,
+        ERROR_AT_DEFAULT,
+        DEFAULT_OR_ERROR,
+        UNREGISTERED_URL_SAFE,
+        ASSOCIATED_OR_LOCAL_REJECTION
+    }
 
     private record AcsFixture(
             String id,
             Fixture fixture,
             Expectation expectation,
+            OutboundAction.RequestSigning requestSigning,
+            URI hostileAcs,
             IdpErrorProbeConfiguration configuration,
             URI defaultAcs,
             URI secondaryAcs,
+            URI otherEntityAcs,
             SamlAcsSelectionRequestFactory requests) implements ScenarioFixture {
         @Override
         public Prepared prepare(CaseContext context, String actionId) {
             var requestId = "_" + actionId;
             var payload = requests.build(
                     fixture, requestId, configuration.ssoEndpoint(), configuration.suiteIssuer(),
-                    defaultAcs, secondaryAcs, context.clock().instant());
+                    defaultAcs, secondaryAcs, otherEntityAcs, context.clock().instant());
             return new Prepared(new OutboundAction(
                     actionId, OutboundKind.AUTHN_REQUEST, payload,
-                    configuration.ssoEndpoint(), false), requestId);
+                    configuration.ssoEndpoint(), false, requestSigning), requestId);
         }
 
         @Override
@@ -148,9 +204,12 @@ public final class IdpAcsSelectionScenarioTestCase
                 var statusCodes = root.getElementsByTagNameNS(PROTOCOL, "StatusCode");
                 if (statusCodes.getLength() == 0) return FixtureObservation.NOT_VERIFIED;
                 var success = SUCCESS.equals(((Element) statusCodes.item(0)).getAttribute("Value"));
+                var responseDestination = root.getAttribute("Destination");
                 var expectedDestination = expectation == Expectation.SUCCESS_AT_SECONDARY
                         ? secondaryAcs : defaultAcs;
-                var destinationMatches = expectedDestination.toString().equals(root.getAttribute("Destination"));
+                var destinationMatches = expectedDestination.toString().equals(responseDestination);
+                var associatedDestination = defaultAcs.toString().equals(responseDestination)
+                        || secondaryAcs.toString().equals(responseDestination);
                 return switch (expectation) {
                     case SUCCESS_AT_DEFAULT -> success && destinationMatches
                             ? FixtureObservation.SATISFIED
@@ -160,7 +219,18 @@ public final class IdpAcsSelectionScenarioTestCase
                     case ERROR_AT_DEFAULT -> !success && destinationMatches
                             ? FixtureObservation.SATISFIED
                             : success ? FixtureObservation.NOT_VERIFIED : FixtureObservation.VIOLATED;
-                    case DEFAULT_OR_ERROR -> destinationMatches
+                    // IDP12.d records two permitted MAY choices. A response to another
+                    // location is judged by IDP12.b, not a fabricated negative oracle here.
+                    case DEFAULT_OR_ERROR -> (success && destinationMatches)
+                            || List.of("urn:oasis:names:tc:SAML:2.0:status:Requester",
+                                    "urn:oasis:names:tc:SAML:2.0:status:Responder",
+                                    "urn:oasis:names:tc:SAML:2.0:status:VersionMismatch")
+                                    .contains(((Element) statusCodes.item(0)).getAttribute("Value"))
+                            ? FixtureObservation.SATISFIED : FixtureObservation.NOT_VERIFIED;
+                    case UNREGISTERED_URL_SAFE -> associatedDestination
+                            && (!success || defaultAcs.toString().equals(responseDestination))
+                            ? FixtureObservation.SATISFIED : FixtureObservation.VIOLATED;
+                    case ASSOCIATED_OR_LOCAL_REJECTION -> associatedDestination
                             ? FixtureObservation.SATISFIED : FixtureObservation.VIOLATED;
                 };
             } catch (SamlException malformed) {
@@ -168,10 +238,57 @@ public final class IdpAcsSelectionScenarioTestCase
             }
         }
 
+        @Override
+        public FixtureObservation observeBrowser(
+                String requestId, int httpStatus, String url, String body) {
+            if (httpStatus < 400) return FixtureObservation.NOT_VERIFIED;
+            URI landing;
+            try {
+                landing = URI.create(url);
+            } catch (IllegalArgumentException invalid) {
+                return FixtureObservation.NOT_VERIFIED;
+            }
+            if (hostileAcs != null && sameLocation(landing, hostileAcs)) {
+                return FixtureObservation.VIOLATED;
+            }
+            if (!sameOrigin(landing, configuration.ssoEndpoint())) {
+                return FixtureObservation.NOT_VERIFIED;
+            }
+            return switch (expectation) {
+                case SUCCESS_AT_DEFAULT, SUCCESS_AT_SECONDARY -> FixtureObservation.CONTROL_FAILED;
+                case ERROR_AT_DEFAULT, DEFAULT_OR_ERROR -> FixtureObservation.NOT_VERIFIED;
+                case UNREGISTERED_URL_SAFE,
+                        ASSOCIATED_OR_LOCAL_REJECTION -> FixtureObservation.SATISFIED;
+            };
+        }
+
         @Override public Duration timeout() { return configuration.responseTimeout(); }
         @Override public String definitionKey() {
             return String.join("|", id, fixture.name(), expectation.name(),
-                    configuration.ssoEndpoint().toString(), defaultAcs.toString(), secondaryAcs.toString());
+                    requestSigning.name(), String.valueOf(hostileAcs),
+                    configuration.ssoEndpoint().toString(), defaultAcs.toString(), secondaryAcs.toString(),
+                    otherEntityAcs.toString());
+        }
+
+        private static boolean sameOrigin(URI left, URI right) {
+            return left.isAbsolute() && right.isAbsolute()
+                    && java.util.Objects.equals(lower(left.getScheme()), lower(right.getScheme()))
+                    && java.util.Objects.equals(lower(left.getHost()), lower(right.getHost()))
+                    && effectivePort(left) == effectivePort(right);
+        }
+
+        private static boolean sameLocation(URI left, URI right) {
+            return sameOrigin(left, right)
+                    && java.util.Objects.equals(left.getPath(), right.getPath());
+        }
+
+        private static int effectivePort(URI value) {
+            if (value.getPort() >= 0) return value.getPort();
+            return "https".equalsIgnoreCase(value.getScheme()) ? 443 : 80;
+        }
+
+        private static String lower(String value) {
+            return value == null ? null : value.toLowerCase(java.util.Locale.ROOT);
         }
     }
 

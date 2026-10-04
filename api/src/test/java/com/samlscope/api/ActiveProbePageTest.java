@@ -13,7 +13,7 @@ class ActiveProbePageTest {
         var status = new ActiveProbeCoordinator.Status(
                 "plan_test", ActiveProbeCoordinator.State.READY, "action_test",
                 URI.create("https://peer.example/probe"), true, null,
-                "<script>case</script>", "Check <unsafe> instructions");
+                "<script>case</script>", "Check <unsafe> instructions", false);
 
         var html = ActiveProbePage.start(status, "/p/plan_test/ui/completion.css");
 
@@ -30,7 +30,7 @@ class ActiveProbePageTest {
         var next = new ActiveProbeCoordinator.Status(
                 "plan_test", ActiveProbeCoordinator.State.READY, "action_next",
                 URI.create("https://peer.example/probe/next"), false, null,
-                "IIP-IDP05-a-idp-01", "next");
+                "IIP-IDP05-a-idp-01", "next", false);
 
         var html = ActiveProbePage.recorded(
                 "/p/plan_test/ui/completion.css", next, Map.of("status", "recorded"), "nonce_test");

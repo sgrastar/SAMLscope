@@ -58,6 +58,15 @@ public final class AutoConfigurationEvidenceTestCase
 
     @Override
     public CaseStep resume(CaseContext context, CaseState state, CaseEvent event) {
+        // A case already waiting before an oracle upgrade can reuse its immutable Run snapshot.
+        // Configuration-unavailable and cancellation events keep their existing semantics.
+        if (event instanceof CaseEvent.ConfigConfirmed) {
+            byte[] metadata;
+            try { metadata = targetMetadata.apply(context.runId()); }
+            catch (RuntimeException unavailable) { metadata = null; }
+            var outcome = TargetMetadataObservation.evaluate(id(), metadata, context.clock().instant());
+            if (outcome.isPresent()) return new CaseStep.Finish(outcome.orElseThrow());
+        }
         return fallback.resume(context, state, event);
     }
 }

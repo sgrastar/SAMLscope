@@ -138,6 +138,45 @@ class PendingInteractionServiceTest {
                 pending.answerValues());
     }
 
+    @Test
+    void obsoleteInteractionFreeBrowserWaitIsNotProjectedAsAnotherUserAction() {
+        var evidenceOnly = new InteractionFreeCase();
+        var browser = new TranscriptBrowserCase();
+        var oldWait = execution(evidenceOnly.id(), CaseExecutionStatus.WAITING_BROWSER,
+                new WaitCondition(WaitCondition.Kind.BROWSER, null,
+                        URI.create("https://suite.example/obsolete-start"), null, EXPIRES));
+        var service = new PendingInteractionService(repository(List.of(oldWait,
+                execution(browser.id(), CaseExecutionStatus.WAITING_BROWSER,
+                        new WaitCondition(WaitCondition.Kind.BROWSER, null,
+                                URI.create("https://suite.example/start"), null, EXPIRES)))),
+                new TestCaseRegistry(List.of(evidenceOnly, browser)));
+
+        var pending = service.pending("run");
+
+        assertEquals(1, pending.size());
+        assertEquals(browser.id(), pending.getFirst().caseId());
+        assertEquals(URI.create("https://suite.example/start"), pending.getFirst().startUrl());
+        assertEquals(InteractionQuery.CompletionMode.TRANSCRIPT, pending.getFirst().completionMode());
+        assertEquals(CaseExecutionStatus.WAITING_BROWSER, oldWait.status());
+        assertEquals(0, oldWait.revision());
+        assertEquals(null, oldWait.outcome(), "GET projection must not migrate the persisted wait");
+    }
+
+    @Test
+    void unregisteredAndOpaqueBrowserWaitsStillFailClosed() {
+        var opaque = passiveCase("ordinary-browser", TargetRole.IDP);
+        var oldWait = execution(opaque.id(), CaseExecutionStatus.WAITING_BROWSER,
+                new WaitCondition(WaitCondition.Kind.BROWSER, null,
+                        URI.create("https://suite.example/start"), null, EXPIRES));
+        var unregistered = new PendingInteractionService(repository(List.of(oldWait)),
+                new TestCaseRegistry(List.of()));
+        assertThrows(IllegalArgumentException.class, () -> unregistered.pending("run"));
+
+        var service = new PendingInteractionService(repository(List.of(oldWait)),
+                new TestCaseRegistry(List.of(opaque)));
+        assertThrows(IllegalStateException.class, () -> service.pending("run"));
+    }
+
     private CaseExecution execution(String caseId, CaseExecutionStatus status, WaitCondition wait) {
         return new CaseExecution(
                 "run", caseId, 0, status, new CaseState("test", Map.of("secret", "not exposed")), wait,
@@ -169,6 +208,19 @@ class PendingInteractionServiceTest {
         }
         @Override public EvidenceStatus evidenceStatus(CaseContext context) {
             return new EvidenceStatus(false, List.of("response"), List.of(), Map.of());
+        }
+    }
+
+    private static final class InteractionFreeCase
+            implements com.samlscope.runner.cases.InteractionFreeEvidenceCase {
+        @Override public String id() { return "IIP-IDP06-b-idp-01"; }
+        @Override public TargetRole role() { return TargetRole.IDP; }
+        @Override public EvidenceStatus evidenceStatus(CaseContext context) {
+            return new EvidenceStatus(false, List.of("native-mechanism-trace"), List.of(), Map.of());
+        }
+        @Override public com.samlscope.core.evaluation.CaseOutcome queuedEvidenceOutcome(CaseContext context) {
+            return com.samlscope.core.evaluation.CaseOutcome.notVerified("native evidence unavailable",
+                    "native-mechanism.unproven");
         }
     }
 

@@ -195,10 +195,15 @@ Completely separate the public ID and administrative token:
 
 ### Use Authrim as the login IdP
 
-Implementation update (2026-09-07): standard OIDC login and account-owned Plans are
-implemented using a generic library, with no Authrim SDK dependency. Integration into
-the signed startup/build boundary requires renewed G2 approval. Configuration, anonymous
-access policies, and remaining deployment choices are in [17](17-oidc-authentication.md).
+Implementation update (2026-09-11): OIDC-enabled deployments use account-only access;
+secret URLs are disabled. Local anonymous/general/admin roles and an admin page are
+implemented. The selected lifecycle policy now assigns time-based account deletion to
+Authrim, with deletion webhooks under coordination; this supersedes the local 30-day
+anonymous expiry design still present in code. Authrim's `account:lifecycle:read` scope
+and `authrim_account_lifecycle` UserInfo claim are documented. UserInfo integration,
+webhook handling, Back-Channel Logout and live-provider acceptance remain deferred.
+Runtime integration requires renewed G2 approval. See [17](17-oidc-authentication.md)
+for the contract and the current implementation gap.
 
 Use Authrim (OIDC or SAML) for login to the Hosted version.
 **There are two design cautions here.**
@@ -226,7 +231,7 @@ Because **Test Peer verification is intentionally lax**, creating a SAMLscope lo
 - Use separate code paths, separate session stores, and separate Cookie names
 - **Use separate origins** (`app.samlscope.com` and `peer.samlscope.com`). This matches the policy in [08 §5](08-suite-security.md)
 - Make OIDC the first choice for the Login SP (using SAML increases the confusion caused by coexistence)
-- Retain the secret-URL method after introducing OIDC login (to preserve the migration path and anonymous use)
+- Secret URLs are available only when OIDC is disabled. OIDC anonymous accounts authenticate through the provider.
 
 > Secondary benefit: having SAMLscope log in through Authrim's OIDC/SAML provides dogfooding for Authrim's implementation. However, README must make clear that **Authrim as SAMLscope's test target is an entirely separate matter**, so this does not appear to be a conflict of interest.
 

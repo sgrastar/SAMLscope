@@ -28,6 +28,24 @@ public final class XmlSignatureVerifier {
         }
     }
 
+    /** Check the unmodified content digest independently of a deliberately corrupted SignatureValue. */
+    public boolean hasValidEnvelopedReferenceDigests(Element target) {
+        try {
+            if (!target.hasAttribute("ID") || target.getAttribute("ID").isBlank()) return false;
+            target.setIdAttribute("ID", true);
+            var element = directChild(target, DS, "Signature");
+            if (element == null) return false;
+            var signature = new XMLSignature(element, "");
+            var info = signature.getSignedInfo();
+            if (info.getLength() != 1 || !("#" + target.getAttribute("ID")).equals(info.item(0).getURI())) return false;
+            var transforms = element.getElementsByTagNameNS(DS, "Transform");
+            if (transforms.getLength() != 2
+                    || !"http://www.w3.org/2000/09/xmldsig#enveloped-signature".equals(((Element) transforms.item(0)).getAttribute("Algorithm"))
+                    || !"http://www.w3.org/2001/10/xml-exc-c14n#".equals(((Element) transforms.item(1)).getAttribute("Algorithm"))) return false;
+            return info.verifyReferences();
+        } catch (Exception invalid) { return false; }
+    }
+
     private Element directChild(Element parent, String namespace, String localName) {
         for (var child = parent.getFirstChild(); child != null; child = child.getNextSibling()) {
             if (child instanceof Element element

@@ -24,6 +24,21 @@ public sealed interface CaseEvent {
     /** Internal signal that the Suite, not the operator, observed sufficient Transcript evidence. */
     record TranscriptReady() implements CaseEvent {}
 
+    /** Structured HTTP observation submitted for one front-channel probe action. */
+    record BrowserObservation(int httpStatus, String url, String body, EvidenceRef evidence) implements CaseEvent {
+        public BrowserObservation(int httpStatus, String url, String body) {
+            this(httpStatus, url, body, null);
+        }
+
+        public BrowserObservation {
+            if (url == null) url = "";
+            if (body == null) body = "";
+            if (evidence != null && !"transcript".equals(evidence.kind())) {
+                throw new IllegalArgumentException("Browser observation evidence must be a Transcript reference");
+            }
+        }
+    }
+
     record ConfigConfirmed() implements CaseEvent {}
 
     record ConfigUnavailable(ConfigurationIssue issue, String note) implements CaseEvent {

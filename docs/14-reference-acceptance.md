@@ -1,5 +1,19 @@
 # Reference acceptance matrix
 
+The [2026-09-14 execution record](21-reference-execution-record.md) tracks the
+new, unpublished three-product acceptance effort. After host/Docker recovery,
+baseline SSO and registered browser SSO probe chains completed for all three
+products. Keycloak/Shibboleth repeats agree; SimpleSAMLphp ForceAuthn has a
+Suite timestamp-precision concern. Preloaded metadata campaigns and ECP exchanges
+now have independent repeat pairs with matching semantic results for all three
+products. Real-browser target-initiated SLO now has correlated
+requests for all three products; Keycloak and SimpleSAMLphp repeat results agree.
+Shibboleth's logout UI reports failure despite a Suite-generated response, with
+the Suite's iframe policy requiring investigation. The local execution record and
+[publication draft](22-reference-publication-draft.md) are prepared; broader
+session campaigns and product-finding approval remain unresolved. The historical Core/Full results below remain under their
+original scope; they are not a substitute for the new functional-profile record.
+
 This matrix records actual executions, not advertised product capabilities.
 Profile Core/Full and evidence plan Quick/Standard/Full are separate dimensions.
 An unexecuted combination is not NOT_APPLICABLE and does not establish a product
@@ -24,10 +38,10 @@ infer support or applicability from this planning table.
 | Current candidate rerun | Current-image independent Runs verified immediate report refresh and final JSON/HTML agreement | Registered chain and M2/M3 exports reproduced; real-browser and operator campaigns remain |
 | Active probe chain | Correlated positive/negative controls and explicit unavailable-response outcomes | Corrected-image chain completed twice with matching outcomes; failure candidates and remaining campaigns require review |
 | Conditional features | Configuration or observed protocol evidence for each predicate | Undetermined inputs remain; do not submit blanket answers |
-| Metadata campaigns | Actual target import/refresh, changed metadata and subsequent correlated flow | Target refresh setup remains unestablished |
+| Metadata campaigns | Actual target import/refresh, changed metadata and subsequent correlated flow | Preloaded import/flow attempts now recorded for all requested IdPs in docs/21; automatic refresh remains unestablished |
 | Browser campaigns and SLO | Requested browser/session transitions with Transcript correlation | Baseline SSO alone does not establish these |
-| Full profile and ECP | Authorized fixture, supported endpoints, ephemeral credentials and actual exchanges | No Full-profile reference execution recorded |
-| SP target and other products | Separate pinned fixtures and repeatable Run records | Setup and execution outstanding |
+| Full profile and ECP | Authorized fixture, supported endpoints, ephemeral credentials and actual exchanges | Historical Full profile remains unexecuted; functional ECP exchanges and setup/judgment concerns are recorded in docs/21 |
+| SP target and other products | Separate pinned fixtures and repeatable Run records | Requested IdP fixtures now executed under functional profiles; separate SP execution remains outstanding |
 | Sample publication | Scrubbed preview, provenance, known-bug review, hosted access tests | No reference sample approved for publication |
 
 ## Reproduction record

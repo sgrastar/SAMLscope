@@ -1,0 +1,30 @@
+import java.nio.file.*;
+import java.nio.charset.StandardCharsets;
+import java.security.*;
+import java.security.cert.*;
+import java.time.Instant;
+import java.util.*;
+import java.io.*;
+import javax.xml.crypto.dsig.*;
+import javax.xml.crypto.dsig.dom.DOMValidateContext;
+import javax.xml.parsers.*;
+import org.w3c.dom.*;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+/** Native JCA diagnostic fixture; no product settings, private key, network SAML, or product determination. */
+public final class MetadataCertificatePkixCalibration {
+    static final String MD="urn:oasis:names:tc:SAML:2.0:metadata",DS="http://www.w3.org/2000/09/xmldsig#",REV="urn:samlscope:test:certificate-revocation";
+    static String sha(byte[] raw)throws Exception{return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(raw));}
+    static Element parse(byte[] raw)throws Exception{var f=DocumentBuilderFactory.newInstance();f.setNamespaceAware(true);f.setFeature("http://apache.org/xml/features/disallow-doctype-decl",true);return f.newDocumentBuilder().parse(new ByteArrayInputStream(raw)).getDocumentElement();}
+    static X509Certificate certificate(Element e,String ns,String name)throws Exception{return (X509Certificate)CertificateFactory.getInstance("X.509").generateCertificate(new ByteArrayInputStream(Base64.getMimeDecoder().decode(e.getElementsByTagNameNS(ns,name).item(0).getTextContent())));}
+    public static void main(String[] args)throws Exception {
+        if(args.length!=2)throw new IllegalArgumentException("public input/output directory");System.setProperty("com.sun.security.ocsp.timeout","1");System.setProperty("com.sun.security.ocsp.readtimeout","1");System.setProperty("com.sun.security.crl.timeout","1");System.setProperty("com.sun.security.crl.readtimeout","1");System.setProperty("com.sun.security.enableCRLDP","true");var input=Path.of(args[0]);var output=Path.of(args[1]);Files.createDirectories(output);var mapper=new ObjectMapper();var manifest=mapper.readTree(input.resolve("manifest.json").toFile());var records=new ArrayList<Map<String,Object>>();Element normalMetadata=null;for(var row:manifest.path("inputs"))if(row.path("variant").asText().equals("control"))normalMetadata=parse(Files.readAllBytes(input.resolve(row.path("metadataFile").asText())));if(normalMetadata==null)throw new IllegalArgumentException("Missing normal trust certificate");var normalCertificate=certificate((Element)normalMetadata.getElementsByTagNameNS(MD,"SPSSODescriptor").item(0),DS,"X509Certificate");
+        for(var row:manifest.path("inputs")){
+            String variant=row.path("variant").asText();var metadata=Files.readAllBytes(input.resolve(row.path("metadataFile").asText()));var request=Files.readAllBytes(input.resolve(row.path("requestFile").asText()));var md=parse(metadata);var sp=(Element)md.getElementsByTagNameNS(MD,"SPSSODescriptor").item(0);var cert=certificate(sp,DS,"X509Certificate");var req=parse(request);req.setIdAttribute("ID",true);var validation=new DOMValidateContext(cert.getPublicKey(),req.getElementsByTagNameNS(DS,"Signature").item(0));validation.setProperty("org.jcp.xml.dsig.secureValidation",Boolean.FALSE);if(!XMLSignatureFactory.getInstance("DOM").unmarshalXMLSignature(validation).validate(validation))throw new IllegalArgumentException("Calibration input signature invalid");
+            TrustAnchor anchor;if(variant.equals("certificate-unknown-ca"))anchor=new TrustAnchor(normalCertificate,null);else anchor=new TrustAnchor(cert.getIssuerX500Principal().getName(),cert.getPublicKey(),null);var parameters=new PKIXParameters(Set.of(anchor));parameters.setRevocationEnabled(variant.equals("certificate-revoked")||variant.equals("certificate-revocation-unreachable"));if(variant.equals("certificate-revoked")){var crl=(X509CRL)CertificateFactory.getInstance("X.509").generateCRL(new ByteArrayInputStream(Base64.getMimeDecoder().decode(md.getElementsByTagNameNS(REV,"CRL").item(0).getTextContent())));parameters.addCertStore(CertStore.getInstance("Collection",new CollectionCertStoreParameters(List.of(crl))));}if(parameters.isRevocationEnabled()){var revocation=(PKIXRevocationChecker)CertPathValidator.getInstance("PKIX").getRevocationChecker();revocation.setOptions(Set.of(PKIXRevocationChecker.Option.PREFER_CRLS,PKIXRevocationChecker.Option.NO_FALLBACK));parameters.addCertPathChecker(revocation);}var path=CertificateFactory.getInstance("X.509").generateCertPath(List.of(cert));
+            var record=new TreeMap<String,Object>();record.put("variant",variant);record.put("requestId",req.getAttribute("ID"));record.put("requestSha256",sha(request));record.put("metadataSha256",sha(metadata));record.put("certificateSha256",sha(cert.getEncoded()));record.put("nativeExecutedAt",Instant.now().toString());
+            try{CertPathValidator.getInstance("PKIX").validate(path,parameters);if(!variant.equals("control"))throw new IllegalArgumentException("Expected PKIX diagnostic rejection missing");record.put("accepted",true);}catch(CertPathValidatorException error){if(variant.equals("control"))throw error;var writer=new StringWriter();writer.append("request_id=").append(req.getAttribute("ID")).append("\nrequest_sha256=").append(sha(request)).append("\ncertificate_sha256=").append(sha(cert.getEncoded())).append("\nreason=").append(error.getReason().toString()).append("\n");error.printStackTrace(new PrintWriter(writer));String file=variant+"-native-exception.txt";var bytes=writer.toString().getBytes(StandardCharsets.UTF_8);Files.write(output.resolve(file),bytes);record.put("accepted",false);record.put("exceptionClass",error.getClass().getName());record.put("reason",error.getReason().toString());record.put("exceptionTraceFile",file);record.put("exceptionTraceSha256",sha(bytes));}records.add(record);
+        }
+        mapper.writerWithDefaultPrettyPrinter().writeValue(output.resolve("native-pkix-diagnostic.json").toFile(),Map.of("schema","samlscope-native-pkix-certificate-calibration-v1","controlsAdopted",false,"productConfigurationWrites",0,"protocolSubmissions",0,"credentialPosts",0,"nativePrivateKeyExported",false,"records",records));
+    }
+}

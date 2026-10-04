@@ -79,7 +79,7 @@ public final class OutboundDispatcher {
         Objects.requireNonNull(handoffRecorder, "handoffRecorder");
         var entry = repository.findOutbox(actionId)
                 .orElseThrow(() -> new IllegalArgumentException("Unknown outbox action: " + actionId));
-        if (entry.action().kind() != OutboundKind.AUTHN_REQUEST) {
+        if (entry.action().kind() != OutboundKind.AUTHN_REQUEST && entry.action().kind() != OutboundKind.LOGOUT_REQUEST) {
             throw new IllegalArgumentException("Front-channel dispatcher does not implement "
                     + entry.action().kind());
         }

@@ -25,6 +25,69 @@ class MetadataFixtureObservationTestCaseTest {
     private static final Instant NOW = Instant.parse("2026-08-30T00:00:00Z");
 
     @Test
+    void legacyConfigurationStateCanExpireWithoutBeingConfirmed() {
+        var legacy = new com.samlscope.core.caseexec.CaseState("await-configuration", Map.of());
+        var testCase = testCase();
+        for (var event : List.<CaseEvent>of(new CaseEvent.TimedOut(java.time.Duration.ofDays(7)), new CaseEvent.Aborted("skip"))) {
+            var terminal = (CaseStep.Finish) testCase.resume(context(List.of()), legacy, event);
+            assertEquals(Outcome.NOT_VERIFIED, terminal.outcome().outcome());
+        }
+        org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class,
+                () -> testCase.resume(context(List.of()), legacy, new CaseEvent.ConfigConfirmed()));
+    }
+
+    @Test
+    void acceptingSuiteInvalidExtensionDoesNotProveTargetNamespaceViolation() {
+        var testCase = new MetadataFixtureObservationTestCase("IIP-MD05-a3-idp-01", TargetRole.IDP,
+                List.of(new MetadataFixtureObservationTestCase.Fixture("invalid-organization-saml-extension",
+                        MetadataFixtureObservationTestCase.Behavior.REJECT, "namespace qualification control")),
+                ConfigurationFailureSemantics.TEST_PRECONDITION);
+        var entries = List.of(fetch("control", 1), use("control", 2),
+                fetch("invalid-organization-saml-extension", 3), use("invalid-organization-saml-extension", 4));
+        assertEquals(Outcome.NOT_VERIFIED, evaluate(testCase, entries));
+        assertEquals(false, testCase.evidenceStatus(context(entries)).ready());
+    }
+
+    @Test
+    void suiteIssuedSignaturePairCanCompleteKeyValueConsumption() {
+        var testCase = new MetadataFixtureObservationTestCase("key-value", TargetRole.IDP,
+                List.of(new MetadataFixtureObservationTestCase.Fixture("keyvalue-only",
+                        MetadataFixtureObservationTestCase.Behavior.ACCEPT, "consume signing key")),
+                ConfigurationFailureSemantics.TEST_PRECONDITION);
+        var entries = new java.util.ArrayList<>(List.of(fetch("control", 1), use("control", 2), fetch("keyvalue-only", 3)));
+        for (var control : List.of("invalid", "valid")) {
+            entries.add(new TranscriptEntry("request-" + control, RUN, Direction.OUTBOUND, NOW, null,
+                    "POST", "https://idp.example/sso", null, Map.of(), null, 0, "decoded", 10, null, null,
+                    Map.of("type", "AuthnRequest", "id", control, "variant", "keyvalue-only",
+                            "campaign", "metadata-polling", "metadataSignatureGroup", "campaign:1", "metadataSignatureControl", control)));
+            entries.add(entry(entries.size() + 1, "https://suite.example/sp/acs/0?mdv=keyvalue-only&run=" + RUN,
+                    10, Map.of("metadataProbeAccepted", true, "inResponseTo", control,
+                            "statusCode", "urn:oasis:names:tc:SAML:2.0:status:" + (control.equals("valid") ? "Success" : "Requester"))));
+        }
+        assertEquals(Outcome.SATISFIED, evaluate(testCase, entries));
+        assertEquals(true, testCase.evidenceStatus(context(entries)).ready());
+        // A valid response to the bad-signature control invalidates the discrimination.
+        entries.add(entry(20, "https://suite.example/sp/acs/0?mdv=keyvalue-only&run=" + RUN, 10,
+                Map.of("metadataProbeAccepted", true, "inResponseTo", "invalid", "statusCode", "urn:oasis:names:tc:SAML:2.0:status:Success")));
+        assertEquals(Outcome.NOT_VERIFIED, evaluate(testCase, entries));
+    }
+
+    @Test
+    void successfulSsoCannotProveKeyValueConsumptionWithSignatureValidationDisabled() {
+        var testCase = new MetadataFixtureObservationTestCase("key-value", TargetRole.IDP,
+                List.of(new MetadataFixtureObservationTestCase.Fixture("keyvalue-only",
+                        MetadataFixtureObservationTestCase.Behavior.ACCEPT, "consume the signing key")),
+                ConfigurationFailureSemantics.TEST_PRECONDITION);
+        var entries = List.of(fetch("control", 1), use("control", 2),
+                fetch("keyvalue-only", 3), use("keyvalue-only", 4));
+        assertEquals(Outcome.NOT_VERIFIED, evaluate(testCase, entries));
+        var status = testCase.evidenceStatus(context(entries));
+        assertEquals(false, status.ready());
+        assertEquals(true, status.requiredObservations().contains("signature-discrimination:keyvalue-only"));
+        assertEquals(false, status.completedObservations().contains("signature-discrimination:keyvalue-only"));
+    }
+
+    @Test
     void requiresWorkingControlAndAllFixtureFetchesBeforeItIsReady() {
         var testCase = testCase();
         var incomplete = testCase.evidenceStatus(context(List.of(fetch("control", 1), use("control", 2))));
@@ -63,6 +126,32 @@ class MetadataFixtureObservationTestCaseTest {
     }
 
     @Test
+    void anotherRunOrDuplicateRecorderIdentityCannotCompleteMetadataAcceptance() {
+        var acceptOnly = new MetadataFixtureObservationTestCase("accept-only", TargetRole.IDP,
+                List.of(new MetadataFixtureObservationTestCase.Fixture("accepted",
+                        MetadataFixtureObservationTestCase.Behavior.ACCEPT, "positive")),
+                ConfigurationFailureSemantics.TEST_PRECONDITION);
+        var valid = List.of(fetch("control", 1), use("control", 2),
+                fetch("accepted", 3), use("accepted", 4));
+        assertEquals(Outcome.SATISFIED, evaluate(acceptOnly, valid));
+        for (var position : List.of(2, 3)) {
+            var mixed = new java.util.ArrayList<>(valid);
+            var original = mixed.get(position);
+            mixed.set(position, new TranscriptEntry(original.id(), "run_FOREIGN",
+                    original.direction(), original.timestamp(), original.correlationId(),
+                    original.method(), original.url(), original.status(), original.headers(),
+                    original.bodyRef(), original.bodyBytes(), original.decodedSamlRef(),
+                    original.decodedSamlBytes(), original.contentType(), original.rawQuery(), original.samlSummary()));
+            assertEquals(Outcome.NOT_VERIFIED, evaluate(acceptOnly, mixed));
+            assertEquals(false, acceptOnly.evidenceStatus(context(mixed)).ready());
+        }
+        var duplicate = new java.util.ArrayList<>(valid);
+        duplicate.add(valid.get(0));
+        assertEquals(Outcome.NOT_VERIFIED, evaluate(acceptOnly, duplicate));
+        assertEquals(false, acceptOnly.evidenceStatus(context(duplicate)).ready());
+    }
+
+    @Test
     void preservesTheApprovedConfigurationFailureSemantics() {
         var context = context(List.of());
         var normative = testCase(ConfigurationFailureSemantics.NORMATIVE_CAPABILITY);
@@ -90,7 +179,7 @@ class MetadataFixtureObservationTestCaseTest {
         var aggregate = entry(3, "/metadata/preloaded", 0,
                 Map.of("type", "MetadataFetch", "variant", "preloaded-aggregate",
                         "variants", List.of("accepted"), "feed", "preloaded"));
-        var operatorDownload = entry(2, "/metadata/preloaded/download", 0,
+        var operatorDownload = entry(5, "/metadata/preloaded/download", 0,
                 Map.of("type", "MetadataExport", "variant", "preloaded-aggregate",
                         "variants", List.of("accepted"), "feed", "preloaded-download"));
 
@@ -127,6 +216,41 @@ class MetadataFixtureObservationTestCaseTest {
 
         assertEquals(Outcome.NOT_VERIFIED, evaluate(acceptOnly, List.of(
                 fetch("control", 1), use("control", 2), fetch("accepted", 3), error, mismatch)));
+    }
+
+    @Test
+    void defaultSelectionRequiresActualEndpointAndRetainsCounterexamples() {
+        var testCase = new MetadataFixtureObservationTestCase("default-acs", TargetRole.IDP,
+                List.of(new MetadataFixtureObservationTestCase.Fixture("second",
+                        MetadataFixtureObservationTestCase.Behavior.ACCEPT, "select second", 1)),
+                ConfigurationFailureSemantics.TEST_PRECONDITION);
+        var prefix = List.of(fetch("control", 1), use("control", 2), fetch("second", 3));
+        var correct = entry(4, "https://suite.example/p/plan/sp/acs/1?mdv=second&run=" + RUN,
+                10, use("second", 4).samlSummary());
+        var entries = new java.util.ArrayList<>(prefix);
+        assertEquals(Outcome.NOT_VERIFIED, evaluate(testCase, entries));
+        entries.add(correct);
+        assertEquals(Outcome.SATISFIED, evaluate(testCase, entries));
+        entries.add(use("second", 5));
+        assertEquals(Outcome.VIOLATED, evaluate(testCase, entries));
+        assertEquals(Outcome.NOT_VERIFIED, evaluate(testCase, List.of(fetch("second", 3), use("second", 5))));
+    }
+
+    @Test
+    void staleUseAndPrefixCollisionCannotCompleteARequiredFixture() {
+        var testCase = new MetadataFixtureObservationTestCase("exact", TargetRole.IDP,
+                List.of(new MetadataFixtureObservationTestCase.Fixture("accepted",
+                        MetadataFixtureObservationTestCase.Behavior.ACCEPT, "positive")),
+                ConfigurationFailureSemantics.TEST_PRECONDITION);
+        assertEquals(Outcome.NOT_VERIFIED, evaluate(testCase, List.of(
+                fetch("control", 1), use("control", 2), use("accepted", 3), fetch("accepted", 4))));
+        for (var query : List.of("mdv=accepted-other&run=" + RUN,
+                "mdv=accepted&run=" + RUN + "-other", "mdv=accepted&run=" + RUN + "&run=" + RUN)) {
+            var collision = entry(4, "https://suite.example/p/plan/sp/acs/0?" + query,
+                    10, use("accepted", 4).samlSummary());
+            assertEquals(Outcome.NOT_VERIFIED, evaluate(testCase, List.of(
+                    fetch("control", 1), use("control", 2), fetch("accepted", 3), collision)));
+        }
     }
 
     private MetadataFixtureObservationTestCase testCase() {

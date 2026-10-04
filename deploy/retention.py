@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Offline hosted retention. Preview by default; apply only to a stopped service.
 
-Private Runs expire from creation; published Transcript entries expire individually
+Non-anonymous private Runs expire from creation; published Transcript entries expire individually
 from recording. Published results and reusable Plans are retained.
 """
 import argparse
@@ -12,7 +12,23 @@ import re
 import shutil
 import sqlite3
 
-SUPPORTED_SCHEMA_VERSION = 11
+SUPPORTED_SCHEMA_VERSION = 14
+SUPPORTED_MIGRATIONS = (1, 2, 3, 4, 5, 6, 7, 8, 11, 12, 13, 14)
+
+
+def validate_schema(db):
+    versions = tuple(row[0] for row in db.execute("SELECT version FROM schema_migrations ORDER BY version"))
+    if versions != SUPPORTED_MIGRATIONS:
+        raise ValueError("Unsupported database schema; migrate with the matching application first")
+    # These inputs belong to a Run, including published Runs. Deleting their parent
+    # must remove them; expiring only published Transcripts must preserve them.
+    for table, value in (("supplemental_decryption_keys", "document_json"),
+                         ("run_shared_key_commitments", "key_sha256")):
+        db.execute(f"SELECT run_id, {value} FROM {table} LIMIT 0")
+        foreign_keys = db.execute(f"PRAGMA foreign_key_list({table})").fetchall()
+        if len(foreign_keys) != 1 or foreign_keys[0][2:5] != ("runs", "run_id", "id") \
+                or foreign_keys[0][6] != "CASCADE":
+            raise ValueError("Unsupported Run input ownership; cascade deletion required")
 
 
 def instant(value):
@@ -42,7 +58,7 @@ def safe_path(root, relative):
     return path
 
 
-def maintain(data_directory, now, *, apply=False, service_stopped=False):
+def maintain(data_directory, now, *, apply=False, service_stopped=False, anonymous_confirmations=()):
     if apply and not service_stopped:
         raise ValueError("Apply requires a stopped service and --service-stopped")
     if now.tzinfo is None:
@@ -57,17 +73,51 @@ def maintain(data_directory, now, *, apply=False, service_stopped=False):
     with sqlite3.connect(database.as_uri() + "?mode=" + mode, uri=True) as db:
         db.execute("PRAGMA foreign_keys = ON")
         db.execute("BEGIN IMMEDIATE" if apply else "BEGIN")
-        if db.execute("SELECT MAX(version) FROM schema_migrations").fetchone()[0] != SUPPORTED_SCHEMA_VERSION:
-            raise ValueError("Unsupported database schema; migrate with the matching application first")
+        validate_schema(db)
         db.execute("SELECT run_id, entry_count, stored_bytes FROM transcript_usage LIMIT 0")
         db.execute("SELECT singleton, entry_count, stored_bytes FROM transcript_global_usage LIMIT 0")
+        # A current provider check must be supplied by a trusted operator/integration.
+        # No confirmation means candidate reporting only, never destructive expiry.
+        candidates = []
+        for identifier, role, status, created, last_used, version in db.execute(
+                "SELECT id, role, status, created_at, last_used_at, version FROM application_users"):
+            if role == "ANONYMOUS" and status == "ACTIVE" and instant(last_used or created) <= now - dt.timedelta(days=30):
+                candidates.append({"id": identifier, "version": version, "lastUsedAt": last_used,
+                                   "expiresAt": (instant(last_used or created) + dt.timedelta(days=30)).isoformat()})
+        by_id = {row["id"]: row for row in candidates}
+        expired_users = []
+        for confirmation in anonymous_confirmations:
+            candidate = by_id.get(confirmation.get("id"))
+            if candidate is None or confirmation.get("isAnonymous") is not True:
+                raise ValueError("Anonymous expiry confirmation does not match a current candidate")
+            if confirmation.get("version") != candidate["version"] or confirmation.get("lastUsedAt") != candidate["lastUsedAt"]:
+                raise ValueError("Account changed since expiry confirmation")
+            verified = instant(confirmation["verifiedAt"])
+            if not now - dt.timedelta(minutes=5) <= verified <= now:
+                raise ValueError("A fresh account-state verification is required")
+            if candidate["id"] in expired_users:
+                raise ValueError("Duplicate account-state confirmation")
+            expired_users.append(candidate["id"])
+        expired_plans = []
+        expired_runs = []
+        for user in expired_users:
+            expired_plans.extend(row[0] for row in db.execute(
+                "SELECT plan_id FROM hosted_plan_owners WHERE owner_id = ?", (user,)))
+        for plan in expired_plans:
+            if not re.fullmatch(r"plan_[0-9A-HJKMNP-TV-Z]{26}", plan):
+                raise ValueError("Invalid Plan identifier")
+            expired_runs.extend(run_id(row[0]) for row in db.execute("SELECT id FROM runs WHERE plan_id = ?", (plan,)))
         private = [run_id(row[0]) for row in db.execute(
             "SELECT r.id, r.created_at FROM runs r LEFT JOIN published_runs p "
-            "ON p.run_id = r.id WHERE p.run_id IS NULL")
+            "ON p.run_id = r.id LEFT JOIN hosted_plan_owners o ON o.plan_id = r.plan_id "
+            "LEFT JOIN application_users u ON u.id = o.owner_id "
+            "WHERE p.run_id IS NULL AND COALESCE(u.role, '') <> 'ANONYMOUS'")
             if instant(row[1]) <= now - dt.timedelta(days=30)]
         entries = []
         paths = set()
-        for identifier in private:
+        for plan in expired_plans:
+            paths.update((f"keys/{plan}", f"target-metadata/{plan}.xml"))
+        for identifier in set(private + expired_runs):
             paths.update((f"transcripts/{identifier}", f"results/{identifier}",
                           f"target-metadata/{identifier}.xml"))
         for identifier, owner, recorded, document in db.execute(
@@ -92,7 +142,9 @@ def maintain(data_directory, now, *, apply=False, service_stopped=False):
                 raise ValueError("Symlink inside evidence directory")
         summary = {"mode": "apply" if apply else "preview", "asOf": now.isoformat(),
                    "privateRuns": private, "publishedTranscriptEntries": entries,
-                   "paths": sorted(paths)}
+                   "paths": sorted(paths), "anonymousExpiryCandidates": candidates,
+                   "expiredAnonymousUsers": expired_users, "expiredAnonymousPlans": expired_plans,
+                   "anonymousExpiry": "verified-confirmations-only"}
         if apply:
             # Keep rows until file deletion succeeds. On failure leave the service
             # stopped and retry; removed expired files are intentionally not restored.
@@ -101,6 +153,12 @@ def maintain(data_directory, now, *, apply=False, service_stopped=False):
                     shutil.rmtree(path)
                 else:
                     path.unlink(missing_ok=True)
+            db.executemany("DELETE FROM plans WHERE id = ?", [(value,) for value in expired_plans])
+            for user in expired_users:
+                db.execute("DELETE FROM target_metadata_revisions WHERE connection_id IN "
+                           "(SELECT id FROM target_connections WHERE owner_id = ?)", (user,))
+                db.execute("DELETE FROM target_connections WHERE owner_id = ?", (user,))
+                db.execute("DELETE FROM application_users WHERE id = ?", (user,))
             db.executemany("DELETE FROM runs WHERE id = ?", [(value,) for value in private])
             db.executemany("DELETE FROM transcript_entries WHERE id = ?", [(value,) for value in entries])
             db.execute("""UPDATE transcript_usage SET
@@ -127,9 +185,12 @@ def main():
     parser.add_argument("--data-dir", required=True)
     parser.add_argument("--apply", action="store_true")
     parser.add_argument("--service-stopped", action="store_true")
+    parser.add_argument("--anonymous-confirmations", type=Path,
+                        help="Trusted current provider-state confirmations; omitted while UserInfo integration is pending")
     args = parser.parse_args()
+    confirmations = json.loads(args.anonymous_confirmations.read_text()) if args.anonymous_confirmations else []
     result = maintain(args.data_dir, dt.datetime.now(dt.timezone.utc),
-                      apply=args.apply, service_stopped=args.service_stopped)
+                      apply=args.apply, service_stopped=args.service_stopped, anonymous_confirmations=confirmations)
     print(json.dumps(result, indent=2))
 
 

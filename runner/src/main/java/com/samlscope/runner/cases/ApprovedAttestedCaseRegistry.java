@@ -77,7 +77,14 @@ public final class ApprovedAttestedCaseRegistry {
         }
         if (idpScenarioConfigurations != null
                 && IdpForceAuthnScenarioTestCase.MECHANISM_ACCESS_CASE.equals(definition.id())) {
-            return new IdpForceAuthnScenarioTestCase(definition.id(), idpScenarioConfigurations);
+            var bridge=new KeycloakNativeRunEvidenceBridge(SuiteRunProfileLookup.configuredDataDirectory());
+            return new ForceAuthnMechanismEvidenceTestCase(
+                    new IdpForceAuthnScenarioTestCase(definition.id(), idpScenarioConfigurations),
+                    new ShibbolethForceAuthnMechanismEvidence(
+                            SuiteRunProfileLookup.configuredDataDirectory().resolve("force-authn-mechanism-evidence"),
+                            transcriptContent == null ? bridge::content : transcriptContent,
+                            targetMetadata == null ? bridge::targetMetadata : targetMetadata,
+                            bridge::primaryKey));
         }
         if (idpScenarioConfigurations != null
                 && IdpTimePrecisionScenarioTestCase.CASE_ID.equals(definition.id())) {
@@ -104,11 +111,102 @@ public final class ApprovedAttestedCaseRegistry {
                                 "violated", Outcome.VIOLATED, "attestation.violated"),
                         AttestationOption.notVerified(
                                 "unable_to_verify", "attestation.unavailable", "attestation_unavailable")));
+        if (DefaultAlgorithmPreventionProbeTestCase.CASE.equals(definition.id())) {
+            return withNativeDefaultAlgorithms(fallback, SuiteRunProfileLookup.configuredDataDirectory(),
+                    transcriptContent, targetMetadata);
+        }
+        if (SloRegisteredSignerEvidence.CASE.equals(definition.id())) {
+            return withNativeSloRegisteredSigner(fallback,SuiteRunProfileLookup.configuredDataDirectory(),
+                    transcriptContent,targetMetadata);
+        }
+        if (RegisteredSignerObservationTestCase.CASE.equals(definition.id())) {
+            var data = SuiteRunProfileLookup.configuredDataDirectory();
+            var bridge = new KeycloakNativeRunEvidenceBridge(data);
+            return new RegisteredSignerObservationTestCase(fallback,
+                    data.resolve("keycloak-registered-signer-evidence"),
+                    transcriptContent == null ? bridge::content : transcriptContent,
+                    targetMetadata == null ? bridge::targetMetadata : targetMetadata,
+                    bridge::key,
+                    new SimpleSamlPhpRegisteredSignerEvidence(
+                            data.resolve("registered-signer-evidence-simplesamlphp"),
+                            transcriptContent == null ? bridge::content : transcriptContent,
+                            targetMetadata == null ? bridge::targetMetadata : targetMetadata,
+                            bridge::key),
+                    new ShibbolethRegisteredSignerEvidence(
+                            data.resolve("registered-signer-evidence-shibboleth"),
+                            transcriptContent == null ? bridge::content : transcriptContent,
+                            targetMetadata == null ? bridge::targetMetadata : targetMetadata,
+                            bridge::key));
+        }
+        if (targetMetadata != null && KeycloakSelfContainedTrustEvidenceFile.ID.equals(definition.id())) {
+            var data = SuiteRunProfileLookup.configuredDataDirectory();
+            return withNativeMetadataTrust(fallback, data, transcriptContent, targetMetadata);
+        }
         if (targetMetadata != null && List.of("IIP-MD09-a-idp-01", "IIP-MD09-a-sp-01")
                 .contains(definition.id())) {
             return new AutoAttestedMetadataEvidenceTestCase(fallback, targetMetadata);
         }
         return fallback;
+    }
+
+    static com.samlscope.core.caseexec.TestCase withNativeDefaultAlgorithms(
+            com.samlscope.core.caseexec.TestCase fallback, java.nio.file.Path data,
+            com.samlscope.core.transcript.TranscriptContentReader transcriptContent,
+            Function<String, byte[]> targetMetadata) {
+        var bridge = new KeycloakNativeRunEvidenceBridge(data);
+        var content = transcriptContent == null
+                ? (com.samlscope.core.transcript.TranscriptContentReader) bridge::content : transcriptContent;
+        var profiles = new SuiteRunProfileLookup(data);
+        // The original control metadata advertises the polling control key, not the Plan primary key.
+        return new DefaultAlgorithmPreventionProbeTestCase(fallback, content,
+                targetMetadata == null ? bridge::targetMetadata : targetMetadata,
+                run -> bridge.key(run, "control"), profiles::profile,
+                data.resolve("default-algorithm-evidence"),
+                new ShibbolethDefaultAlgorithmNativeAdapter(content));
+    }
+
+    static com.samlscope.core.caseexec.TestCase withNativeSloRegisteredSigner(
+            com.samlscope.core.caseexec.TestCase fallback, java.nio.file.Path data,
+            com.samlscope.core.transcript.TranscriptContentReader transcriptContent,
+            Function<String, byte[]> targetMetadata) {
+        var bridge=new KeycloakNativeRunEvidenceBridge(data);
+        return new SloRegisteredSignerObservationTestCase(fallback,data.resolve("slo-registered-signer-evidence"),
+                transcriptContent==null?bridge::content:transcriptContent,
+                targetMetadata==null?bridge::targetMetadata:targetMetadata,bridge::key);
+    }
+
+    static com.samlscope.core.caseexec.TestCase withNativeMetadataTrust(
+            com.samlscope.core.caseexec.TestCase fallback, java.nio.file.Path data,
+            com.samlscope.core.transcript.TranscriptContentReader transcriptContent,
+            Function<String, byte[]> targetMetadata) {
+        var bridge = new KeycloakNativeRunEvidenceBridge(data);
+        var keycloak = new KeycloakSelfContainedTrustEvidenceFile(
+                bridge.evidenceDirectory(), bridge::content, bridge::key);
+        var nativeFallback = new KeycloakSelfContainedTrustAttestedTestCase(fallback, targetMetadata, keycloak);
+        var content = transcriptContent == null
+                ? (com.samlscope.core.transcript.TranscriptContentReader) bridge::content : transcriptContent;
+        var simpleSamlPhp = new SimpleSamlPhpSelfContainedTrustEvidenceFile(
+                data.resolve("metadata-trust-evidence"), data.resolve("metadata-role-key-evidence"),
+                content, targetMetadata, bridge::metadataRoleKey);
+        var shibboleth = new ShibbolethSelfContainedTrustEvidenceFile(
+                data.resolve("metadata-trust-evidence"), data.resolve("metadata-role-key-evidence"),
+                content, targetMetadata, bridge::metadataRoleKey);
+        var simpleSamlPhpCase = new SelfContainedMetadataTrustEvidenceTestCase(nativeFallback,
+                simpleSamlPhp::exists,
+                context -> keycloak.exists(context.runId()) ? ambiguousNativeTrust() : simpleSamlPhp.evaluate(context),
+                SimpleSamlPhpSelfContainedTrustEvidenceFile.ADAPTER,
+                "native-self-contained-trust-evidence", ".simplesamlphp-trust.json");
+        return new SelfContainedMetadataTrustEvidenceTestCase(simpleSamlPhpCase,
+                shibboleth::exists,
+                context -> simpleSamlPhp.exists(context.runId()) || keycloak.exists(context.runId())
+                        ? ambiguousNativeTrust() : shibboleth.evaluate(context),
+                ShibbolethSelfContainedTrustEvidenceFile.ADAPTER,
+                ShibbolethSelfContainedTrustEvidenceFile.KIND, ".shibboleth-trust.json");
+    }
+
+    private static com.samlscope.core.evaluation.CaseOutcome ambiguousNativeTrust() {
+        return com.samlscope.core.evaluation.CaseOutcome.notVerified(
+                "native_metadata_trust_ambiguous", "metadata.trust.native-evidence-incomplete");
     }
 
     private static String prompt(CaseDefinition definition) {

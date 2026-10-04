@@ -58,8 +58,11 @@ final class EcpProbeRuntime {
             throw new IllegalArgumentException("ECP probing requires a completed baseline SSO round trip");
         }
         var plan = plans.find(run.planId()).orElseThrow(() -> new IllegalStateException("Run has no Test Plan"));
-        if (plan.profile() != FunctionalProfile.ECP_IDP) {
-            throw new IllegalArgumentException("The ECP probe is available only for an ECP — IdP Run");
+        if (plan.profile() != FunctionalProfile.ECP_IDP && plan.profile() != FunctionalProfile.METADATA_IDP) {
+            throw new IllegalArgumentException("The ECP probe is available only for an ECP or metadata — IdP Run");
+        }
+        if (plan.target().kind() != com.samlscope.core.plan.TargetKind.IDP) {
+            throw new IllegalArgumentException("ECP probing requires an IdP target");
         }
         var target = metadataParser.parse(
                 metadataCache.getRunSnapshot(run.id(), plan.id()), plan.target().entityId());
@@ -68,6 +71,31 @@ final class EcpProbeRuntime {
                 .map(com.samlscope.saml.metadata.TargetMetadata.Endpoint::location)
                 .findFirst().orElseThrow(() -> new IllegalArgumentException(
                         "Target metadata has no SOAP SingleSignOnService for ECP"));
+        java.util.List<com.samlscope.saml.ecp.MetadataApplicationEcpProbeFactory.Prepared> metadataProbes = null;
+        if (plan.profile() == FunctionalProfile.METADATA_IDP) {
+            if (!(run.context().get("metadata_lab") instanceof java.util.Map<?, ?> lab)
+                    || !"AUTOMATIC_POLLING".equals(lab.get("ingestion_mode"))
+                    || !(lab.get("selected_variant") instanceof String variant)
+                    || !(lab.get("selected_at") instanceof String selected)
+                    || !(lab.get("campaign_variants") instanceof List<?> variants)
+                    || variants.size() != 1 || !variant.equals(variants.getFirst())
+                    || !(lab.get("campaign_index") instanceof Number index)
+                    || index.doubleValue() != 1.0) {
+                // A completed single-member polling campaign leaves its polling key and full
+                // metadata behind the native URL. Manual refresh publishes the primary key,
+                // so switching modes would change the evidence epoch while probing its key.
+                throw new IllegalArgumentException("A completed single-variant polling epoch is required before ECP probing");
+            }
+            var selectedAt = java.time.Instant.parse(selected);
+            if (selectedAt.isBefore(run.createdAt()) || selectedAt.isAfter(run.updatedAt())) {
+                throw new IllegalArgumentException("Metadata selection does not belong to this Run epoch");
+            }
+            metadataProbes = saml.buildMetadataApplicationEcpProbes(
+                    plan, run.id(), MetadataService.Variant.parse(variant), endpoint, selectedAt);
+            for (var probe : metadataProbes) {
+                probes.validateMetadata(run.id(), probe.fixtureId(), endpoint, probe.envelope());
+            }
+        }
         var responseConsumer = URI.create(peerBase.resolve("/p/" + plan.id() + "/sp/paos")
                 + "?run=" + java.net.URLEncoder.encode(run.id(), StandardCharsets.UTF_8));
         var userBytes = username.getBytes(StandardCharsets.UTF_8);
@@ -79,6 +107,13 @@ final class EcpProbeRuntime {
         var allocatedEnvelopes = new ArrayList<byte[]>();
         try {
             var results = new ArrayList<EcpProbeService.Result>();
+            if (metadataProbes != null) {
+                for (var probe : metadataProbes) {
+                    var envelope = probe.envelope(); allocatedEnvelopes.add(envelope);
+                    results.add(probes.executeMetadata(run.id(), probe.fixtureId(), endpoint, envelope, credential));
+                }
+                return List.copyOf(results);
+            }
             var baseline = saml.buildEcpAuthnRequest(plan, endpoint, responseConsumer, "ecp-" + run.id());
             var baselineEnvelope = envelopes.baseline(baseline.xml());
             allocatedEnvelopes.add(baselineEnvelope);

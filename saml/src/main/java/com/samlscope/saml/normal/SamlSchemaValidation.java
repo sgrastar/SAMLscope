@@ -24,9 +24,11 @@ import org.xml.sax.helpers.DefaultHandler;
 
 /** Offline, DTD-free validation against the SAML 2.0 schemas shipped with the pinned OpenSAML runtime. */
 public final class SamlSchemaValidation {
-    public enum SchemaKind { PROTOCOL, ASSERTION }
+    public enum SchemaKind { PROTOCOL, ASSERTION, METADATA }
 
     private static final Map<String, String> NAMESPACE_RESOURCES = Map.of(
+            "urn:oasis:names:tc:SAML:2.0:metadata", "schema/saml-schema-metadata-2.0.xsd",
+            "http://www.w3.org/XML/1998/namespace", "schema/xml.xsd",
             "urn:oasis:names:tc:SAML:2.0:protocol", "schema/saml-schema-protocol-2.0.xsd",
             "urn:oasis:names:tc:SAML:2.0:assertion", "schema/saml-schema-assertion-2.0.xsd",
             "http://www.w3.org/2000/09/xmldsig#", "schema/xmldsig-core-schema.xsd",
@@ -34,29 +36,55 @@ public final class SamlSchemaValidation {
             "http://www.w3.org/2009/xmlenc11#", "schema/xenc11-schema.xsd");
     private static final Schema PROTOCOL = load("urn:oasis:names:tc:SAML:2.0:protocol");
     private static final Schema ASSERTION = load("urn:oasis:names:tc:SAML:2.0:assertion");
+    private static final Schema METADATA = load("urn:oasis:names:tc:SAML:2.0:metadata");
+    private static final class StringFixtureSchema {
+        private static final Schema INSTANCE = load("urn:oasis:names:tc:SAML:2.0:protocol", true);
+    }
 
     private SamlSchemaValidation() {}
 
     public static boolean isValid(Element element, SchemaKind kind) {
+        return validationFailure(element, kind).isEmpty();
+    }
+
+    public static java.util.Optional<String> validationFailure(Element element, SchemaKind kind) {
+        return validationFailure(element, schema(kind));
+    }
+
+    /** Explicit opt-in for Suite-generated input only; normal target validation is unchanged. */
+    public static java.util.Optional<String> stringFixtureValidationFailure(Element element) {
+        return validationFailure(element, StringFixtureSchema.INSTANCE);
+    }
+
+    private static java.util.Optional<String> validationFailure(Element element, Schema schema) {
         try {
-            var validator = (kind == SchemaKind.PROTOCOL ? PROTOCOL : ASSERTION).newValidator();
+            var validator = schema.newValidator();
             validator.setProperty(XMLConstants.ACCESS_EXTERNAL_DTD, "");
             validator.setProperty(XMLConstants.ACCESS_EXTERNAL_SCHEMA, "");
             validator.validate(new DOMSource(element));
-            return true;
+            return java.util.Optional.empty();
         } catch (SAXException | java.io.IOException invalid) {
-            return false;
+            return java.util.Optional.ofNullable(invalid.getMessage()).or(() -> java.util.Optional.of("Schema validation failed"));
         }
     }
 
     /**
      * Validates an element and reports values whose schema type is {@code xs:string}
-     * or a restriction derived from it. This deliberately uses schema type
+     * or a simple-content type derived from it. This deliberately uses schema type
      * information rather than element-name heuristics.
      */
     public static StringInspection inspectStringValues(Element element, SchemaKind kind) {
+        return inspectStringValues(element, schema(kind));
+    }
+
+    /** Resolves the fixed Suite fixture type, never arbitrary network or target schemas. */
+    public static StringInspection inspectFixtureStringValues(Element element) {
+        return inspectStringValues(element, StringFixtureSchema.INSTANCE);
+    }
+
+    private static StringInspection inspectStringValues(Element element, Schema schema) {
         try {
-            var handler = schema(kind).newValidatorHandler();
+            var handler = schema.newValidatorHandler();
             var collector = new StringValueCollector(handler.getTypeInfoProvider());
             handler.setContentHandler(collector);
             var transformerFactory = javax.xml.transform.TransformerFactory.newInstance();
@@ -84,7 +112,7 @@ public final class SamlSchemaValidation {
     }
 
     private static Schema schema(SchemaKind kind) {
-        return kind == SchemaKind.PROTOCOL ? PROTOCOL : ASSERTION;
+        return switch (kind) { case PROTOCOL -> PROTOCOL; case ASSERTION -> ASSERTION; case METADATA -> METADATA; };
     }
 
     private static boolean isString(TypeInfo type) {
@@ -94,7 +122,7 @@ public final class SamlSchemaValidation {
         return type.isDerivedFrom(
                 XMLConstants.W3C_XML_SCHEMA_NS_URI,
                 "string",
-                TypeInfo.DERIVATION_RESTRICTION);
+                TypeInfo.DERIVATION_RESTRICTION | TypeInfo.DERIVATION_EXTENSION);
     }
 
     private static final class StringValueCollector extends DefaultHandler {
@@ -146,6 +174,10 @@ public final class SamlSchemaValidation {
     }
 
     private static Schema load(String namespace) {
+        return load(namespace, false);
+    }
+
+    private static Schema load(String namespace, boolean stringFixtures) {
         try {
             var factory = SchemaFactory.newInstance(XMLConstants.W3C_XML_SCHEMA_NS_URI);
             factory.setFeature(XMLConstants.FEATURE_SECURE_PROCESSING, true);
@@ -158,6 +190,11 @@ public final class SamlSchemaValidation {
             var xmlEncryption11Resource = NAMESPACE_RESOURCES.get("http://www.w3.org/2009/xmlenc11#");
             var xmlEncryption11 = new StreamSource(
                     requiredResource(xmlEncryption11Resource), "classpath:/" + xmlEncryption11Resource);
+            if (stringFixtures) {
+                var fixture = new StreamSource(requiredResource("schema/samlscope-string-fixtures.xsd"),
+                        "classpath:/schema/samlscope-string-fixtures.xsd");
+                return factory.newSchema(new StreamSource[] {source, xmlEncryption11, fixture});
+            }
             return factory.newSchema(new StreamSource[] {source, xmlEncryption11});
         } catch (SAXException failure) {
             throw new ExceptionInInitializerError(failure);

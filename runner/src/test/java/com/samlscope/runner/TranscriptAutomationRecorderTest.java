@@ -46,6 +46,39 @@ class TranscriptAutomationRecorderTest {
     private static final Instant NOW = Instant.parse("2026-08-30T00:00:00Z");
 
     @Test
+    void closeWaitsForInFlightReconciliationBeforeStorageCanBeRemoved() throws Exception {
+        var delegate = new MemoryRecorder();
+        var recorder = new TranscriptAutomationRecorder(delegate, delegate);
+        var entered = new java.util.concurrent.CountDownLatch(1);
+        var interrupted = new java.util.concurrent.CountDownLatch(1);
+        var release = new java.util.concurrent.CountDownLatch(1);
+        var finished = new java.util.concurrent.atomic.AtomicBoolean();
+        recorder.onRecorded(ignored -> {
+            entered.countDown();
+            try { release.await(); }
+            catch (InterruptedException stopping) {
+                interrupted.countDown();
+                try { release.await(); }
+                catch (InterruptedException repeated) { Thread.currentThread().interrupt(); }
+            }
+            finished.set(true);
+        });
+        recorder.record(input());
+        org.junit.jupiter.api.Assertions.assertTrue(entered.await(5, java.util.concurrent.TimeUnit.SECONDS));
+        var closing = java.util.concurrent.CompletableFuture.runAsync(recorder::close);
+        try {
+            org.junit.jupiter.api.Assertions.assertTrue(interrupted.await(5, java.util.concurrent.TimeUnit.SECONDS));
+            assertThrows(java.util.concurrent.TimeoutException.class,
+                    () -> closing.get(50, java.util.concurrent.TimeUnit.MILLISECONDS));
+        } finally {
+            release.countDown();
+            closing.get(5, java.util.concurrent.TimeUnit.SECONDS);
+        }
+        org.junit.jupiter.api.Assertions.assertTrue(finished.get());
+        recorder.close();
+    }
+
+    @Test
     void notifiesAfterDurableRecordAndDoesNotBreakProtocolTrafficWhenReconciliationFails() {
         var delegate = new MemoryRecorder();
         var recorder = new TranscriptAutomationRecorder(delegate, delegate, Runnable::run);

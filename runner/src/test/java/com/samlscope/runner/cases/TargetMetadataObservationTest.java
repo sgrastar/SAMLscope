@@ -23,6 +23,77 @@ class TargetMetadataObservationTest {
     @TempDir java.nio.file.Path directory;
 
     @Test
+    void encryptionPreferenceAntecedentRequiresZeroOrOnePerTypeWithinEachKey() {
+        var id = "IIP-MD05-e5-idp-01";
+        var data = "<md:EncryptionMethod Algorithm='http://www.w3.org/2001/04/xmlenc#aes128-cbc'/>";
+        var transport = "<md:EncryptionMethod Algorithm='http://www.w3.org/2001/04/xmlenc#rsa-oaep-mgf1p'/>";
+        var role = "<md:IDPSSODescriptor protocolSupportEnumeration='" + SAML2 + "'>%s</md:IDPSSODescriptor>";
+        for (var keys : List.of("", "<md:KeyDescriptor/>", "<md:KeyDescriptor>" + data + transport + "</md:KeyDescriptor>",
+                "<md:KeyDescriptor>" + data + "</md:KeyDescriptor><md:KeyDescriptor>" + data + "</md:KeyDescriptor>")) {
+            assertOutcome(id, Outcome.SATISFIED, metadata(role.formatted(keys)));
+        }
+        for (var methods : List.of(data + data, transport + transport,
+                "<md:EncryptionMethod Algorithm='urn:unknown'/>", "<md:EncryptionMethod/>")) {
+            assertTrue(TargetMetadataObservation.evaluate(id,
+                    metadata(role.formatted("<md:KeyDescriptor>" + methods + "</md:KeyDescriptor>")), NOW).isEmpty());
+        }
+        assertTrue(TargetMetadataObservation.evaluate(id, metadata(""), NOW).isEmpty());
+        assertTrue(TargetMetadataObservation.evaluate(id, metadata("<md:SPSSODescriptor/>"), NOW).isEmpty());
+        assertTrue(TargetMetadataObservation.evaluate(id, metadata("<md:IDPSSODescriptor/>"), NOW).isEmpty());
+    }
+
+    @Test
+    void aSingleSigningKeyMakesIdentificationUnambiguousButUnknownCandidatesDoNot() throws Exception {
+        var cert = certificate();
+        var key = "<md:KeyDescriptor use='signing'><ds:KeyInfo><ds:X509Data><ds:X509Certificate>"
+                + cert + "</ds:X509Certificate></ds:X509Data></ds:KeyInfo></md:KeyDescriptor>";
+        var id = "IIP-MD05-ae-idp-01";
+        assertOutcome(id, Outcome.SATISFIED_WITH_NOTE, metadata(role("IDPSSODescriptor", SAML2, key)));
+        assertOutcome(id, Outcome.SATISFIED_WITH_NOTE, metadata(role("IDPSSODescriptor", SAML2, key + key)));
+        assertTrue(TargetMetadataObservation.evaluate(id, metadata(role("IDPSSODescriptor", SAML2, "")), NOW).isEmpty());
+        assertTrue(TargetMetadataObservation.evaluate(id, metadata(role("SPSSODescriptor", SAML2, key)), NOW).isEmpty());
+        assertTrue(TargetMetadataObservation.evaluate(id, metadata(role("IDPSSODescriptor", SAML2, key.replace("use='signing'", "use='encryption'"))), NOW).isEmpty());
+        assertTrue(TargetMetadataObservation.evaluate(id, metadata(role("IDPSSODescriptor", SAML2, key.replace(cert, "invalid"))), NOW).isEmpty());
+        var other = Base64.getEncoder().encodeToString(new FilePlanKeyStore(directory, Clock.fixed(NOW, ZoneOffset.UTC))
+                .getOrCreate("plan_0123456789ABCDEFGHJKMNPQRS", "different").certificate().getEncoded());
+        assertTrue(TargetMetadataObservation.evaluate(id, metadata(role("IDPSSODescriptor", SAML2, key + key.replace(cert, other))), NOW).isEmpty());
+        assertTrue(TargetMetadataObservation.evaluate(id, metadata(role("IDPSSODescriptor", SAML2,
+                key.replace("</ds:KeyInfo>", "<ds:KeyValue/></ds:KeyInfo>"))), NOW).isEmpty());
+    }
+
+    @Test
+    void unpublishedUiGuidanceUsesOnlyTheExplicitApprovedNoteBranches() {
+        for (var suffix : List.of("f7", "f8", "fa")) {
+            var id = "IIP-MD05-" + suffix + "-idp-01";
+            assertOutcome(id, Outcome.SATISFIED_WITH_NOTE, metadata(role("IDPSSODescriptor", SAML2, "")));
+            assertTrue(TargetMetadataObservation.evaluate(id,
+                    metadata(role("SPSSODescriptor", SAML2, "")), NOW).isEmpty());
+            assertTrue(TargetMetadataObservation.evaluate(id, "<unrelated/>".getBytes(StandardCharsets.UTF_8), NOW).isEmpty());
+        }
+        for (var suffix : List.of("f9", "fb", "fh", "fj")) {
+            assertFalse(TargetMetadataObservation.supports("IIP-MD05-" + suffix + "-idp-01"),
+                    "a publisher document cannot prove absence of a consumer UI");
+        }
+    }
+
+    @Test
+    void presentUiContentNeedsActualSemanticOrAssetEvidence() {
+        for (var pair : List.of(new String[]{"f7", "Description"}, new String[]{"f8", "Logo"}, new String[]{"fa", "InformationURL"})) {
+            for (var text : List.of("", "https://example.test/image.png")) {
+                if (pair[0].equals("f8") && text.isEmpty()) continue;
+                var xml = metadata(role("IDPSSODescriptor", SAML2,
+                        "<md:Extensions><mdui:UIInfo xmlns:mdui=\"urn:oasis:names:tc:SAML:metadata:ui\"><mdui:"
+                                + pair[1] + ">" + text + "</mdui:" + pair[1] + "></mdui:UIInfo></md:Extensions>"));
+                assertTrue(TargetMetadataObservation.evaluate("IIP-MD05-" + pair[0] + "-idp-01",
+                        xml, NOW).isEmpty());
+            }
+        }
+        assertOutcome("IIP-MD05-f8-idp-01", Outcome.VIOLATED, metadata(role("IDPSSODescriptor", SAML2,
+                "<md:Extensions><u:UIInfo xmlns:u=\"urn:oasis:names:tc:SAML:metadata:ui\">"
+                        + "<u:Logo>http://example.test/logo.png</u:Logo></u:UIInfo></md:Extensions>")));
+    }
+
+    @Test
     void detectsOverlappingSameTypeRolesWithoutTreatingOneRoleAsAnOverlap() {
         assertOutcome("IIP-MD05-a7-idp-01", Outcome.SATISFIED_WITH_NOTE,
                 metadata(role("IDPSSODescriptor", SAML2, "")));
@@ -358,17 +429,10 @@ class TargetMetadataObservationTest {
 
     @Test
     void algorithmPublicationCapabilityRequiresPositiveSignatureAndEncryptionDeclarations() {
-        var complete = metadata("""
-                <md:Extensions>
-                  <alg:SigningMethod Algorithm="urn:example:signature" MinKeySize="2048"/>
-                  <alg:EncryptionMethod Algorithm="urn:example:encryption"/>
-                </md:Extensions>
-                """);
-        var partial = metadata("""
-                <md:Extensions>
-                  <alg:SigningMethod Algorithm="urn:example:signature"/>
-                </md:Extensions>
-                """);
+        var signing = "<md:Extensions><alg:SigningMethod Algorithm='urn:example:signature'/></md:Extensions>";
+        var encryption = encryptionKeyDescriptor("encryption", encryptionMethod("urn:example:encryption"));
+        var complete = metadata(signing + role("IDPSSODescriptor", SAML2, encryption));
+        var partial = metadata(signing + role("IDPSSODescriptor", SAML2, ""));
 
         var outcome = TargetMetadataObservation.evaluate("IIP-MD09-a-idp-01", complete, NOW)
                 .orElseThrow();
@@ -378,6 +442,36 @@ class TargetMetadataObservationTest {
         assertTrue(TargetMetadataObservation.evaluate("IIP-MD09-a-idp-01", partial, NOW).isEmpty());
         assertTrue(TargetMetadataObservation.evaluate(
                 "IIP-MD09-a-idp-01", metadata(""), NOW).isEmpty());
+        assertEquals("IDPSSODescriptor", outcome.details().get("role"));
+        assertEquals("https://idp.example/entity", outcome.details().get("entity_id"));
+        assertOutcome("IIP-MD09-a-sp-01", Outcome.SATISFIED,
+                metadata(role("SPSSODescriptor", SAML2, signing + encryption)));
+        assertOutcome("IIP-MD09-a-idp-01", Outcome.SATISFIED,
+                metadata(role("IDPSSODescriptor", SAML2, signing + encryption.replace(" use=\"encryption\"", ""))));
+    }
+
+    @Test
+    void algorithmCapabilityCannotBorrowWrongNamespacePlacementRoleOrEntity() {
+        var signing = "<md:Extensions><alg:SigningMethod Algorithm='urn:example:signature'/></md:Extensions>";
+        var encryption = encryptionKeyDescriptor("encryption", encryptionMethod("urn:example:encryption"));
+        var idp = role("IDPSSODescriptor", SAML2, encryption);
+        for (var contents : List.of(
+                signing + role("SPSSODescriptor", SAML2, encryption),
+                signing + role("IDPSSODescriptor", "urn:example:other-protocol", encryption),
+                signing + role("IDPSSODescriptor", SAML2, encryption.replace("md:EncryptionMethod", "alg:EncryptionMethod")),
+                signing + role("IDPSSODescriptor", SAML2, encryption.replace("use=\"encryption\"", "use=\"signing\"")),
+                signing + role("IDPSSODescriptor", SAML2, encryption.replace("urn:example:encryption", "")),
+                signing.replace("urn:example:signature", "") + idp,
+                "<md:Extensions><alg:SigningMethod Algorithm='urn:example:signature'/>"
+                        + encryptionMethod("urn:example:encryption") + "</md:Extensions>" + role("IDPSSODescriptor", SAML2, ""),
+                "<md:Extensions><ext:Other>" + signing + "</ext:Other></md:Extensions>" + idp,
+                role("IDPSSODescriptor", SAML2, signing) + role("SPSSODescriptor", SAML2, encryption))) {
+            assertTrue(TargetMetadataObservation.evaluate("IIP-MD09-a-idp-01", metadata(contents), NOW).isEmpty(), contents);
+        }
+        var aggregate = ("<md:EntitiesDescriptor xmlns:md='urn:oasis:names:tc:SAML:2.0:metadata'>"
+                + entity("https://target.example/entity", role("IDPSSODescriptor", SAML2, ""))
+                + entity("https://unrelated.example/entity", signing + idp) + "</md:EntitiesDescriptor>").getBytes(StandardCharsets.UTF_8);
+        assertTrue(TargetMetadataObservation.evaluate("IIP-MD09-a-idp-01", aggregate, NOW).isEmpty());
     }
 
     @Test

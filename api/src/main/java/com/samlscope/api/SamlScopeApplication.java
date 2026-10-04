@@ -82,11 +82,12 @@ public final class SamlScopeApplication {
         var oidcClient = config.oidc().enabled()
                 ? (injectedOidcClient != null ? injectedOidcClient : new com.samlscope.api.auth.OidcClient(
                         config.oidc(), config.publicBaseUrl().resolve("/auth/callback"))) : null;
+        var database = new SqliteDatabase(config.dataDirectory());
+        var users = new com.samlscope.store.SqliteUserRepository(database);
         var oidc = new com.samlscope.api.auth.OidcRoutes(config.oidc(), config.publicBaseUrl(),
-                oidcClient, new com.samlscope.api.auth.OidcSessions(clock));
+                oidcClient, new com.samlscope.api.auth.OidcSessions(clock), users);
         var hostedRateLimiter = new HostedRateLimiter(clock);
         var json = new JsonCodec();
-        var database = new SqliteDatabase(config.dataDirectory());
         PlanRepository plans = new SqlitePlanRepository(database, json);
         RunRepository runs = new SqliteRunRepository(database, json);
         var targetConnections = new com.samlscope.store.SqliteTargetConnectionRepository(database, json);
@@ -107,13 +108,12 @@ public final class SamlScopeApplication {
         var signer = new XmlSigner();
         var metadataParser = new TargetMetadataParser();
         var saml = new SamlProtocolService(config.peerBaseUrl(), keyStore, signer, new OpenSamlReader(), clock);
-        var metadata = new MetadataService(config.peerBaseUrl(), keyStore, signer, clock);
+        var metadata = MetadataUiAssetConfiguration.create(config.peerBaseUrl(), keyStore, signer, clock);
         var preflight = new PreflightService(config.peerBaseUrl(), plans, runs, runService, metadataCache,
                 metadataParser, new OutboundPolicy(config.outboundAllowPrivate()), clock, json.mapper());
         var idpPeer = new IdpPeerService(plans, runs, runService, metadataCache, metadataParser, saml, transcript, clock);
         var secondaryIdpPeer = new IdpPeerService(
                 plans, runs, runService, metadataCache, metadataParser, saml, transcript, clock, true);
-        var sloPeer = new SloPeerService(plans, runs, metadataCache, metadataParser, saml, transcript, clock);
         var caseExecutions = new SqliteCaseExecutionRepository(database, json);
         var hostedRunProvisioner = new com.samlscope.store.SqliteHostedRunProvisioner(database, json, config.mode() == AppConfig.Mode.HOSTED);
         var ephemeralCredentials = new InMemoryEphemeralCredentialProvider();
@@ -125,19 +125,23 @@ public final class SamlScopeApplication {
                 config.peerBaseUrl(), plans, runs, metadataCache, metadataParser, saml,
                 new EcpProbeEnvelopeFactory(),
                 new EcpProbeService(caseExecutions, ephemeralCredentials, outboundDispatcher, clock));
+        var targetInitiated = new com.samlscope.runner.TargetInitiatedIntents();
         var m1 = M1Runtime.create(
                 config, database, json, plans, runs, transcript, transcript, metadataCache,
                 metadataParser, keyStore, caseExecutions, metadataLab, outboundDispatcher,
                 hostedRateLimiter, hostedRunProvisioner, clock,
-                profileArtifacts, approvedProfileDigests);
+                profileArtifacts, approvedProfileDigests, targetInitiated);
         var authorization = new ManagementAuthorization(oidc,
                 new com.samlscope.store.SqlitePlanOwnerRepository(database), plans, runs, m1);
         transcript.onRecorded(m1::reconcileTranscriptEvidenceAutomatically);
         var spPeer = new SpPeerService(
                 plans, runs, runService, metadataCache, metadataParser, saml, transcript, clock,
-                m1::acceptActiveProbe);
+                m1::acceptActiveProbe, targetInitiated);
+        var sloPeer = new SloPeerService(plans, runs, metadataCache, metadataParser, saml, transcript, clock,
+                m1::acceptActiveSloProbe, targetInitiated);
         var preloadedMetadataCache = new BoundedByteArrayCache(128);
 
+        var managementWrites = new java.util.concurrent.Semaphore(1, true);
         return Javalin.create(javalin -> {
             javalin.startup.showJavalinBanner = false;
             javalin.events.serverStopped(transcript::close);
@@ -155,7 +159,37 @@ public final class SamlScopeApplication {
                 securityHeaders(ctx);
                 enforceConfiguredOrigin(ctx, config);
             });
+            if (config.oidc().enabled()) {
+                javalin.routes.before(ctx -> {
+                    // Serialize management mutations with role changes and account deletion.
+                    if (ctx.path().startsWith("/api/") && !java.util.Set.of("GET", "HEAD", "OPTIONS").contains(ctx.method().name())) {
+                        managementWrites.acquire();
+                        ctx.attribute("managementWriteLock", true);
+                    }
+                });
+                javalin.routes.after(ctx -> {
+                    if (Boolean.TRUE.equals(ctx.attribute("managementWriteLock"))) {
+                        ctx.attribute("managementWriteLock", false);
+                        managementWrites.release();
+                    }
+                });
+            }
             oidc.register(javalin);
+            if (config.oidc().enabled()) {
+                AdminRoutes.register(javalin, authorization, users, new com.samlscope.store.SqlitePlanOwnerRepository(database),
+                        plans, storedTranscript, config, clock);
+                javalin.routes.after(ctx -> {
+                    // Auth endpoints, background SSE, and public report downloads are not application activity.
+                    if (ctx.statusCode() >= 200 && ctx.statusCode() < 300 && ctx.path().startsWith("/api/")
+                            && !ctx.path().equals("/api/health") && !ctx.path().equals("/api/profiles")
+                            && !ctx.path().endsWith("/events") && !ctx.path().endsWith("/result.json")
+                            && !ctx.path().endsWith("/report.html")) {
+                        oidc.session(ctx).ifPresent(session -> users.touch(session.identity().ownerId(), clock.instant()));
+                    }
+                });
+            }
+            SupplementalDecryptionKeyRoutes.register(javalin, m1::supplementalKeys, m1::submitSupplementalKeys);
+            TargetInitiatedRoutes.register(javalin, m1::targetInitiated, m1::prepareTargetInitiated);
             QuickCheckRoutes.register(javalin, m1::quickCheck);
             ResultRoutes.register(javalin, m1::requireResult, m1::requireReport);
             PublicationRoutes.register(javalin, m1::publish);
@@ -184,10 +218,22 @@ public final class SamlScopeApplication {
                     ctx.json(m1.abortActiveProbe(ctx.pathParam("id"))));
             javalin.routes.post("/api/runs/{id}/active-probe/retry", ctx ->
                     ctx.json(m1.retryActiveProbe(ctx.pathParam("id"))));
+            javalin.routes.post("/api/runs/{id}/target-initiated/conclude", ctx ->
+                    ctx.json(java.util.Map.of("concluded", m1.concludeTargetInitiated(ctx.pathParam("id")))));
+            javalin.routes.post("/api/runs/{id}/browser-observation", ctx -> {
+                var request = ctx.bodyAsClass(ApiModels.BrowserObservation.class);
+                ctx.json(m1.recordBrowserObservation(ctx.pathParam("id"), request));
+            });
+            javalin.routes.post("/api/runs/{id}/active-probe/browser-response", ctx -> {
+                var request = ctx.bodyAsClass(ApiModels.BrowserResponse.class);
+                ctx.json(m1.reportActiveProbeBrowserResponse(ctx.pathParam("id"), request));
+            });
             if (config.managementProtected()) {
                 ManagementSessionRoutes.register(javalin, config.publicBaseUrl(), m1::exchange,
                         m1::resumeManagementSession);
-                javalin.routes.before("/api/manage/session", ctx -> authorization.session(ctx));
+                javalin.routes.before("/api/manage/session", ctx -> {
+                    if (config.oidc().enabled()) throw new SecurityException("Secret URLs are disabled");
+                });
                 javalin.routes.before("/api/plans/{id}", ctx -> {
                     if (ctx.method().name().equals("GET")) {
                         authorization.authorizePlan(ctx, false);
@@ -218,8 +264,25 @@ public final class SamlScopeApplication {
                         authorization.authorizeRun(ctx, true));
                 javalin.routes.before("/api/runs/{id}/active-probe/retry", ctx ->
                         authorization.authorizeRun(ctx, true));
+                javalin.routes.before("/api/runs/{id}/active-probe/browser-response", ctx ->
+                        authorization.authorizeRun(ctx, true));
+                javalin.routes.before("/api/runs/{id}/browser-observation", ctx ->
+                        authorization.authorizeRun(ctx, true));
+                javalin.routes.before("/api/runs/{id}/target-initiated/conclude", ctx ->
+                        authorization.authorizeRun(ctx, true));
                 javalin.routes.before("/api/runs/{id}/interactions", ctx ->
                         authorization.authorizeRun(ctx, false));
+                javalin.routes.before("/api/runs/{id}/target-initiated", ctx -> {
+                    if (ctx.method().name().equals("GET")) {
+                        authorization.authorizeRun(ctx, false);
+                    } else {
+                        authorization.authorizeRun(ctx, true);
+                    }
+                });
+                javalin.routes.before("/api/runs/{id}/supplemental-decryption-keys", ctx ->
+                        authorization.authorizeRun(ctx, false));
+                javalin.routes.before("/api/runs/{id}/supplemental-decryption-keys/submit", ctx ->
+                        authorization.authorizeRun(ctx, true));
                 javalin.routes.before("/api/runs/{id}/workspace-evidence", ctx ->
                         authorization.authorizeRun(ctx, false));
                 javalin.routes.before("/api/runs/{id}/campaigns", ctx ->
@@ -287,7 +350,7 @@ public final class SamlScopeApplication {
             routes(javalin, config, plans, runs, transcript, storedTranscript,
                     eventBus, runService, preflight,
                     metadata, metadataLab, metadataCache, metadataParser, spPeer,
-                    idpPeer, secondaryIdpPeer, sloPeer, m1,
+                    idpPeer, secondaryIdpPeer, sloPeer, saml, m1,
                     hostedRateLimiter, hostedRunProvisioner, preloadedMetadataCache, authorization, clock,
                     targetConnections);
             javalin.routes.exception(MisdirectedRequest.class, (error, ctx) ->
@@ -298,6 +361,9 @@ public final class SamlScopeApplication {
             javalin.routes.exception(com.samlscope.core.plan.PlanConfigurationConflict.class, (error, ctx) ->
                     ctx.status(HttpStatus.CONFLICT).json(new ApiModels.ErrorView(
                             "plan_configuration_fixed", error.getMessage())));
+            javalin.routes.exception(com.samlscope.runner.TestInputFixed.class, (error, ctx) ->
+                    ctx.status(HttpStatus.CONFLICT).json(new ApiModels.ErrorView(
+                            "test_input_fixed", error.getMessage())));
             javalin.routes.exception(SecurityException.class, (error, ctx) ->
                     ctx.status(HttpStatus.FORBIDDEN)
                             .json(new ApiModels.ErrorView("access_denied", "Access denied")));
@@ -339,6 +405,7 @@ public final class SamlScopeApplication {
                                SpPeerService spPeer, IdpPeerService idpPeer,
                                IdpPeerService secondaryIdpPeer,
                                SloPeerService sloPeer,
+                               com.samlscope.saml.normal.SamlProtocolService saml,
                                M1Runtime m1, HostedRateLimiter hostedRateLimiter,
                                com.samlscope.store.SqliteHostedRunProvisioner hostedRunProvisioner,
                                BoundedByteArrayCache preloadedMetadataCache,
@@ -346,6 +413,7 @@ public final class SamlScopeApplication {
                                com.samlscope.store.SqliteTargetConnectionRepository targetConnections) {
         javalin.routes.get("/", SamlScopeApplication::serveIndex);
         javalin.routes.get("/reports/{run}", SamlScopeApplication::serveIndex);
+        javalin.routes.get("/admin", SamlScopeApplication::serveIndex);
         javalin.routes.get("/licenses", SamlScopeApplication::serveIndex);
         javalin.routes.get("/licenses/source-notices.json", ctx ->
                 serveClasspath(ctx, "/public/licenses/source-notices.json", "application/json; charset=utf-8"));
@@ -358,6 +426,7 @@ public final class SamlScopeApplication {
         javalin.routes.get("/manage/{run}", SamlScopeApplication::serveIndex);
         javalin.routes.get("/browser/{run}/{caseId}", SamlScopeApplication::serveIndex);
         javalin.routes.get("/assets/{file}", SamlScopeApplication::serveAsset);
+        MetadataUiAssetRoutes.register(javalin);
         javalin.routes.get("/api/health", ctx -> ctx.json(Map.of(
                 "status", "ok", "version", "0.1.0", "mode", config.mode().name().toLowerCase(),
                 "oidcEnabled", config.oidc().enabled())));
@@ -381,14 +450,16 @@ public final class SamlScopeApplication {
             ApiModels.RunCreated initialRun = null;
             if (config.managementProtected()) {
                 var run = runService.prepare(plan.id());
-                var access = m1.prepareManagementAccess(run);
+                var access = config.oidc().enabled() ? null : m1.prepareManagementAccess(run);
+                var grant = config.oidc().enabled() ? new com.samlscope.core.access.RunAccessGrant(
+                        run.id(), "sha256:" + "0".repeat(64), null, null, clock.instant(), true) : access.grant();
                 if (!hostedRunProvisioner.createPlanWithInitialRun(
-                        plan, run, access.grant(), owner)) {
+                        plan, run, grant, owner)) {
                     throw new HostedRateLimiter.RateLimitExceeded(
                             "Another Run against this target is already active");
                 }
                 runService.publishCreated(run);
-                initialRun = new ApiModels.RunCreated(run, access.access().managementUrl().toString());
+                initialRun = new ApiModels.RunCreated(run, config.oidc().enabled() ? config.publicBaseUrl().resolve("/manage/" + run.id()).toString() : access.access().managementUrl().toString());
             } else {
                 plans.save(plan);
             }
@@ -426,13 +497,15 @@ public final class SamlScopeApplication {
                     hostedRateLimiter.requireAllowed("create-run", ctx.ip(), 20, Duration.ofHours(1));
                 }
                 run = runService.prepare(requestedPlan.id());
-                var access = m1.prepareManagementAccess(run);
-                if (!hostedRunProvisioner.createRun(run, access.grant())) {
+                var access = config.oidc().enabled() ? null : m1.prepareManagementAccess(run);
+                var grant = config.oidc().enabled() ? new com.samlscope.core.access.RunAccessGrant(
+                        run.id(), "sha256:" + "0".repeat(64), null, null, clock.instant(), true) : access.grant();
+                if (!hostedRunProvisioner.createRun(run, grant)) {
                     throw new HostedRateLimiter.RateLimitExceeded(
                             "Another Run against this target is already active");
                 }
                 runService.publishCreated(run);
-                managementUrl = access.access().managementUrl().toString();
+                managementUrl = config.oidc().enabled() ? config.publicBaseUrl().resolve("/manage/" + run.id()).toString() : access.access().managementUrl().toString();
             } else {
                 run = runService.create(requestedPlan.id());
                 managementUrl = null;
@@ -448,7 +521,12 @@ public final class SamlScopeApplication {
             client.sendEvent("run", new RunEvent(runId, "run.snapshot", clock.instant(),
                     Map.of("status", run.status().name(), "reachability", run.targetToSuiteReachability().name())));
             client.keepAlive();
-            var subscription = eventBus.subscribe(runId, event -> client.sendEvent("run", event));
+            var subscription = eventBus.subscribe(runId, event -> {
+                try {
+                    if (config.oidc().enabled()) authorization.authorizeRun(client.ctx(), false);
+                    client.sendEvent("run", event);
+                } catch (SecurityException revoked) { client.close(); }
+            });
             client.onClose(subscription::close);
         });
 
@@ -457,20 +535,29 @@ public final class SamlScopeApplication {
             confirmReachabilityProbe(ctx.queryParam("probe"), plan.id(), runs, runService);
             var variant = MetadataService.Variant.parse(ctx.queryParam("variant"));
             var runId = ctx.queryParam("run");
+            com.samlscope.core.transcript.TranscriptEntry metadataFetch = null;
             if (variant != MetadataService.Variant.BASELINE) {
                 runId = requiredQuery(ctx, "run");
                 var run = requireRun(runs, runId);
                 if (!plan.id().equals(run.planId())) {
                     throw new IllegalArgumentException("Run belongs to another Test Plan");
                 }
-                transcript.record(new com.samlscope.core.transcript.TranscriptInput(
+                metadataFetch = transcript.record(new com.samlscope.core.transcript.TranscriptInput(
                         run.id(), com.samlscope.core.transcript.Direction.INBOUND, clock.instant(),
                         "metadata:" + variant.id(), "GET", absoluteRequestUrl(ctx), 200,
                         headers(ctx), new byte[0], null, ctx.req().getQueryString(), new byte[0],
                         Map.of("type", "MetadataFetch", "variant", variant.id())));
                 ctx.header("Cache-Control", "no-store");
             }
-            ctx.contentType("application/samlmetadata+xml").result(metadata.generate(plan, variant, runId));
+            // A Suite peer metadata variant may advertise an attribute (e.g. a producer encryption
+            // algorithm) while the ACS/SSO locations stay baseline: a correlated SSO response then
+            // reaches the Suite peer as a normal round trip rather than a fixture probe. The
+            // attribute variant still applies, so this is not a baseline metadata response.
+            var payload = "true".equals(ctx.queryParam("baselineEndpoints"))
+                    ? metadata.generateSuiteMetadata(plan, variant, runId)
+                    : metadata.generate(plan, variant, runId);
+            if (metadataFetch != null) MetadataResponseEvidence.record(transcript, metadataFetch, payload, clock);
+            ctx.contentType("application/samlmetadata+xml").result(payload);
         });
         javalin.routes.get("/p/{plan}/metadata/live", ctx -> {
             var plan = requirePlan(plans, ctx.pathParam("plan"));
@@ -482,7 +569,7 @@ public final class SamlScopeApplication {
                 throw new IllegalArgumentException("Run belongs to another Test Plan");
             }
             var redirectStatus = metadataRedirectStatus(variant);
-            transcript.record(new com.samlscope.core.transcript.TranscriptInput(
+            var metadataFetch = transcript.record(new com.samlscope.core.transcript.TranscriptInput(
                     run.id(), com.samlscope.core.transcript.Direction.INBOUND, clock.instant(),
                     "metadata-live:" + variant.id(), "GET", absoluteRequestUrl(ctx),
                     redirectStatus == null ? 200 : redirectStatus.getCode(),
@@ -491,7 +578,9 @@ public final class SamlScopeApplication {
             // Automatic polling is opt-in. A fetch records evidence but does not advance: targets
             // often fetch more than once during one key reload, and every duplicate fetch must see
             // the same fixture. The correlated browser response advances the campaign.
-            metadataLab.recordLiveFetch(run.id(), plan.id(), variant.id(), ctx.queryParam("poll"));
+            if (redirectStatus == null) {
+                metadataLab.recordLiveFetch(run.id(), plan.id(), variant.id(), ctx.queryParam("poll"));
+            }
             ctx.header("Cache-Control", "no-store");
             if (redirectStatus != null) {
                 var location = config.peerBaseUrl().resolve(
@@ -503,19 +592,25 @@ public final class SamlScopeApplication {
                 ctx.redirect(location.toString(), redirectStatus);
                 return;
             }
-            ctx.contentType("application/samlmetadata+xml")
-                    .result(labState.ingestionMode() == MetadataLabService.IngestionMode.AUTOMATIC_POLLING
-                            ? metadata.generatePolling(plan, variant, runId)
-                            : metadata.generate(plan, variant, runId));
+            var polling = labState.ingestionMode() == MetadataLabService.IngestionMode.AUTOMATIC_POLLING;
+            // Keep the indexed comparison's original bytes stable across its two requests.
+            // Consumers still compare the recorded hashes: cache eviction or a restart is not proof of stability.
+            var payload = polling && variant == MetadataService.Variant.ATTRIBUTE_POLICY_INDEXED
+                    ? preloadedMetadataCache.getOrCompute("attribute-policy-indexed:" + runId,
+                            () -> metadata.generatePolling(plan, variant, runId))
+                    : polling ? metadata.generatePolling(plan, variant, runId)
+                            : metadata.generate(plan, variant, runId);
+            MetadataResponseEvidence.record(transcript, metadataFetch, payload, clock);
+            ctx.contentType("application/samlmetadata+xml").result(payload);
         });
         javalin.routes.get("/p/{plan}/metadata/preloaded", ctx -> {
             var plan = requirePlan(plans, ctx.pathParam("plan"));
             var runId = requiredQuery(ctx, "run");
             var run = requireRun(runs, runId);
             var preload = requiredQuery(ctx, "preload");
-            metadataLab.authorizePreloadedFetch(run.id(), plan.id(), preload);
+            var scope = metadataLab.authorizePreloadedFetch(run.id(), plan.id(), preload);
             var payload = preloadedMetadataCache.getOrCompute(
-                    preloadedCacheKey(plan.id(), run.id()),
+                    preloadedCacheKey(plan.id(), run.id()) + ":" + preload,
                     () -> {
                         if (config.mode() == AppConfig.Mode.HOSTED) {
                             hostedRateLimiter.requireAllowedTogether(
@@ -530,11 +625,11 @@ public final class SamlScopeApplication {
                                             "preloaded-generation-global", "service", 60,
                                             Duration.ofHours(1)));
                         }
-                        return metadata.generatePreloadedCampaign(plan, run.id());
+                        return metadata.generatePreloadedCampaign(plan, run.id(), scope.stream().map(MetadataService.Variant::parse).toList());
                     });
             var variants = metadataLab.recordPreloadedFetch(
                     run.id(), plan.id(), preload);
-            transcript.record(new com.samlscope.core.transcript.TranscriptInput(
+            var metadataFetch = transcript.record(new com.samlscope.core.transcript.TranscriptInput(
                     run.id(), com.samlscope.core.transcript.Direction.INBOUND, clock.instant(),
                     "metadata-preloaded", "GET", absoluteRequestUrl(ctx), 200,
                     headers(ctx), new byte[0], null, ctx.req().getQueryString(), new byte[0],
@@ -544,8 +639,8 @@ public final class SamlScopeApplication {
                             "variants", variants,
                             "feed", "preloaded")));
             ctx.header("Cache-Control", "no-store");
-            ctx.contentType("application/samlmetadata+xml")
-                    .result(payload);
+            MetadataResponseEvidence.record(transcript, metadataFetch, payload, clock);
+            ctx.contentType("application/samlmetadata+xml").result(payload);
         });
         javalin.routes.get("/p/{plan}/metadata/preloaded/download", ctx -> {
             var plan = requirePlan(plans, ctx.pathParam("plan"));
@@ -555,7 +650,7 @@ public final class SamlScopeApplication {
             var variants = metadataLab.authorizePreloadedDownload(
                     run.id(), plan.id(), preload);
             var payload = preloadedMetadataCache.getOrCompute(
-                    preloadedCacheKey(plan.id(), run.id()),
+                    preloadedCacheKey(plan.id(), run.id()) + ":" + preload,
                     () -> {
                         if (config.mode() == AppConfig.Mode.HOSTED) {
                             hostedRateLimiter.requireAllowedTogether(
@@ -570,9 +665,9 @@ public final class SamlScopeApplication {
                                             "preloaded-generation-global", "service", 60,
                                             Duration.ofHours(1)));
                         }
-                        return metadata.generatePreloadedCampaign(plan, run.id());
+                        return metadata.generatePreloadedCampaign(plan, run.id(), variants.stream().map(MetadataService.Variant::parse).toList());
                     });
-            transcript.record(new com.samlscope.core.transcript.TranscriptInput(
+            var metadataFetch = transcript.record(new com.samlscope.core.transcript.TranscriptInput(
                     run.id(), com.samlscope.core.transcript.Direction.INBOUND, clock.instant(),
                     "metadata-preloaded-download", "GET", absoluteRequestUrl(ctx), 200,
                     Map.of(), new byte[0], null, ctx.req().getQueryString(), new byte[0],
@@ -582,6 +677,7 @@ public final class SamlScopeApplication {
                             "variants", variants,
                             "feed", "preloaded-download")));
             ctx.header("Cache-Control", "no-store");
+            MetadataResponseEvidence.record(transcript, metadataFetch, payload, clock);
             ctx.header("Content-Disposition", "attachment; filename=\"samlscope-metadata-campaign.xml\"");
             ctx.contentType("application/samlmetadata+xml").result(payload);
         });
@@ -596,11 +692,22 @@ public final class SamlScopeApplication {
             if (metadataRedirectStatus(variant) == null) {
                 throw new IllegalArgumentException("Metadata content route requires a redirect fixture");
             }
+            var labState = metadataLab.state(run.id());
+            if (!variant.id().equals(labState.selectedVariant())) {
+                throw new IllegalArgumentException("Metadata redirect fixture is no longer selected");
+            }
+            metadataLab.recordLiveFetch(run.id(), plan.id(), variant.id(), ctx.queryParam("poll"));
+            var metadataFetch = transcript.record(new com.samlscope.core.transcript.TranscriptInput(
+                    run.id(), com.samlscope.core.transcript.Direction.INBOUND, clock.instant(),
+                    "metadata-live-content:" + variant.id(), "GET", absoluteRequestUrl(ctx), 200,
+                    headers(ctx), new byte[0], null, ctx.req().getQueryString(), new byte[0],
+                    Map.of("type", "MetadataFetch", "variant", variant.id(), "feed", "live-content")));
             ctx.header("Cache-Control", "no-store");
-            ctx.contentType("application/samlmetadata+xml")
-                    .result(ctx.queryParam("poll") == null
-                            ? metadata.generate(plan, variant, runId)
-                            : metadata.generatePolling(plan, variant, runId));
+            var payload = labState.ingestionMode() == MetadataLabService.IngestionMode.AUTOMATIC_POLLING
+                    ? metadata.generatePolling(plan, variant, runId)
+                    : metadata.generate(plan, variant, runId);
+            MetadataResponseEvidence.record(transcript, metadataFetch, payload, clock);
+            ctx.contentType("application/samlmetadata+xml").result(payload);
         });
         javalin.routes.get("/mdq/<entityId>", ctx -> {
             var entityId = URLDecoder.decode(ctx.pathParam("entityId"), StandardCharsets.UTF_8);
@@ -620,11 +727,33 @@ public final class SamlScopeApplication {
         javalin.routes.get("/p/{plan}/start/m0-roundtrip", ctx ->
                 ctx.redirect(spPeer.start(ctx.pathParam("plan"), requiredQuery(ctx, "run")).toString()));
         javalin.routes.get("/p/{plan}/start/metadata-polling/{index}", ctx -> {
+            var signatureControl = ctx.queryParam("signatureControl");
+            if (signatureControl != null && !"invalid".equals(signatureControl)) {
+                throw new IllegalArgumentException("Unknown metadata signature control");
+            }
             var plan = requirePlan(plans, ctx.pathParam("plan"));
             var run = requireRun(runs, requiredQuery(ctx, "run"));
             var index = Integer.parseInt(ctx.pathParam("index"));
             var flow = metadataLab.requireAutomaticStartFlow(
                     run.id(), plan.id(), requiredQuery(ctx, "poll"), index);
+            var attributeIndex = AttributePolicyRequestOptions.parse(
+                    flow.variant(), ctx.queryParam("attributeConsumingServiceIndex"));
+            if (signatureControl != null && flow.variant().requestFixture()
+                    != com.samlscope.saml.normal.SamlSignedRequestFactory.Fixture.VALID) {
+                throw new IllegalArgumentException("Signature control requires a normal signed-request fixture");
+            }
+            if (!metadataLab.automaticStartReady(run.id(), plan.id(), flow.campaignToken(), index)) {
+                var next = "/p/" + plan.id() + "/start/metadata-polling/" + index
+                        + "?run=" + run.id() + "&poll=" + java.net.URLEncoder.encode(
+                                flow.campaignToken(), java.nio.charset.StandardCharsets.UTF_8)
+                        + (signatureControl == null ? "" : "&signatureControl=invalid")
+                        + (attributeIndex == null ? "" : "&attributeConsumingServiceIndex=" + attributeIndex);
+                ctx.header("Cache-Control", "no-store")
+                        .header("Content-Security-Policy", "default-src 'none'; frame-ancestors 'none'; base-uri 'none'")
+                        .status(202).contentType("text/html; charset=utf-8")
+                        .result(metadataFetchWaitingPage(next));
+                return;
+            }
             // requireAutomaticStartFlow records the attempted index in the Run context. Reload so
             // the request-correlation update below cannot overwrite that orchestration state.
             run = requireRun(runs, run.id());
@@ -640,9 +769,10 @@ public final class SamlScopeApplication {
             var acs = config.peerBaseUrl().resolve(
                     "/p/" + plan.id() + "/sp/acs/0?mdv=" + flow.variant().id() + "&run=" + run.id());
             var requestXml = new com.samlscope.saml.normal.SamlSignedRequestFactory().build(
-                    com.samlscope.saml.normal.SamlSignedRequestFactory.Fixture.VALID,
+                    signatureControl == null ? flow.variant().requestFixture()
+                            : com.samlscope.saml.normal.SamlSignedRequestFactory.Fixture.BAD_SIGNATURE_VALUE,
                     requestId, destination, peerEntityId(config, plan), acs,
-                    clock.instant(), metadata.credentialsForPollingVariant(plan, flow.variant()));
+                    clock.instant(), metadata.credentialsForPollingVariant(plan, flow.variant()), attributeIndex);
             var relayState = "samlscope-metadata-polling|" + run.id() + "|"
                     + flow.campaignToken() + "|" + flow.index();
             var requests = new LinkedHashMap<String, Object>();
@@ -654,6 +784,8 @@ public final class SamlScopeApplication {
             requests.put(flow.variant().id(), requestId);
             var context = new LinkedHashMap<String, Object>(run.context());
             context.put("metadata_polling_requests", Map.copyOf(requests));
+            context.put("active_metadata_request_id", requestId);
+            context.put("active_metadata_signature_control", signatureControl == null ? "valid" : "invalid");
             runService.update(run, RunStatus.WAITING_BROWSER, run.targetToSuiteReachability(), context);
             transcript.record(new com.samlscope.core.transcript.TranscriptInput(
                     run.id(), com.samlscope.core.transcript.Direction.OUTBOUND, clock.instant(),
@@ -662,7 +794,10 @@ public final class SamlScopeApplication {
                             "type", "AuthnRequest",
                             "id", requestId,
                             "variant", flow.variant().id(),
-                            "campaign", "metadata-polling")));
+                            "campaign", "metadata-polling",
+                            "metadataSignatureControl", signatureControl == null ? "valid" : "invalid",
+                            "metadataSignatureGroup", flow.campaignToken() + ":" + flow.index(),
+                            "attributeConsumingServiceIndex", attributeIndex == null ? "absent" : attributeIndex.toString())));
             var nonceBytes = new byte[18];
             NONCE_RANDOM.nextBytes(nonceBytes);
             var nonce = Base64.getUrlEncoder().withoutPadding().encodeToString(nonceBytes);
@@ -710,10 +845,18 @@ public final class SamlScopeApplication {
             var requestId = "_" + Identifiers.newId("metadata");
             var acs = config.peerBaseUrl().resolve(
                     "/p/" + plan.id() + "/sp/acs/0?mdv=" + flow.variant().id() + "&run=" + run.id());
-            var requestXml = new com.samlscope.saml.normal.SamlSignedRequestFactory().build(
-                    com.samlscope.saml.normal.SamlSignedRequestFactory.Fixture.VALID,
-                    requestId, destination, metadata.preloadedEntityId(plan, flow.variant()), acs,
-                    clock.instant(), metadata.credentialsForVariant(plan, flow.variant()));
+            var authnInput = ctx.queryParam("authn") == null ? null : AuthnContextCampaignInputs.read(
+                    config.dataDirectory().resolve("authn-context-inputs"), run.id(),
+                    metadataCache.getRunSnapshot(run.id(), plan.id()), ctx.queryParam("authn"));
+            var requestXml = authnInput == null
+                    ? new com.samlscope.saml.normal.SamlSignedRequestFactory().build(
+                        flow.variant().requestFixture(), requestId, destination,
+                        metadata.preloadedEntityId(plan, flow.variant()), acs,
+                        clock.instant(), metadata.credentialsForVariant(plan, flow.variant()))
+                    : new com.samlscope.saml.normal.SamlRequestedAuthnContextRequestFactory().buildSignedContext(
+                        authnInput.request(), requestId, destination,
+                        metadata.preloadedEntityId(plan, flow.variant()), acs,
+                        clock.instant(), metadata.credentialsForVariant(plan, flow.variant()));
             var relayState = "samlscope-metadata-preloaded|" + run.id() + "|"
                     + flow.campaignToken() + "|" + flow.index();
             var requests = new LinkedHashMap<String, Object>();
@@ -725,15 +868,22 @@ public final class SamlScopeApplication {
             requests.put(flow.variant().id(), requestId);
             var context = new LinkedHashMap<String, Object>(run.context());
             context.put("metadata_preloaded_requests", Map.copyOf(requests));
+            context.put("active_metadata_request_id", requestId);
             runService.update(run, RunStatus.WAITING_BROWSER, run.targetToSuiteReachability(), context);
+            var requestSummary = new LinkedHashMap<String, Object>();
+            requestSummary.put("type", "AuthnRequest");
+            requestSummary.put("id", requestId);
+            requestSummary.put("variant", flow.variant().id());
+            requestSummary.put("campaign", "metadata-preloaded");
+            if (authnInput != null) {
+                requestSummary.put("authn_context_case", authnInput.caseId());
+                requestSummary.put("authn_context_condition", authnInput.condition());
+                requestSummary.put("authn_context_inputs_sha256", authnInput.sha256());
+            }
             transcript.record(new com.samlscope.core.transcript.TranscriptInput(
                     run.id(), com.samlscope.core.transcript.Direction.OUTBOUND, clock.instant(),
                     requestId, "POST", destination.toString(), null, Map.of(), new byte[0], null,
-                    null, requestXml, Map.of(
-                            "type", "AuthnRequest",
-                            "id", requestId,
-                            "variant", flow.variant().id(),
-                            "campaign", "metadata-preloaded")));
+                    null, requestXml, Map.copyOf(requestSummary)));
             var nonceBytes = new byte[18];
             NONCE_RANDOM.nextBytes(nonceBytes);
             var nonce = Base64.getUrlEncoder().withoutPadding().encodeToString(nonceBytes);
@@ -782,13 +932,34 @@ public final class SamlScopeApplication {
         javalin.routes.post("/p/{plan}/idp/sso", ctx -> serveIdp(ctx, idpPeer));
         javalin.routes.get("/p/{plan}/idp/secondary/sso", ctx -> serveIdp(ctx, secondaryIdpPeer));
         javalin.routes.post("/p/{plan}/idp/secondary/sso", ctx -> serveIdp(ctx, secondaryIdpPeer));
+        // Fixture-only endpoint: a participant that always fails is required to exercise
+        // continue-after-failure and PartialLogout. It records the attempt so the rule can require
+        // an observed failing attempt, but it never contributes a verdict by itself.
+        javalin.routes.get("/p/{plan}/sp/slo-fail", ctx -> {
+            recordSloFailParticipant(ctx, transcript, clock, saml);
+            ctx.status(HttpStatus.INTERNAL_SERVER_ERROR).contentType("text/plain").result("slo failure fixture");
+        });
+        javalin.routes.post("/p/{plan}/sp/slo-fail", ctx -> {
+            recordSloFailParticipant(ctx, transcript, clock, saml);
+            // A SOAP participant failure must be a SOAP Fault, not an I/O-level error, or the
+            // propagation loop cannot distinguish a failed participant from a broken transport.
+            if (String.valueOf(ctx.contentType()).toLowerCase(java.util.Locale.ROOT).contains("xml")) {
+                ctx.status(HttpStatus.INTERNAL_SERVER_ERROR).contentType("text/xml").result(
+                        "<S:Envelope xmlns:S=\"http://schemas.xmlsoap.org/soap/envelope/\"><S:Body>"
+                        + "<S:Fault><faultcode>S:Server</faultcode>"
+                        + "<faultstring>slo failure fixture</faultstring></S:Fault>"
+                        + "</S:Body></S:Envelope>");
+                return;
+            }
+            ctx.status(HttpStatus.INTERNAL_SERVER_ERROR).contentType("text/plain").result("slo failure fixture");
+        });
         for (var role : List.of("sp", "idp")) {
             javalin.routes.get("/p/{plan}/" + role + "/slo", ctx ->
-                    serveSlo(ctx, sloPeer, SloPeerService.Transport.FRONT_CHANNEL));
+                    serveSlo(ctx, sloPeer, SloPeerService.Transport.FRONT_CHANNEL, m1));
             javalin.routes.post("/p/{plan}/" + role + "/slo", ctx ->
-                    serveSlo(ctx, sloPeer, SloPeerService.Transport.FRONT_CHANNEL));
+                    serveSlo(ctx, sloPeer, SloPeerService.Transport.FRONT_CHANNEL, m1));
             javalin.routes.post("/p/{plan}/" + role + "/slo/soap", ctx ->
-                    serveSlo(ctx, sloPeer, SloPeerService.Transport.SOAP));
+                    serveSlo(ctx, sloPeer, SloPeerService.Transport.SOAP, m1));
         }
         javalin.routes.post("/p/{plan}/sp/paos", ctx -> {
             var runId = requiredQuery(ctx, "run");
@@ -805,6 +976,28 @@ public final class SamlScopeApplication {
         });
     }
 
+    private static void recordSloFailParticipant(
+            Context ctx, com.samlscope.core.transcript.TranscriptRecorder transcript,
+            java.time.Clock clock, com.samlscope.saml.normal.SamlProtocolService saml) {
+        var runId = ctx.queryParam("run");
+        if (runId == null || runId.isBlank()) return;
+        byte[] decoded = new byte[0];
+        try {
+            var message = "GET".equalsIgnoreCase(ctx.method().name())
+                    ? saml.decodeRedirectRaw(ctx.req().getQueryString(), "SAMLRequest")
+                    : saml.decodePostRaw(ctx.bodyAsBytes(), "SAMLRequest");
+            decoded = message.xml();
+        } catch (RuntimeException undecodable) {
+            decoded = new byte[0];
+        }
+        if (decoded == null || decoded.length == 0) decoded = new byte[0];
+        transcript.record(new com.samlscope.core.transcript.TranscriptInput(
+                runId, com.samlscope.core.transcript.Direction.INBOUND, clock.instant(),
+                null, ctx.method().name(), absoluteRequestUrl(ctx), 500, java.util.Map.of(),
+                new byte[0], "text/plain", ctx.req().getQueryString(), decoded,
+                java.util.Map.of("type", "SloFailParticipant", "http_status", 500)));
+    }
+
     private static void requireActiveProbeRoute(
             Context ctx, com.samlscope.runner.ActiveProbeCoordinator.Status status) {
         if (!ctx.pathParam("plan").equals(status.planId())
@@ -816,6 +1009,11 @@ public final class SamlScopeApplication {
 
     private static void renderActiveProbe(
             Context ctx, com.samlscope.runner.ActiveProbeCoordinator.PreparedProbe probe) {
+        if (probe.redirectDestination() != null) {
+            ctx.header("Cache-Control", "no-store");
+            ctx.redirect(probe.redirectDestination().toASCIIString());
+            return;
+        }
         var nonceBytes = new byte[18];
         NONCE_RANDOM.nextBytes(nonceBytes);
         var nonce = Base64.getUrlEncoder().withoutPadding().encodeToString(nonceBytes);
@@ -831,16 +1029,7 @@ public final class SamlScopeApplication {
             Context ctx, com.samlscope.peer.sp.SpPeerService.ConsumeResult consumed, M1Runtime m1,
             MetadataLabService metadataLab) {
         if (consumed.activeProbe()) {
-            var status = m1.activeProbeRouteStatus(consumed.activeProbeRunId());
-            var nonceBytes = new byte[18];
-            NONCE_RANDOM.nextBytes(nonceBytes);
-            var nonce = Base64.getUrlEncoder().withoutPadding().encodeToString(nonceBytes);
-            ctx.header("Content-Security-Policy", "default-src 'none'; script-src 'nonce-" + nonce
-                    + "'; style-src 'self'; frame-ancestors 'none'; base-uri 'none'; object-src 'none'");
-            ctx.header("Cache-Control", "no-store").contentType("text/html; charset=utf-8")
-                    .result(ActiveProbePage.recorded(
-                            "/p/" + ctx.pathParam("plan") + "/ui/completion.css",
-                            status, consumed.summary(), nonce));
+            renderActiveProbeResponse(ctx, consumed.activeProbeRunId(), consumed.summary(), m1);
             return;
         }
         if (consumed.metadataProbe() && consumed.relayState() != null
@@ -858,6 +1047,12 @@ public final class SamlScopeApplication {
             if (!correlated) {
                 throw new IllegalArgumentException(
                         "Automatic metadata campaign response does not match the issued AuthnRequest");
+            }
+            if ("invalid".equals(consumed.summary().get("metadataSignatureControl"))) {
+                ctx.header("Cache-Control", "no-store").contentType("text/html; charset=utf-8")
+                        .result("<!doctype html><html lang=\"en\"><body><h1>Signature control response recorded</h1>"
+                                + "<p>The fixture remains selected for its normal signed request.</p></body></html>");
+                return;
             }
             // Advance only after both the stable metadata fetch and the signed browser response
             // have been bound to the same current fixture and request ID.
@@ -935,15 +1130,32 @@ public final class SamlScopeApplication {
             return;
         }
         ctx.header("Cache-Control", "no-store").contentType("text/html; charset=utf-8")
-                .result(PeerCompletionPage.render(m1.workspaceUrl(consumed.metadataProbe()
-                                ? consumed.metadataProbeRunId() : consumed.relayState()),
+                .result(PeerCompletionPage.render(
+                        m1.workspaceUrl(consumed.runId() == null ? consumed.relayState() : consumed.runId()),
                         "/p/" + ctx.pathParam("plan") + "/ui/completion.css", consumed.summary()));
     }
 
-    private static void serveSlo(Context ctx, SloPeerService service, SloPeerService.Transport transport) {
+    private static void renderActiveProbeResponse(Context ctx, String runId, Map<String, Object> summary, M1Runtime m1) {
+        var status = m1.activeProbeRouteStatus(runId);
+        var nonceBytes = new byte[18];
+        NONCE_RANDOM.nextBytes(nonceBytes);
+        var nonce = Base64.getUrlEncoder().withoutPadding().encodeToString(nonceBytes);
+        ctx.header("Content-Security-Policy", "default-src 'none'; script-src 'nonce-" + nonce
+                + "'; style-src 'self'; frame-ancestors 'none'; base-uri 'none'; object-src 'none'");
+        ctx.header("Cache-Control", "no-store").contentType("text/html; charset=utf-8")
+                .result(ActiveProbePage.recorded(
+                        "/p/" + ctx.pathParam("plan") + "/ui/completion.css",
+                        status, summary, nonce));
+    }
+
+    private static void serveSlo(Context ctx, SloPeerService service, SloPeerService.Transport transport, M1Runtime m1) {
         var result = service.consume(
                 ctx.pathParam("plan"), transport, ctx.method().name(), ctx.req().getQueryString(),
                 ctx.bodyAsBytes(), headers(ctx), absoluteRequestUrl(ctx));
+        if (result.activeProbe()) {
+            renderActiveProbeResponse(ctx, result.runId(), result.summary(), m1);
+            return;
+        }
         if (result.response() == null) {
             ctx.status(HttpStatus.NO_CONTENT);
             return;
@@ -959,13 +1171,21 @@ public final class SamlScopeApplication {
         var nonceBytes = new byte[18];
         NONCE_RANDOM.nextBytes(nonceBytes);
         var nonce = Base64.getUrlEncoder().withoutPadding().encodeToString(nonceBytes);
-        ctx.header("Content-Security-Policy", "default-src 'none'; script-src 'nonce-" + nonce
-                        + "'; form-action " + origin(result.response().destination())
-                        + "; frame-ancestors 'none'; base-uri 'none'; object-src 'none'");
+        ctx.header("Content-Security-Policy", sloPostContentSecurityPolicy(
+                result.response().destination(), nonce));
         ctx.header("Cache-Control", "no-store").contentType("text/html; charset=utf-8")
                 .result(HtmlPostPage.render(
                         result.response().destination(), result.response().base64(),
                         result.response().relayState(), nonce).replace("SAMLResponse", "SAMLResponse"));
+    }
+
+    static String sloPostContentSecurityPolicy(URI metadataDestination, String nonce) {
+        // SloPeerService resolves this endpoint from the configured target metadata,
+        // never from a request-supplied return URL. IdP logout may use an iframe.
+        var targetOrigin = origin(metadataDestination);
+        return "default-src 'none'; script-src 'nonce-" + nonce
+                + "'; form-action " + targetOrigin + "; frame-ancestors " + targetOrigin
+                + "; base-uri 'none'; object-src 'none'";
     }
 
     private static void serveIdp(Context ctx, IdpPeerService service) {
@@ -1039,7 +1259,7 @@ public final class SamlScopeApplication {
                 target.id(), revision.id());
     }
 
-    private static ApiModels.PlanView view(AppConfig config, TestPlan plan) {
+    static ApiModels.PlanView view(AppConfig config, TestPlan plan) {
         var entityId = peerEntityId(config, plan);
         var secondaryEntityId = secondaryIdpEntityId(config, plan);
         var summary = new ApiModels.PlanSummary(
@@ -1201,6 +1421,18 @@ public final class SamlScopeApplication {
                 + " seconds. This pacing lets a target's standard metadata-key refresh window "
                 + "elapse; it does not affect the conformance outcome.</p><p><a href=\"" + escaped
                 + "\">Continue now</a></p></body></html>";
+    }
+
+    static String metadataFetchWaitingPage(String next) {
+        var escaped = htmlEscape(next).replace("\"", "&quot;").replace("'", "&#39;");
+        return "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\">"
+                + "<meta http-equiv=\"refresh\" content=\"2;url=" + escaped + "\">"
+                + "<title>Waiting for metadata retrieval</title></head><body>"
+                + "<h1>Waiting for metadata retrieval</h1>"
+                + "<p>The next fixture is ready. The authentication request will start automatically "
+                + "after the target retrieves it. Keep this page open.</p>"
+                + "<p>This wait does not determine the test result.</p><p><a href=\"" + escaped
+                + "\">Check again</a></p></body></html>";
     }
 
     private static final class MisdirectedRequest extends RuntimeException {

@@ -22,6 +22,16 @@ class SamlScopeApplicationTest {
     @TempDir Path dataDirectory;
 
     @Test
+    void logoutPostAllowsOnlyTheConfiguredTargetOriginToEmbedTheResponse() {
+        var policy = SamlScopeApplication.sloPostContentSecurityPolicy(
+                URI.create("https://idp.example:8443/idp/profile/SAML2/POST/SLO"), "test-nonce");
+        assertEquals("default-src 'none'; script-src 'nonce-test-nonce'; "
+                + "form-action https://idp.example:8443; frame-ancestors https://idp.example:8443; "
+                + "base-uri 'none'; object-src 'none'", policy);
+        assertFalse(policy.contains("*"));
+    }
+
+    @Test
     void createsPlanAndPublishesSignedMetadata() throws Exception {
         var config = new AppConfig(AppConfig.Mode.SELFHOSTED,
                 URI.create("http://127.0.0.1:8080"), URI.create("http://127.0.0.1:8080"),
@@ -326,6 +336,28 @@ class SamlScopeApplicationTest {
             assertTrue(transcript.body().contains("MetadataFetch"));
             assertTrue(transcript.body().contains("no-key-info"));
             assertTrue(transcript.body().contains("\"feed\":\"live\""));
+            var entries = new com.fasterxml.jackson.databind.ObjectMapper().readTree(transcript.body());
+            var byId = new java.util.HashMap<String, com.fasterxml.jackson.databind.JsonNode>();
+            entries.forEach(entry -> byId.put(entry.path("id").asText(), entry));
+            boolean exactLiveBody = false;
+            for (var entry : entries) {
+                var summary = entry.path("samlSummary");
+                if (!"MetadataPrepared".equals(summary.path("type").asText())) continue;
+                var fetch = byId.get(summary.path("fetchTranscriptId").asText());
+                assertNotNull(fetch);
+                assertEquals(200, fetch.path("status").asInt(), "Redirect-only responses have no prepared metadata body");
+                assertEquals("OUTBOUND", entry.path("direction").asText());
+                assertEquals("PREPARED", summary.path("delivery").asText());
+                assertEquals(fetch.path("id").asText(), entry.path("correlationId").asText());
+                byte[] recorded = Files.readAllBytes(dataDirectory.resolve(entry.path("decodedSamlRef").asText()));
+                assertEquals(java.util.HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256").digest(recorded)),
+                        summary.path("metadataSha256").asText());
+                if ("live".equals(summary.path("feed").asText()) && "no-key-info".equals(summary.path("variant").asText())) {
+                    assertArrayEquals(liveMetadata.body().getBytes(java.nio.charset.StandardCharsets.UTF_8), recorded);
+                    exactLiveBody = true;
+                }
+            }
+            assertTrue(exactLiveBody, "Record exactly the bytes returned to the metadata consumer");
         } finally {
             app.stop();
         }
@@ -438,6 +470,9 @@ class SamlScopeApplicationTest {
             assertEquals(metadata, Files.readString(snapshots.resolve(planId + ".xml")));
             assertEquals(metadata, Files.readString(snapshots.resolve(runId + ".xml")));
 
+            verifyPollingRetrievalGate(client, base, planId, runId);
+            verifyDefaultAcsProbe(client, base, runId);
+
             var changed = metadata.replace("https://idp.example/sso", "https://idp.example/sso-v2");
             currentMetadata.set(changed);
             var repeated = client.send(
@@ -451,6 +486,94 @@ class SamlScopeApplicationTest {
             app.stop();
             source.stop(0);
         }
+    }
+
+    private static void verifyDefaultAcsProbe(HttpClient client, URI base, String runId) throws Exception {
+        var armed = client.send(HttpRequest.newBuilder(base.resolve("/api/runs/" + runId + "/metadata-lab/automatic-polling"))
+                .header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString("{\"variants\":[\"default-acs-second\"],\"pollingDelaySeconds\":0}"))
+                .build(), HttpResponse.BodyHandlers.ofString());
+        assertEquals(200, armed.statusCode(), armed.body());
+        var state = new com.fasterxml.jackson.databind.ObjectMapper().readTree(armed.body());
+        var startUri = URI.create(state.get("automaticStartUrl").asText());
+        var start = base.resolve(startUri.getRawPath() + "?" + startUri.getRawQuery());
+        assertEquals(202, client.send(HttpRequest.newBuilder(start).build(), HttpResponse.BodyHandlers.ofString()).statusCode());
+        var liveUri = URI.create(state.get("metadataUrl").asText());
+        var metadata = client.send(HttpRequest.newBuilder(base.resolve(liveUri.getRawPath() + "?" + liveUri.getRawQuery())).build(),
+                HttpResponse.BodyHandlers.ofByteArray());
+        assertEquals(200, metadata.statusCode());
+        var sent = client.send(HttpRequest.newBuilder(start).build(), HttpResponse.BodyHandlers.ofString());
+        assertEquals(200, sent.statusCode(), sent.body());
+        var matcher = java.util.regex.Pattern.compile("name=\"SAMLRequest\" value=\"([^\"]+)\"").matcher(sent.body());
+        assertTrue(matcher.find(), sent.body());
+        var request = com.samlscope.saml.normal.SecureXml.parse(java.util.Base64.getDecoder().decode(matcher.group(1)));
+        for (var name : java.util.List.of("AssertionConsumerServiceURL", "AssertionConsumerServiceIndex", "ProtocolBinding")) {
+            assertFalse(request.getDocumentElement().hasAttribute(name), name);
+        }
+        var doc = com.samlscope.saml.normal.SecureXml.parse(metadata.body());
+        var role = (org.w3c.dom.Element) doc.getElementsByTagNameNS("urn:oasis:names:tc:SAML:2.0:metadata", "SPSSODescriptor").item(0);
+        var certText = role.getElementsByTagNameNS("http://www.w3.org/2000/09/xmldsig#", "X509Certificate").item(0).getTextContent();
+        var certificate = (java.security.cert.X509Certificate) java.security.cert.CertificateFactory.getInstance("X.509")
+                .generateCertificate(new java.io.ByteArrayInputStream(java.util.Base64.getMimeDecoder().decode(certText)));
+        assertTrue(new com.samlscope.saml.crypto.XmlSignatureVerifier().hasValidEnvelopedSignature(request.getDocumentElement(), certificate));
+    }
+
+    private static void verifyPollingRetrievalGate(HttpClient client, URI base, String planId, String runId)
+            throws Exception {
+        var armed = client.send(HttpRequest.newBuilder(base.resolve("/api/runs/" + runId + "/metadata-lab/automatic-polling"))
+                .header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString("{\"variants\":[\"redirect-307\",\"control\"],\"pollingDelaySeconds\":0}"))
+                .build(), HttpResponse.BodyHandlers.ofString());
+        assertEquals(200, armed.statusCode(), armed.body());
+        var mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+        var state = mapper.readTree(armed.body());
+        var startUri = URI.create(state.get("automaticStartUrl").asText());
+        var start = base.resolve(startUri.getRawPath() + "?" + startUri.getRawQuery());
+        var liveUri = URI.create(state.get("metadataUrl").asText());
+        var live = base.resolve(liveUri.getRawPath() + "?" + liveUri.getRawQuery());
+        var waiting = client.send(HttpRequest.newBuilder(start).build(), HttpResponse.BodyHandlers.ofString());
+        assertEquals(202, waiting.statusCode(), waiting.body());
+        assertFalse(waiting.body().contains("SAMLRequest"));
+        var negativeWaiting = client.send(HttpRequest.newBuilder(URI.create(start + "&signatureControl=invalid")).build(),
+                HttpResponse.BodyHandlers.ofString());
+        assertEquals(202, negativeWaiting.statusCode());
+        assertTrue(negativeWaiting.body().contains("signatureControl=invalid"));
+        var before = client.send(HttpRequest.newBuilder(base.resolve("/api/runs/" + runId + "/transcript")).build(),
+                HttpResponse.BodyHandlers.ofString());
+        assertFalse(before.body().contains("metadata-polling"), "waiting must not record a request as sent");
+        var redirect = client.send(HttpRequest.newBuilder(live).build(), HttpResponse.BodyHandlers.ofString());
+        assertEquals(307, redirect.statusCode());
+        var pending = client.send(HttpRequest.newBuilder(start).build(), HttpResponse.BodyHandlers.ofString());
+        assertEquals(202, pending.statusCode(), "receiving only the redirect is not retrieval of the fixture");
+        var contentUri = URI.create(redirect.headers().firstValue("Location").orElseThrow());
+        assertFalse(contentUri.getRawQuery().contains("poll="));
+        var content = client.send(HttpRequest.newBuilder(base.resolve(contentUri.getRawPath() + "?" + contentUri.getRawQuery())).build(),
+                HttpResponse.BodyHandlers.ofByteArray());
+        assertEquals(200, content.statusCode());
+        var sent = client.send(HttpRequest.newBuilder(start).build(), HttpResponse.BodyHandlers.ofString());
+        assertEquals(200, sent.statusCode(), sent.body());
+        var matcher = java.util.regex.Pattern.compile("name=\"SAMLRequest\" value=\"([^\"]+)\"").matcher(sent.body());
+        assertTrue(matcher.find(), sent.body());
+        var request = com.samlscope.saml.normal.SecureXml.parse(java.util.Base64.getDecoder().decode(matcher.group(1)));
+        var doc = com.samlscope.saml.normal.SecureXml.parse(content.body());
+        var role = (org.w3c.dom.Element) doc.getElementsByTagNameNS("urn:oasis:names:tc:SAML:2.0:metadata", "SPSSODescriptor").item(0);
+        var certText = role.getElementsByTagNameNS("http://www.w3.org/2000/09/xmldsig#", "X509Certificate").item(0).getTextContent();
+        var certificate = (java.security.cert.X509Certificate) java.security.cert.CertificateFactory.getInstance("X.509")
+                .generateCertificate(new java.io.ByteArrayInputStream(java.util.Base64.getMimeDecoder().decode(certText)));
+        assertTrue(new com.samlscope.saml.crypto.XmlSignatureVerifier().hasValidEnvelopedSignature(
+                request.getDocumentElement(), certificate), "tokenless redirected metadata must advertise the actual request signing key");
+        var negative = client.send(HttpRequest.newBuilder(URI.create(start + "&signatureControl=invalid")).build(),
+                HttpResponse.BodyHandlers.ofString());
+        assertEquals(200, negative.statusCode(), negative.body());
+        var negativeMatcher = java.util.regex.Pattern.compile("name=\"SAMLRequest\" value=\"([^\"]+)\"").matcher(negative.body());
+        assertTrue(negativeMatcher.find());
+        var negativeXml = com.samlscope.saml.normal.SecureXml.parse(java.util.Base64.getDecoder().decode(negativeMatcher.group(1)));
+        assertFalse(new com.samlscope.saml.crypto.XmlSignatureVerifier().hasValidEnvelopedSignature(
+                negativeXml.getDocumentElement(), certificate));
+        var recorded = client.send(HttpRequest.newBuilder(base.resolve("/api/runs/" + runId + "/transcript")).build(),
+                HttpResponse.BodyHandlers.ofString());
+        assertTrue(recorded.body().contains("metadataSignatureGroup"));
+        assertTrue(recorded.body().contains("\"metadataSignatureControl\":\"invalid\""));
     }
 
     private static int occurrences(String value, String needle) {

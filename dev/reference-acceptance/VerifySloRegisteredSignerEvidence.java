@@ -1,0 +1,148 @@
+package com.samlscope.runner.cases;
+
+import com.fasterxml.jackson.databind.*;
+import com.fasterxml.jackson.databind.node.*;
+import com.samlscope.core.caseexec.*;
+import com.samlscope.core.evaluation.*;
+import com.samlscope.core.plan.*;
+import com.samlscope.core.run.Reachability;
+import com.samlscope.core.transcript.*;
+import com.samlscope.runner.DefaultCaseContext;
+import com.samlscope.saml.crypto.*;
+import com.samlscope.store.JsonCodec;
+import java.nio.file.*;
+import java.security.*;
+import java.security.cert.*;
+import java.security.spec.PKCS8EncodedKeySpec;
+import java.sql.*;
+import java.time.*;
+import java.util.*;
+import static com.samlscope.runner.cases.SloRegisteredSignerEvidence.*;
+import static com.samlscope.runner.cases.MetadataAlgorithmEvidence.children;
+import com.samlscope.saml.normal.SecureXml;
+import org.w3c.dom.Element;
+import org.bouncycastle.jce.provider.BouncyCastleProvider;
+import org.bouncycastle.asn1.x500.X500Name;
+import org.bouncycastle.cert.jcajce.*;
+import org.bouncycastle.operator.jcajce.JcaContentSignerBuilder;
+
+/** Archived production reader, local evidence copies, read-only DB and memory-only existing Plan keys. */
+public final class VerifySloRegisteredSignerEvidence {
+    private static final ObjectMapper M=new JsonCodec().mapper();
+    private record Data(byte[] manifestRaw,ObjectNode manifest,Map<String,List<TranscriptEntry>> entries,
+                        Map<String,byte[]> decoded,Map<String,byte[]> targets,Map<String,PlanCredentials> keys) { }
+    private static void check(boolean value,String message){if(!value)throw new IllegalArgumentException(message);}
+    private static void regular(Path root,Path file){check(file.normalize().startsWith(root)&&Files.isRegularFile(file,LinkOption.NOFOLLOW_LINKS),"Missing scoped original");for(var p=file;p!=null;p=p.getParent())check(!Files.isSymbolicLink(p),"Symlink original");}
+    private static Data load(Path folder,Path data)throws Exception {
+        var m=(ObjectNode)M.readTree(folder.resolve("manifest.json").toFile());var entries=new HashMap<String,List<TranscriptEntry>>();var decoded=new HashMap<String,byte[]>();var targets=new HashMap<String,byte[]>();var keys=new HashMap<String,PlanCredentials>();data=data.toAbsolutePath().normalize();var db=data.resolve("samlscope.db");regular(data,db);
+        for(var peer:m.path("peers")){
+            String label=text(peer,"label"),run=text(peer,"runId"),plan=text(peer,"planId");var child=folder.resolve(label);
+            entries.put(run,List.of(M.readValue(child.resolve("transcript.json").toFile(),TranscriptEntry[].class)));targets.put(run,Files.readAllBytes(child.resolve("target-metadata.xml")));
+            for(var row:M.readTree(child.resolve("decoded-manifest.json").toFile())){var file=child.resolve(text(row,"file")).normalize();check(file.getParent().equals(child.resolve("decoded")),"Decoded original escaped");var bytes=Files.readAllBytes(file);check(hash(bytes).equals(text(row,"sha256"))&&decoded.put(text(row,"id"),bytes)==null,"Duplicate/changed decoded original");}
+            try(var c=DriverManager.getConnection("jdbc:sqlite:file:"+db+"?mode=ro");var q=c.prepareStatement("SELECT plan_id FROM runs WHERE id=?")){q.setString(1,run);try(var rows=q.executeQuery()){check(rows.next()&&plan.equals(rows.getString(1))&&!rows.next(),"Unknown scoped Run/Plan");}}
+            var keyfile=data.resolve("keys/"+plan+"/signing-key.pk8");var certfile=data.resolve("keys/"+plan+"/signing-certificate.der");regular(data,keyfile);regular(data,certfile);byte[] raw=Files.readAllBytes(keyfile);
+            try{keys.put(run,new PlanCredentials(KeyFactory.getInstance("RSA").generatePrivate(new PKCS8EncodedKeySpec(raw)),(X509Certificate)CertificateFactory.getInstance("X.509").generateCertificate(new java.io.ByteArrayInputStream(Files.readAllBytes(certfile)))));}finally{Arrays.fill(raw,(byte)0);}
+        }
+        return new Data(Files.readAllBytes(folder.resolve("manifest.json")),m,entries,decoded,targets,keys);
+    }
+    private static TranscriptEntry copy(TranscriptEntry e,String run,String reference,int length){return new TranscriptEntry(e.id(),run,e.direction(),e.timestamp(),e.correlationId(),e.method(),e.url(),e.status(),e.headers(),e.bodyRef(),e.bodyBytes(),reference,length,e.contentType(),e.rawQuery(),e.samlSummary());}
+    private static CaseContext context(Data d,boolean complete){String run=text(d.manifest.path("peers").get(0),"runId");var recorder=new TranscriptRecorder(){public List<TranscriptEntry> list(String r){return d.entries.getOrDefault(r,List.of()).stream().map(e->{var raw=d.decoded.get(e.id());return raw==null?e:copy(e,e.runId(),e.decodedSamlRef(),raw.length);}).toList();}public TranscriptEntry record(TranscriptInput i){throw new AssertionError("No target send");}public TranscriptEntry updateSamlAnalysis(String run,String id,Map<String,Object>s){throw new AssertionError("No history mutation");}};return new DefaultCaseContext(run,TargetRole.IDP,Clock.systemUTC(),TestPlan.Parameters.defaults(),TestPlan.Interaction.defaults(),Reachability.CONFIRMED,recorder,complete);}
+    private static final class Fallback implements TestCase,AttestationPrompt {
+        public String id(){return CASE;}public TargetRole role(){return TargetRole.IDP;}public String promptEn(){return "Approved signer attestation";}public List<AttestationOption>options(){return List.of();}
+        public CaseStep start(CaseContext c){throw new AssertionError("Owned native proof cannot borrow attestation");}public CaseStep resume(CaseContext c,CaseState s,CaseEvent e){throw new AssertionError("Owned native proof cannot borrow attestation");}
+    }
+    private static CaseOutcome observe(Path directory,Path folder,Data d,boolean lifecycle)throws Exception {return observe(directory,folder,d,lifecycle,false);}
+    private static CaseOutcome observe(Path directory,Path folder,Data d,boolean lifecycle,boolean offlinePermission)throws Exception {
+        Files.write(folder.resolve("manifest.json"),M.readTree(d.manifestRaw).equals(d.manifest)?d.manifestRaw:M.writeValueAsBytes(d.manifest));var content=(TranscriptContentReader)(e->d.decoded.get(e.id()));var reader=new SloRegisteredSignerEvidence(directory,content,d.targets::get,(run,alias)->"primary".equals(alias)?Optional.ofNullable(d.keys.get(run)):Optional.empty(),offlinePermission,SloRegisteredSignerNativeAdapters.create(content));var c=context(d,true);var outcome=reader.evaluate(c).orElseThrow();
+        if(lifecycle){var wrapper=new SloRegisteredSignerObservationTestCase(new Fallback(),directory,content,d.targets::get,(run,alias)->"primary".equals(alias)?Optional.ofNullable(d.keys.get(run)):Optional.empty(),offlinePermission,SloRegisteredSignerNativeAdapters.create(content));check(wrapper.start(c).equals(new CaseStep.Finish(outcome)),"Start differs from actual reader");for(var event:List.<CaseEvent>of(new CaseEvent.TranscriptReady(),new CaseEvent.ConfigConfirmed(),new CaseEvent.Attested("satisfied","not used")))check(wrapper.resume(c,CaseState.initial(),event).equals(new CaseStep.Finish(outcome)),"Resume differs from actual reader");check(wrapper.evidenceStatus(c).ready()==(outcome.outcome()!=Outcome.NOT_VERIFIED),"Protocol readiness mismatch");if(outcome.outcome()!=Outcome.NOT_VERIFIED){check(wrapper.reevaluateRecordedEvidence(c,CaseOutcome.notVerified("pending","case.pending-interaction")).orElseThrow().equals(outcome),"Recorded reader differs");check(wrapper.reevaluateRecordedEvidence(c,outcome).isEmpty(),"Conclusive history can be overwritten");}check(reader.evaluate(context(d,false)).orElseThrow().outcome()==Outcome.NOT_VERIFIED,"Incomplete transcript accepted");}
+        return outcome;
+    }
+    private static void rehash(Path folder,Data d,String path)throws Exception{((ObjectNode)d.manifest.path("files")).put(path,hash(Files.readAllBytes(folder.resolve(path))));}
+    private static void originalEdit(Path folder,Data d,String label,java.util.function.Consumer<ObjectNode> change)throws Exception {
+        var ref=(ObjectNode)d.manifest.path("originals").path(label);var node=(ObjectNode)M.readTree(d.decoded.get(text(ref,"reference")));change.accept(node);var bytes=M.writeValueAsBytes(node);d.decoded.put(text(ref,"reference"),bytes);ref.put("sha256",hash(bytes));String path="native-originals/"+label+".json";Files.write(folder.resolve(path),bytes);rehash(folder,d,path);
+    }
+    private static void readbackEdit(Path folder,Data d,String label,java.util.function.Consumer<ObjectNode> change)throws Exception {
+        var ref=d.manifest.path("originals").path(label);var original=M.readTree(d.decoded.get(text(ref,"reference")));String path=text(original,"nativeReadbackFile");var node=(ObjectNode)M.readTree(folder.resolve(path).toFile());change.accept(node);var bytes=M.writeValueAsBytes(node);Files.write(folder.resolve(path),bytes);rehash(folder,d,path);originalEdit(folder,d,label,n->{try{n.put("nativeReadbackSha256",hash(bytes));}catch(Exception e){throw new IllegalArgumentException(e);}});
+    }
+    private static PlanCredentials calibrationKey()throws Exception {
+        Security.addProvider(new BouncyCastleProvider());var generator=KeyPairGenerator.getInstance("RSA");generator.initialize(2048);var pair=generator.generateKeyPair();var subject=new X500Name("CN=Memory-only SLO consumer calibration");var now=Instant.now();var certificate=new JcaX509v3CertificateBuilder(subject,java.math.BigInteger.ONE,java.util.Date.from(now.minusSeconds(86400)),java.util.Date.from(now.plusSeconds(86400)),subject,pair.getPublic()).build(new JcaContentSignerBuilder("SHA256withRSA").setProvider("BC").build(pair.getPrivate()));return new PlanCredentials(pair.getPrivate(),new JcaX509CertificateConverter().setProvider("BC").getCertificate(certificate));
+    }
+    private static void strip(Element element){for(var signature:children(element,DS,"Signature"))element.removeChild(signature);}
+    private static byte[] resignBaseline(Data d,byte[] bytes,PlanCredentials signer)throws Exception {
+        var document=SecureXml.parse(bytes);var root=document.getDocumentElement();strip(root);String run=text(d.manifest,"runId");
+        var plain=children(root,S,"Assertion");var encrypted=children(root,S,"EncryptedAssertion");check(plain.size()+encrypted.size()==1,"Ambiguous original assertion");
+        var assertion=plain.isEmpty()?new SamlXmlDecrypter().decrypt(encrypted.getFirst(),d.keys.get(run).privateKey()):plain.getFirst();strip(assertion);new XmlSigner().sign(assertion,signer,children(assertion,S,"Subject").getFirst());
+        if(!encrypted.isEmpty()){var replacement=new SamlEncryptionFixtureFactory().encrypt(SamlEncryptionFixtureFactory.Wrapper.EncryptedAssertion,assertion,d.keys.get(run).certificate().getPublicKey(),new SamlEncryptionFixtureFactory.Algorithms(SamlEncryptionFixtureFactory.Content.AES128_GCM,SamlEncryptionFixtureFactory.Transport.RSA_OAEP,SamlEncryptionFixtureFactory.Digest.DEFAULT,SamlEncryptionFixtureFactory.Mgf.DEFAULT));root.replaceChild(document.importNode(replacement,true),encrypted.getFirst());}
+        new XmlSigner().sign(root,signer,children(root,P,"Status").getFirst());return SecureXml.serialize(document);
+    }
+    private static void modelResponse(Path folder,Data d,int index,byte[] original,PlanCredentials signer)throws Exception {
+        var row=(ObjectNode)d.manifest.path("probes").get(index);String run=text(d.manifest,"runId"),requestRef=text(row,"requestReference");var request=d.entries.get(run).stream().filter(e->e.id().equals(requestRef)).findFirst().orElseThrow();String requestId="_"+request.correlationId();
+        var document=SecureXml.parse(original);var root=document.getDocumentElement();strip(root);root.setAttribute("ID","_model_response_"+index);root.setAttribute("InResponseTo",requestId);root.setAttribute("IssueInstant",request.timestamp().plusMillis(1).toString());new XmlSigner().sign(root,signer,children(root,P,"Status").getFirst());byte[] response=SecureXml.serialize(document);
+        String http=text(row,"nativeHttpOriginal");var ref=d.manifest.path("originals").path(http);var rawNative=json(d.decoded.get(text(ref,"reference")));var nativeRow=rawNative.path("native");Instant delivery=at(nativeRow,"finishedAt").plusNanos(1);
+        String existing=row.path("responseReference").asText(),id=existing.isBlank()?"tx_00000000000000000000000001":existing;String endpoint=root.getAttribute("Destination");var prior=d.entries.get(run).stream().filter(e->e.id().equals(id)).findFirst();var entries=new ArrayList<>(d.entries.get(run));entries.removeIf(e->e.id().equals(id));
+        entries.add(new TranscriptEntry(id,run,Direction.INBOUND,prior.map(TranscriptEntry::timestamp).orElse(delivery),request.correlationId(),"POST",endpoint,200,Map.of(),null,0,"transcripts/"+run+"/"+id+".saml.xml",response.length,"application/x-www-form-urlencoded",null,Map.of("type","LogoutResponse","inResponseTo",requestId)));
+        d.entries.put(run,entries);d.decoded.put(id,response);row.put("responseReference",id);
+        String bodyFile=text(nativeRow,"responseBodyFile");String action=endpoint.replace("&","&amp;").replace("\"","&quot;");byte[] body=("<html><body><form method='POST' action=\""+action+"\"><input type='hidden' name='SAMLResponse' value='"+Base64.getEncoder().encodeToString(response)+"'/></form></body></html>").getBytes(java.nio.charset.StandardCharsets.UTF_8);Files.write(folder.resolve(bodyFile),body);rehash(folder,d,bodyFile);
+        originalEdit(folder,d,http,n->{var x=(ObjectNode)n.path("native");n.put("responseReference",id);x.put("responseStatus",200).put("responseBodySha256",uncheckedHash(body)).put("responseBodyBytes",body.length).put("responseSamlEndpoint",endpoint).put("responseSamlSha256",uncheckedHash(response));x.remove("responseLocationFile");});
+    }
+    private static String uncheckedHash(byte[] bytes){try{return hash(bytes);}catch(Exception e){throw new IllegalArgumentException(e);}}
+    private static Map<String,Object> producer(Path folder,Data d)throws Exception {
+        byte[] sourceManifest=d.manifestRaw,sourceTarget=d.targets.get(text(d.manifest,"runId"));var signer=calibrationKey();var target=SecureXml.parse(sourceTarget);var certificates=target.getElementsByTagNameNS(DS,"X509Certificate");String der=Base64.getEncoder().encodeToString(signer.certificate().getEncoded());for(int i=0;i<certificates.getLength();i++)certificates.item(i).setTextContent(der);byte[] targetBytes=SecureXml.serialize(target);String digest=hash(targetBytes);d.manifest.put("targetMetadataSha256",digest);
+        for(var peer:d.manifest.path("peers")){String run=text(peer,"runId"),label=text(peer,"label");d.targets.put(run,targetBytes);Files.write(folder.resolve(label+"/target-metadata.xml"),targetBytes);rehash(folder,d,label+"/target-metadata.xml");}Files.write(folder.resolve("target-metadata.xml"),targetBytes);rehash(folder,d,"target-metadata.xml");
+        var labels=new ArrayList<String>();d.manifest.path("originals").fieldNames().forEachRemaining(labels::add);for(String label:labels)originalEdit(folder,d,label,n->n.put("targetMetadataSha256",digest));
+        String baseline=text(d.manifest.path("baseline"),"responseReference");d.decoded.put(baseline,resignBaseline(d,d.decoded.get(baseline),signer));byte[] normal=d.decoded.get(text(d.manifest.path("probes").get(2),"responseReference"));modelResponse(folder,d,2,normal,signer);modelResponse(folder,d,1,normal,signer);
+        var directory=folder.resolve("calibration");Files.createDirectories(directory);Files.write(directory.resolve("source-manifest.json"),sourceManifest);Files.write(directory.resolve("source-target-metadata.xml"),sourceTarget);
+        var input=M.createObjectNode().put("schema","samlscope-slo-known-signer-consumer-model-v1").put("runId",text(d.manifest,"runId")).put("caseId",CASE).put("sourceManifestSha256",hash(sourceManifest)).put("sourceTargetMetadataSha256",hash(sourceTarget)).put("selectedOperation","accept-known-signer-regardless-of-issuer").put("counterfactualCalibrationOnly",true).put("actualProductFinding",false);byte[] inputBytes=M.writeValueAsBytes(input);Files.write(directory.resolve("producer-input.json"),inputBytes);
+        var provenance=M.createObjectNode().put("model","known-signer-issuer-mismatch-accepted-v1").put("sourceManifestFile","calibration/source-manifest.json").put("sourceManifestSha256",hash(sourceManifest)).put("sourceTargetMetadataFile","calibration/source-target-metadata.xml").put("sourceTargetMetadataSha256",hash(sourceTarget)).put("producerFile","calibration/producer-input.json").put("producerSha256",hash(inputBytes));
+        var prep=(ObjectNode)json(Files.readAllBytes(folder.resolve("preparation.json")));prep.put("schema",CALIBRATION_PREPARATION_SCHEMA).put("targetMetadataSha256",digest).put("counterfactualCalibrationOnly",true).put("actualProductFinding",false);prep.set("calibrationProvenance",provenance);for(var name:List.of("source-manifest.json","source-target-metadata.xml","producer-input.json")){String file="calibration/"+name;rehash(folder,d,file);((ObjectNode)prep.path("files")).put(file,hash(Files.readAllBytes(directory.resolve(name))));}
+        for(var name:List.of("target-metadata.xml","primary/target-metadata.xml","secondary/target-metadata.xml"))if(prep.path("files").has(name))((ObjectNode)prep.path("files")).put(name,digest);
+        var oldLabels=new ArrayList<String>();prep.path("originals").fieldNames().forEachRemaining(oldLabels::add);for(String label:oldLabels){var r=prep.path("originals").path(label);var changed=d.manifest.path("originals").path(label);((ObjectNode)r).put("sha256",text(changed,"sha256"));String file="native-originals/"+label+".json";((ObjectNode)prep.path("files")).put(file,hash(Files.readAllBytes(folder.resolve(file))));}
+        d.manifest.put("schema",CALIBRATION_SCHEMA).put("counterfactualCalibrationOnly",true).put("actualProductFinding",false);d.manifest.set("calibrationProvenance",provenance);Files.write(folder.resolve("preparation.json"),M.writeValueAsBytes(prep));rehash(folder,d,"preparation.json");
+        return Map.of("sourceManifestSha256",hash(sourceManifest),"sourceTargetMetadataSha256",hash(sourceTarget),"derivedTargetMetadataSha256",digest,"producerInputSha256",hash(inputBytes),"signedBaselineSha256",hash(d.decoded.get(baseline)),"signedCrossSuccessSha256",hash(d.decoded.get(text(d.manifest.path("probes").get(1),"responseReference"))),"ephemeralSigningKeyMemoryOnly",true,"nativeProductOperationExecuted",false);
+    }
+    public static void main(String[] args)throws Exception {
+        Path source=Path.of(args[0]).toRealPath(),data=Path.of(args[1]),output=Path.of(args[2]);check(!Files.exists(output),"Replay original immutable");var temporary=Files.createTempDirectory("slo-signer-replay-");String run=M.readTree(source.resolve("manifest.json").toFile()).path("peers").get(0).path("runId").asText();var directory=temporary.resolve("slo-registered-signer-evidence");var folder=directory.resolve(run);Files.createDirectories(folder);
+        try{
+            try(var paths=Files.walk(source)){for(var file:paths.filter(Files::isRegularFile).toList()){var dest=folder.resolve(source.relativize(file));Files.createDirectories(dest.getParent());Files.copy(file,dest);}}
+            var base=load(folder,data);var actual=observe(directory,folder,base,true);check(actual.outcome()==Outcome.SATISFIED_WITH_NOTE||actual.outcome()==Outcome.SATISFIED,"Actual native proof incomplete: "+actual);
+            var backups=new HashMap<String,byte[]>();try(var paths=Files.walk(folder)){for(var p:paths.filter(Files::isRegularFile).toList())backups.put(folder.relativize(p).toString(),Files.readAllBytes(p));}
+            var checks=new TreeMap<String,Object>();
+            for(String name:List.of("wrong-run","wrong-adapter","wrong-target","wrong-campaign","foreign-plan","foreign-key","duplicate-history","foreign-decoded-ref","missing-normal","duplicate-outbound-action","altered-session-index","missing-restoration","restoration-flag-only","negative-operation-count","too-few-outbox-count","optional-consumer-label-only","public-counterfactual","unrelated-native-http","foreign-native-request-hash","foreign-native-body-hash","native-epoch-changed","private-native-readback","missing-native-peer","foreign-hosted-identity","hosted-label-only","generic-http-rejection")){
+                for(var old:backups.entrySet())Files.write(folder.resolve(old.getKey()),old.getValue());var d=load(folder,data);String owner=text(d.manifest.path("peers").get(0),"runId"),other=text(d.manifest.path("peers").get(1),"runId");String http="local-other-signer-http";
+                switch(name){
+                    case "wrong-run"->d.manifest.put("runId","run_00000000000000000000000000");case "wrong-adapter"->d.manifest.put("adapter","unrelated");case "wrong-target"->d.manifest.put("targetMetadataSha256","0".repeat(64));case "wrong-campaign"->d.manifest.put("campaignId","unrelated");case "foreign-plan"->((ObjectNode)d.manifest.path("peers").get(1)).put("planId","plan_00000000000000000000000000");case "foreign-key"->d.keys.put(owner,d.keys.get(other));
+                    case "duplicate-history"->{var rows=new ArrayList<>(d.entries.get(owner));rows.add(rows.getFirst());d.entries.put(owner,rows);}
+                    case "foreign-decoded-ref"->{var rows=new ArrayList<>(d.entries.get(owner));int i=0;while(rows.get(i).decodedSamlRef()==null)i++;var e=rows.get(i);rows.set(i,copy(e,e.runId(),"transcripts/"+other+"/"+e.id()+".saml.xml",e.decodedSamlBytes()));d.entries.put(owner,rows);}
+                    case "missing-normal"->{String ref=text(d.manifest.path("probes").get(2),"responseReference");d.entries.put(owner,d.entries.get(owner).stream().filter(e->!ref.equals(e.id())).toList());}
+                    case "duplicate-outbound-action"->{var row=d.manifest.path("probes").get(1);var e=d.entries.get(owner).stream().filter(q->q.id().equals(text(row,"requestReference"))).findFirst().orElseThrow();var rows=new ArrayList<>(d.entries.get(owner));String id="tx_00000000000000000000000000";rows.add(new TranscriptEntry(id,owner,e.direction(),e.timestamp(),e.correlationId(),e.method(),e.url(),e.status(),e.headers(),e.bodyRef(),e.bodyBytes(),"transcripts/"+owner+"/"+id+".saml.xml",e.decodedSamlBytes(),e.contentType(),e.rawQuery(),e.samlSummary()));d.decoded.put(id,d.decoded.get(e.id()));d.entries.put(owner,rows);}
+                    case "altered-session-index"->{String ref=text(d.manifest.path("probes").get(1),"requestReference");var xml=com.samlscope.saml.normal.SecureXml.parse(d.decoded.get(ref));((org.w3c.dom.Element)xml.getElementsByTagNameNS(P,"SessionIndex").item(0)).setTextContent("foreign-session");d.decoded.put(ref,com.samlscope.saml.normal.SecureXml.serialize(xml));}
+                    case "missing-restoration"->((ObjectNode)d.manifest.path("originals")).remove("restoration");
+                    case "restoration-flag-only"->readbackEdit(folder,d,"restoration",n->{var it=n.path("configurationFiles").fieldNames();((ObjectNode)n.path("configurationFiles")).put(it.next(),"0".repeat(64));});
+                    case "negative-operation-count","too-few-outbox-count"->{String file="operation-counts.json";var node=(ObjectNode)M.readTree(folder.resolve(file).toFile());node.put(name.equals("negative-operation-count")?"credentialPosts":"outboxProtocolSubmissions",name.equals("negative-operation-count")?-1:2);Files.write(folder.resolve(file),M.writeValueAsBytes(node));rehash(folder,d,file);}
+                    case "optional-consumer-label-only"->d.manifest.put("optionalResponseConsumerObserved",true);case "public-counterfactual"->d.manifest.put("counterfactualCalibrationOnly",true);
+                    case "unrelated-native-http"->originalEdit(folder,d,http,n->n.put("actionId","unrelated"));case "foreign-native-request-hash"->originalEdit(folder,d,http,n->((ObjectNode)n.path("native")).put("requestSha256","0".repeat(64)));case "foreign-native-body-hash"->originalEdit(folder,d,http,n->((ObjectNode)n.path("native")).put("responseBodySha256","0".repeat(64)));
+                    case "native-epoch-changed"->readbackEdit(folder,d,"probes-after",n->((ObjectNode)n.path("runtime")).put("startedAt","foreign-epoch"));case "private-native-readback"->readbackEdit(folder,d,"probes-before",n->n.put("password","diagnostic-only"));case "missing-native-peer"->readbackEdit(folder,d,"probes-after",n->((ArrayNode)n.path("peers")).remove(1));case "foreign-hosted-identity"->readbackEdit(folder,d,"probes-before",n->n.put("hostedEntityId","https://foreign.example/idp"));
+                    case "hosted-label-only"->{var before=M.readTree(d.decoded.get(text(d.manifest.path("originals").path("probes-before"),"reference")));String readback=text(before,"nativeReadbackFile");String file=M.readTree(folder.resolve(readback).toFile()).path("hostedMetadataFile").asText();var xml=com.samlscope.saml.normal.SecureXml.parse(Files.readAllBytes(folder.resolve(file)));xml.getDocumentElement().setAttribute("entityID","https://foreign.example/idp");Files.write(folder.resolve(file),com.samlscope.saml.normal.SecureXml.serialize(xml));rehash(folder,d,file);}
+                    case "generic-http-rejection"->{var original=M.readTree(d.decoded.get(text(d.manifest.path("originals").path(http),"reference")));String file=text(original.path("native"),"responseBodyFile");byte[] body="<html>Unrelated HTTP error</html>".getBytes(java.nio.charset.StandardCharsets.UTF_8);Files.write(folder.resolve(file),body);rehash(folder,d,file);originalEdit(folder,d,http,n->{try{((ObjectNode)n.path("native")).put("responseBodySha256",hash(body)).put("responseBodyBytes",body.length);}catch(Exception e){throw new IllegalArgumentException(e);}});}
+                }
+                var outcome=observe(directory,folder,d,true);check(outcome.outcome()==Outcome.NOT_VERIFIED,"Invalid proof accepted: "+name+" "+outcome);checks.put(name,Map.of("outcome",outcome.outcome(),"centralVerdict",Evaluator.toVerdict(Rfc2119Level.SHOULD,outcome)));
+            }
+            for(var old:backups.entrySet())Files.write(folder.resolve(old.getKey()),old.getValue());var calibrated=load(folder,data);
+            var model=producer(folder,calibrated);var publicResult=observe(directory,folder,calibrated,true);check(publicResult.outcome()==Outcome.NOT_VERIFIED,"Public reader adopted a diagnostic consumer model");
+            var mutant=observe(directory,folder,calibrated,true,true);check(mutant.outcome()==Outcome.VIOLATED&&Evaluator.toVerdict(Rfc2119Level.SHOULD,mutant)==Verdict.WARNING,"Whole-reader accepted cross signer undetected: "+mutant);
+            var modelChecks=new TreeMap<String,Object>();modelChecks.put("public-calibrated-consumer",Map.of("outcome",publicResult.outcome(),"centralVerdict",Evaluator.toVerdict(Rfc2119Level.SHOULD,publicResult)));
+            var savedModel=calibrated.manifest.deepCopy();
+            for(String name:List.of("calibration-label-only","calibration-source-run","calibration-session-mismatch","calibration-order-mismatch")){
+                calibrated.manifest.removeAll();calibrated.manifest.setAll(savedModel);String owner=text(calibrated.manifest,"runId");var row=calibrated.manifest.path("probes").get(1);String responseRef=text(row,"responseReference");var requestRef=text(row,"requestReference");
+                var savedEntries=new ArrayList<>(calibrated.entries.get(owner));byte[] requestRaw=calibrated.decoded.get(requestRef);
+                if(name.equals("calibration-label-only"))calibrated.manifest.put("counterfactualCalibrationOnly",false).put("schema",SCHEMA);
+                else if(name.equals("calibration-source-run"))calibrated.manifest.put("runId",text(calibrated.manifest.path("peers").get(1),"runId"));
+                else if(name.equals("calibration-session-mismatch")){var q=SecureXml.parse(requestRaw);((Element)q.getElementsByTagNameNS(P,"SessionIndex").item(0)).setTextContent("foreign-session");calibrated.decoded.put(requestRef,SecureXml.serialize(q));}
+                else {var response=savedEntries.stream().filter(e->e.id().equals(responseRef)).findFirst().orElseThrow();calibrated.entries.put(owner,savedEntries.stream().map(e->e.id().equals(responseRef)?new TranscriptEntry(e.id(),owner,e.direction(),savedEntries.stream().filter(q->q.id().equals(requestRef)).findFirst().orElseThrow().timestamp(),e.correlationId(),e.method(),e.url(),e.status(),e.headers(),e.bodyRef(),e.bodyBytes(),e.decodedSamlRef(),e.decodedSamlBytes(),e.contentType(),e.rawQuery(),e.samlSummary()):e).toList());}
+                var rejected=observe(directory,folder,calibrated,true,true);check(rejected.outcome()==Outcome.NOT_VERIFIED,"Invalid diagnostic model accepted: "+name);modelChecks.put(name,Map.of("outcome",rejected.outcome(),"centralVerdict",Evaluator.toVerdict(Rfc2119Level.SHOULD,rejected)));
+                calibrated.entries.put(owner,savedEntries);calibrated.decoded.put(requestRef,requestRaw);
+            }
+            Files.write(output,M.writerWithDefaultPrettyPrinter().writeValueAsBytes(Map.of("production_outcome",actual,"checks",checks,"shared_native_lifecycle",true,"privateMaterialExported",false,"additionalProductOperations",0,"wholeReaderCalibration",Map.of("outcome",mutant.outcome(),"centralVerdict",Evaluator.toVerdict(Rfc2119Level.SHOULD,mutant),"counterfactualCalibrationOnly",true,"actualProductFinding",false,"model",model,"checks",modelChecks,"scope","isolated-signed-consumer-model-through-full-reader-and-wrapper"))));
+        }finally{try(var paths=Files.walk(temporary)){for(var p:paths.sorted(Comparator.reverseOrder()).toList())Files.delete(p);}}
+    }
+}

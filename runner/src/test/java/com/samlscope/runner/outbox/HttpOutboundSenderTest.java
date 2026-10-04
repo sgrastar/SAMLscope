@@ -48,6 +48,7 @@ class HttpOutboundSenderTest {
             var response = "<S:Envelope xmlns:S=\"http://schemas.xmlsoap.org/soap/envelope/\"><S:Body/></S:Envelope>"
                     .getBytes(StandardCharsets.UTF_8);
             exchange.getResponseHeaders().set("Content-Type", "text/xml");
+            exchange.getResponseHeaders().set("Set-Cookie", "session=credential-sentinel");
             exchange.sendResponseHeaders(200, response.length);
             exchange.getResponseBody().write(response);
             exchange.close();
@@ -55,8 +56,17 @@ class HttpOutboundSenderTest {
         server.start();
         try {
             var recorder = recorder();
+            var submitted = new java.util.ArrayList<com.samlscope.core.transcript.TranscriptInput>();
+            var boundary = new com.samlscope.core.transcript.TranscriptRecorder() {
+                public com.samlscope.core.transcript.TranscriptEntry record(com.samlscope.core.transcript.TranscriptInput input) {
+                    submitted.add(input); return recorder.record(input);
+                }
+                public java.util.List<com.samlscope.core.transcript.TranscriptEntry> list(String run) { return recorder.list(run); }
+                public com.samlscope.core.transcript.TranscriptEntry updateSamlAnalysis(String id, String correlation,
+                        Map<String, Object> summary) { return recorder.updateSamlAnalysis(id, correlation, summary); }
+            };
             var sender = new HttpOutboundSender(
-                    HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NEVER).build(), recorder,
+                    HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NEVER).build(), boundary,
                     Clock.fixed(NOW, ZoneOffset.UTC));
             var request = "<S:Envelope xmlns:S=\"http://schemas.xmlsoap.org/soap/envelope/\"><S:Body/></S:Envelope>"
                     .getBytes(StandardCharsets.UTF_8);
@@ -73,7 +83,17 @@ class HttpOutboundSenderTest {
                     == com.samlscope.core.transcript.Direction.OUTBOUND).findFirst().orElseThrow();
             var inbound = entries.stream().filter(value -> value.direction()
                     == com.samlscope.core.transcript.Direction.INBOUND).findFirst().orElseThrow();
-            assertTrue(outbound.headers().get("Authorization").getFirst().contains("redacted: Basic"));
+            assertFalse(outbound.headers().containsKey("Authorization"));
+            assertEquals(2, submitted.size());
+            for (var input : submitted) {
+                assertTrue(input.headers().keySet().stream().noneMatch(name ->
+                        java.util.Set.of("authorization", "cookie", "set-cookie").contains(name.toLowerCase(java.util.Locale.ROOT))));
+                assertFalse(input.headers().toString().contains("credential-sentinel"));
+            }
+            var tls = (Map<?, ?>) result.details().get("tls_observation");
+            assertEquals("plaintext-http-observed", tls.get("status"));
+            assertEquals(false, tls.get("affects_verdict"));
+            assertEquals(tls, inbound.samlSummary().get("tls_observation"));
             assertFalse(outbound.headers().toString().contains("YWxpY2U6c2VjcmV0"));
             assertEquals(result.transcriptEntryId(), inbound.id());
         } finally {
@@ -106,6 +126,51 @@ class HttpOutboundSenderTest {
         }
     }
 
+    @Test
+    void deliversLogoutProbesAndReadsTheSamlMessageOutOfTheResponsePage() throws Exception {
+        var seenBody = new AtomicReference<String>();
+        var server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        server.createContext("/sloprobe", exchange -> {
+            seenBody.set(new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
+            var samlResponse = java.util.Base64.getEncoder().encodeToString(
+                    ("<samlp:LogoutResponse xmlns:samlp=\"urn:oasis:names:tc:SAML:2.0:protocol\" ID=\"_r\" "
+                            + "InResponseTo=\"_a\"><samlp:Status><samlp:StatusCode "
+                            + "Value=\"urn:oasis:names:tc:SAML:2.0:status:Requester\"/></samlp:Status>"
+                            + "</samlp:LogoutResponse>").getBytes(StandardCharsets.UTF_8));
+            var page = ("<html><body><form method=\"post\" action=\"https://suite.example/slo\">"
+                    + "<input type=\"hidden\" name=\"SAMLResponse\" value=\"" + samlResponse + "\"/>"
+                    + "</form></body></html>").getBytes(StandardCharsets.UTF_8);
+            exchange.getResponseHeaders().set("Content-Type", "text/html");
+            exchange.sendResponseHeaders(200, page.length);
+            exchange.getResponseBody().write(page);
+            exchange.close();
+        });
+        server.start();
+        try {
+            var recorder = recorder();
+            var sender = new HttpOutboundSender(
+                    HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NEVER).build(), recorder,
+                    Clock.fixed(NOW, ZoneOffset.UTC));
+            var request = ("<samlp:LogoutRequest xmlns:samlp=\"urn:oasis:names:tc:SAML:2.0:protocol\" ID=\"_l\"/>")
+                    .getBytes(StandardCharsets.UTF_8);
+            var action = new OutboundAction("action_0123456789abcdef0123456789abcdef", OutboundKind.LOGOUT_PROBE,
+                    request, URI.create("http://127.0.0.1:" + server.getAddress().getPort() + "/sloprobe"), false);
+
+            var result = sender.send(RUN_ID, action, new byte[0]);
+
+            assertTrue(seenBody.get().startsWith("SAMLRequest="));
+            assertEquals(200, result.details().get("http_status"));
+            assertEquals("LogoutResponse", result.details().get("saml_message"));
+            var inbound = recorder.list(RUN_ID).stream()
+                    .filter(value -> value.direction() == com.samlscope.core.transcript.Direction.INBOUND)
+                    .findFirst().orElseThrow();
+            assertEquals("saml-message", inbound.samlSummary().get("probe_response"));
+            assertEquals("urn:oasis:names:tc:SAML:2.0:status:Requester", inbound.samlSummary().get("status"));
+        } finally {
+            server.stop(0);
+        }
+    }
+
     private FileTranscriptRecorder recorder() {
         var json = new JsonCodec();
         var database = new SqliteDatabase(directory);
@@ -119,5 +184,77 @@ class HttpOutboundSenderTest {
         new SqliteRunRepository(database, json).save(new TestRun(
                 RUN_ID, plan.id(), RunStatus.RUNNING, Reachability.UNKNOWN, Map.of(), NOW, NOW));
         return new FileTranscriptRecorder(database, json, directory);
+    }
+
+    @Test void soapLogoutUsesActualEnvelopeNoCredentialAndRecordsInnerCorrelatedMessages() throws Exception {
+        var seenBody = new AtomicReference<byte[]>(); var seenType = new AtomicReference<String>();
+        var seenCredential = new AtomicReference<String>();
+        var server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        var target = URI.create("http://127.0.0.1:" + server.getAddress().getPort() + "/soap-slo");
+        var request = ("<S:Envelope xmlns:S='http://schemas.xmlsoap.org/soap/envelope/'><S:Body>"
+                + "<p:LogoutRequest xmlns:p='urn:oasis:names:tc:SAML:2.0:protocol' ID='_soap' Destination='"
+                + target + "'/></S:Body></S:Envelope>").getBytes(StandardCharsets.UTF_8);
+        server.createContext("/soap-slo", exchange -> {
+            seenBody.set(exchange.getRequestBody().readAllBytes()); seenType.set(exchange.getRequestHeaders().getFirst("Content-Type"));
+            seenCredential.set(exchange.getRequestHeaders().getFirst("Authorization"));
+            var reply = ("<S:Envelope xmlns:S='http://schemas.xmlsoap.org/soap/envelope/'><S:Body>"
+                    + "<p:LogoutResponse xmlns:p='urn:oasis:names:tc:SAML:2.0:protocol' ID='_reply' InResponseTo='_soap'/>"
+                    + "</S:Body></S:Envelope>").getBytes(StandardCharsets.UTF_8);
+            exchange.getResponseHeaders().set("Set-Cookie", "never-record-this");
+            exchange.getResponseHeaders().set("Content-Type", "text/xml");
+            exchange.sendResponseHeaders(200, reply.length); exchange.getResponseBody().write(reply); exchange.close();
+        });
+        server.start();
+        try {
+            var recorder = recorder();
+            var result = new HttpOutboundSender(HttpClient.newHttpClient(), recorder, Clock.fixed(NOW, ZoneOffset.UTC))
+                    .send(RUN_ID, new OutboundAction("action_0123456789abcdef0123456789abcdef", OutboundKind.LOGOUT_PROBE, request, target, false), null);
+            org.junit.jupiter.api.Assertions.assertArrayEquals(request, seenBody.get());
+            assertEquals("text/xml; charset=utf-8", seenType.get());
+            org.junit.jupiter.api.Assertions.assertNull(seenCredential.get());
+            var entries = recorder.list(RUN_ID); assertEquals(2, entries.size());
+            assertTrue(entries.stream().allMatch(e -> "direct-soap".equals(e.samlSummary().get("probe_transport"))));
+            var sent = entries.stream().filter(e -> e.direction() == com.samlscope.core.transcript.Direction.OUTBOUND).findFirst().orElseThrow();
+            var received = entries.stream().filter(e -> e.id().equals(result.transcriptEntryId())).findFirst().orElseThrow();
+            assertEquals("LogoutRequest", sent.samlSummary().get("type"));
+            assertEquals("LogoutResponse", received.samlSummary().get("saml_message"));
+            assertEquals(sent.id(), received.samlSummary().get("request_transcript"));
+            assertTrue(sent.decodedSamlBytes() > 0 && received.decodedSamlBytes() > 0);
+            assertFalse(received.headers().toString().contains("never-record-this"));
+        } finally { server.stop(0); }
+    }
+
+    @Test void ambiguousSoapAndWrongOutboxDestinationAreRejectedBeforeNetwork() {
+        var recorder = recorder(); var sender = new HttpOutboundSender(HttpClient.newHttpClient(), recorder, Clock.fixed(NOW, ZoneOffset.UTC));
+        var target = URI.create("http://127.0.0.1:1/soap-slo");
+        for (var message : java.util.List.of(
+                "<S:Envelope xmlns:S='http://schemas.xmlsoap.org/soap/envelope/'><S:Body/><S:Body/></S:Envelope>",
+                "<S:Envelope xmlns:S='http://schemas.xmlsoap.org/soap/envelope/'><S:Body><p:LogoutRequest xmlns:p='urn:oasis:names:tc:SAML:2.0:protocol' ID='_a' Destination='http://foreign.invalid'/></S:Body></S:Envelope>",
+                "<S:Envelope xmlns:S='urn:foreign'><S:Body><LogoutRequest/></S:Body></S:Envelope>")) {
+            assertThrows(IllegalArgumentException.class, () -> sender.send(RUN_ID,
+                    new OutboundAction("action_0123456789abcdef0123456789abcdef", OutboundKind.LOGOUT_PROBE,
+                            message.getBytes(StandardCharsets.UTF_8), target, false), null));
+        }
+        assertTrue(recorder.list(RUN_ID).isEmpty());
+    }
+
+    @Test void soapFaultIsKnownHttpResponseWithNoFabricatedDecodedLogoutResponse() throws Exception {
+        var server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        var target = URI.create("http://127.0.0.1:" + server.getAddress().getPort() + "/soap-fault");
+        server.createContext("/soap-fault", exchange -> {
+            exchange.getRequestBody().readAllBytes();
+            var fault = "<S:Envelope xmlns:S='http://schemas.xmlsoap.org/soap/envelope/'><S:Body><S:Fault><faultcode>S:Server</faultcode></S:Fault></S:Body></S:Envelope>".getBytes(StandardCharsets.UTF_8);
+            exchange.sendResponseHeaders(500, fault.length); exchange.getResponseBody().write(fault); exchange.close();
+        }); server.start();
+        try {
+            var request = ("<S:Envelope xmlns:S='http://schemas.xmlsoap.org/soap/envelope/'><S:Body><p:LogoutRequest xmlns:p='urn:oasis:names:tc:SAML:2.0:protocol' ID='_a' Destination='" + target + "'/></S:Body></S:Envelope>").getBytes(StandardCharsets.UTF_8);
+            var recorder = recorder();
+            var result = new HttpOutboundSender(HttpClient.newHttpClient(), recorder, Clock.fixed(NOW, ZoneOffset.UTC))
+                    .send(RUN_ID, new OutboundAction("action_0123456789abcdef0123456789abcdef", OutboundKind.LOGOUT_PROBE, request, target, false), null);
+            assertEquals(500, result.details().get("http_status"));
+            var received = recorder.list(RUN_ID).stream().filter(e -> e.id().equals(result.transcriptEntryId())).findFirst().orElseThrow();
+            assertEquals(0, received.decodedSamlBytes());
+            assertTrue(received.bodyBytes() > 0);
+        } finally { server.stop(0); }
     }
 }

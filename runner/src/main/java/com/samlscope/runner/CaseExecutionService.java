@@ -41,6 +41,53 @@ public final class CaseExecutionService {
                 testCase.start(context), context.clock().instant(), context.interaction(), context.parameters().requestSigningMode());
     }
 
+    private static final String QUEUED_FRONT_CHANNEL = "runner-queued-front-channel";
+
+    /** Persist intent to run, without generating a timestamp, deadline, signature, or payload. */
+    public CaseExecution enqueueFrontChannel(String runId, TestCase testCase, CaseContext context) {
+        requireMatchingRun(runId, testCase, context);
+        if (!(testCase instanceof BrowserFrontChannelScenario))
+            throw new IllegalArgumentException("Only front-channel scenarios can be queued");
+        var existing = repository.find(runId, testCase.id());
+        if (existing.isPresent()) return existing.orElseThrow();
+        var queued = new CaseExecution(runId, testCase.id(), 0, CaseExecutionStatus.RUNNING,
+                new CaseState(QUEUED_FRONT_CHANNEL, java.util.Map.of()), null, null, context.clock().instant());
+        if (repository.apply(-1, queued, List.of())) return queued;
+        return repository.find(runId, testCase.id()).orElseThrow();
+    }
+
+    static boolean isQueuedFrontChannel(CaseExecution execution) {
+        return execution.status() == CaseExecutionStatus.RUNNING
+                && QUEUED_FRONT_CHANNEL.equals(execution.state().phase());
+    }
+
+    /** Complete only an explicitly opted-in, never-dispatched case; do not materialize an outbox action. */
+    public CaseExecution completeQueuedFromRecordedEvidence(String runId, TestCase testCase, CaseContext context) {
+        requireMatchingRun(runId, testCase, context);
+        var current = repository.find(runId, testCase.id()).orElseThrow();
+        if (!isQueuedFrontChannel(current) || !context.transcriptComplete()
+                || !(testCase instanceof com.samlscope.runner.cases.QueuedProtocolEvidenceCase observer)
+                || repository.listOutbox(runId).stream().anyMatch(entry -> testCase.id().equals(entry.caseId()))) return current;
+        if (!observer.evidenceStatus(context).ready()) return current;
+        var outcome = observer.queuedEvidenceOutcome(context);
+        if (outcome == null || !java.util.Set.of(com.samlscope.core.evaluation.Outcome.SATISFIED,
+                com.samlscope.core.evaluation.Outcome.SATISFIED_WITH_NOTE,
+                com.samlscope.core.evaluation.Outcome.VIOLATED).contains(outcome.outcome())) return current;
+        return apply(runId, testCase.id(), current.revision(), current.state(), new CaseStep.Finish(outcome),
+                context.clock().instant(), context.interaction(), context.parameters().requestSigningMode());
+    }
+
+    /** Materialize only a selected, never-started case. Existing outbox payloads remain immutable. */
+    public CaseExecution activateFrontChannel(String runId, TestCase testCase, CaseContext context) {
+        requireMatchingRun(runId, testCase, context);
+        if (!(testCase instanceof BrowserFrontChannelScenario))
+            throw new IllegalArgumentException("Only front-channel scenarios can be activated");
+        var current = repository.find(runId, testCase.id()).orElseThrow();
+        if (!isQueuedFrontChannel(current)) return current;
+        return apply(runId, testCase.id(), current.revision(), CaseState.initial(),
+                testCase.start(context), context.clock().instant(), context.interaction(), context.parameters().requestSigningMode());
+    }
+
     public CaseExecution resume(
             String runId, TestCase testCase, CaseContext context, CaseEvent event) {
         requireMatchingRun(runId, testCase, context);
@@ -50,6 +97,44 @@ public final class CaseExecutionService {
         requireExpectedEvent(current, event, context.clock().instant());
         return apply(runId, testCase.id(), current.revision(), current.state(),
                 testCase.resume(context, current.state(), event), context.clock().instant(), context.interaction(), context.parameters().requestSigningMode());
+    }
+
+    /** Keeps FINISHED terminal and appends one auditable result revision; no start/resume or outbox actions. */
+    public CaseExecution reevaluateRecordedEvidence(String runId, TestCase testCase, CaseContext context) {
+        requireMatchingRun(runId, testCase, context);
+        var current = repository.find(runId, testCase.id())
+                .orElseThrow(() -> new IllegalArgumentException("Case has not started: " + testCase.id()));
+        if (current.status() != CaseExecutionStatus.FINISHED || current.outcome() == null
+                || current.outcome().outcome() != com.samlscope.core.evaluation.Outcome.NOT_VERIFIED
+                || !context.transcriptComplete()
+                || !(testCase instanceof RecordedEvidenceReevaluation observer)
+                || !observer.supportsRecordedEvidenceReevaluation(current.outcome())) return current;
+        var candidate = observer.reevaluateRecordedEvidence(context, current.outcome())
+                .flatMap(next -> RecordedEvidenceReevaluation.conclusiveUpdate(current.outcome(), next));
+        if (candidate.isEmpty()) return current;
+        var old = current.outcome();
+        var previous = new java.util.LinkedHashMap<String, Object>();
+        previous.put("revision", current.revision());
+        previous.put("updated_at", current.updatedAt().toString());
+        previous.put("outcome", old.outcome().name());
+        previous.put("not_verified_reason", old.notVerifiedReason());
+        if (old.reasonCode() != null) previous.put("reason_code", old.reasonCode());
+        if (old.reasonMessageKey() != null) previous.put("reason_message_key", old.reasonMessageKey());
+        previous.put("evidence", old.evidence().stream().map(value -> java.util.Map.of(
+                "kind", value.kind(), "reference", value.reference())).toList());
+        previous.put("details", old.details());
+        var data = new java.util.LinkedHashMap<String, Object>(current.state().data());
+        data.put("previous_recorded_evidence_result", java.util.Map.copyOf(previous));
+        var next = candidate.orElseThrow();
+        var details = new java.util.LinkedHashMap<String, Object>(next.details());
+        details.put("previous_recorded_evidence_result", java.util.Map.copyOf(previous));
+        var outcome = new CaseOutcome(next.outcome(), next.notVerifiedReason(), next.reasonCode(),
+                next.reasonMessageKey(), next.evidence(), details);
+        var revised = new CaseExecution(runId, testCase.id(), current.revision() + 1,
+                CaseExecutionStatus.FINISHED, new CaseState(current.state().phase(), data), null,
+                outcome, context.clock().instant());
+        if (repository.apply(current.revision(), revised, List.of())) return revised;
+        return repository.find(runId, testCase.id()).orElseThrow();
     }
 
     private void requireMatchingRun(String runId, TestCase testCase, CaseContext context) {
@@ -182,6 +267,7 @@ public final class CaseExecutionService {
                     || event instanceof CaseEvent.ConfigUnavailable;
             case WAITING_ATTESTATION -> event instanceof CaseEvent.Attested;
             case WAITING_INBOUND -> event instanceof CaseEvent.InboundMessage
+                    || event instanceof CaseEvent.BrowserObservation
                     || event instanceof CaseEvent.InboundUnavailable
                     || event instanceof CaseEvent.RetryInbound;
             case FINISHED -> false;

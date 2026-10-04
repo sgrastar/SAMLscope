@@ -1,7 +1,7 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, expect, test, vi } from 'vitest'
 import { metadataFixtureWork, RunManagement } from './RunManagement'
-import type { MetadataLab } from './api'
+import type { CampaignReport, MetadataLab, PendingInteraction } from './api'
 import { stubWorkspaceFetch } from './workspaceTestFixture'
 
 afterEach(() => {
@@ -768,6 +768,68 @@ test('filters the approved case workspace without changing case outcomes', async
   await waitFor(() => expect(document.activeElement).toBe(caseButton))
 })
 
+test.each(['no-action', 'finished', 'shared-campaign'] as const)(
+  'keeps missing evidence visible without requesting another browser step (%s)', async (state) => {
+    const report = evidenceOnlyCampaign()
+    const campaign = report.campaigns[0]
+    if (state !== 'no-action') {
+      campaign.actionKind = 'LOGIN'
+      campaign.deliberateUserActions = 1
+      campaign.actions = [{ id: 'fresh-login', caseIds: campaign.caseIds, remainingCaseIds: [] }]
+      report.classifications[0].actionKind = 'LOGIN'
+    }
+    if (state === 'shared-campaign') {
+      const otherCaseId = 'IIP-IDP06-a-idp-01'
+      report.cases = 2
+      report.casesByEvidenceClass.OPERATOR_ASSISTED = 2
+      report.notVerifiedCases = 2
+      campaign.remainingUserActions = 1
+      campaign.caseIds = [...campaign.caseIds, otherCaseId]
+      campaign.remainingCaseIds = [...campaign.remainingCaseIds, otherCaseId]
+      campaign.actions.push({ id: 'another-case-login', caseIds: [otherCaseId],
+        remainingCaseIds: [otherCaseId] })
+      report.classifications.push({ ...report.classifications[0], caseId: otherCaseId, outcome: null })
+    }
+    const calls = stubCampaignWorkspace(report)
+    render(<RunManagement runId={report.runId} />)
+    fireEvent.click(await screen.findByRole('button', { name: /IIP-IDP06-b-idp-01/ }))
+
+    const dialog = screen.getByRole('dialog', { name: 'IIP-IDP06-b-idp-01' })
+    expect(within(dialog).getByText('Not verified')).toBeTruthy()
+    expect(within(dialog).getByText('force-authn-mechanism-reachability')).toBeTruthy()
+    expect(within(dialog).getByText('No browser action queued')).toBeTruthy()
+    expect(within(dialog).getByText('Not requested')).toBeTruthy()
+    expect(within(dialog).getByText('No further browser step is requested')).toBeTruthy()
+    expect(within(dialog).getByText(/Ask the target administrator or evidence reviewer/)).toBeTruthy()
+    expect(within(dialog).queryByRole('link', { name: 'Open focused case' })).toBeNull()
+    expect(within(dialog).getByRole('link', { name: 'View recorded result' }).getAttribute('href'))
+      .toBe(`/reports/${report.runId}`)
+    expect(within(dialog).getByRole('link', { name: 'Sources and license notices' })).toBeTruthy()
+    if (state !== 'shared-campaign') {
+      expect(screen.queryByText('A fresh target session is required at the campaign boundary.')).toBeNull()
+    }
+    expect(calls.filter(call => call.init?.method === 'POST')).toHaveLength(0)
+  },
+)
+
+test('preserves an actual pending browser input when the campaign estimate has no remaining steps', async () => {
+  const report = evidenceOnlyCampaign()
+  stubCampaignWorkspace(report, [{
+    caseId: 'IIP-IDP06-b-idp-01', kind: 'BROWSER', promptKey: 'case.browser',
+    promptEn: 'Complete the currently queued browser observation.',
+    startUrl: '/browser/run/current-input', expiresAt: '2026-10-02T00:00:00Z',
+    answerValues: [], completionMode: 'TRANSCRIPT',
+  }])
+  render(<RunManagement runId={report.runId} />)
+  fireEvent.click(await screen.findByRole('button', { name: /IIP-IDP06-b-idp-01/ }))
+
+  const dialog = screen.getByRole('dialog', { name: 'IIP-IDP06-b-idp-01' })
+  expect(within(dialog).getByText('Complete the currently queued browser observation.')).toBeTruthy()
+  expect(within(dialog).getByRole('link', { name: 'Open focused browser step' }).getAttribute('href'))
+    .toBe('/browser/run/current-input')
+  expect(within(dialog).queryByText('No further browser step is requested')).toBeNull()
+})
+
 test('reissues an uncertain one-time fixture without turning it into a target failure', async () => {
   const calls: Array<{ url: string; init?: RequestInit }> = []
   let retried = false
@@ -851,6 +913,14 @@ test('shows plan action budgets and keeps self-attested evidence separate', asyn
   expect(screen.getByText(/Externally verified:/)).toBeTruthy()
   expect(screen.getByText(/Self-attested:/)).toBeTruthy()
   expect(screen.getByText('8')).toBeTruthy()
+  const assisted = screen.getByText('Assisted', { selector: 'strong' }).closest('article')!
+  expect(within(assisted).getByText('Planned steps')).toBeTruthy()
+  expect(within(assisted).getByText('Test-user browser steps')).toBeTruthy()
+  expect(within(assisted).getByText('Administrator setup')).toBeTruthy()
+  expect(within(assisted).getByText('8 configuration, 2 metadata refresh')).toBeTruthy()
+  expect(within(assisted).getByText('31 total / 9 remaining (budget 35)')).toBeTruthy()
+  expect(screen.getByText(/Counts are planned campaign steps, not measured sign-ins/)).toBeTruthy()
+  expect(screen.getByText(/Actual sign-ins and time spent preparing evidence are not measured here/)).toBeTruthy()
 })
 
 test('completes one shared policy action without collecting a target verdict', async () => {
@@ -980,6 +1050,98 @@ test('shares one section conclusion while preserving case-specific overrides', a
   expect(posts[2].url).toContain('/attest')
   expect(posts[2].init?.body).toBe(JSON.stringify({ value: 'evidence_violates', note: 'Shared policy export' }))
 })
+
+test('shows and fixes the supplemental decryption key input for the IdP logout profile', async () => {
+  const calls: Array<{ url: string; init?: RequestInit }> = []
+  let submitted = false
+  vi.stubGlobal('fetch', vi.fn(async (url: string, init?: RequestInit) => {
+    calls.push({ url, init })
+    if (init?.method === 'POST' && url.endsWith('/supplemental-decryption-keys/submit')) {
+      submitted = true
+      return json({
+        runId: 'run_test', targetEntityId: 'https://target.example/entity', metadataSha256: 'a'.repeat(64),
+        sourceUri: 'https://idp.example/keys', publicKeysSpkiBase64: ['QUJD'], recordedAt: '2026-09-15T00:00:00Z',
+      })
+    }
+    if (url.endsWith('/supplemental-decryption-keys')) return json({
+      targetEntityId: 'https://target.example/entity', metadataSha256: 'a'.repeat(64),
+      testsStarted: submitted,
+      input: submitted ? {
+        runId: 'run_test', targetEntityId: 'https://target.example/entity', metadataSha256: 'a'.repeat(64),
+        sourceUri: 'https://idp.example/keys', publicKeysSpkiBase64: ['QUJD'], recordedAt: '2026-09-15T00:00:00Z',
+      } : null,
+    })
+    if (url.endsWith('/workspace-evidence')) return json({
+      interactions: [], bootstrapContracts: [], protocolEvidence: protocolEvidence(),
+      activeProbe: { state: 'NOT_STARTED' }, campaigns: [],
+    })
+    if (url.endsWith('/metadata-lab')) return json(metadataLab())
+    if (url === '/api/health') return json({ mode: 'selfhosted' })
+    if (url === '/api/plans') return json([{
+      plan: { id: 'plan', profile: 'single_logout_idp', name: 'Logout target',
+        target: { kind: 'IDP', entityId: 'https://target.example/entity' } },
+      entityId: 'https://suite.example/p/plan', metadataUrl: 'https://suite.example/p/plan/metadata',
+      mdqUrl: 'https://suite.example/mdq', secondaryIdpEntityId: 'https://suite.example/secondary',
+      secondaryIdpMetadataUrl: 'https://suite.example/secondary/metadata',
+    }])
+    if (url === '/api/runs/run_test') return json({ id: 'run_test', planId: 'plan', status: 'COMPLETED', context: {} })
+    throw new Error(`Unexpected request: ${url}`)
+  }))
+  render(<RunManagement runId="run_test" csrfToken="csrf" />)
+  expect(await screen.findByText('IdP decryption key input')).toBeTruthy()
+  expect(screen.getByText('a'.repeat(64))).toBeTruthy()
+  fireEvent.change(screen.getByLabelText(/Public-key source/), { target: { value: 'https://idp.example/keys' } })
+  fireEvent.change(screen.getByLabelText(/RSA public key/), { target: { value: 'QUJD' } })
+  fireEvent.click(screen.getByRole('button', { name: 'Fix decryption key input' }))
+  await waitFor(() => expect(submitted).toBe(true))
+  expect(await screen.findByText(/Fixed: 1 supplemental RSA key\(s\) from https:\/\/idp\.example\/keys/)).toBeTruthy()
+  const submit = calls.find(call => call.init?.method === 'POST')
+  expect(submit?.url).toBe('/api/runs/run_test/supplemental-decryption-keys/submit')
+  expect(submit?.init?.body).toBe(JSON.stringify({
+    targetEntityId: 'https://target.example/entity', metadataSha256: 'a'.repeat(64),
+    sourceUri: 'https://idp.example/keys', publicKeysSpkiBase64: ['QUJD'],
+  }))
+})
+
+function evidenceOnlyCampaign(): CampaignReport {
+  const caseId = 'IIP-IDP06-b-idp-01'
+  return {
+    runId: 'run_0123456789ABCDEFGHJKMNPQRS', cases: 1,
+    casesByEvidenceClass: { PROTOCOL_OBSERVED: 0, OPERATOR_ASSISTED: 1, SELF_ATTESTED: 0 },
+    externallyVerifiedCases: 0, selfAttestedCases: 0, notVerifiedCases: 1, plans: [],
+    campaigns: [{
+      id: 'native-authentication-mechanism', title: 'Authentication mechanism evidence',
+      plan: 'STANDARD', evidenceClass: 'OPERATOR_ASSISTED', actionKind: 'NONE',
+      deliberateUserActions: 0, remainingUserActions: 0, freshSessionRequired: true,
+      caseIds: [caseId], remainingCaseIds: [caseId], actions: [],
+      expectedTranscriptEvidence: ['force-authn-mechanism-reachability'],
+    }],
+    classifications: [{
+      caseId, plan: 'STANDARD', evidenceClass: 'OPERATOR_ASSISTED',
+      campaignId: 'native-authentication-mechanism', actionKind: 'NONE', freshSessionRequired: true,
+      resolved: false, outcome: 'NOT_VERIFIED',
+      expectedTranscriptEvidence: ['force-authn-mechanism-reachability'],
+    }],
+  }
+}
+
+function stubCampaignWorkspace(report: CampaignReport, interactions: PendingInteraction[] = []) {
+  const calls: Array<{ url: string; init?: RequestInit }> = []
+  stubWorkspaceFetch(vi.fn(async (url: string, init?: RequestInit) => {
+    calls.push({ url, init })
+    if (url.includes('/campaigns')) return json(report)
+    if (url.includes('/interactions')) return json(interactions)
+    if (url.includes('/active-probe')) return json({ state: 'NOT_STARTED' })
+    if (url.includes('/bootstrap-contracts')) return json([])
+    if (url.includes('/metadata-lab')) return json(metadataLab())
+    if (url.includes('/protocol-evidence')) return json(protocolEvidence())
+    if (url === '/api/health') return json({ status: 'ok', version: 'test', mode: 'selfhosted' })
+    if (url.includes('/api/runs/')) return json({ id: report.runId, planId: 'plan' })
+    if (url === '/api/plans') return json([])
+    return json([])
+  }))
+  return calls
+}
 
 function metadataLab() {
   return {

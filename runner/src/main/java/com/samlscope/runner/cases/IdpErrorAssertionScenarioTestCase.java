@@ -14,6 +14,7 @@ import com.samlscope.runner.BrowserFrontChannelScenario;
 import com.samlscope.runner.scenario.FixtureObservation;
 import com.samlscope.runner.scenario.FixtureScenarioTestCase;
 import com.samlscope.runner.scenario.ScenarioFixture;
+import com.samlscope.runner.scenario.TargetHttpObservation;
 import com.samlscope.saml.normal.SamlErrorProbeRequestFactory;
 import com.samlscope.saml.normal.SamlErrorProbeRequestFactory.Probe;
 import com.samlscope.saml.normal.SamlException;
@@ -66,7 +67,7 @@ public final class IdpErrorAssertionScenarioTestCase
                 ? List.of(Probe.BASELINE_SUCCESS, Probe.UNRECOGNIZED_SUBJECT)
                 : ERROR_ASSERTION_PROBES;
         var fixtures = probes.stream().<ScenarioFixture>map(
-                probe -> new ErrorAssertionFixture(probe, configuration, requests)).toList();
+                probe -> new ErrorAssertionFixture(id, probe, configuration, requests)).toList();
         return new FixtureScenarioTestCase(
                 id, TargetRole.IDP, fixtures,
                 ignored -> configuration.preconditionsSatisfied(),
@@ -101,6 +102,7 @@ public final class IdpErrorAssertionScenarioTestCase
     @Override public String instructionsEn(CaseState state) { return browserInstructionsEn(); }
 
     private record ErrorAssertionFixture(
+            String caseId,
             Probe probe,
             IdpErrorProbeConfiguration configuration,
             SamlErrorProbeRequestFactory requests) implements ScenarioFixture {
@@ -135,17 +137,39 @@ public final class IdpErrorAssertionScenarioTestCase
                     return success && assertions > 0
                             ? FixtureObservation.SATISFIED : FixtureObservation.CONTROL_FAILED;
                 }
-                if (success) return FixtureObservation.NOT_VERIFIED;
+                if (success) {
+                    // SSO01.d requires an error Status for the deterministic nonexistent
+                    // principal. A correlated Success is therefore a direct violation whether
+                    // or not the product also emits an Assertion. Keep SSO01.f unchanged: its
+                    // separate oracle concerns assertion absence in an error Response.
+                    return SUBJECT_ERROR_CASE.equals(caseId) && probe == Probe.UNRECOGNIZED_SUBJECT
+                            ? FixtureObservation.VIOLATED : FixtureObservation.NOT_VERIFIED;
+                }
                 return assertions == 0 ? FixtureObservation.SATISFIED : FixtureObservation.VIOLATED;
             } catch (SamlException malformed) {
                 return FixtureObservation.NOT_VERIFIED;
             }
         }
 
+        @Override public FixtureObservation observeBrowser(
+                String requestId, int httpStatus, String url, String body) {
+            if (!TargetHttpObservation.isSameOriginError(
+                    configuration.ssoEndpoint(), httpStatus, url)) {
+                return FixtureObservation.NOT_VERIFIED;
+            }
+            if (probe == Probe.BASELINE_SUCCESS) return FixtureObservation.CONTROL_FAILED;
+            // SSO01.d requires an error SAML Status for the unknown subject. A target-local HTTP
+            // error proves it was not returned. SSO01.f remains inconclusive because absence of a
+            // Response cannot prove whether that Response would have contained an Assertion.
+            return SUBJECT_ERROR_CASE.equals(caseId) && probe == Probe.UNRECOGNIZED_SUBJECT
+                    ? FixtureObservation.VIOLATED : FixtureObservation.NOT_VERIFIED;
+        }
+
         @Override public Duration timeout() { return configuration.responseTimeout(); }
         @Override public String definitionKey() {
-            return String.join("|", probe.name(), configuration.ssoEndpoint().toString(),
-                    configuration.suiteIssuer(), configuration.registeredAcs().toString());
+            return String.join("|", caseId, probe.name(), configuration.ssoEndpoint().toString(),
+                    configuration.suiteIssuer(), configuration.registeredAcs().toString(),
+                    "recorder-terminal-http-v1");
         }
     }
 }

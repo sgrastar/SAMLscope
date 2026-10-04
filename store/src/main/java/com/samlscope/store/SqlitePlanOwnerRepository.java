@@ -8,6 +8,11 @@ import java.util.List;
 public final class SqlitePlanOwnerRepository {
     private final SqliteDatabase database;
     public SqlitePlanOwnerRepository(SqliteDatabase database) { this.database = database; }
+    public String ownerOf(String planId) {
+        try (var c = database.open(); var s = c.prepareStatement("SELECT owner_id FROM hosted_plan_owners WHERE plan_id = ?")) {
+            s.setString(1, planId); try (var r = s.executeQuery()) { return r.next() ? r.getString(1) : null; }
+        } catch (SQLException e) { throw new StoreException("Could not read Plan owner", e); }
+    }
     public List<String> ownedPlans(String oidcOwnerId) {
         if (oidcOwnerId == null || !oidcOwnerId.matches("oidc:[0-9a-f]{64}")) {
             throw new IllegalArgumentException("An OIDC owner fingerprint is required");

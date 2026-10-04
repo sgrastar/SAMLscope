@@ -21,7 +21,8 @@ import com.samlscope.core.transcript.TranscriptContentReader;
 
 /** Finishes from an ordinary SSO Transcript when conclusive; otherwise waits for more evidence. */
 public final class AutoBrowserEvidenceTestCase
-        implements TestCase, BrowserPrompt, ProtocolEvidenceCase, com.samlscope.runner.EvidenceCampaignCase {
+        implements TestCase, BrowserPrompt, ProtocolEvidenceCase, com.samlscope.runner.EvidenceCampaignCase,
+        com.samlscope.runner.RecordedEvidenceReevaluation {
     private final BrowserEvidenceTestCase fallback;
     private final TranscriptContentReader content;
     private final SamlDecryptionKeyProvider decryptionKeys;
@@ -126,10 +127,31 @@ public final class AutoBrowserEvidenceTestCase
                         "evidence_count", value.evidence().size())).orElseGet(java.util.Map::of));
     }
 
+    @Override
+    public boolean supportsRecordedEvidenceReevaluation(com.samlscope.core.evaluation.CaseOutcome previous) {
+        return id().equals("IIP-SSO03-b-idp-01") && previous != null
+                && previous.outcome() == com.samlscope.core.evaluation.Outcome.NOT_VERIFIED;
+    }
+
+    @Override
+    public Optional<com.samlscope.core.evaluation.CaseOutcome> reevaluateRecordedEvidence(
+            CaseContext context, com.samlscope.core.evaluation.CaseOutcome previous) {
+        if (!context.transcriptComplete() || !supportsRecordedEvidenceReevaluation(previous)) return Optional.empty();
+        return transcriptOutcome(context).flatMap(next ->
+                com.samlscope.runner.RecordedEvidenceReevaluation.conclusiveUpdate(previous, next));
+    }
+
     private java.util.Optional<com.samlscope.core.evaluation.CaseOutcome> transcriptOutcome(CaseContext context) {
         var messages = new ArrayList<NormalFlowBrowserObservation.Message>();
+        var entries = context.transcript().list(context.runId());
+        if (id().equals("IIP-SSO03-b-idp-01")) {
+            var seen = new java.util.HashSet<String>();
+            if (entries.stream().anyMatch(entry -> !context.runId().equals(entry.runId())
+                    || !seen.add(entry.id()))) return Optional.empty();
+        }
         var key = decryptionKeys.keyFor(context.runId()).orElse(null);
-        for (var entry : context.transcript().list(context.runId())) {
+        for (var entry : entries) {
+            if (MetadataProbeCorrelation.signatureControl(entry)) continue;
             if (entry.decodedSamlRef() == null || entry.decodedSamlBytes() <= 0) continue;
             // Inbound SAML is recorded before protocol parsing and then updated atomically with
             // the validated summary. Never conclude from the durable-but-unvalidated first form.
@@ -155,7 +177,8 @@ public final class AutoBrowserEvidenceTestCase
                     || id().equals("IIP-SSO01-et-idp-01");
             messages.add(new NormalFlowBrowserObservation.Message(
                     "transcript:" + entry.id(), entry.method(), entry.url(), entry.timestamp(),
-                    key == null || preserveEnvelope ? xml : decryptAssertions(xml, key)));
+                    key == null || preserveEnvelope ? xml : decryptAssertions(xml, key),
+                    entry.direction() == Direction.INBOUND));
         }
         return NormalFlowBrowserObservation.evaluate(
                 id(), messages, targetEntityIds.apply(context.runId()).orElse(null),

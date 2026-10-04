@@ -62,16 +62,17 @@ final class TargetMetadataObservation {
     static boolean supports(String caseId) {
         return isAlgorithmPublicationCapability(caseId)
                 || suffix(caseId, "a3") || suffix(caseId, "a6") || suffix(caseId, "a7")
-                || suffix(caseId, "a9") || suffix(caseId, "ab")
+                || suffix(caseId, "a9") || suffix(caseId, "ab") || idpSuffix(caseId, "ae")
                 || suffix(caseId, "c8") || suffix(caseId, "c9") || suffix(caseId, "ca")
                 || suffix(caseId, "cb") || suffix(caseId, "cc") || suffix(caseId, "ce")
                 || suffix(caseId, "d2") || suffix(caseId, "d3") || suffix(caseId, "d4")
                 || suffix(caseId, "d5") || suffix(caseId, "d6") || suffix(caseId, "d7")
                 || suffix(caseId, "d8") || suffix(caseId, "d9")
                 || suffix(caseId, "e1") || suffix(caseId, "e2") || suffix(caseId, "e3")
-                || suffix(caseId, "e4") || suffix(caseId, "e6") || suffix(caseId, "ed")
+                || suffix(caseId, "e4") || idpSuffix(caseId, "e5") || suffix(caseId, "e6") || suffix(caseId, "ed")
                 || suffix(caseId, "ec") || suffix(caseId, "f1") || suffix(caseId, "f2")
                 || suffix(caseId, "f3") || suffix(caseId, "f4") || suffix(caseId, "fk")
+                || idpSuffix(caseId, "f7") || suffix(caseId, "f8") || suffix(caseId, "fa")
                 || idpSuffix(caseId, "fc") || idpSuffix(caseId, "fd") || idpSuffix(caseId, "fe");
     }
 
@@ -82,8 +83,13 @@ final class TargetMetadataObservation {
         catch (SamlException invalid) { return Optional.empty(); }
         var evidence = List.of(new EvidenceRef("target-metadata", digest(metadata)));
         if (isAlgorithmPublicationCapability(caseId)) {
-            return algorithmPublicationCapability(document, evidence);
+            return algorithmPublicationCapability(caseId, document, evidence);
         }
+        if (idpSuffix(caseId, "f7") || suffix(caseId, "f8") || suffix(caseId, "fa")) {
+            return publishedUiGuidance(caseId, document, evidence);
+        }
+        if (idpSuffix(caseId, "ae")) return uniquePublishedSigningKey(document, evidence);
+        if (idpSuffix(caseId, "e5")) return encryptionPreferenceAntecedent(document, evidence);
         if (suffix(caseId, "a3")) return Optional.of(extensionNamespaces(document, evidence));
         if (suffix(caseId, "a6")) return Optional.of(rootOnlyExpiration(document, evidence));
         if (suffix(caseId, "a7")) return Optional.of(roleOverlap(document, evidence));
@@ -125,6 +131,116 @@ final class TargetMetadataObservation {
         return Optional.empty();
     }
 
+    private static Optional<CaseOutcome> uniquePublishedSigningKey(Document document, List<EvidenceRef> evidence) {
+        var root = document.getDocumentElement();
+        if (!MD.equals(root.getNamespaceURI()) || !"EntityDescriptor".equals(root.getLocalName())) return Optional.empty();
+        var roles = directElements(root, MD, "IDPSSODescriptor");
+        if (roles.isEmpty()) return Optional.empty();
+        var keys = new java.util.LinkedHashSet<String>();
+        for (var role : roles) {
+            boolean signingKeyFound = false;
+            for (var descriptor : directElements(role, MD, "KeyDescriptor")) {
+                var use = descriptor.getAttribute("use");
+                if ("encryption".equals(use)) continue;
+                if (!use.isEmpty() && !"signing".equals(use)) return Optional.empty();
+                var infos = directElements(descriptor, DS, "KeyInfo");
+                if (infos.size() != 1) return Optional.empty();
+                var info = infos.getFirst();
+                // Additional key representations need equality proof, not a guessed key count.
+                for (var child = info.getFirstChild(); child != null; child = child.getNextSibling()) {
+                    if (child instanceof Element element && (!DS.equals(element.getNamespaceURI())
+                            || !Set.of("X509Data", "KeyName").contains(element.getLocalName()))) return Optional.empty();
+                }
+                var containers = directElements(info, DS, "X509Data");
+                if (containers.size() != 1) return Optional.empty();
+                for (var child = containers.getFirst().getFirstChild(); child != null; child = child.getNextSibling()) {
+                    if (child instanceof Element element && (!DS.equals(element.getNamespaceURI())
+                            || !"X509Certificate".equals(element.getLocalName()))) return Optional.empty();
+                }
+                var certificates = directElements(containers.getFirst(), DS, "X509Certificate");
+                if (certificates.size() != 1) return Optional.empty();
+                try { keys.add(Base64.getEncoder().encodeToString(certificate(certificates.getFirst()).getPublicKey().getEncoded())); }
+                catch (IllegalArgumentException invalid) { return Optional.empty(); }
+                signingKeyFound = true;
+            }
+            if (!signingKeyFound) return Optional.empty();
+        }
+        if (keys.size() != 1) return Optional.empty();
+        return Optional.of(result(Outcome.SATISFIED_WITH_NOTE,
+                "metadata.publisher.signing-key-unambiguous", evidence,
+                Map.of("distinct_signing_keys", 1, "role", "IDPSSODescriptor")));
+    }
+
+    /** The approved e5 control explicitly satisfies zero/singleton groups; multiple choices still need execution. */
+    private static Optional<CaseOutcome> encryptionPreferenceAntecedent(
+            Document document, List<EvidenceRef> evidence) {
+        var root = document.getDocumentElement();
+        if (!MD.equals(root.getNamespaceURI()) || !"EntityDescriptor".equals(root.getLocalName())
+                || root.getAttribute("entityID").isBlank()) return Optional.empty();
+        var roles = directElements(root, MD, "IDPSSODescriptor");
+        if (roles.isEmpty()) return Optional.empty();
+        int descriptors = 0;
+        for (var role : roles) {
+            if (!List.of(role.getAttribute("protocolSupportEnumeration").split("\\s+")).contains(SAML2)) return Optional.empty();
+            for (var key : directElements(role, MD, "KeyDescriptor")) {
+                if ("signing".equals(key.getAttribute("use"))) continue;
+                if (!key.getAttribute("use").isEmpty() && !"encryption".equals(key.getAttribute("use"))) return Optional.empty();
+                descriptors++;
+                int data = 0, transport = 0;
+                for (var method : directElements(key, MD, "EncryptionMethod")) {
+                    var algorithm = method.getAttribute("Algorithm");
+                    if (DATA_ENCRYPTION.contains(algorithm)) data++;
+                    else if (KEY_TRANSPORT_OR_AGREEMENT.contains(algorithm)) transport++;
+                    else return Optional.empty(); // Unknown types cannot establish singleton groups.
+                }
+                if (data > 1 || transport > 1) return Optional.empty();
+            }
+        }
+        return Optional.of(result(Outcome.SATISFIED, "metadata.publisher.encryption-preference-antecedent-false",
+                evidence, Map.of("encryption_key_descriptors", descriptors,
+                        "multiple_algorithms_of_same_type", false,
+                        "scope", "published-metadata-snapshot")));
+    }
+
+    private static Optional<CaseOutcome> publishedUiGuidance(
+            String caseId, Document document, List<EvidenceRef> evidence) {
+        var root = document.getDocumentElement();
+        if (!MD.equals(root.getNamespaceURI())
+                || !Set.of("EntityDescriptor", "EntitiesDescriptor").contains(root.getLocalName())) return Optional.empty();
+        var roleName = caseId.contains("-idp-") ? "IDPSSODescriptor" : "SPSSODescriptor";
+        var roles = elements(document, MD, roleName);
+        if (roles.isEmpty()) return Optional.empty();
+        var elementName = idpSuffix(caseId, "f7") ? "Description" : suffix(caseId, "f8") ? "Logo" : "InformationURL";
+        var published = new ArrayList<Element>();
+        for (var role : roles) {
+            var extensions = direct(role, MD, "Extensions");
+            if (extensions == null) continue;
+            // Only role UIInfo counts; Organization or another role's content cannot stand in.
+            for (var info : elements(extensions, UI, "UIInfo")) {
+                for (var child = info.getFirstChild(); child != null; child = child.getNextSibling()) {
+                    if (child instanceof Element element && UI.equals(element.getNamespaceURI())
+                            && elementName.equals(element.getLocalName())) published.add(element);
+                }
+            }
+        }
+        if (published.isEmpty()) return Optional.of(result(Outcome.SATISFIED_WITH_NOTE,
+                "metadata.publisher.ui-guidance-not-published", evidence,
+                Map.of("role", roleName, "element", elementName, "published_elements", 0)));
+        if ("Logo".equals(elementName)) {
+            var nonHttps = published.stream().map(Element::getTextContent).map(String::strip)
+                    .filter(value -> {
+                        try { return !"https".equalsIgnoreCase(java.net.URI.create(value).getScheme()); }
+                        catch (IllegalArgumentException invalid) { return true; }
+                    }).count();
+            if (nonHttps > 0) return Optional.of(result(Outcome.VIOLATED,
+                    "metadata.publisher.logo-https-guidance", evidence,
+                    Map.of("published_elements", published.size(), "non_https_logos", nonHttps)));
+        }
+        // Natural-language usefulness, retrieved image format, and an appropriate background
+        // require their actual evidence. URL suffixes and empty text are not absence proofs.
+        return Optional.empty();
+    }
+
     /**
      * A metadata document that publishes both signature and encryption algorithm declarations is
      * positive evidence of the MD09.a capability. Absence or a partial declaration is
@@ -132,15 +248,40 @@ final class TargetMetadataObservation {
      * in another runtime configuration.
      */
     private static Optional<CaseOutcome> algorithmPublicationCapability(
-            Document document, List<EvidenceRef> evidence) {
-        var signing = elements(document, ALG, "SigningMethod").stream()
+            String caseId, Document document, List<EvidenceRef> evidence) {
+        var root = document.getDocumentElement();
+        // This API has no selected entity ID. Do not borrow another entity's declarations
+        // from an aggregate, or declarations placed inside unrelated extension content.
+        if (!MD.equals(root.getNamespaceURI()) || !"EntityDescriptor".equals(root.getLocalName())
+                || root.getAttribute("entityID").isBlank()) return Optional.empty();
+        var roleName = caseId.contains("-idp-") ? "IDPSSODescriptor" : "SPSSODescriptor";
+        var entityExtensions = direct(root, MD, "Extensions");
+        for (var role : directElements(root, MD, roleName)) {
+            if (!List.of(role.getAttribute("protocolSupportEnumeration").strip().split("\\s+"))
+                    .contains(SAML2)) continue;
+            var roleExtensions = direct(role, MD, "Extensions");
+            long signing = algorithmDeclarations(entityExtensions, ALG, "SigningMethod")
+                    + algorithmDeclarations(roleExtensions, ALG, "SigningMethod");
+            long encryption = 0;
+            // EncryptionMethod is defined by SAML metadata, not the algsupport schema.
+            // A signing-only KeyDescriptor does not advertise an encryption capability.
+            for (var key : directElements(role, MD, "KeyDescriptor")) {
+                if (!key.getAttribute("use").isBlank() && !"encryption".equals(key.getAttribute("use"))) continue;
+                if (direct(key, DS, "KeyInfo") == null) continue;
+                encryption += algorithmDeclarations(key, MD, "EncryptionMethod");
+            }
+            if (signing > 0 && encryption > 0) return Optional.of(result(
+                    Outcome.SATISFIED, "metadata.publisher.algorithm-capability-published", evidence,
+                    Map.of("signing_methods", signing, "encryption_methods", encryption,
+                            "entity_id", root.getAttribute("entityID"), "role", roleName)));
+        }
+        return Optional.empty();
+    }
+
+    private static long algorithmDeclarations(Element parent, String namespace, String localName) {
+        if (parent == null) return 0;
+        return directElements(parent, namespace, localName).stream()
                 .filter(value -> !value.getAttribute("Algorithm").isBlank()).count();
-        var encryption = elements(document, ALG, "EncryptionMethod").stream()
-                .filter(value -> !value.getAttribute("Algorithm").isBlank()).count();
-        if (signing == 0 || encryption == 0) return Optional.empty();
-        return Optional.of(result(
-                Outcome.SATISFIED, "metadata.publisher.algorithm-capability-published", evidence,
-                Map.of("signing_methods", signing, "encryption_methods", encryption)));
     }
 
     private static CaseOutcome rootOnlyExpiration(Document document, List<EvidenceRef> evidence) {

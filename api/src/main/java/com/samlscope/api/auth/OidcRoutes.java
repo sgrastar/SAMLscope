@@ -10,20 +10,29 @@ public final class OidcRoutes {
     public static final String COOKIE = "__Host-samlscope-login";
     public static final String LOGIN_COOKIE = "__Host-samlscope-login-state";
     public static final String CSRF_HEADER = "X-OIDC-CSRF-Token";
+    private final com.samlscope.store.SqliteUserRepository users;
     private final OidcConfig config;
     private final URI publicBase;
     private final OidcClient client;
     private final OidcSessions sessions;
 
-    public OidcRoutes(OidcConfig config, URI publicBase, OidcClient client, OidcSessions sessions) {
+    public OidcRoutes(OidcConfig config, URI publicBase, OidcClient client, OidcSessions sessions, com.samlscope.store.SqliteUserRepository users) {
+        this.users = users;
         this.config = config;
         this.publicBase = publicBase;
         this.client = client;
         this.sessions = sessions;
     }
+    public com.samlscope.store.SqliteUserRepository.User user(OidcSessions.Session session) {
+        return users.requireActive(session.identity().ownerId());
+    }
     public OidcConfig config() { return config; }
     public Optional<OidcSessions.Session> session(Context ctx) {
-        return config.enabled() ? sessions.find(ctx.cookie(COOKIE)) : Optional.empty();
+        var current = config.enabled() ? sessions.find(ctx.cookie(COOKIE)) : Optional.<OidcSessions.Session>empty();
+        return current.filter(s -> {
+            try { users.requireActive(s.identity().ownerId()); return true; }
+            catch (SecurityException unavailable) { sessions.logout(ctx.cookie(COOKIE)); return false; }
+        });
     }
     public void requireMutation(Context ctx, OidcSessions.Session session) {
         requireOrigin(ctx);
@@ -41,9 +50,11 @@ public final class OidcRoutes {
         javalin.routes.get("/auth/session", ctx -> {
             ctx.header("Cache-Control", "no-store");
             var current = session(ctx);
-            ctx.json(current.<Object>map(s -> new SessionView(true, true, config.accessPolicy().name().toLowerCase(),
-                    s.identity().displayName(), s.csrfToken())).orElseGet(() ->
-                    new SessionView(config.enabled(), false, config.accessPolicy().name().toLowerCase(), null, null)));
+            ctx.json(current.<Object>map(s -> {
+                var user = users.requireActive(s.identity().ownerId());
+                return new SessionView(true, true, "required", user.displayName(), s.csrfToken(), user.id(), user.role().name());
+            }).orElseGet(() -> new SessionView(config.enabled(), false,
+                    config.enabled() ? "required" : "optional", null, null, null, null)));
         });
         if (!config.enabled()) return;
         javalin.routes.before("/auth/*", ctx -> ctx.header("Cache-Control", "no-store"));
@@ -64,6 +75,9 @@ public final class OidcRoutes {
                 var code = single(ctx, "code", true);
                 if (code.length() > 8192) throw new SecurityException();
                 var identity = client.exchange(code, pending.nonce(), pending.verifier());
+                users.enroll(identity.ownerId(), identity.displayName(),
+                        !config.bootstrapAdminSubject().isEmpty() && config.bootstrapAdminSubject().equals(identity.subject()),
+                        java.time.Instant.now());
                 var raw = sessions.signIn(identity, ctx.cookie(COOKIE));
                 cookie(ctx, COOKIE, raw, (int) OidcSessions.SESSION_LIFETIME.toSeconds());
                 ctx.redirect("/");
@@ -100,5 +114,5 @@ public final class OidcRoutes {
                 + "; Path=/; Max-Age=" + maxAge + "; Secure; HttpOnly; SameSite=Lax");
     }
     public record SessionView(boolean enabled, boolean authenticated, String accessPolicy,
-                               String displayName, String csrfToken) {}
+                               String displayName, String csrfToken, String userId, String role) {}
 }

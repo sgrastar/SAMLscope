@@ -37,6 +37,28 @@ export interface RunCreated {
   managementUrl: string | null
 }
 
+export interface SupplementalDecryptionKeyInput {
+  runId: string
+  targetEntityId: string
+  metadataSha256: string
+  sourceUri: string | null
+  publicKeysSpkiBase64: string[]
+  recordedAt: string
+}
+
+export interface TargetInitiatedIntent {
+  runId: string
+  kind: 'UNSOLICITED_SSO' | 'TARGET_LOGOUT'
+  expiresAt: string
+}
+
+export interface SupplementalDecryptionKeyStatus {
+  targetEntityId: string
+  metadataSha256: string
+  testsStarted: boolean
+  input: SupplementalDecryptionKeyInput | null
+}
+
 export interface PlanCreated {
   plan: Plan
   initialRun: RunCreated | null
@@ -102,7 +124,7 @@ export interface PublicResult {
     verdict: string
     specUrl: string
     obligations: Array<{ key: string; level: string; role: string; verdict: string }>
-    cases: Array<{ id: string; obligation: string; outcome: string | null; verdict: string; mode: string; reason: string; evidenceClass: string }>
+    cases: Array<{ id: string; obligation: string; outcome: string | null; verdict: string; mode: string; reason: string; evidenceClass: string; diagnostics?: Record<string, string[]> }>
   }>
   unresolved: Array<{ obligation: string; level: string; verdict: string; reasons: string[]; howToResolve: string }>
   notObservable: Array<{ obligation: string; level: string; reason: string }>
@@ -276,7 +298,16 @@ export interface CampaignReport {
 }
 
 export interface Health { status: string; version: string; mode: 'selfhosted' | 'hosted'; oidcEnabled?: boolean }
+export type UserRole = 'ANONYMOUS' | 'USER' | 'ADMIN'
+export interface AdminUser {
+  user: { id: string; displayName: string; role: UserRole; status: 'ACTIVE' | 'DELETING'; createdAt: string; lastUsedAt: string | null; version: number }
+  expiresAt: string | null
+  expiryCandidate: boolean
+}
+export interface AdminPlan { plan: Plan; ownerId: string | null; createdAt: string }
 export interface AuthSession {
+  userId?: string | null
+  role?: UserRole | null
   enabled: boolean
   authenticated: boolean
   accessPolicy: 'optional' | 'new_plans' | 'required'
@@ -320,6 +351,13 @@ function camelize(value: unknown): unknown {
 }
 
 export const api = {
+  adminUsers: () => request<AdminUser[]>('/api/admin/users'),
+  adminPlans: () => request<AdminPlan[]>('/api/admin/plans'),
+  updateUser: (user: AdminUser['user']) => request<AdminUser['user']>(`/api/admin/users/${encodeURIComponent(user.id)}`, {
+    method: 'PUT', body: JSON.stringify({ displayName: user.displayName, role: user.role, version: user.version }),
+  }),
+  deleteUser: (id: string, version: number) => request<void>(`/api/admin/users/${encodeURIComponent(id)}`, { method: 'DELETE', body: JSON.stringify({ version }) }),
+  adminDeletePlan: (id: string) => request<void>(`/api/admin/plans/${encodeURIComponent(id)}`, { method: 'DELETE' }),
   resumeManagementSession: (runId: string) => request<{ runId: string; csrfToken: string }>(
     '/api/manage/session', { method: 'POST', body: JSON.stringify({ runId, resume: true }) }),
   authSession,
@@ -431,6 +469,22 @@ export const api = {
   startTests: (runId: string, csrfToken?: string) =>
     request<{ ecpProbesRequired: boolean }>(`/api/runs/${runId}/tests/start`, {
       method: 'POST', headers: csrfToken ? { 'X-CSRF-Token': csrfToken } : {},
+    }),
+  targetInitiated: (runId: string) =>
+    request<TargetInitiatedIntent | null>(`/api/runs/${runId}/target-initiated`),
+  prepareTargetInitiated: (runId: string, kind: TargetInitiatedIntent['kind'], csrfToken?: string) =>
+    request<TargetInitiatedIntent>(`/api/runs/${runId}/target-initiated`, {
+      method: 'POST', body: JSON.stringify({ kind }),
+      headers: csrfToken ? { 'X-CSRF-Token': csrfToken } : {},
+    }),
+  supplementalDecryptionKeys: (runId: string) =>
+    request<SupplementalDecryptionKeyStatus>(`/api/runs/${runId}/supplemental-decryption-keys`),
+  submitSupplementalDecryptionKeys: (runId: string, input: {
+    targetEntityId: string; metadataSha256: string; sourceUri: string; publicKeysSpkiBase64: string[];
+  }, csrfToken?: string) => request<SupplementalDecryptionKeyInput>(
+    `/api/runs/${runId}/supplemental-decryption-keys/submit`, {
+      method: 'POST', body: JSON.stringify(input),
+      headers: csrfToken ? { 'X-CSRF-Token': csrfToken } : {},
     }),
   startMilestone: (runId: string, milestone: 'M2' | 'M3', csrfToken?: string) =>
     request<unknown>(`/api/runs/${runId}/milestones/${milestone}/start`, {

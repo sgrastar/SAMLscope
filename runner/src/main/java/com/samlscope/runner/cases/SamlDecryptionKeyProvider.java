@@ -7,4 +7,7 @@ import java.util.Optional;
 @FunctionalInterface
 public interface SamlDecryptionKeyProvider {
     Optional<PrivateKey> keyFor(String runId);
+
+    /** Optional Run-scoped shared key; never read from a response or persisted in CaseState. */
+    default Optional<javax.crypto.SecretKey> sharedKeyFor(String runId) { return Optional.empty(); }
 }

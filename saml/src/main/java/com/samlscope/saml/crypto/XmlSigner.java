@@ -29,7 +29,7 @@ public final class XmlSigner {
             var signature = new XMLSignature(
                     document,
                     "",
-                    XMLSignature.ALGO_ID_SIGNATURE_RSA_SHA256,
+                    signatureAlgorithm(credentials),
                     Canonicalizer.ALGO_ID_C14N_EXCL_OMIT_COMMENTS);
             if (insertBefore == null) target.appendChild(signature.getElement());
             else target.insertBefore(signature.getElement(), insertBefore);
@@ -42,6 +42,12 @@ public final class XmlSigner {
                             "http://www.w3.org/2000/09/xmldsig#", "ds:XPath");
                     xpath.setAttributeNS(
                             "http://www.w3.org/2000/xmlns/", "xmlns:md",
+                            "urn:oasis:names:tc:SAML:2.0:metadata");
+                    // A dedicated prefix survives serialization even when md is inherited from
+                    // the document root. Some native verifiers detach Signature before evaluating
+                    // XPath, so the transform must retain its own namespace binding.
+                    xpath.setAttributeNS(
+                            "http://www.w3.org/2000/xmlns/", "xmlns:mdx",
                             "urn:oasis:names:tc:SAML:2.0:metadata");
                     xpath.setAttributeNS(
                             "http://www.w3.org/2000/xmlns/", "xmlns:samlp",
@@ -61,6 +67,14 @@ public final class XmlSigner {
         } catch (Exception e) {
             throw new SamlException("Could not sign XML", e);
         }
+    }
+
+    private static String signatureAlgorithm(PlanCredentials credentials) {
+        return switch (credentials.privateKey().getAlgorithm()) {
+            case "RSA" -> XMLSignature.ALGO_ID_SIGNATURE_RSA_SHA256;
+            case "EC" -> XMLSignature.ALGO_ID_SIGNATURE_ECDSA_SHA256;
+            default -> throw new SamlException("Unsupported XML signing key algorithm");
+        };
     }
 
     public record TransformSpec(String algorithm, String xpath) {

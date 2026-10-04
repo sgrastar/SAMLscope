@@ -1,6 +1,6 @@
 # SAMLscope — SAML Conformance Test Suite
 
-**Design documentation** / Created: 2026-08-25 / Status: v0.1 implementation complete; operational reference runs remain release evidence
+**Design documentation** / Created: 2026-08-25 / Status: v0.1 implementation and reference acceptance incomplete; release blocked
 
 An OSS tool that allows anyone to verify any SAML IdP / SP implementation under the same conditions, based on requirements in published specifications.
 It aims to be the SAML equivalent of the OIDF Conformance Suite.
@@ -15,7 +15,7 @@ It aims to be the SAML equivalent of the OIDF Conformance Suite.
 | Trust model for published results | **Level 0 (local export) + Level 2 (shared URLs only for Hosted Runs)**. Uploading self-hosted results is not adopted |
 | Backend | **Java 21 + Javalin/Jetty + OpenSAML 5 + Apache Santuario + SQLite** |
 | Frontend | **React + Vite (TypeScript)**. `report.html` is also a static build of the same application |
-| Hosted-version administrative access | **Per-Run secret URLs + optional standard OIDC**; integration pending renewed G2 approval ([17](17-oidc-authentication.md)) |
+| Hosted-version administrative access | **Secret URLs when OIDC is off; account-only access and admin roles when OIDC is on**; integration pending renewed G2 approval ([17](17-oidc-authentication.md)) |
 | Reference implementation results | **Published as version-pinned samples**. Run in CI, but do not publish continuously |
 | Build / repository | **Gradle (Kotlin DSL)** / **single repository** |
 | Quoting specification source text | **ID + original summary + link to the original-text anchor**. Do not reproduce the full text (inquiry to Kantara in parallel) |
@@ -59,7 +59,7 @@ M0   Skeleton implementation      ✅ Peer, transcript, preflight, API, and UI s
   ↓
 G2   Test design                  ✅ Role-specific cases, controls, counterexamples, mutants, and feasibility spikes have signed independent approval
   ↓                               Also include the verification infrastructure (schema / g2_validate / approvals/g2.yaml / CI)
-M1–M4 Evaluation and publication ✅ Approved cases, evidence workflows, protocol probes, result JSON, report HTML, and hosted publication controls are implemented
+M1–M4 Evaluation and publication ⚠ Runtime framework exists; missing or partial case oracles remain release blockers (docs/26, docs/27)
 ```
 
 The conventions for implementation agents (such as Codex) are in [`AGENTS.md`](../AGENTS.md).
@@ -118,3 +118,95 @@ not by differences in reference-implementation results ([00 §5](00-concept.md))
 2. **Three evaluation paths**. Automated (back channel only) / Browser-assisted (through the user’s browser) / Attested (the user attests to behavior on the Target side). SAML black-box tests may be unable to mechanically observe “the other party rejected it”; unless this is incorporated into the design, the resulting numbers have no meaning. → [03](03-test-model.md)
 3. **Metadata requirements require reconfiguration on the test-target side**. IIP-MD01–MD04 and similar requirements cannot be verified unless the Target is configured to retrieve the Suite’s metadata. Give the Test Plan a metadata distribution method (manual / HTTP / MDQ). In the manual case, these become
 **`NOT_VERIFIED(plan_configuration)`** (**not** `NOT_APPLICABLE`). They remain in the denominator, and the result becomes `conformance = INDETERMINATE` / `completeness = INCOMPLETE`. → [04](04-requirement-coverage.md)
+
+- [Reference per-test comparison and Suite fixes](23-reference-test-comparison.md) — reviewed local IdP results, attribution, and remaining approval/browser limitations.
+- [Unverified case inventory](26-unverified-case-inventory.md) — all remaining observations, Suite implementation gaps, supplemental retests, and evidence provenance.
+- [Interaction execution and setup cost](25-interaction-execution-cost.md) — measured configuration changes, delegated operations, result deltas, and work-reduction priorities.
+
+- [Additional implementation and retests](27-additional-implementation.md) — implemented observations, automation fixes, verified results, and remaining release blockers.
+- [Supplemental decryption key acceptance](29-supplemental-key-acceptance.md) — explicit Run input for IdP decryption tests, local verification, and reference re-tests (2026-09-15).
+- [Algorithm observation operations](30-algorithm-observation-operations.md) — producer-side IIP-ALG04/06 evidence, SSO/SLO evidence-generation gaps, and operation counts (2026-09-15).
+- [Target-initiated acceptance](31-peer-intent-acceptance.md) — single-use intents for IdP-initiated SSO and target-initiated logout, reference results, and limits (2026-09-15).
+
+- [Metadata behavior after product console import](34-native-metadata-import-acceptance.md)
+- [Suite signature controls and product-native import](35-suite-signature-controls.md)
+- [Published UI information notes and aggregate metadata retests](36-published-ui-acceptance.md)
+- [Completing missing metadata extension and default ACS conditions](37-metadata-condition-completion.md)
+- [Keycloak default ACS verification and signing-key uniqueness](38-keycloak-acs-and-signing-key.md)
+- [SimpleSAMLphp encrypted SSO execution paths and missing evidence](39-encrypted-sso-execution.md)
+- [Shared-key GCM decryption and opaque Assertion evaluation fixes](40-shared-key-decryption-foundation.md)
+
+- [SimpleSAMLphp shared-key GCM product verification](41-shared-key-gcm-acceptance.md)
+
+- [Metadata algorithm order and role-priority execution conditions](42-metadata-algorithm-fixtures.md)
+
+- [Signature-verified evidence for algorithm selection](43-verified-algorithm-evidence.md)
+
+- [Recording original metadata within a Run](44-prepared-metadata-evidence.md)
+
+- [Connecting and verifying metadata algorithm selection evaluation](45-metadata-algorithm-oracle.md)
+
+- [Deploying algorithm selection tests to Keycloak](46-keycloak-algorithm-oracle.md)
+
+- [Shibboleth native loading and algorithm selection verification](47-shibboleth-native-algorithm-batch.md)
+
+- [Skipping unsupported algorithms and evaluating encryption order conditions](48-algorithm-order-followup.md)
+
+- [Encryption method, OAEP parameter, and key-size input conditions](49-encryption-metadata-fixtures.md)
+
+- [Evaluating and verifying shared encryption, signature, and parameter choices](50-metadata-intersection-oracle.md)
+
+- [Condition-specific encryption generation evidence and MGF omission audit](51-producer-algorithm-metadata-evidence.md)
+
+- [SimpleSAMLphp intersection selection and efficient configuration restoration](52-simplesamlphp-intersection-and-batch-restore.md)
+
+- [Attribute name and NameFormat generation verification](53-attribute-name-capability.md)
+
+- [Attribute release policy comparison inputs](54-attribute-policy-fixtures.md)
+
+- [Comparison under a fixed attribute release policy](55-fixed-attribute-policy-observations.md)
+
+- [Connecting attribute release policy comparison to formal evaluation](56-attribute-policy-acceptance.md)
+
+- [Preliminary diagnosis of SimpleSAMLphp attribute release paths](57-simplesamlphp-attribute-policy-probe.md)
+
+- [UI metadata consumption inputs and remaining observation paths](58-ui-consumer-fixtures.md)
+
+- [Formal evaluation of UI logo language selection](59-ui-logo-acceptance.md)
+
+- [UI URL scheme comparison inputs](60-ui-url-scheme-inputs.md)
+
+- [Attribute release comparison across SPs](61-relying-party-attribute-comparison.md) — IDP02.a internal comparison, native configuration, original-evidence verification, and formal Shibboleth adoption.
+
+- [Scoped SP preloading and SimpleSAMLphp attribute comparison](62-scoped-preloaded-campaigns.md)
+
+- [Keycloak attribute release verification by SP](63-keycloak-relying-party-attributes.md)
+
+- [NameID omission evidence checking and comparison](64-nameid-omission-evidence.md)
+
+- [Measured Keycloak attribute name and NameFormat generation](65-keycloak-attribute-name-diagnosis.md)
+
+- [Common authentication context strength and preference comparison](66-authn-context-comparison-inputs.md)
+
+- [Product integration and formal authentication context comparison](67-authn-context-native-acceptance.md)
+
+- [EC signature product audit records and formal evaluation](68-native-ec-signature-acceptance.md)
+
+- [Evidence audit for shared signature algorithm evaluation](69-algorithm-verification-evidence-audit.md)
+
+- [Product audit integration for shared signature tests](70-native-signed-request-acceptance.md)
+
+- [SimpleSAMLphp shared signature tests](71-simplesamlphp-signature-acceptance.md)
+
+- [Keycloak signature verification event observations](72-keycloak-signature-observation.md)
+
+- [Keycloak and SimpleSAMLphp EC signature observations](73-native-ec-product-observations.md)
+
+- [Display name precedence and observation-condition diagnosis](74-display-precedence-observation.md)
+
+- [Supplemental TLS observations and recording boundaries](75-transport-observation.md)
+
+- [Correlating certificate conditions with product signature rejection](76-native-certificate-diagnosis.md)
+- [Native signature-mode capability](77-signature-mode-capability.md) — independent Response/Assertion signing observation and native configuration campaigns.
+- [Measured SimpleSAMLphp encrypted responses](78-simplesamlphp-native-encryption.md)
+- [Metadata key selection and unpublished-key controls](79-metadata-key-selection.md)

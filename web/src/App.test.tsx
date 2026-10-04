@@ -226,7 +226,8 @@ test('explains how to fix metadata role and common metadata input errors', async
   window.history.replaceState(null, '', '?new=1')
   vi.stubGlobal('scrollTo', vi.fn())
   const originalScrollIntoView = Element.prototype.scrollIntoView
-  Element.prototype.scrollIntoView = vi.fn()
+  const scrollIntoView = vi.fn()
+  Element.prototype.scrollIntoView = scrollIntoView
   const fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input)
     if (url.endsWith('/api/health')) return json({ status: 'ok', version: '0.1.0', mode: 'hosted', oidcEnabled: false })
@@ -256,6 +257,8 @@ test('explains how to fix metadata role and common metadata input errors', async
     expect(await screen.findByText(/requires Service Provider metadata/)).toBeTruthy()
     expect(screen.getByText(/SPSSODescriptor/)).toBeTruthy()
     expect(screen.getByText(/choose an IdP profile/)).toBeTruthy()
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('alert')))
+    expect(scrollIntoView).toHaveBeenCalledWith({ behavior: 'smooth', block: 'start' })
     expect(fetch.mock.calls.find(([url, init]) => String(url).endsWith('/api/targets') && init?.method === 'POST')?.[1]?.body)
       .toContain('"expectedRole":"SP"')
   } finally {

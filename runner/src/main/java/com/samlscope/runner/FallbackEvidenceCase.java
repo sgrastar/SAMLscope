@@ -12,4 +12,11 @@ import com.samlscope.core.caseexec.CaseExecution;
  */
 public interface FallbackEvidenceCase {
     boolean resolvedFromExternalEvidence(CaseExecution execution);
+
+    /** Keeps preparation-dependent native evidence distinct from protocol-only evidence. */
+    default RunCampaignQuery.EvidenceClass evidenceClass(CaseExecution execution) {
+        return resolvedFromExternalEvidence(execution)
+                ? RunCampaignQuery.EvidenceClass.PROTOCOL_OBSERVED
+                : RunCampaignQuery.EvidenceClass.SELF_ATTESTED;
+    }
 }

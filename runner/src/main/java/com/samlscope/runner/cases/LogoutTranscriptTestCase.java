@@ -33,6 +33,7 @@ public final class LogoutTranscriptTestCase implements TestCase {
     @Override public String id() { return id; }
     @Override public TargetRole role() { return DEFINITIONS.get(id).role(); }
     @Override public CaseStep start(CaseContext context) {
+        if (!context.transcriptComplete()) return new CaseStep.Finish(LogoutTranscriptProfileCase.incompleteHistory());
         return new CaseStep.Finish(new LogoutTranscriptProfileCase(
                 DEFINITIONS.get(id).rule(), certificates.apply(context.runId())).evaluate(
                 context.runId(), context.transcript(), content));

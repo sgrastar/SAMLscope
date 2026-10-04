@@ -3,6 +3,7 @@ package com.samlscope.runner;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.time.Clock;
 import java.time.Instant;
@@ -39,6 +40,53 @@ import com.samlscope.runner.cases.ProtocolEvidenceCase;
 
 class RunCampaignServiceTest {
     private static final Instant NOW = Instant.parse("2026-08-31T00:00:00Z");
+
+    @Test
+    void excludesKnownEcpEvidenceFixturesFromCountsAndUserActions() {
+        var definition = definition("IIP-G03-a-idp-01", "IIP-G03.a", ExecutionMode.AUTOMATED, "none");
+        var executions = new java.util.ArrayList<CaseExecution>();
+        executions.add(execution(definition.id(), true));
+        com.samlscope.runner.outbox.EcpProbeService.requiredFixtureIds()
+                .forEach(id -> executions.add(execution(id, true)));
+        com.samlscope.saml.ecp.MetadataApplicationEcpProbeFactory.FIXTURES
+                .forEach(id -> executions.add(execution(id, true)));
+
+        var report = service(List.of(definition), List.of(), executions).report("run");
+
+        assertEquals(1, report.cases());
+        assertEquals(1, report.externallyVerifiedCases());
+        assertEquals(0, report.notVerifiedCases());
+        assertEquals(List.of(definition.id()), report.classifications().stream()
+                .map(RunCampaignQuery.CaseClassification::caseId).toList());
+        assertTrue(report.plans().stream().allMatch(plan -> plan.deliberateUserActions() == 0));
+    }
+
+    @Test
+    void anUnknownEcpEvidenceFixtureIsNotSilentlyExcluded() {
+        assertThrows(IllegalArgumentException.class, () -> service(List.of(), List.of(),
+                List.of(execution("fixture-ecp-metadata-unknown", true))).report("run"));
+    }
+
+    @Test
+    void supplementalMetadataActionsShareWorkWithoutDuplicatingConformanceCases() {
+        var extension = definition("IIP-EXT01-c-idp-01", "IIP-EXT01.c", ExecutionMode.BROWSER, "none");
+        var metadata = definition("metadata-case", "IIP-MD05.a3", ExecutionMode.CONFIG, "none");
+        var implementation = new com.samlscope.runner.cases.IdpExecutableBrowserFixtureScenarioTestCase(
+                extension.id(), ignored -> null);
+        var report = service(List.of(extension, metadata), List.of(implementation,
+                new CampaignProtocolCase(metadata.id(), List.of("control"))),
+                List.of(execution(extension.id(), false), execution(metadata.id(), false))).report("run");
+        assertEquals(2, report.cases());
+        assertEquals(2, report.classifications().size());
+        assertTrue(report.classifications().stream().allMatch(value -> value.plan() == Plan.STANDARD),
+                "A required metadata operation must not disappear from a QUICK plan budget");
+        assertEquals(2, report.campaigns().size());
+        var campaign = report.campaigns().stream()
+                .filter(value -> value.actionKind() == RunCampaignQuery.ActionKind.METADATA_REFRESH).findFirst().orElseThrow();
+        assertEquals(14, campaign.deliberateUserActions(), "one shared control plus the schema-derived metadata matrix");
+        assertEquals(2, campaign.caseIds().size());
+        assertEquals(2, report.casesByEvidenceClass().values().stream().mapToInt(Integer::intValue).sum());
+    }
 
     @Test
     void sharesOneMetadataRefreshActionAcrossMultipleCases() {
@@ -180,6 +228,114 @@ class RunCampaignServiceTest {
     }
 
     @Test
+    void finishedMissingAdministratorEvidenceRemainsUnresolvedWithoutLoginActions() {
+        var definition = definition(
+                "IIP-IDP06-b-idp-01", "IIP-IDP06.b", ExecutionMode.ATTESTED, "none");
+        var outcome = CaseOutcome.notVerified(
+                "Authentication mechanism evidence is unavailable", "force-authn-mechanism.unproven");
+        var execution = new CaseExecution("run", definition.id(), 1,
+                CaseExecutionStatus.FINISHED, CaseState.initial(), null, outcome, NOW);
+        var service = service(List.of(definition),
+                List.of(new AdministratorEvidenceCase(definition.id())), List.of(execution));
+
+        for (var report : List.of(service.report("run"), service.report("run"))) {
+            var campaign = report.campaigns().getFirst();
+            assertEquals(RunCampaignQuery.ActionKind.NONE, campaign.actionKind());
+            assertEquals(List.of(definition.id()), campaign.remainingCaseIds());
+            assertEquals(0, campaign.deliberateUserActions());
+            assertEquals(0, campaign.remainingUserActions());
+            assertTrue(campaign.actions().isEmpty());
+            assertFalse(campaign.freshSessionRequired());
+            assertFalse(report.classifications().getFirst().resolved());
+            assertEquals("NOT_VERIFIED", report.classifications().getFirst().outcome());
+            assertEquals(List.of("native-authentication-mechanism-trace"),
+                    campaign.expectedTranscriptEvidence());
+            assertEquals(1, report.notVerifiedCases());
+            assertEquals(0, report.externallyVerifiedCases());
+            assertEquals(0, report.selfAttestedCases());
+            assertTrue(report.plans().stream().allMatch(plan -> plan.loginActions() == 0
+                    && plan.deliberateUserActions() == 0 && plan.remainingUserActions() == 0));
+        }
+        assertEquals(CaseExecutionStatus.FINISHED, execution.status());
+        assertEquals(1, execution.revision());
+        assertEquals(outcome, execution.outcome());
+    }
+
+    @Test
+    void pendingAdministratorEvidenceDoesNotCreateBrowserWork() {
+        var definition = definition(
+                "IIP-IDP06-b-idp-01", "IIP-IDP06.b", ExecutionMode.ATTESTED, "none");
+        var report = service(List.of(definition),
+                List.of(new AdministratorEvidenceCase(definition.id())),
+                List.of(execution(definition.id(), false))).report("run");
+
+        var campaign = report.campaigns().getFirst();
+        assertEquals(List.of(definition.id()), campaign.remainingCaseIds());
+        assertEquals(0, campaign.deliberateUserActions());
+        assertEquals(0, campaign.remainingUserActions());
+        assertTrue(campaign.actions().isEmpty());
+        assertFalse(report.classifications().getFirst().resolved());
+        assertEquals(1, report.notVerifiedCases());
+    }
+
+    @Test
+    void missingBrowserEvidenceRemainsVisibleButDoesNotRepeatFinishedActions() {
+        var missing = definition("missing", "IIP-IDP05.a", ExecutionMode.BROWSER, "required");
+        var pending = definition("pending", "IIP-IDP06.a", ExecutionMode.BROWSER, "required");
+        var complete = definition("complete", "IIP-IDP07.a", ExecutionMode.BROWSER, "required");
+        var missingExecution = new CaseExecution("run", missing.id(), 4,
+                CaseExecutionStatus.FINISHED, new CaseState("awaiting-response", Map.of()), null,
+                CaseOutcome.notVerified("No correlated response", "browser.response-unavailable"), NOW);
+        var report = service(List.of(missing, pending, complete),
+                List.of(new BrowserScenarioCase(missing.id(), 2, true),
+                        new BrowserScenarioCase(pending.id(), 1, true),
+                        new BrowserScenarioCase(complete.id(), 1, true)),
+                List.of(missingExecution, execution(pending.id(), false), execution(complete.id(), true)))
+                .report("run");
+
+        var campaign = report.campaigns().getFirst();
+        assertEquals(List.of(missing.id(), pending.id()), campaign.remainingCaseIds());
+        assertEquals(3, campaign.deliberateUserActions(),
+                "historical reauthentication and shared fresh-session recovery remain in the budget");
+        assertEquals(2, campaign.remainingUserActions(),
+                "only the unfinished scenario needs a login checkpoint and fresh-session recovery");
+        assertTrue(campaign.freshSessionRequired());
+        assertEquals(List.of("active-probe-login-1", "active-probe-login-2",
+                "active-probe-login-after-fresh-session"), campaign.actions().stream()
+                        .map(RunCampaignQuery.CampaignAction::id).toList());
+        assertTrue(campaign.actions().stream().allMatch(action -> action.remainingCaseIds().isEmpty()
+                || action.remainingCaseIds().equals(List.of(pending.id()))));
+        assertEquals(List.of(missing.id()), campaign.actions().get(1).caseIds());
+        assertTrue(campaign.actions().get(1).remainingCaseIds().isEmpty());
+        assertEquals(2, report.notVerifiedCases());
+        assertEquals(1, report.externallyVerifiedCases());
+        assertEquals(CaseExecutionStatus.FINISHED, missingExecution.status());
+        assertEquals(4, missingExecution.revision());
+    }
+
+    @Test
+    void conclusiveAdministratorEvidenceIsResolvedWithoutOperatorActions() {
+        var definition = definition(
+                "IIP-IDP06-b-idp-01", "IIP-IDP06.b", ExecutionMode.ATTESTED, "none");
+        for (var outcome : List.of(Outcome.SATISFIED, Outcome.SATISFIED_WITH_NOTE, Outcome.VIOLATED)) {
+            var execution = new CaseExecution("run", definition.id(), 1,
+                    CaseExecutionStatus.FINISHED, CaseState.initial(), null,
+                    CaseOutcome.of(outcome, "native-observation", List.of()), NOW);
+            var report = service(List.of(definition),
+                    List.of(new AdministratorEvidenceCase(definition.id())), List.of(execution)).report("run");
+            assertTrue(report.classifications().getFirst().resolved());
+            assertEquals(outcome.name(), report.classifications().getFirst().outcome());
+            assertTrue(report.campaigns().getFirst().remainingCaseIds().isEmpty());
+            assertTrue(report.campaigns().getFirst().actions().isEmpty());
+            assertEquals(0, report.campaigns().getFirst().deliberateUserActions());
+            assertEquals(0, report.campaigns().getFirst().remainingUserActions());
+            assertEquals(0, report.notVerifiedCases());
+            assertEquals(1, report.externallyVerifiedCases());
+            assertEquals(0, report.selfAttestedCases());
+        }
+    }
+
+    @Test
     void groupsTheAutomaticallyChainedActiveProbeAndKeepsFreshSessionBoundary() {
         var first = definition("IIP-IDP05-a-idp-01", "IIP-IDP05.a", ExecutionMode.BROWSER, "required");
         var second = definition("IIP-IDP07-a-idp-01", "IIP-IDP07.a", ExecutionMode.BROWSER, "required");
@@ -272,6 +428,53 @@ class RunCampaignServiceTest {
         assertEquals(1, attested.selfAttestedCases());
     }
 
+    @Test
+    void nativePreparationDoesNotBecomeProtocolOnlyOrAnOperatorAttestation() {
+        var definition = definition("native", "native.obligation", ExecutionMode.CONFIG, "none");
+        var nativeCase = new ConditionalCampaignCase(definition.id(), true);
+        var external = service(List.of(definition), List.of(nativeCase), List.of(finishedExecution(
+                definition.id(), new EvidenceRef("target-metadata", "sha256:" + "1".repeat(64)))))
+                .report("run");
+        assertEquals(EvidenceClass.OPERATOR_ASSISTED, external.classifications().getFirst().evidenceClass());
+        assertEquals(1, external.externallyVerifiedCases());
+        assertEquals(0, external.selfAttestedCases());
+        var attested = service(List.of(definition), List.of(nativeCase), List.of(finishedExecution(
+                definition.id(), new EvidenceRef("attestation", "attestation:run:native"))))
+                .report("run");
+        assertEquals(EvidenceClass.SELF_ATTESTED, attested.classifications().getFirst().evidenceClass());
+        assertEquals(0, attested.externallyVerifiedCases());
+        assertEquals(1, attested.selfAttestedCases());
+    }
+
+    @Test
+    void waitsForPreparationBeforeBudgetingTheSharedBrowserLogin() {
+        record PreparedBrowserCase(String id) implements TestCase, BrowserFrontChannelScenario {
+            @Override public TargetRole role() { return TargetRole.IDP; }
+            @Override public String instructionsEn(CaseState state) { return "Reuse one browser session."; }
+            @Override public RunCampaignQuery.ActionKind evidenceActionKind(CaseExecution execution) {
+                return execution.state().phase().equals("await-fixture-normal")
+                        ? RunCampaignQuery.ActionKind.LOGIN : RunCampaignQuery.ActionKind.CONFIGURATION;
+            }
+            @Override public CaseStep start(CaseContext context) { throw new UnsupportedOperationException(); }
+            @Override public CaseStep resume(CaseContext context, CaseState state, CaseEvent event) {
+                throw new UnsupportedOperationException();
+            }
+        }
+        var definition = definition("native-browser", "native.obligation", ExecutionMode.BROWSER, "none");
+        var testCase = new PreparedBrowserCase(definition.id());
+        var unprepared = service(List.of(definition), List.of(testCase),
+                List.of(execution(definition.id(), false))).report("run");
+        assertEquals(RunCampaignQuery.ActionKind.CONFIGURATION, unprepared.campaigns().getFirst().actionKind());
+        assertEquals(0, unprepared.plans().stream().filter(value -> value.plan() == Plan.STANDARD)
+                .findFirst().orElseThrow().loginActions(), "Preparation must not request an unproductive login");
+        var preparedExecution = new CaseExecution("run", definition.id(), 1, CaseExecutionStatus.RUNNING,
+                new CaseState("await-fixture-normal", Map.of()), null, null, NOW);
+        var prepared = service(List.of(definition), List.of(testCase), List.of(preparedExecution)).report("run");
+        assertEquals(RunCampaignQuery.ActionKind.LOGIN, prepared.campaigns().getFirst().actionKind());
+        assertEquals(1, prepared.plans().stream().filter(value -> value.plan() == Plan.STANDARD)
+                .findFirst().orElseThrow().loginActions(), "Prepared scenarios share the existing browser login key");
+    }
+
     private RunCampaignService service(
             List<CaseDefinition> definitions, List<TestCase> cases, List<CaseExecution> executions) {
         return new RunCampaignService(
@@ -326,7 +529,13 @@ class RunCampaignServiceTest {
             @Override public com.samlscope.core.run.Reachability reachability() {
                 return com.samlscope.core.run.Reachability.CONFIRMED;
             }
-            @Override public com.samlscope.core.transcript.TranscriptRecorder transcript() { return null; }
+            @Override public com.samlscope.core.transcript.TranscriptRecorder transcript() {
+                return new com.samlscope.core.transcript.TranscriptRecorder() {
+                    public com.samlscope.core.transcript.TranscriptEntry record(com.samlscope.core.transcript.TranscriptInput input) { throw new UnsupportedOperationException(); }
+                    public com.samlscope.core.transcript.TranscriptEntry updateSamlAnalysis(String id, String correlation, Map<String,Object> summary) { throw new UnsupportedOperationException(); }
+                    public List<com.samlscope.core.transcript.TranscriptEntry> list(String runId) { return List.of(); }
+                };
+            }
             @Override public boolean transcriptComplete() { return true; }
         };
     }
@@ -343,6 +552,28 @@ class RunCampaignServiceTest {
         @Override public EvidenceStatus evidenceStatus(CaseContext context) {
             return new EvidenceStatus(
                     false, List.of("correlated-saml-response"), List.of(), Map.of());
+        }
+    }
+
+    private static final class AdministratorEvidenceCase
+            implements TestCase, ProtocolEvidenceCase, EvidenceCampaignCase {
+        private final String id;
+        private AdministratorEvidenceCase(String id) { this.id = id; }
+        @Override public String id() { return id; }
+        @Override public TargetRole role() { return TargetRole.IDP; }
+        @Override public String evidenceCampaignId() { return "native-authentication-mechanism"; }
+        @Override public String evidenceCampaignTitle() { return "Authentication mechanism evidence"; }
+        @Override public RunCampaignQuery.ActionKind evidenceActionKind() {
+            return RunCampaignQuery.ActionKind.NONE;
+        }
+        @Override public List<String> evidenceActionKeys() { return List.of(); }
+        @Override public CaseStep start(CaseContext context) { throw new UnsupportedOperationException(); }
+        @Override public CaseStep resume(CaseContext context, CaseState state, CaseEvent event) {
+            throw new UnsupportedOperationException();
+        }
+        @Override public EvidenceStatus evidenceStatus(CaseContext context) {
+            return new EvidenceStatus(false, List.of("native-authentication-mechanism-trace"),
+                    List.of(), Map.of());
         }
     }
 
@@ -447,7 +678,12 @@ class RunCampaignServiceTest {
             implements TestCase, EvidenceCampaignCase, FallbackEvidenceCase,
             com.samlscope.runner.cases.AttestationPrompt {
         private final String id;
-        private ConditionalCampaignCase(String id) { this.id = id; }
+        private final boolean operatorPrepared;
+        private ConditionalCampaignCase(String id) { this(id, false); }
+        private ConditionalCampaignCase(String id, boolean operatorPrepared) {
+            this.id = id;
+            this.operatorPrepared = operatorPrepared;
+        }
         @Override public String id() { return id; }
         @Override public TargetRole role() { return TargetRole.IDP; }
         @Override public String evidenceCampaignId() { return "target-metadata-inspection"; }
@@ -458,6 +694,10 @@ class RunCampaignServiceTest {
         @Override public boolean resolvedFromExternalEvidence(CaseExecution execution) {
             return execution.outcome() != null && execution.outcome().evidence().stream()
                     .anyMatch(value -> "target-metadata".equals(value.kind()));
+        }
+        @Override public EvidenceClass evidenceClass(CaseExecution execution) {
+            return operatorPrepared && resolvedFromExternalEvidence(execution)
+                    ? EvidenceClass.OPERATOR_ASSISTED : FallbackEvidenceCase.super.evidenceClass(execution);
         }
         @Override public String promptEn() { return "Review evidence."; }
         @Override public List<AttestationOption> options() {

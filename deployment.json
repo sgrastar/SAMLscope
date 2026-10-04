@@ -1,0 +1,6 @@
+{
+  "image": "samlscope:reference-slo-probe-v22",
+  "digest": "sha256:fa5ba11d8a69fb41f5dcf360cbd653a8abf7f51880006b5b58090f1840672680",
+  "suite_restarts": 1,
+  "forward_restarts": 1
+}

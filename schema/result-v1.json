@@ -284,7 +284,12 @@
         "evidence_class": { "type": "string" },
         "attested": { "type": "boolean" },
         "evidence": { "type": "array", "items": { "$ref": "#/$defs/evidence" } },
-        "definition_url": { "type": "string", "format": "uri-reference" }
+        "definition_url": { "type": "string", "format": "uri-reference" },
+        "diagnostics": {
+          "description": "Allowlisted Suite condition identifiers; partial observations do not change the verdict.",
+          "type": "object",
+          "additionalProperties": { "type": "array", "items": { "type": "string" }, "uniqueItems": true }
+        }
       }
     },
     "requirement": {

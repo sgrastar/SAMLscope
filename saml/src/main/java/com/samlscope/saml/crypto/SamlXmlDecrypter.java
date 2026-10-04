@@ -14,17 +14,25 @@ public final class SamlXmlDecrypter implements SamlElementDecrypter {
     static { Init.init(); }
 
     @Override public Element decrypt(Element encryptedWrapper, PrivateKey privateKey) {
-        if (encryptedWrapper == null) throw new IllegalArgumentException("encryptedWrapper is required");
         if (privateKey == null) throw new IllegalArgumentException("privateKey is required");
+        return decryptWithKey(encryptedWrapper, privateKey, false);
+    }
+
+    @Override public Element decryptSharedKey(Element encryptedWrapper, javax.crypto.SecretKey key) {
+        if (key == null || !"AES".equalsIgnoreCase(key.getAlgorithm()))
+            throw new IllegalArgumentException("An AES shared key is required");
+        return decryptWithKey(encryptedWrapper, key, true);
+    }
+
+    private Element decryptWithKey(Element encryptedWrapper, java.security.Key key, boolean shared) {
+        if (encryptedWrapper == null) throw new IllegalArgumentException("encryptedWrapper is required");
         try {
             var isolated = isolate(encryptedWrapper);
-            var encryptedData = firstElement(isolated.getDocumentElement(),
-                    "http://www.w3.org/2001/04/xmlenc#", "EncryptedData");
-            if (encryptedData == null) throw new SamlException("Encrypted wrapper has no EncryptedData");
+            var encryptedData = encryptedData(isolated.getDocumentElement());
             var cipher = XMLCipher.getInstance();
             cipher.setSecureValidation(true);
-            cipher.init(XMLCipher.DECRYPT_MODE, null);
-            cipher.setKEK(privateKey);
+            cipher.init(XMLCipher.DECRYPT_MODE, shared ? key : null);
+            if (!shared) cipher.setKEK(key);
             cipher.doFinal(isolated, encryptedData);
             var plaintext = firstElementChild(isolated.getDocumentElement());
             if (plaintext == null) throw new SamlException("Decryption produced no element");
@@ -42,9 +50,26 @@ public final class SamlXmlDecrypter implements SamlElementDecrypter {
         return SecureXml.parse(SecureXml.serialize(document));
     }
 
-    private Element firstElement(Element root, String namespace, String localName) {
-        var nodes = root.getElementsByTagNameNS(namespace, localName);
-        return nodes.getLength() == 0 ? null : (Element) nodes.item(0);
+    private Element encryptedData(Element wrapper) {
+        final String encryption = "http://www.w3.org/2001/04/xmlenc#";
+        if (!"urn:oasis:names:tc:SAML:2.0:assertion".equals(wrapper.getNamespaceURI())
+                || !java.util.Set.of("EncryptedAssertion", "EncryptedID", "EncryptedAttribute").contains(wrapper.getLocalName()))
+            throw new SamlException("Expected a SAML encrypted wrapper");
+        Element data = null;
+        for (var child = wrapper.getFirstChild(); child != null; child = child.getNextSibling()) {
+            if (child instanceof Element element) {
+                if (data == null && encryption.equals(element.getNamespaceURI()) && "EncryptedData".equals(element.getLocalName())) {
+                    data = element;
+                } else if (data == null || !encryption.equals(element.getNamespaceURI()) || !"EncryptedKey".equals(element.getLocalName())) {
+                    throw new SamlException("Encrypted wrapper must contain one direct EncryptedData followed only by EncryptedKey elements");
+                }
+            } else if ((child.getNodeType() == Node.TEXT_NODE || child.getNodeType() == Node.CDATA_SECTION_NODE)
+                    && !child.getTextContent().isBlank()) {
+                throw new SamlException("Encrypted wrapper contains unexpected text");
+            }
+        }
+        if (data == null) throw new SamlException("Encrypted wrapper has no direct EncryptedData");
+        return data;
     }
 
     private Element firstElementChild(Element parent) {
