@@ -15,15 +15,20 @@ import java.util.*;
  */
 public final class ForceAuthnMechanismEvidenceTestCase implements InteractionFreeEvidenceCase,EvidenceCampaignCase,RecordedEvidenceReevaluation {
     private final IdpForceAuthnScenarioTestCase fallback;
-    private final ShibbolethForceAuthnMechanismEvidence evidence;
-    public ForceAuthnMechanismEvidenceTestCase(IdpForceAuthnScenarioTestCase fallback,ShibbolethForceAuthnMechanismEvidence evidence){
-        this.fallback=Objects.requireNonNull(fallback);this.evidence=Objects.requireNonNull(evidence);
+    private final List<NativeForceAuthnMechanismEvidence> evidence;
+    public ForceAuthnMechanismEvidenceTestCase(IdpForceAuthnScenarioTestCase fallback,NativeForceAuthnMechanismEvidence... evidence){
+        this.fallback=Objects.requireNonNull(fallback);this.evidence=List.of(evidence);
+        if(this.evidence.isEmpty())throw new IllegalArgumentException("Native evidence adapter required");
         if(!IdpForceAuthnScenarioTestCase.MECHANISM_ACCESS_CASE.equals(fallback.id()))throw new IllegalArgumentException("Approved mechanism case required");
     }
-    public ForceAuthnMechanismEvidenceTestCase withDecryptionKeys(SamlDecryptionKeyProvider provider){return new ForceAuthnMechanismEvidenceTestCase(fallback,evidence.withKeys(provider));}
+    public ForceAuthnMechanismEvidenceTestCase withDecryptionKeys(SamlDecryptionKeyProvider provider){return new ForceAuthnMechanismEvidenceTestCase(fallback,evidence.stream().map(e->e.withKeys(provider)).toArray(NativeForceAuthnMechanismEvidence[]::new));}
     @Override public String id(){return fallback.id();}
     @Override public TargetRole role(){return fallback.role();}
-    private Optional<CaseOutcome> observe(CaseContext context){return evidence.read(context).map(outcome->{
+    private Optional<CaseOutcome> observe(CaseContext context){
+        var owned=evidence.stream().filter(e->e.exists(context.runId())).toList();
+        if(owned.size()>1)return Optional.of(unproven());
+        if(owned.isEmpty())return Optional.empty();
+        return owned.getFirst().read(context).map(outcome->{
         if(outcome.outcome()!=Outcome.NOT_VERIFIED)return outcome;
         var details=new LinkedHashMap<String,Object>(outcome.details());
         details.put("required_action","administrator_evidence");details.put("instructions_en",INSTRUCTIONS);

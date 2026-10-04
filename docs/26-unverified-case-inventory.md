@@ -4,20 +4,20 @@ This inventory covers NOT_VERIFIED observations remaining after the previous fol
 
 | Before retesting | Conclusive (Success / Failed / Warning) | Currently unverified | Distinct unverified case IDs |
 |---:|---:|---:|---:|
-| 594 | 391 | 203 | 81 |
+| 594 | 403 | 191 | 80 |
 
 ## Breakdown
 
 | Cause and current path | Count | Next scope |
 |---|---:|---|
 | No automated evaluation after browser completion | 0 | Suite implementation |
-| Only some test conditions are implemented | 29 | Suite implementation |
-| Evidence verification and attestation after configuration | 59 | Configuration and evidence |
-| Attestation is disabled | 65 | Configuration and evidence |
+| Only some test conditions are implemented | 25 | Suite implementation |
+| Evidence verification and attestation after configuration | 56 | Configuration and evidence |
+| Attestation is disabled | 62 | Configuration and evidence |
 | Additional metadata tests and observations are missing | 10 | Test-path investigation |
 | Additional browser and SLO observations are missing | 12 | Test-path investigation |
 | Old waiting results have expired by resume time | 0 | Retest in a new Run |
-| Executed without a conclusive result | 28 | Individual diagnosis |
+| Executed without a conclusive result | 26 | Individual diagnosis |
 
 Classification uses result reason codes, interaction types, and Suite implementation. "Test-path investigation" does not guarantee that execution is possible. Configuration and evidence paths also cannot guarantee results merely by enabling attestation.
 
@@ -93,7 +93,7 @@ Inspect reason codes and positive controls to distinguish Suite, configuration, 
 | `IIP-ALG08-c-idp-01` | Not verified (outside this retest scope) | Success | Not verified (outside this retest scope) |
 | `IIP-EXT01-a-idp-01` | Success | Success | Success |
 | `IIP-EXT01-b-idp-01` | Success | Success | Success |
-| `IIP-EXT01-c-idp-01` | Not verified: browser_fixture_partial | Success | Not verified: browser_fixture_partial |
+| `IIP-EXT01-c-idp-01` | Success | Success | Not verified: browser_fixture_partial |
 | `IIP-G01-a-idp-01` | Not verified: browser_fixture_partial | Not verified: browser_fixture_partial | Not verified: browser_fixture_partial |
 | `IIP-G02-a-idp-01` | Success | Success | Success |
 | `IIP-G03-b-idp-01` | Success | Success | Success |
@@ -104,7 +104,7 @@ Inspect reason codes and positive controls to distinguish Suite, configuration, 
 | `IIP-IDP04-b-idp-01` | Not verified (outside this retest scope) | Success | Failed (Product) |
 | `IIP-IDP05-a-idp-01` | Failed (Product) | Not verified (outside this retest scope) | Not verified (outside this retest scope) |
 | `IIP-IDP06-a-idp-01` | Success | Success | Success |
-| `IIP-IDP06-b-idp-01` | Not verified (outside this retest scope) | Success | Not verified: audit.force-authn-mechanism-access-unproven |
+| `IIP-IDP06-b-idp-01` | Success | Success | Success |
 | `IIP-IDP08-a-idp-01` | Failed (Product) | Success | Not verified (outside this retest scope) |
 | `IIP-IDP09-a-idp-01` | Not verified (outside this retest scope) | Not verified (outside this retest scope) | Success |
 | `IIP-IDP11-a-idp-01` | Failed (Product) | Success | Not verified (outside this retest scope) |
@@ -164,7 +164,9 @@ Inspect reason codes and positive controls to distinguish Suite, configuration, 
 | `IIP-MD05-av-idp-01` | Failed (Product) | Failed (Product) | Failed (Product) |
 | `IIP-MD05-b-idp-01` | Failed (Product) | Success | Failed (Product) |
 | `IIP-MD05-c-idp-01` | Success | Success | Success |
+| `IIP-MD05-c1-idp-01` | Not verified (outside this retest scope) | Failed (Product) | Failed (Product) |
 | `IIP-MD05-c2-idp-01` | Not verified (outside this retest scope) | Success | Success |
+| `IIP-MD05-c3-idp-01` | Not verified (outside this retest scope) | Not verified (outside this retest scope) | Failed (Product) |
 | `IIP-MD05-cd-idp-01` | Failed (Product) | Not verified (outside this retest scope) | Failed (Product) |
 | `IIP-MD05-d-idp-01` | Success | Success | Success |
 | `IIP-MD05-e-idp-01` | Success | Success | Success |
@@ -226,8 +228,10 @@ Inspect reason codes and positive controls to distinguish Suite, configuration, 
 | `IIP-SSO03-b-idp-01` | Success | Not verified (outside this retest scope) | Success |
 | `IIP-SSO04-a-idp-01` | Success | Success | Success |
 | `IIP-SSO05-a-idp-01` | Not verified (outside this retest scope) | Success | Not verified (outside this retest scope) |
+| `IIP-SSO05-a1-idp-01` | Success | Not verified (outside this retest scope) | Not verified (outside this retest scope) |
 | `IIP-SSO05-a2-idp-01` | Not verified (outside this retest scope) | Success | Success |
 | `IIP-SSO05-a3-idp-01` | Success | Success | Success |
+| `IIP-SSO05-a8-idp-01` | Success | Not verified (outside this retest scope) | Not verified (outside this retest scope) |
 | `IIP-SSO07-b-idp-01` | Failed (Product) | Failed (Product) | Failed (Product) |
 
 ## Case-level inventory
@@ -242,12 +246,11 @@ Product columns list profiles with remaining unverified observations. Where a ca
 | `IIP-ALG07-a-idp-01` | browser_sso_idp、ecp_idp、metadata_idp、single_logout_idp | browser_sso_idp、ecp_idp、metadata_idp、single_logout_idp | browser_sso_idp、ecp_idp、metadata_idp、single_logout_idp | Attestation is disabled |
 | `IIP-ALG08-a-idp-01` | — | — | browser_sso_idp、ecp_idp | Evidence verification and attestation after configuration |
 | `IIP-ALG08-b-idp-01` | — | — | browser_sso_idp、ecp_idp | Evidence verification and attestation after configuration |
-| `IIP-ALG08-c-idp-01` | browser_sso_idp、ecp_idp | ecp_idp | browser_sso_idp、ecp_idp | Attestation is disabled |
-| `IIP-EXT01-c-idp-01` | browser_sso_idp、ecp_idp、metadata_idp、single_logout_idp | — | browser_sso_idp、ecp_idp、metadata_idp、single_logout_idp | Only some test conditions are implemented |
+| `IIP-ALG08-c-idp-01` | browser_sso_idp、ecp_idp | — | browser_sso_idp、ecp_idp | Attestation is disabled |
+| `IIP-EXT01-c-idp-01` | — | — | browser_sso_idp、ecp_idp、metadata_idp、single_logout_idp | Only some test conditions are implemented |
 | `IIP-G01-a-idp-01` | browser_sso_idp、ecp_idp、metadata_idp、single_logout_idp | browser_sso_idp、ecp_idp、metadata_idp、single_logout_idp | browser_sso_idp、ecp_idp、metadata_idp、single_logout_idp | Only some test conditions are implemented |
 | `IIP-G02-c-idp-01` | browser_sso_idp | browser_sso_idp | browser_sso_idp | Attestation is disabled |
 | `IIP-IDP04-b-idp-01` | browser_sso_idp | — | — | Evidence verification and attestation after configuration |
-| `IIP-IDP06-b-idp-01` | browser_sso_idp | — | browser_sso_idp | Executed without a conclusive result |
 | `IIP-IDP10-d-idp-01` | browser_sso_idp | — | — | Executed without a conclusive result |
 | `IIP-IDP11-a-idp-01` | — | — | browser_sso_idp | Evidence verification and attestation after configuration |
 | `IIP-IDP12-d-idp-01` | — | browser_sso_idp | — | Executed without a conclusive result |
@@ -278,9 +281,9 @@ Product columns list profiles with remaining unverified observations. Where a ca
 | `IIP-MD05-aq-idp-01` | metadata_idp | — | — | Evidence verification and attestation after configuration |
 | `IIP-MD05-ar-idp-01` | metadata_idp | — | — | Evidence verification and attestation after configuration |
 | `IIP-MD05-aw-idp-01` | metadata_idp | metadata_idp | metadata_idp | Evidence verification and attestation after configuration |
-| `IIP-MD05-c1-idp-01` | metadata_idp | metadata_idp | metadata_idp | Evidence verification and attestation after configuration |
+| `IIP-MD05-c1-idp-01` | metadata_idp | — | — | Evidence verification and attestation after configuration |
 | `IIP-MD05-c2-idp-01` | metadata_idp | — | — | Evidence verification and attestation after configuration |
-| `IIP-MD05-c3-idp-01` | metadata_idp | metadata_idp | metadata_idp | Evidence verification and attestation after configuration |
+| `IIP-MD05-c3-idp-01` | metadata_idp | metadata_idp | — | Evidence verification and attestation after configuration |
 | `IIP-MD05-c5-idp-01` | metadata_idp | metadata_idp | metadata_idp | Attestation is disabled |
 | `IIP-MD05-c6-idp-01` | metadata_idp | metadata_idp | metadata_idp | Attestation is disabled |
 | `IIP-MD05-c7-idp-01` | metadata_idp | metadata_idp | metadata_idp | Attestation is disabled |
@@ -315,8 +318,8 @@ Product columns list profiles with remaining unverified observations. Where a ca
 | `IIP-SSO01-gc-idp-01` | browser_sso_idp | — | browser_sso_idp | Evidence verification and attestation after configuration |
 | `IIP-SSO01-gj-idp-01` | browser_sso_idp | — | browser_sso_idp | Evidence verification and attestation after configuration |
 | `IIP-SSO01-i2-idp-01` | browser_sso_idp | browser_sso_idp | browser_sso_idp | Only some test conditions are implemented |
-| `IIP-SSO05-a1-idp-01` | browser_sso_idp | browser_sso_idp | browser_sso_idp | Attestation is disabled |
-| `IIP-SSO05-a8-idp-01` | browser_sso_idp | browser_sso_idp | browser_sso_idp | Attestation is disabled |
+| `IIP-SSO05-a1-idp-01` | — | browser_sso_idp | browser_sso_idp | Attestation is disabled |
+| `IIP-SSO05-a8-idp-01` | — | browser_sso_idp | browser_sso_idp | Attestation is disabled |
 
 ## Classification of inconclusive observations (diagnosis)
 
@@ -324,10 +327,10 @@ This classification describes unverified reasons without changing Verdicts. feat
 
 | Diagnosis | Count | Meaning | Proposed display |
 |---|---:|---|---|
-| `suite-observation-gap` | 118 | The Suite observation or execution path is not connected | Not verified that can be resolved by implementing the Suite path |
-| `operator-attestation-available` | 67 | Can be verified through attestation or operator testimony | Can be verified through operator testimony, with one answer per case. Attestation is disabled in the current Plan |
+| `suite-observation-gap` | 115 | The Suite observation or execution path is not connected | Not verified that can be resolved by implementing the Suite path |
+| `operator-attestation-available` | 62 | Can be verified through attestation or operator testimony | Can be verified through operator testimony, with one answer per case. Attestation is disabled in the current Plan |
 | `evidence-form-mismatch` | 10 | The product response does not match the evidence format required by the approved evaluation conditions | Not verified because the evidence format does not match the approved conditions; requirement interpretation needs review |
-| `role-inapplicable` | 8 | A variant requests an artifact that the target does not consume in its role | The variant is not consumed in the IdP role and is outside the execution scope; inapplicability has been established |
+| `role-inapplicable` | 4 | A variant requests an artifact that the target does not consume in its role | The variant is not consumed in the IdP role and is outside the execution scope; inapplicability has been established |
 
 ### role-inapplicable
 
@@ -341,7 +344,7 @@ This classification describes unverified reasons without changing Verdicts. feat
 
 ### operator-attestation-available
 
-`IIP-ALG07-a-idp-01`, `IIP-ALG08-c-idp-01`, `IIP-G02-c-idp-01`, `IIP-IDP06-b-idp-01`, `IIP-IDP21-a-idp-01`, `IIP-MD05-c5-idp-01`, `IIP-MD05-c6-idp-01`, `IIP-MD05-c7-idp-01`, `IIP-MD09-a-idp-01`, `IIP-MD09-b-idp-01`, `IIP-SSO01-de-idp-01`, `IIP-SSO01-dy-idp-01`, `IIP-SSO01-e-idp-01`, `IIP-SSO01-ea-idp-01`, `IIP-SSO01-ec-idp-01`, `IIP-SSO01-ed-idp-01`, `IIP-SSO01-ee-idp-01`, `IIP-SSO05-a1-idp-01`, `IIP-SSO05-a8-idp-01`
+`IIP-ALG07-a-idp-01`, `IIP-ALG08-c-idp-01`, `IIP-G02-c-idp-01`, `IIP-IDP21-a-idp-01`, `IIP-MD05-c5-idp-01`, `IIP-MD05-c6-idp-01`, `IIP-MD05-c7-idp-01`, `IIP-MD09-a-idp-01`, `IIP-MD09-b-idp-01`, `IIP-SSO01-de-idp-01`, `IIP-SSO01-dy-idp-01`, `IIP-SSO01-e-idp-01`, `IIP-SSO01-ea-idp-01`, `IIP-SSO01-ec-idp-01`, `IIP-SSO01-ed-idp-01`, `IIP-SSO01-ee-idp-01`, `IIP-SSO05-a1-idp-01`, `IIP-SSO05-a8-idp-01`
 
 
 ### suite-observation-gap

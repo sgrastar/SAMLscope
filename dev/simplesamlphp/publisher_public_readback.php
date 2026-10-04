@@ -67,6 +67,15 @@ try {
             if ($key === false) throw new \RuntimeException('Native peer credential unavailable');
             $details = openssl_pkey_get_details($key);
             $row['signatureOverridePublicSpkiPem'] = $details['key'];
+            $certificate = $crypto->loadPublicKey($peer, true, 'signature.');
+            if ($certificate === null || !isset($certificate['certData'])) throw new \RuntimeException('Native peer certificate unavailable');
+            $peerCertificateHandle = openssl_pkey_get_public($certificate['PEM']);
+            if ($peerCertificateHandle === false) throw new \RuntimeException('Native peer public certificate unavailable');
+            $publicDetails = openssl_pkey_get_details($peerCertificateHandle);
+            if ($publicDetails['key'] !== $details['key']) throw new \RuntimeException('Native peer public/private mismatch');
+            $row['signatureOverrideCertificateDerBase64'] = $certificate['certData'];
+            $row['signatureOverrideCertificatePublicSpkiPem'] = $publicDetails['key'];
+            unset($certificate,$peerCertificateHandle,$publicDetails);
             unset($override,$key,$details);
         }
         $peers[] = $row;

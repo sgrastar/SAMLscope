@@ -4,6 +4,13 @@ import static com.samlscope.runner.cases.MetadataPublisherKeyInventoryEvidence.*
 import com.fasterxml.jackson.databind.JsonNode;
 import java.time.Instant;
 import java.util.*;
+import com.samlscope.core.transcript.*;
+import com.samlscope.saml.binding.RedirectSignatureVerifier;
+import com.samlscope.saml.normal.SecureXml;
+import java.io.ByteArrayInputStream;
+import java.security.cert.CertificateFactory;
+import java.security.cert.X509Certificate;
+import org.w3c.dom.Element;
 
 /** Stock hosted-metadata producer and native credential loader. Configured new_
  * keys and per-peer overrides are not automatically called current role keys.
@@ -21,9 +28,19 @@ public final class SimpleSamlPhpPublisherInventoryAdapter implements NativeMetad
             "native-controller.php", "e048fb572f43168187c178e0927f9e6c885031197b8a9c8682539963dde8ec56");
     // These are fixed with the public dev programs before actual capture. An unknown
     // projection/producer source fails closed rather than accepting receipt labels.
-    static final String PUBLIC_READBACK_SOURCE = "d372d37aa319cca4115ef6a6c3e685ea44755ccc4400c502d623d8601121f110";
+    static final String PUBLIC_READBACK_SOURCE = "cb29da8172b697ecf0d34d4942f3d76e095c3cce67b87bd9a0e13c9a4e541b08";
     static final String CONTROL_SOURCE = "504a170d2df9b62cfdc3a498cac3cfaf984cf9430d7b6f8a84b94926f6b38f62";
     @Override public String id() { return ID; }
+    @Override public void validateTransition(Frame f, JsonNode epoch, byte[] target) throws Exception {
+        validateSimpleSamlPhpEpochTransition(f, epoch, target);
+    }
+    @Override public List<String> validateControls(Frame f, String caseId) throws Exception {
+        validateSimpleSamlPhpControls(f, caseId);
+        return controlOmissions(f, f.manifest.path("controls"), caseId);
+    }
+    @Override public void validateRestoration(Frame f) throws Exception {
+        validateSimpleSamlPhpRestoration(f);
+    }
     @Override public Inventory validate(Frame f, JsonNode epoch) throws Exception {
         JsonNode before = state(f, text(epoch, "beforeOriginal"), text(epoch, "id"));
         JsonNode after = state(f, text(epoch, "afterOriginal"), text(epoch, "id"));
@@ -40,7 +57,100 @@ public final class SimpleSamlPhpPublisherInventoryAdapter implements NativeMetad
         byte[] nativeProduced = Base64.getDecoder().decode(text(b,"nativeProducedMetadataXmlBase64"));
         require(hash(nativeProduced).equals(text(b,"nativeProducedMetadataSha256"))
                 && Arrays.equals(nativeProduced,f.file(text(epoch,"publicationFile"))));
-        return inventory(b);
+        var inventory=inventory(b);
+        if("explicit-native-peer-signers".equals(text(epoch,"transition")))
+            return usedSigningInventory(f, epoch, b, inventory);
+        return inventory;
+    }
+    /** A recipient override is current only after its original signed response
+     * proves use in the same unchanged native publication epoch. A foreign
+     * peer Run remains that Run throughout; its records are never relabelled. */
+    static Inventory usedSigningInventory(Frame f, JsonNode epoch, JsonNode state, Inventory inventory) throws Exception {
+        var peers=f.manifest.path("usedSigningPeers");require(peers.isArray()&&peers.size()==2);
+        var initial=f.node(text(f.original("initial","native-role-inventory"),"readbackFile"));
+        require(initial.path("remotePeers").isArray()&&initial.path("remotePeers").isEmpty()
+                && state.path("remotePeers").isArray()&&state.path("remotePeers").size()==2);
+        var runs=new HashSet<String>();var entities=new HashSet<String>();var labels=new HashSet<String>();
+        var actualKeys=new ArrayList<RoleKey>();var requests=new HashSet<String>();var responses=new HashSet<String>();
+        Instant from=at(epoch,"startedAt"),until=at(epoch,"finishedAt");Instant previous=null;
+        for(var peer:peers) {
+            String run=text(peer,"runId"),plan=text(peer,"planId"),entity=text(peer,"entityId"),label=text(peer,"label");
+            require(validRun(run)&&runs.add(run)&&plan.matches("plan_[0-9A-HJKMNP-TV-Z]{26}")
+                    && entities.add(entity)&&entity.equals("http://localhost:18080/p/"+plan)
+                    && labels.add(label)&&Set.of("primary","secondary").contains(label));
+            require(label.equals("primary")==run.equals(f.context.runId()));
+            var created=f.node(text(peer,"createdFile"));var nativeRun=created.path("run");
+            require(run.equals(text(nativeRun,"id"))&&plan.equals(text(nativeRun,"planId")));
+            var nativePlan=f.node(text(peer,"planFile"));for(int i=0;i<3&&nativePlan.has("plan");i++)nativePlan=nativePlan.path("plan");
+            require(plan.equals(text(nativePlan,"id"))&&TARGET.equals(text(nativePlan.path("target"),"entityId")));
+            require((label.equals("primary")?"metadata_idp":"browser_sso_idp").equals(text(nativePlan,"profile")));
+            byte[] target=f.targetMetadata.apply(run);require(target!=null&&hash(target).equals(text(f.manifest,"targetMetadataSha256")));
+            byte[] fixture=f.file(text(peer,"fixtureFile"));Element sp=SecureXml.parse(fixture).getDocumentElement();
+            require(MD.equals(sp.getNamespaceURI())&&"EntityDescriptor".equals(sp.getLocalName())&&entity.equals(sp.getAttribute("entityID"))
+                    && MetadataAlgorithmEvidence.children(sp,MD,"SPSSODescriptor").size()==1);
+            String reqId=text(peer,"requestReference"),rspId=text(peer,"responseReference");
+            require(requests.add(reqId)&&responses.add(rspId));
+            var request=f.peerTranscript(run,reqId);var response=f.peerTranscript(run,rspId);
+            require(request.direction()==Direction.OUTBOUND&&response.direction()==Direction.INBOUND
+                    && "GET".equals(request.method())&&"POST".equals(response.method())
+                    && request.timestamp().isBefore(response.timestamp())
+                    && within(request.timestamp(),from,until)&&within(response.timestamp(),from,until)
+                    && (previous==null||request.timestamp().isAfter(previous)));previous=response.timestamp();
+            byte[] requestRaw=f.decoded(request),responseRaw=f.decoded(response);
+            var q=SecureXml.parse(requestRaw).getDocumentElement();
+            require("urn:oasis:names:tc:SAML:2.0:protocol".equals(q.getNamespaceURI())&&"AuthnRequest".equals(q.getLocalName())
+                    && entity.equals(KeycloakSubjectConfirmationEvidence.issuer(q))&&!q.getAttribute("ID").isBlank()
+                    && Set.of("","false","0").contains(q.getAttribute("ForceAuthn"))&&Set.of("","false","0").contains(q.getAttribute("IsPassive"))
+                    && !Instant.parse(q.getAttribute("IssueInstant")).isAfter(request.timestamp()));
+            String destination=q.getAttribute("Destination"),acs=q.getAttribute("AssertionConsumerServiceURL");
+            require(inventory.endpoints().stream().anyMatch(e->e.kind().equals("SingleSignOnService")&&e.location().equals(destination))
+                    && MetadataAlgorithmEvidence.children(MetadataAlgorithmEvidence.children(sp,MD,"SPSSODescriptor").getFirst(),MD,"AssertionConsumerService")
+                        .stream().anyMatch(e->"urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST".equals(e.getAttribute("Binding"))&&acs.equals(e.getAttribute("Location")))
+                    && response.url().equals(acs)&&request.rawQuery()!=null
+                    && request.url().equals(destination+"?"+request.rawQuery())
+                    && MetadataAlgorithmEvidence.signingKeys(sp).stream().anyMatch(c->new RedirectSignatureVerifier().isValidForMessage(request.rawQuery(),c,requestRaw)));
+            JsonNode nativePeer=null;for(var row:state.path("remotePeers"))if(entity.equals(row.path("entityId").asText())){require(nativePeer==null);nativePeer=row;}
+            require(nativePeer!=null&&nativePeer.path("signatureOverridePresent").isBoolean()
+                    && nativePeer.path("signatureOverridePresent").asBoolean()==label.equals("secondary")
+                    && nativePeer.path("sharedEncryptionOverridePresent").isBoolean()
+                    && !nativePeer.path("sharedEncryptionOverridePresent").asBoolean());
+            String certificate;
+            if(nativePeer.path("signatureOverridePresent").asBoolean()) {
+                certificate=text(nativePeer,"signatureOverrideCertificateDerBase64");
+                require(certificateSpki(certificate).equals(publicPemSpki(text(nativePeer,"signatureOverridePublicSpkiPem")))
+                        && certificateSpki(certificate).equals(publicPemSpki(text(nativePeer,"signatureOverrideCertificatePublicSpkiPem"))));
+                var material=f.original("ephemeral-material","native-public-signing-material");
+                byte[] publicRaw=f.file(text(material,"publicCertificateFile"));
+                var generated=(X509Certificate)CertificateFactory.getInstance("X.509").generateCertificate(new ByteArrayInputStream(publicRaw));
+                require(hash(publicRaw).equals(text(material,"certificateSha256"))
+                        && hash(generated.getPublicKey().getEncoded()).equals(certificateSpki(certificate))
+                        && at(material,"nativeStartedAt").isBefore(at(material,"nativeFinishedAt"))
+                        && at(material,"nativeFinishedAt").isBefore(at(epoch,"startedAt")));
+            } else {
+                JsonNode current=null;for(var row:state.path("currentCredentials"))if("".equals(row.path("prefix").asText())){require(current==null);current=row;}
+                require(current!=null);certificate=text(current,"certificateDerBase64");
+            }
+            verifiedResponseSigningKey(responseRaw,certificate,sp,q.getAttribute("ID"),acs);
+            var original=f.original(text(peer,"signerUseOriginal"),"native-signer-use");
+            require(run.equals(text(original,"observedRunId"))&&reqId.equals(text(original,"requestReference"))&&rspId.equals(text(original,"responseReference"))
+                    && hash(requestRaw).equals(text(original,"requestSha256"))&&hash(responseRaw).equals(text(original,"responseSha256"))
+                    && hash(fixture).equals(text(original,"fixtureSha256"))&&certificateSpki(certificate).equals(text(original,"responseCertificateSpkiSha256"))
+                    && within(at(original,"nativeStartedAt"),from,until)&&within(at(original,"nativeFinishedAt"),from,until)
+                    && !request.timestamp().isBefore(at(original,"nativeStartedAt"))&& !response.timestamp().isAfter(at(original,"nativeFinishedAt"))
+                    && !at(original,"recordedAt").isBefore(at(original,"nativeFinishedAt")));
+            actualKeys.add(new RoleKey(certificateSpki(certificate),"signing","native-original-signed-response:"+run+":"+rspId));
+        }
+        require(labels.equals(Set.of("primary","secondary"))&&actualKeys.stream().map(RoleKey::spkiSha256).distinct().count()==2);
+        var keys=new ArrayList<>(inventory.keys());for(var key:actualKeys)if(keys.stream().noneMatch(k->k.purpose().equals(key.purpose())&&k.spkiSha256().equals(key.spkiSha256())))keys.add(key);
+        return new Inventory(keys,inventory.endpoints(),inventory.protocols(),inventory.wantAuthnRequestsSigned(),inventory.unresolvedScope());
+    }
+    static String verifiedResponseSigningKey(byte[] raw,String nativeCertificate,Element peer,String requestId,String acs) throws Exception {
+        var cert=(X509Certificate)CertificateFactory.getInstance("X.509").generateCertificate(new ByteArrayInputStream(Base64.getMimeDecoder().decode(nativeCertificate)));
+        var response=SecureXml.parse(raw).getDocumentElement();
+        // The key is the independently derived native credential public key,
+        // not Response KeyInfo and not a rewritten target metadata snapshot.
+        VerifiedResponseAssertion.read(response,TARGET,List.of(cert),peer,Optional.empty(),requestId,acs);
+        return hash(cert.getPublicKey().getEncoded());
     }
     static JsonNode state(Frame f, String name, String epoch) throws Exception {
         JsonNode n = f.original(name, "native-role-inventory");

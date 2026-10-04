@@ -401,8 +401,16 @@ public final class ApprovedBrowserCaseRegistry {
         }
         if (idpScenarioConfigurations != null
                 && IdpExecutableBrowserFixtureScenarioTestCase.CASE_IDS.contains(definition.id())) {
-            return new IdpExecutableBrowserFixtureScenarioTestCase(
+            var fallback = new IdpExecutableBrowserFixtureScenarioTestCase(
                     definition.id(), idpScenarioConfigurations, decryptionKeys);
+            if ("IIP-EXT01-c-idp-01".equals(definition.id())) {
+                var data = SuiteRunProfileLookup.configuredDataDirectory();
+                var bridge = new KeycloakNativeRunEvidenceBridge(data);
+                return ExtensionAttributeParserTestCase.wrap(fallback,
+                        transcriptContent == null ? bridge::content : transcriptContent,
+                        bridge::targetMetadata, data.resolve("extension-attribute-parser-evidence"));
+            }
+            return fallback;
         }
         if (idpScenarioConfigurations != null
                 && IdpVersionScenarioTestCase.CASE_ID.equals(definition.id())) {

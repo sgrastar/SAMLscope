@@ -36,10 +36,18 @@ final class KeycloakAuthenticationIdentityEvidence {
         "org.keycloak.keycloak-server-spi-26.7.2.jar","04142eb6f4f2195a23ebbf785aaf8c05bcf308fa5dc6ad33b5326711b2ee536d",
         "org.keycloak.keycloak-core-26.7.2.jar","7486c2cd0bc59a6beb85dfb2f7e9b36659a50f15853e25162637ffcab2570d53");
     private final Path directory;
+    private final String expectedCollector;
+    private final String expectedNativeClasspath;
     private final TranscriptContentReader content;
     private final Function<String,byte[]> metadata;
     KeycloakAuthenticationIdentityEvidence(Path directory,TranscriptContentReader content,
             Function<String,byte[]> metadata,SamlDecryptionKeyProvider keys) {
+        this(directory,content,metadata,keys,COLLECTOR,"6c395042caae9cd300d9c0d989a58c5aaca4510dec2e1c1c9daeedfe3da5261e");
+    }
+    KeycloakAuthenticationIdentityEvidence(Path directory,TranscriptContentReader content,
+            Function<String,byte[]> metadata,SamlDecryptionKeyProvider keys,String collector,String nativeClasspath) {
+        require(collector!=null&&collector.matches("[0-9a-f]{64}")&&nativeClasspath!=null&&nativeClasspath.matches("[0-9a-f]{64}"));
+        this.expectedCollector=collector;this.expectedNativeClasspath=nativeClasspath;
         this.directory=Objects.requireNonNull(directory).toAbsolutePath().normalize();
         this.content=Objects.requireNonNull(content);this.metadata=Objects.requireNonNull(metadata);Objects.requireNonNull(keys);
     }
@@ -106,7 +114,7 @@ final class KeycloakAuthenticationIdentityEvidence {
     private static boolean contains(byte[] source,String token){return new String(source,StandardCharsets.ISO_8859_1).contains(token);}
     private void nativeScope(Path folder,JsonNode files,String flowId,Instant first,Instant last)throws Exception {
         byte[] inventory=original(folder,files,"originals/before.native-classpath.txt");
-        require(hash(inventory).equals("6c395042caae9cd300d9c0d989a58c5aaca4510dec2e1c1c9daeedfe3da5261e")&&Arrays.equals(inventory,original(folder,files,"originals/after.native-classpath.txt")));
+        require(hash(inventory).equals(expectedNativeClasspath)&&Arrays.equals(inventory,original(folder,files,"originals/after.native-classpath.txt")));
         var before=node(folder,files,"originals/before.environment.json");var after=node(folder,files,"originals/after.environment.json");
         require(before.path("runtime").equals(after.path("runtime"))&&before.at("/runtime/running").asBoolean(false)
             &&hash(inventory).equals(text(before,"nativeClasspathSha256"))&&hash(inventory).equals(text(after,"nativeClasspathSha256"))
@@ -133,7 +141,7 @@ final class KeycloakAuthenticationIdentityEvidence {
             var receipt=json(raw(folder,"manifest.json"));var files=receipt.path("files");byte[] targetRaw=metadata.apply(context.runId());
             require(SCHEMA.equals(text(receipt,"schema"))&&CASE.equals(text(receipt,"caseId"))&&context.runId().equals(text(receipt,"runId"))
                 &&ADAPTER.equals(text(receipt,"adapter"))&&"native-authentication-identity".equals(text(receipt,"campaignId"))&&TARGET.equals(text(receipt,"targetEntityId"))
-                &&hash(targetRaw).equals(text(receipt,"targetMetadataSha256"))&&COLLECTOR.equals(hash(original(folder,files,"originals/collector.py"))));
+                &&hash(targetRaw).equals(text(receipt,"targetMetadataSha256"))&&expectedCollector.equals(hash(original(folder,files,"originals/collector.py"))));
             var created=node(folder,files,"created.json").path("run");var plan=node(folder,files,"plan.json").at("/plan/plan");
             require(context.runId().equals(text(created,"id"))&&text(created,"planId").equals(text(plan,"id"))&&"browser_sso_idp".equals(text(plan,"profile"))
                 &&TARGET.equals(text(plan.path("target"),"entityId")));String entity="http://localhost:18080/p/"+text(created,"planId");

@@ -82,6 +82,42 @@ class NativeCampaignRegistryTest {
         assertEquals(algorithmFallback().options(), assertInstanceOf(AttestationPrompt.class, test).options());
     }
 
+    @Test void missingPersistentConstructionPreservesManualOptionsWithoutAnotherLogin() {
+        String id = "IIP-SSO05-a1-idp-01";
+        var fallback = new AttestedOutcomeTestCase(id, TargetRole.IDP, "persistent-attestation",
+                "Approved persistent construction prompt", Duration.ofDays(7),
+                List.of(AttestationOption.of("satisfied", Outcome.SATISFIED, "attestation.satisfied")));
+        var test = ApprovedAttestedCaseRegistry.withNativePersistentIdentifiers(fallback, directory,
+                entry -> { throw new AssertionError("Absent construction has no original to consume"); }, run -> new byte[0]);
+        assertEquals(Outcome.NOT_VERIFIED,
+                assertInstanceOf(CaseStep.Finish.class, test.start(context())).outcome().outcome());
+        assertFalse(test instanceof BrowserFrontChannelScenario);
+        assertEquals(fallback.options(), assertInstanceOf(AttestationPrompt.class, test).options());
+        var manual = assertInstanceOf(CaseStep.AwaitAttestation.class, test.start(attestationOnlyContext()));
+        assertTrue(manual.actions().isEmpty());
+    }
+
+    @Test void actualSevenArgumentRuntimeConstructionWiresBothPersistentCases() {
+        var approved = KeycloakPersistentIdentifierEvidence.DIGESTS.entrySet().stream()
+                .map(entry -> new CaseDefinition(entry.getKey(),
+                        entry.getKey().contains("a1-") ? "IIP-SSO05.a1" : "IIP-SSO05.a8",
+                        TargetRole.IDP, ExecutionMode.ATTESTED, Milestone.M1, List.of(), Map.of(),
+                        List.of(), List.of(), List.of(), "Native controls remain required", List.of(),
+                        new Requirements(List.of(), "none"), false, null, entry.getValue())).toList();
+        var catalog = new CaseDefinitionCatalog(approved);
+        var bare = ApprovedAttestedCaseRegistry.create(catalog, Milestone.M1);
+        var actual = ApprovedAttestedCaseRegistry.create(catalog, Milestone.M1,
+                java.net.URI.create("http://localhost:18080"), null,
+                entry -> { throw new AssertionError("Registry construction must not read evidence"); },
+                ignored -> Optional.empty(), ignored -> List.of());
+        for (String id : KeycloakPersistentIdentifierEvidence.DIGESTS.keySet()) {
+            assertInstanceOf(AttestedOutcomeTestCase.class, bare.require(id));
+            assertInstanceOf(NativePersistentIdentifierEvidenceTestCase.class, actual.require(id));
+            assertEquals(((AttestationPrompt) bare.require(id)).options(),
+                    ((AttestationPrompt) actual.require(id)).options());
+        }
+    }
+
     @Test void ownedMalformedDefaultPolicyCannotBecomeAnAttestedSuccess() throws Exception {
         var proof = directory.resolve("default-algorithm-evidence").resolve(context().runId());
         Files.createDirectories(proof);
@@ -130,7 +166,7 @@ class NativeCampaignRegistryTest {
                 definition(MetadataFullUiConfigurationTestCase.CASE, "IIP-MD05.f", ExecutionMode.CONFIG, Milestone.M2)));
         var attested = ApprovedAttestedCaseRegistry.create(definitions, Milestone.M1);
         assertEquals(Set.of(DefaultAlgorithmPreventionProbeTestCase.CASE), attested.ids());
-        assertInstanceOf(DefaultAlgorithmPreventionProbeTestCase.class,
+        assertInstanceOf(DefaultAlgorithmSourceRunTestCase.class,
                 attested.require(DefaultAlgorithmPreventionProbeTestCase.CASE));
         var config = ApprovedConfigCaseRegistry.create(definitions, Milestone.M2);
         assertEquals(Set.of(MetadataFullUiConfigurationTestCase.CASE), config.ids());
@@ -140,6 +176,31 @@ class NativeCampaignRegistryTest {
                 entry -> { throw new AssertionError(); }, run -> new byte[0], directory.resolve("metadata-rejection-evidence"));
         assertEquals(config.ids(), decorated.ids());
         assertSame(original, decorated.require(MetadataFullUiConfigurationTestCase.CASE));
+    }
+
+    @Test void actualMultipleKeyRuntimeDecorationKeepsTheApprovedConfigCaseAndManualOptions() {
+        var definitions = new CaseDefinitionCatalog(List.of(
+                definition(SimpleSamlPhpMultipleDecryptionKeysEvidence.CASE, "IIP-IDP19.b",
+                        ExecutionMode.CONFIG, Milestone.M3)));
+        var bare = ApprovedConfigCaseRegistry.create(definitions, Milestone.M3);
+        var fallback = bare.require(SimpleSamlPhpMultipleDecryptionKeysEvidence.CASE);
+        var actual = ApprovedConfigCaseRegistry.withMultipleDecryptionKeys(bare,
+                ignored -> new SupplementalDecryptionKeyService.KeySet(List.of(), List.of()),
+                (run, id) -> Optional.empty());
+        var test = actual.require(SimpleSamlPhpMultipleDecryptionKeysEvidence.CASE);
+        assertInstanceOf(NativeMultipleDecryptionKeysConfigurationTestCase.class, test);
+        assertEquals(bare.ids(), actual.ids());
+        assertEquals(((ConfigurationPrompt) fallback).instructionEn(),
+                ((ConfigurationPrompt) test).instructionEn());
+        assertEquals(((AttestationPrompt) fallback).options(), ((AttestationPrompt) test).options());
+        var wait = assertInstanceOf(CaseStep.AwaitConfig.class, test.start(context()));
+        assertTrue(wait.actions().isEmpty());
+        assertFalse(test instanceof BrowserFrontChannelScenario);
+        assertEquals(List.of(SimpleSamlPhpMultipleDecryptionKeysEvidence.CASE),
+                ((EvidenceCampaignCase) test).evidenceActionKeys());
+        assertSame(test, ApprovedConfigCaseRegistry.withMultipleDecryptionKeys(actual,
+                ignored -> { throw new AssertionError("Decoration must be idempotent"); },
+                (run, id) -> Optional.empty()).require(test.id()));
     }
 
     private CaseDefinition definition(String id, String obligation, ExecutionMode mode, Milestone milestone) {

@@ -16,7 +16,7 @@ import java.util.jar.JarFile;
  * The signed ae originals retain their native Success/NoPassive results. No operator declaration is invented.
  * Native fixture replay is an adoption requirement; mode remains the approved ATTESTED mode.
  */
-final class ShibbolethForceAuthnMechanismEvidence {
+final class ShibbolethForceAuthnMechanismEvidence implements NativeForceAuthnMechanismEvidence {
     static final String SCHEMA="samlscope-shibboleth-force-authn-mechanism-v1";
     static final String KIND="native-force-authn-mechanism";
     static final String REASON="idp.force-authn.mechanism-reachability.native-proven";
@@ -38,12 +38,12 @@ final class ShibbolethForceAuthnMechanismEvidence {
         this.directory=Objects.requireNonNull(directory).toAbsolutePath().normalize();this.content=Objects.requireNonNull(content);
         this.metadata=Objects.requireNonNull(metadata);this.keys=Objects.requireNonNull(keys);
     }
-    ShibbolethForceAuthnMechanismEvidence withKeys(SamlDecryptionKeyProvider provider){return new ShibbolethForceAuthnMechanismEvidence(directory,content,metadata,provider);}
-    boolean exists(String run){return safe(run)&&(Files.exists(receipt(run),LinkOption.NOFOLLOW_LINKS)||Files.exists(folder(run),LinkOption.NOFOLLOW_LINKS));}
+    public ShibbolethForceAuthnMechanismEvidence withKeys(SamlDecryptionKeyProvider provider){return new ShibbolethForceAuthnMechanismEvidence(directory,content,metadata,provider);}
+    public boolean exists(String run){return safe(run)&&(Files.exists(receipt(run),LinkOption.NOFOLLOW_LINKS)||Files.exists(folder(run),LinkOption.NOFOLLOW_LINKS));}
     private Path receipt(String run){return directory.resolve(run+".shibboleth-force-authn-mechanism.json");}
     private Path folder(String run){return directory.resolve(run+".shibboleth-force-authn-mechanism");}
     private static boolean safe(String run){return run!=null&&run.matches("run_[0-9A-HJKMNP-TV-Z]{26}");}
-    Optional<CaseOutcome> read(CaseContext context){
+    public Optional<CaseOutcome> read(CaseContext context){
         if(!exists(context.runId()))return Optional.empty();String stage="native-originals";
         try{
             require(context.transcriptComplete()&&safe(context.runId())&&!Files.isSymbolicLink(directory));

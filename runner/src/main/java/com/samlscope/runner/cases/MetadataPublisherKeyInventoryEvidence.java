@@ -51,7 +51,7 @@ public final class MetadataPublisherKeyInventoryEvidence {
         if (!supports(caseId)) throw new IllegalArgumentException("Unsupported publisher case");
         try {
             require(exists(context.runId()) && context.targetRole() == TargetRole.IDP && context.transcriptComplete());
-            Frame f = new Frame(directory.resolve(context.runId()), context, content);
+            Frame f = new Frame(directory.resolve(context.runId()), context, content, targetMetadata);
             require(SCHEMA.equals(text(f.manifest, "schema")) && CAMPAIGN.equals(text(f.manifest, "campaignId"))
                     && context.runId().equals(text(f.manifest, "runId")));
             byte[] initial = targetMetadata.apply(context.runId());
@@ -94,18 +94,22 @@ public final class MetadataPublisherKeyInventoryEvidence {
                     multiple |= count >= 2; signing |= purpose.equals("signing") && count > 0;
                     encryption |= purpose.equals("encryption") && count > 0;
                 }
-                validateEpochTransition(f, epoch, initial);
+                adapter.validateTransition(f, epoch, initial);
             }
-            validateControls(f, adapter, caseId);
-            validateRestoration(f);
+            List<String> controlOmissions = adapter.validateControls(f, caseId);
+            adapter.validateRestoration(f);
             if (diagnostic) {
-                var omission = SimpleSamlPhpPublisherInventoryAdapter.controlOmissions(f, f.manifest.path("controls"), caseId);
+                var omission = controlOmissions;
                 require(!omission.isEmpty());
                 return new CaseOutcome(Outcome.VIOLATED, null, C1.equals(caseId) ? "metadata.publisher.role-description-incomplete" : "metadata.publisher.current-key-omitted",
                     "metadata.publisher.detector-calibration", f.evidence(), Map.of("evidence_adapter", adapter.id(), "native_run_id", context.runId(),
                     "case_id", caseId, "selected_path", path, "missing_metadata_items", omission, "counterfactual_calibration_only", true));
             }
-            if (!unresolved.isEmpty()) return pending(caseId, context.runId(), "native-role-scope-incomplete", unresolved);
+            // A verified, actually used role key missing from the publication is a
+            // counterexample to all_of. An unresolved different purpose prevents
+            // full success, but does not erase that independently proven omission.
+            if (stockOutcome(caseId,missing,unresolved,multiple,signing,encryption)==Outcome.NOT_VERIFIED
+                    && !unresolved.isEmpty()) return pending(caseId, context.runId(), "native-role-scope-incomplete", unresolved);
             // Every full success includes the declared multi-current and current-purpose scenarios.
             // A conclusive actual omission can falsify all_of without every success scenario.
             if (missing.isEmpty() && C3.equals(caseId) && !(multiple && signing && encryption))
@@ -117,6 +121,7 @@ public final class MetadataPublisherKeyInventoryEvidence {
             details.put("evidence_adapter", adapter.id()); details.put("native_run_id", context.runId());
             details.put("case_id", caseId); details.put("selected_path", path); details.put("scope", "current-idp-saml2-role");
             details.put("missing_metadata_items", List.copyOf(missing));
+            details.put("unresolved_scope", List.copyOf(unresolved));
             details.put("counterfactual_calibration_only", diagnostic);
             return new CaseOutcome(missing.isEmpty() ? Outcome.SATISFIED : Outcome.VIOLATED, null, reason, reason,
                     f.evidence(), details);
@@ -124,11 +129,40 @@ public final class MetadataPublisherKeyInventoryEvidence {
     }
     private static NativeMetadataPublisherInventoryAdapter adapter(String id) {
         if (SimpleSamlPhpPublisherInventoryAdapter.ID.equals(id)) return new SimpleSamlPhpPublisherInventoryAdapter();
+        if (ShibbolethPublisherEndpointInventoryAdapter.ID.equals(id)) return new ShibbolethPublisherEndpointInventoryAdapter();
         throw new IllegalArgumentException("Unknown native publisher adapter");
     }
-    private static void validateEpochTransition(Frame f, JsonNode epoch, byte[] target) throws Exception {
+    static Outcome stockOutcome(String caseId,List<String> missing,List<String> unresolved,boolean multiple,boolean signing,boolean encryption) {
+        require(supports(caseId));
+        if(!missing.isEmpty()) return Outcome.VIOLATED;
+        if(!unresolved.isEmpty() || C3.equals(caseId)&&!(multiple&&signing&&encryption)) return Outcome.NOT_VERIFIED;
+        return Outcome.SATISFIED;
+    }
+    static void validateSimpleSamlPhpEpochTransition(Frame f, JsonNode epoch, byte[] target) throws Exception {
         String kind = text(epoch, "transition");
         if (kind.equals("run-snapshot")) require(Arrays.equals(target, f.file(text(epoch, "publicationFile"))));
+        else if (kind.equals("explicit-native-peer-signers")) {
+            var transition = f.original(text(epoch, "transitionOriginal"), "native-configuration-transition");
+            var initial = f.original("initial", "native-role-inventory");
+            var current = f.original(text(epoch,"beforeOriginal"), "native-role-inventory");
+            var before = f.node(text(initial,"readbackFile")); var after = f.node(text(current,"readbackFile"));
+            String path = "/var/simplesamlphp/metadata/saml20-sp-remote.php";
+            require(Arrays.equals(target, f.file(text(epoch,"publicationFile")))
+                    && text(epoch,"id").equals(text(transition,"epochId"))
+                    && path.equals(text(transition,"path"))
+                    && "per-peer-current-signers".equals(text(transition,"configurationPurpose"))
+                    && at(transition,"startedAt").isAfter(at(initial,"nativeFinishedAt"))
+                    && at(transition,"startedAt").isBefore(at(transition,"completedAt"))
+                    && at(transition,"completedAt").isBefore(at(current,"nativeStartedAt"))
+                    && configurationHash(before,path).equals(text(transition,"beforeConfigurationSha256"))
+                    && configurationHash(after,path).equals(text(transition,"afterConfigurationSha256"))
+                    && !configurationHash(before,path).equals(configurationHash(after,path))
+                    && initial.path("runtime").equals(current.path("runtime")));
+            for (String other : List.of("/var/simplesamlphp/config/config.php", "/var/simplesamlphp/metadata/saml20-idp-hosted.php"))
+                require(configurationHash(before,other).equals(configurationHash(after,other)));
+            for (String field : List.of("publicNativeMetadata", "currentCredentials", "loadedClasses", "roleFeatureFlags", "metadataSources"))
+                require(before.path(field).equals(after.path(field)));
+        }
         else {
             require(kind.equals("explicit-native-configuration"));
             var transition = f.original(text(epoch, "transitionOriginal"), "native-configuration-transition");
@@ -161,7 +195,7 @@ public final class MetadataPublisherKeyInventoryEvidence {
         require(result!=null&&result.matches("[a-f0-9]{64}"));return result;
     }
     /** The omission control changes only the native selected producer; it is not an observed product publication. */
-    private static void validateControls(Frame f, NativeMetadataPublisherInventoryAdapter adapter, String caseId) throws Exception {
+    static void validateSimpleSamlPhpControls(Frame f, String caseId) throws Exception {
         var controls = f.manifest.path("controls"); require(controls.isObject());
         var input = f.file(text(controls, "inputFile")); var p = f.file(text(controls, "positiveOutputFile"));
         var n = f.file(text(controls, "negativeOutputFile"));
@@ -176,7 +210,7 @@ public final class MetadataPublisherKeyInventoryEvidence {
         require(original.path("positiveControlIds").equals(json("[\"iip-md05-c1-idp-01-positive\",\"iip-md05-c3-idp-01-positive\"]".getBytes(java.nio.charset.StandardCharsets.UTF_8)))
                 && original.path("negativeControlIds").equals(json("[\"iip-md05-c1-idp-01-negative\",\"iip-md05-c3-idp-01-negative\"]".getBytes(java.nio.charset.StandardCharsets.UTF_8))));
     }
-    private static void validateRestoration(Frame f) throws Exception {
+    static void validateSimpleSamlPhpRestoration(Frame f) throws Exception {
         var r = f.original("restoration", "native-publisher-restoration");
         require(r.path("restored").isBoolean() && r.path("restored").asBoolean());
         var initial = SimpleSamlPhpPublisherInventoryAdapter.state(f,"initial","initial");
@@ -211,10 +245,23 @@ public final class MetadataPublisherKeyInventoryEvidence {
         var counts = r.path("operationCounts"); require(counts.isObject());
         for (String key : List.of("productSettings", "configurationRestorations", "nativePublicCalls", "credentialPosts", "samlSubmissions", "personOperations"))
             require(counts.path(key).isIntegralNumber() && counts.path(key).asLong(-1) >= 0);
-        boolean changed=false;for(var epoch:f.manifest.path("epochs"))changed|="explicit-native-configuration".equals(text(epoch,"transition"));
-        require(counts.path("personOperations").asInt(-1) == 0 && counts.path("credentialPosts").asInt(-1)==0
-                && counts.path("samlSubmissions").asInt(-1)==0 && counts.path("productSettings").asInt(-1)==(changed?2:0)
+        boolean changed=false, usedSigners=false;for(var epoch:f.manifest.path("epochs")) {
+            changed|="explicit-native-configuration".equals(text(epoch,"transition")) || "explicit-native-peer-signers".equals(text(epoch,"transition"));
+            usedSigners|="explicit-native-peer-signers".equals(text(epoch,"transition"));
+        }
+        require(counts.path("personOperations").asInt(-1) == 0 && counts.path("credentialPosts").asInt(-1)==(usedSigners?1:0)
+                && counts.path("samlSubmissions").asInt(-1)==(usedSigners?3:0) && counts.path("productSettings").asInt(-1)==(changed?2:0)
                 && counts.path("configurationRestorations").asInt(-1)==(changed?1:0));
+        if (usedSigners) {
+            require(counts.path("nativeEphemeralKeyCreations").asInt(-1)==1
+                    && counts.path("nativeEphemeralKeyRemovals").asInt(-1)==1);
+            var material=f.original("ephemeral-material", "native-public-signing-material");
+            var removal=f.original("ephemeral-removal", "native-public-signing-material-removal");
+            require(text(material,"certificateSha256").equals(text(removal,"certificateSha256"))
+                    && removal.path("absent").isBoolean() && removal.path("absent").asBoolean()
+                    && at(removal,"nativeStartedAt").isAfter(at(lastAfter,"nativeFinishedAt"))
+                    && at(removal,"nativeFinishedAt").isBefore(at(r,"recordedAt")));
+        }
     }
     static List<String> compare(Element role, NativeMetadataPublisherInventoryAdapter.Inventory inventory, String caseId) throws Exception {
         var result = new ArrayList<String>(); var published = roleKeys(role);
@@ -280,8 +327,9 @@ public final class MetadataPublisherKeyInventoryEvidence {
     static final class Frame {
         final Path folder; final CaseContext context; final TranscriptContentReader content; final JsonNode manifest;
         final Map<String, TranscriptEntry> history = new LinkedHashMap<>(); final Set<String> used = new LinkedHashSet<>(); final String manifestHash;
-        Frame(Path folder, CaseContext context, TranscriptContentReader content) throws Exception {
-            this.folder = folder; this.context = context; this.content = content;
+        final Function<String,byte[]> targetMetadata;
+        Frame(Path folder, CaseContext context, TranscriptContentReader content, Function<String,byte[]> targetMetadata) throws Exception {
+            this.folder = folder; this.context = context; this.content = content; this.targetMetadata=targetMetadata;
             byte[] raw = raw("manifest.json"); manifest = json(raw); manifestHash = hash(raw);
             require(manifest.isObject() && !sensitive(manifest));
             for (var e : context.transcript().list(context.runId())) {
@@ -297,6 +345,20 @@ public final class MetadataPublisherKeyInventoryEvidence {
         }
         byte[] file(String name) throws Exception { byte[] raw = raw(name); require(hash(raw).equals(text(manifest.path("files"), name))); return raw; }
         JsonNode node(String name) throws Exception { JsonNode n = json(file(name)); require(!sensitive(n)); return n; }
+        TranscriptEntry peerTranscript(String run, String id) {
+            require(validRun(run)); TranscriptEntry found=null;
+            var ids=new HashSet<String>();
+            for(var entry:context.transcript().list(run)) {
+                require(run.equals(entry.runId()) && ids.add(entry.id()));
+                if(id.equals(entry.id())) { require(found==null); found=entry; }
+            }
+            require(found!=null && ("transcripts/"+run+"/"+id+".saml.xml").equals(found.decodedSamlRef()));
+            return found;
+        }
+        byte[] decoded(TranscriptEntry entry) throws Exception {
+            byte[] raw=content.readDecodedSaml(entry); require(raw!=null && raw.length==entry.decodedSamlBytes());
+            return raw;
+        }
         JsonNode original(String name, String kind) throws Exception {
             var ref = manifest.path("originals").path(name); String id = text(ref, "reference"); var tx = history.get(id);
             require(tx != null && tx.direction() == Direction.INBOUND && "POST".equals(tx.method())

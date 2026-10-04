@@ -131,8 +131,23 @@ public final class ApprovedConfigCaseRegistry {
             Function<String,com.samlscope.runner.SupplementalDecryptionKeyService.KeySet> keys,
             java.util.function.BiFunction<String,String,java.util.Optional<com.samlscope.core.caseexec.CaseExecution>> executions) {
         return new TestCaseRegistry(registry.all().stream().map(testCase ->
-                MultipleDecryptionKeysConfigurationTestCase.ID.equals(testCase.id())
-                        ? (TestCase)new MultipleDecryptionKeysConfigurationTestCase(testCase,keys,executions) : testCase).toList());
+                testCase instanceof NativeMultipleDecryptionKeysConfigurationTestCase ? testCase
+                : MultipleDecryptionKeysConfigurationTestCase.ID.equals(testCase.id())
+                        ? withNativeMultipleDecryptionKeys(
+                                new MultipleDecryptionKeysConfigurationTestCase(testCase,keys,executions),
+                                SuiteRunProfileLookup.configuredDataDirectory(), null, null) : testCase).toList());
+    }
+
+    static TestCase withNativeMultipleDecryptionKeys(TestCase fallback, java.nio.file.Path data,
+            TranscriptContentReader content, Function<String, byte[]> metadata) {
+        if (fallback instanceof NativeMultipleDecryptionKeysConfigurationTestCase) return fallback;
+        var bridge = new KeycloakNativeRunEvidenceBridge(data);
+        return new NativeMultipleDecryptionKeysConfigurationTestCase(fallback,
+                new SimpleSamlPhpMultipleDecryptionKeysEvidence(data.resolve("multiple-decryption-keys-evidence"),
+                        content == null ? bridge::content : content,
+                        metadata == null ? bridge::targetMetadata : metadata,
+                        new DefaultAlgorithmSourceRunStore(data, SimpleSamlPhpMultipleDecryptionKeysEvidence.CASE,
+                                SimpleSamlPhpMultipleDecryptionKeysEvidence.DIGEST)));
     }
 
     public static TestCaseRegistry create(CaseDefinitionCatalog definitions) {

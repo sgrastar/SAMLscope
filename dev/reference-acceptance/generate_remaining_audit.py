@@ -829,6 +829,16 @@ def render(root,definitions,output):
             if result['run']['id'] != accepted_runs.get(row['profile']):
                 raise ValueError('EXT01.c accepted Run/profile binding mismatch')
             selected = (path, cases)
+        # The Keycloak replacement retains each original profile Run. Its full native
+        # parser projection, all attribute placements and controls are replayed before
+        # reading the corresponding central conclusion; an endpoint-only parse is not used.
+        if row['product']=='keycloak' and row['profile'] in {
+                'browser_sso_idp','ecp_idp','metadata_idp','single_logout_idp'} \
+                and row['case']=='IIP-EXT01-c-idp-01':
+            ext_root = root.parent.parent/'reference-20261004'/'keycloak-extension-attribute-parser-r2'
+            if (ext_root/'adopted.json').is_file():
+                from verify_keycloak_extension_attribute_parser_acceptance import verify_adoption as verify_keycloak_extension_parser
+                selected = check_once(verify_keycloak_extension_parser, ext_root)[row['profile']]
         # Keycloak target-initiated logout is driven through the native browser endpoint.
         # The gate requires an authenticated product session, the emitted LogoutRequest and
         # correlated Suite response originals, completed session removal, exact client cleanup,
@@ -1494,13 +1504,19 @@ def render(root,definitions,output):
                 if verified_ids!={row['case']} or len(cases)!=1:
                     raise ValueError('SOAP continuation adoption has an unexpected case scope')
                 selected=(path,{cases[0]['id']:cases[0]})
-        # The unchanged default policy and all native algorithm controls belong
-        # to this browser Run. Do not reuse it for another profile's obligation.
+        # The browser proof belongs to its original Run. Other profiles require
+        # an explicit source-Run binding and their own installed case identity.
         if row['product']=='shibboleth' and row['profile']=='browser_sso_idp' \
                 and row['case']=='IIP-ALG08-c-idp-01':
             from verify_shibboleth_default_algorithm_acceptance import verify as verify_shib_default_algorithms
             selected=check_once(verify_shib_default_algorithms,
                 root.parent.parent/'reference-20261004')
+        if row['product']=='shibboleth' and row['profile']=='ecp_idp' \
+                and row['case']=='IIP-ALG08-c-idp-01':
+            source_root = root.parent.parent/'reference-20261004'/'shibboleth-default-algorithm-ecp-source-r1'
+            if (source_root/'result-final.json').is_file():
+                from verify_default_algorithm_source_run_acceptance import verify_adoption as verify_default_algorithm_source_run
+                selected=check_once(verify_default_algorithm_source_run, source_root, live=False)
         if row['product']=='keycloak' and row['profile']=='metadata_idp' \
                 and row['case']=='IIP-MD05-fg-idp-01':
             from verify_keycloak_ui_safety_acceptance import verify_adoption as verify_keycloak_ui_safety
@@ -1572,6 +1588,36 @@ def render(root,definitions,output):
                 from verify_shibboleth_full_ui_acceptance import verify_adoption as verify_shib_full_ui
                 selected=check_once(verify_shib_full_ui, native_root, live=False)
                 qualified_full_ui.add((row['product'], row['profile'], row['case']))
+        if row['product']=='keycloak' and row['profile']=='browser_sso_idp' \
+                and row['case']=='IIP-IDP06-b-idp-01':
+            mechanism_root = root.parent.parent/'reference-20261004'/'keycloak-forceauthn-mechanism-r2'
+            if (mechanism_root/'acceptance-originals.json').is_file():
+                from verify_keycloak_forceauthn_mechanism_acceptance import verify_adoption as verify_keycloak_forceauthn_mechanism
+                selected=check_once(verify_keycloak_forceauthn_mechanism, mechanism_root, live=False)
+        # These two conclusions require original saved state, signed source messages,
+        # actual native construction replay, controls, restoration, and a formal
+        # stored-result transition. A UUID-shaped sample alone has no detection power.
+        if row['product']=='keycloak' and row['profile']=='browser_sso_idp' \
+                and row['case'] in {'IIP-SSO05-a1-idp-01','IIP-SSO05-a8-idp-01'}:
+            identifier_root = root.parent.parent/'reference-20261004'/'keycloak-persistent-opaque-r1'
+            if (identifier_root/'acceptance-originals.json').is_file():
+                from verify_keycloak_persistent_identifier_acceptance import verify_adoption as verify_keycloak_identifiers
+                selected=check_once(verify_keycloak_identifiers, identifier_root, live=False)
+        # A currently used native signer absent from unchanged published metadata
+        # is a concrete all-of counterexample. Unknown other role purposes remain
+        # unproven; the adopter checks both original peer Runs without relabelling.
+        if row['product']=='simplesamlphp' and row['profile']=='metadata_idp' \
+                and row['case'] in {'IIP-MD05-c1-idp-01','IIP-MD05-c3-idp-01'}:
+            publisher_root = root.parent.parent/'reference-20261004'/'simplesamlphp-publisher-used-signers-r2'
+            if (publisher_root/'evaluation-actual/result.json').is_file():
+                from verify_native_publisher_used_signers_acceptance import verify as verify_used_native_signers
+                selected=check_once(verify_used_native_signers, publisher_root, live=False)
+        if row['product']=='shibboleth' and row['profile']=='metadata_idp' \
+                and row['case']=='IIP-MD05-c1-idp-01':
+            publisher_root = root.parent.parent/'reference-20261004'
+            if (publisher_root/'shibboleth-publisher-endpoints-r3/evaluation-actual/result.json').is_file():
+                from verify_shibboleth_publisher_endpoint_acceptance import verify as verify_shib_publisher_endpoints
+                selected=check_once(verify_shib_publisher_endpoints, publisher_root, live=False)
         if selected is not None:
             path, selected_cases = selected
             if path.is_absolute():
@@ -1611,7 +1657,31 @@ def render(root,definitions,output):
     mechanism_keys = {(r['product'],r['profile'],r['case']) for r in mechanism_withdrawn}
     refreshed = [r for r in refreshed if (r['product'],r['profile'],r['case']) not in mechanism_keys]
     transitions = [r for r in transitions if (r['product'],r['profile'],r['case']) not in mechanism_keys]
-    refreshed.extend(mechanism_withdrawn)
+    for row in mechanism_withdrawn:
+        native_root = root.parent.parent/'reference-20261004'
+        native_result = native_root/'ssp-forceauthn-mechanism-r3/evaluation/result.json'
+        selected_mechanism = None
+        if row['product']=='simplesamlphp' and row['profile']=='browser_sso_idp' \
+                and row['case']=='IIP-IDP06-b-idp-01' and native_result.is_file():
+            from verify_ssp_forceauthn_mechanism_acceptance import verify as verify_ssp_forceauthn_mechanism
+            selected_mechanism=check_once(verify_ssp_forceauthn_mechanism, native_root)
+        keycloak_root = native_root/'keycloak-forceauthn-mechanism-r2'
+        if row['product']=='keycloak' and row['profile']=='browser_sso_idp' \
+                and row['case']=='IIP-IDP06-b-idp-01' and (keycloak_root/'result-final.json').is_file():
+            from verify_keycloak_forceauthn_mechanism_acceptance import verify_adoption as verify_keycloak_forceauthn_mechanism
+            selected_mechanism=check_once(verify_keycloak_forceauthn_mechanism, keycloak_root, live=False)
+        if selected_mechanism is not None:
+            path,cases=selected_mechanism
+            raw=path.read_bytes();result=json.loads(raw);case=cases[row['case']]
+            row=dict(row)
+            row['previous_audit_withdrawal']=row.pop('audit_withdrawal')
+            row['baseline']={k:row.get(k) for k in ('run','reason_code','result_sha256','evidence_folder','interaction')}
+            row.update(run=result['run']['id'],reason_code=case['reason_code'],verdict=case['verdict'],
+                result_sha256=hashlib.sha256(raw).hexdigest(),evidence_folder=str(path.parent.relative_to(root.parents[3])),
+                result_file=path.name,interaction=None,evidence=case['evidence'],diagnostics=case.get('diagnostics',{}))
+            transitions.append(row)
+        else:
+            refreshed.append(row)
     (root/'force-authn-mechanism-withdrawals.json').write_text(json.dumps(mechanism_withdrawn,ensure_ascii=False,indent=2)+'\n')
     from audit_async_feedback_failure_evidence import withdrawals as async_feedback_withdrawals
     feedback_withdrawn = check_once(async_feedback_withdrawals, root.parent)
@@ -1622,7 +1692,7 @@ def render(root,definitions,output):
     (root/'async-feedback-failure-withdrawals.json').write_text(json.dumps(feedback_withdrawn,ensure_ascii=False,indent=2)+'\n')
     from audit_metadata_full_ui_evidence import withdrawals as metadata_full_ui_withdrawals
     # Retain the pinned legacy withdrawal unless the independent native adopter
-    # has verified a replacement Run's complete values, controls and restoration.
+        # has verified a replacement Run's complete values, controls and restoration.
     ui_withdrawn = [r for r in check_once(metadata_full_ui_withdrawals, root.parent)
                    if (r['product'], r['profile'], r['case']) not in qualified_full_ui]
     ui_keys = {(r['product'], r['profile'], r['case']) for r in ui_withdrawn}

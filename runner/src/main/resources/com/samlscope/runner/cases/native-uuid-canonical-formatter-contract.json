@@ -1,0 +1,38 @@
+{
+  "schema": "samlscope-native-uuid-canonical-formatter-contract-v1",
+  "engine": "Keycloak26.7.2-RedHat-OpenJDK21.0.12.1",
+  "helperSha256": "766b572ae90893f6d5d430f081e37fc495666a69819c9bb42a3b189970469a1a",
+  "classes": {
+    "jdk.internal.access.SharedSecrets": "4a9b060046e3be33f779fd88e31c169f4f145e61bc8d66421410eb3f8d527e14",
+    "java.lang.System": "6e8032510fcd1d3e5df60093c2e45ca1a4b07c3bb9a58c6ab594fac29c09bc03",
+    "java.util.UUID": "fc75ab76e8f853fbbd48268bdc27b84a33d129ffc65c2d2dea3ff74b97184e08",
+    "java.lang.Long": "cc18d51ef0f74906c2c8714849ff778f7e01a4a29539ba8817faedb989a50f29",
+    "java.lang.Integer": "44bc6d0e77a7f4965c2fa6bcecc9af63b841ef94eace398fcbc1f954c3835179",
+    "java.lang.System$2": "64f66a165d774dc7654e000a9e72b358e58c7c2fca510dd010ac98577600bace",
+    "jdk.internal.access.JavaLangAccess": "43c8ad99990bd7e15b720e75e5d145c7f15b24f3c9cc90a778a40ce9ffda6d9a",
+    "java.lang.String": "831a11d5c76c84b8777a7813440b4570d49934dee05c285c9068a0ec43158412",
+    "java.lang.StringLatin1": "390dc579071b37ccd2959bbaf2b5d4523920c00b8766828bf368bcdc9ec441ec",
+    "java.lang.StringUTF16": "e03e9a012b6c29de2130ef49badab77d421f5272e1c72224838545e1091488b5"
+  },
+  "methods": {
+    "java/util/UUID.toString()Ljava/lang/String;": "cf7cd605acd9fdb65a42a4945c7f4b7fc362fa5bc60c06aba91a968a6bf3d409",
+    "java/lang/System$2.fastUUID(JJ)Ljava/lang/String;": "64b44d2f388b0d61bdf18d7c91804f47a8457ac309d244180049263df3839b00",
+    "java/lang/Long.fastUUID(JJ)Ljava/lang/String;": "9c784dbb7867e69cb8ef234db8d8ccea12dae8f1fb3cfce4b8f44a4687f61171",
+    "java/lang/Long.formatUnsignedLong0(JI[BII)V": "c452779d51a6ec8513f3aed23b043266edc5fde76a5924c2a39bab8b30fb8285",
+    "java/lang/Long.formatUnsignedLong0UTF16(JI[BII)V": "d42b0a3bbfc0e233899e6dd96ceba3b5da3a293a73d4a0a80cec220a5be5573f",
+    "java/lang/Integer.<clinit>()V": "3f793789d6c6b6c503f3eb0ea682639f0901b875a83adeab9f035f2bd83ea9f6",
+    "java/lang/String.<init>([BB)V": "e95e2b65cc318eb3e271378408ee31c8a8be6e8a618b20967f0fa1c5d6c0abad",
+    "java/lang/StringUTF16.putChar([BII)V": "5dceadd3a16a8b0e50b3b391d78dd353bc81e81317a1a12174cd6797fdc1f24d",
+    "java/lang/StringUTF16.getChar([BI)C": "548e340188785293e57ade0b59d01366097ddb10716b9ec5b046197c911c2114"
+  },
+  "derivation": [
+    "UUID.toString delegates only through its actual JavaLangAccess instance System$2",
+    "System$2.fastUUID delegates to Long.fastUUID",
+    "Long.fastUUID has only a compact-encoding branch and feeds all UUID bits through shift=4 nibble loops",
+    "The bounded interpreter executes both original nibble loops and rejects all unsupported instructions/calls",
+    "Integer.digits initializer fixes the first sixteen entries to 0123456789abcdef",
+    "String constructor preserves buffer and coder; UTF16 writes use native shift values0/8",
+    "Fixed G- prefix and canonical lowercase hex body have no pair differing only by case"
+  ],
+  "diagnostic": "Actual native lookup table changed only within an isolated helper JVM and restored; never a product failure"
+}

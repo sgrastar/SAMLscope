@@ -320,6 +320,35 @@ public final class MetadataService {
         return generate(plan, variant, runId, pollingBaseCredentials(plan, variant));
     }
 
+    /**
+     * Signed control metadata for observing a native default signature-consumer policy.
+     * Omitting the sender's optional signing declaration preserves the recipient's
+     * default selection; it does not disable validation or change any normal variant.
+     * Keys and correlated endpoints are the polling CONTROL fixture's originals.
+     */
+    public byte[] generateDefaultAlgorithmConsumerMetadata(TestPlan plan, String runId) {
+        validateDefaultAlgorithmConsumer(plan, runId);
+        return generateDefaultAlgorithmConsumerMetadata(plan, runId,
+                pollingBaseCredentials(plan, Variant.CONTROL));
+    }
+
+    /** Replay the same public original using an already loaded CONTROL key, without key-store writes. */
+    public byte[] generateDefaultAlgorithmConsumerMetadata(
+            TestPlan plan, String runId, PlanCredentials control) {
+        validateDefaultAlgorithmConsumer(plan, runId);
+        java.util.Objects.requireNonNull(control, "control");
+        return generate(plan, Variant.CONTROL, runId,
+                control, true, true);
+    }
+
+    private static void validateDefaultAlgorithmConsumer(TestPlan plan, String runId) {
+        java.util.Objects.requireNonNull(plan, "plan");
+        if (!List.of("browser_sso_idp", "ecp_idp").contains(plan.profile().id())
+                || runId == null || !runId.matches("run_[0-9A-HJKMNP-TV-Z]{26}")) {
+            throw new IllegalArgumentException("A bound IdP default-consumer fixture is required");
+        }
+    }
+
     /** Request-signing credentials advertised for signing by {@link #generatePolling}. */
     public PlanCredentials credentialsForPollingVariant(TestPlan plan, Variant variant) {
         var primary = pollingBaseCredentials(plan, variant);
@@ -351,6 +380,12 @@ public final class MetadataService {
 
     private byte[] generate(
             TestPlan plan, Variant variant, String runId, PlanCredentials primary, boolean correlateEndpoints) {
+        return generate(plan, variant, runId, primary, correlateEndpoints, false);
+    }
+
+    private byte[] generate(
+            TestPlan plan, Variant variant, String runId, PlanCredentials primary,
+            boolean correlateEndpoints, boolean omitAuthnRequestsSigned) {
         var endpointVariant = correlateEndpoints ? variant : Variant.BASELINE;
         // The structural contrast changes EndpointType extension support only; its signed
         // public metadata retains the exact key material and endpoint URLs of the test input.
@@ -371,8 +406,10 @@ public final class MetadataService {
 
         var sp = element(document, MD, "md:SPSSODescriptor");
         sp.setAttribute("protocolSupportEnumeration", "urn:oasis:names:tc:SAML:2.0:protocol");
-        sp.setAttribute("AuthnRequestsSigned", Boolean.toString(
-                plan.parameters().requestSigningMode() == TestPlan.RequestSigningMode.REQUIRED));
+        if (!omitAuthnRequestsSigned) {
+            sp.setAttribute("AuthnRequestsSigned", Boolean.toString(
+                    plan.parameters().requestSigningMode() == TestPlan.RequestSigningMode.REQUIRED));
+        }
         sp.setAttribute("WantAssertionsSigned", Boolean.toString(variant != Variant.SIGNATURE_MODES_OPTIONAL));
         roleKeyDescriptors(document, sp, plan, roleCredentials, variant);
         service(document, sp, "SingleLogoutService", REDIRECT, endpoint(plan, "/sp/slo", endpointVariant, runId), null, false);

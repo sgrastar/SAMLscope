@@ -11,6 +11,7 @@ import com.samlscope.store.JsonCodec;
 import java.net.URI;
 import java.nio.file.*;
 import java.security.MessageDigest;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.*;
 import java.util.function.*;
@@ -24,6 +25,7 @@ public final class DefaultAlgorithmPreventionEvidence {
             P="urn:oasis:names:tc:SAML:2.0:protocol",DS="http://www.w3.org/2000/09/xmldsig#",X="http://www.w3.org/2001/04/xmlenc#";
     static final String POST="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST",SUCCESS="urn:oasis:names:tc:SAML:2.0:status:Success";
     private static final String RUN="run_[0-9A-HJKMNP-TV-Z]{26}";
+    private static final String FACTORY_ADAPTER="simplesamlphp-native-default-algorithm-post-consumer-v1";
     private final Path directory;private final TranscriptContentReader content;
     private final Function<String,byte[]> targetMetadata;private final Function<String,Optional<PlanCredentials>> keys;
     private final Function<String,String> profiles;private final Map<String,DefaultAlgorithmNativeAdapter> adapters;
@@ -46,8 +48,19 @@ public final class DefaultAlgorithmPreventionEvidence {
                 && (Files.exists(directory.resolve(run + ".preparation.json"), LinkOption.NOFOLLOW_LINKS)
                 || Files.exists(directory.resolve(run + ".preparation"), LinkOption.NOFOLLOW_LINKS));
     }
+    record BoundPreparation(DefaultAlgorithmNativeAdapter.Preparation nativePreparation,
+            TranscriptEntry metadataEntry,byte[] metadataBytes) {
+        BoundPreparation {
+            Objects.requireNonNull(nativePreparation);Objects.requireNonNull(metadataEntry);
+            metadataBytes=Objects.requireNonNull(metadataBytes).clone();
+        }
+        @Override public byte[] metadataBytes(){return metadataBytes.clone();}
+    }
     /** Read-only preparation; an administrator's unchecked declaration never enables a login. */
     Optional<DefaultAlgorithmNativeAdapter.Preparation> preparation(CaseContext context) {
+        return boundPreparation(context).map(BoundPreparation::nativePreparation);
+    }
+    Optional<BoundPreparation> boundPreparation(CaseContext context) {
         try {
             require(context.runId().matches(RUN)&&context.targetRole()==TargetRole.IDP&&context.transcriptComplete());
             var folder=directory.resolve(context.runId()+".preparation");safeParents(folder);
@@ -63,15 +76,7 @@ public final class DefaultAlgorithmPreventionEvidence {
             require(target.getAttribute("entityID").equals(text(m,"targetEntityId"))
                     &&"browser_sso_idp".equals(profiles.apply(context.runId()))&&"browser_sso_idp".equals(text(m,"profile")));
             var entries=entries(context);var prepared=entry(entries,text(m,"suiteMetadataReference"));
-            var suiteBytes=decoded(prepared);require(prepared.direction()==Direction.OUTBOUND
-                    &&"MetadataPrepared".equals(prepared.samlSummary().get("type"))&&"control".equals(prepared.samlSummary().get("variant"))
-                    &&"live".equals(prepared.samlSummary().get("feed"))&&hash(suiteBytes).equals(text(m,"suiteMetadataSha256"))
-                    &&hash(suiteBytes).equals(prepared.samlSummary().get("metadataSha256")));
-            var fetch=entry(entries,String.valueOf(prepared.samlSummary().get("fetchTranscriptId")));
-            require(fetch.direction()==Direction.INBOUND&&"MetadataFetch".equals(fetch.samlSummary().get("type"))
-                    &&Objects.equals(fetch.status(),200)&&Objects.equals(prepared.status(),200)
-                    &&Objects.equals(fetch.id(),prepared.correlationId())&&Objects.equals(fetch.url(),prepared.url())
-                    &&!prepared.timestamp().isBefore(fetch.timestamp())&&"PREPARED".equals(prepared.samlSummary().get("delivery")));
+            var suiteBytes=decoded(prepared);metadataBoundary(m,entries,prepared,suiteBytes);
             validateSuite(SecureXml.parse(suiteBytes).getDocumentElement(),keys.apply(context.runId()).orElseThrow());
             var originals=m.path("nativeOriginals");require(originals.isArray()&&!originals.isEmpty());
             var originalsByReference=new HashMap<String,String>();for(var row:originals) {
@@ -82,7 +87,7 @@ public final class DefaultAlgorithmPreventionEvidence {
             var result=adapter.prepare(context,folder,m,targetBytes,suiteBytes).orElseThrow();
             require(result.policyId()!=null&&!result.policyId().isBlank()&&!result.evidence().isEmpty());
             for(var ref:result.evidence())require("transcript".equals(ref.kind())&&originalsByReference.containsKey(ref.reference()));
-            return Optional.of(result);
+            return Optional.of(new BoundPreparation(result,prepared,suiteBytes));
         }catch(Exception missing){return Optional.empty();}
     }
     public Optional<CaseOutcome> evaluate(CaseContext context) {
@@ -101,14 +106,7 @@ public final class DefaultAlgorithmPreventionEvidence {
             require(target.getAttribute("entityID").equals(text(m,"targetEntityId")));
             var primary=keys.apply(context.runId()).orElseThrow();var entries=entries(context);
             var suiteEntry=entry(entries,text(m,"suiteMetadataReference"));var suiteBytes=decoded(suiteEntry);
-            require(suiteEntry.direction()==Direction.OUTBOUND&&"MetadataPrepared".equals(suiteEntry.samlSummary().get("type"))
-                    &&"control".equals(suiteEntry.samlSummary().get("variant"))&&"live".equals(suiteEntry.samlSummary().get("feed"))
-                    &&hash(suiteBytes).equals(text(m,"suiteMetadataSha256"))&&hash(suiteBytes).equals(suiteEntry.samlSummary().get("metadataSha256")));
-            var fetch=entry(entries,String.valueOf(suiteEntry.samlSummary().get("fetchTranscriptId")));
-            require(fetch.direction()==Direction.INBOUND&&"MetadataFetch".equals(fetch.samlSummary().get("type"))
-                    &&Objects.equals(fetch.status(),200)&&Objects.equals(suiteEntry.status(),200)
-                    &&Objects.equals(fetch.id(),suiteEntry.correlationId())&&Objects.equals(fetch.url(),suiteEntry.url())
-                    &&!suiteEntry.timestamp().isBefore(fetch.timestamp())&&"PREPARED".equals(suiteEntry.samlSummary().get("delivery")));
+            var fetch=metadataBoundary(m,entries,suiteEntry,suiteBytes);
             var suite=SecureXml.parse(suiteBytes).getDocumentElement();validateSuite(suite,primary);
             var session=adapters.get(text(m,"adapter")).open(context,folder,m,targetBytes,suiteBytes);require(session!=null);
             var observations=m.path("observations");require(observations.isArray()&&!observations.isEmpty()&&observations.size()<=6);
@@ -146,13 +144,41 @@ public final class DefaultAlgorithmPreventionEvidence {
                 if(fixture.equals("invalid-sha256-signature"))require(nativeUse.decision()==DefaultAlgorithmNativeAdapter.Decision.INVALID_SIGNATURE_REJECTION);
                 samples.add(new DefaultAlgorithmComparison.Sample(fixture,nativeUse,refs));previous=request.timestamp();
             }
-            var proof=new ArrayList<EvidenceRef>();proof.add(ref(fetch));proof.add(ref(suiteEntry));
+            var proof=new ArrayList<EvidenceRef>();fetch.ifPresent(value->proof.add(ref(value)));proof.add(ref(suiteEntry));
             proof.add(new EvidenceRef("default-algorithm-native-evidence",context.runId()+"/manifest.json#sha256="+hash(manifestBytes)));
             var result=DefaultAlgorithmComparison.evaluate(context.runId(),text(m,"adapter"),samples,proof);
             var details=new LinkedHashMap<String,Object>(result.details());details.put("counterfactual_calibration_only",calibration);
             details.put("target_metadata_sha256",hash(targetBytes));details.put("target_entity_id",target.getAttribute("entityID"));details.put("profile",profile);
             return Optional.of(new CaseOutcome(result.outcome(),result.notVerifiedReason(),result.reasonCode(),result.reasonMessageKey(),result.evidence(),Map.copyOf(details)));
         }catch(Exception unproven){return Optional.empty();}
+    }
+    private static Optional<TranscriptEntry> metadataBoundary(JsonNode manifest,Map<String,TranscriptEntry> entries,
+            TranscriptEntry prepared,byte[] bytes)throws Exception {
+        var summary=prepared.samlSummary();
+        require(prepared.direction()==Direction.OUTBOUND&&"MetadataPrepared".equals(summary.get("type"))
+                &&"control".equals(summary.get("variant"))&&hash(bytes).equals(text(manifest,"suiteMetadataSha256"))
+                &&hash(bytes).equals(summary.get("metadataSha256")));
+        if("native-default-consumer".equals(summary.get("feed"))) {
+            require(FACTORY_ADAPTER.equals(text(manifest,"adapter"))&&"FACTORY".equals(prepared.method())
+                    &&prepared.status()==null&&prepared.correlationId()==null
+                    &&"MetadataService.generateDefaultAlgorithmConsumerMetadata".equals(summary.get("factoryMethod"))
+                    &&!summary.containsKey("fetchTranscriptId")&&!summary.containsKey("sourceType")&&!summary.containsKey("delivery"));
+            require(summary.get("factoryPreparedAt") instanceof String);
+            String at=(String)summary.get("factoryPreparedAt");Instant instant=Instant.parse(at);
+            require(instant.toString().equals(at)&&instant.equals(prepared.timestamp()));
+            for(String field:List.of("factorySourceSha256","factoryClassSha256","factoryJarSha256"))
+                require(summary.get(field) instanceof String value&&value.matches("[0-9a-f]{64}"));
+            var root=SecureXml.parse(bytes).getDocumentElement();structure(root,MD,"EntityDescriptor");
+            require(instant.plus(Duration.ofDays(14)).toString().equals(root.getAttribute("validUntil")));
+            return Optional.empty();
+        }
+        require("live".equals(summary.get("feed")));
+        var fetch=entry(entries,String.valueOf(summary.get("fetchTranscriptId")));
+        require(fetch.direction()==Direction.INBOUND&&"MetadataFetch".equals(fetch.samlSummary().get("type"))
+                &&Objects.equals(fetch.status(),200)&&Objects.equals(prepared.status(),200)
+                &&Objects.equals(fetch.id(),prepared.correlationId())&&Objects.equals(fetch.url(),prepared.url())
+                &&!prepared.timestamp().isBefore(fetch.timestamp())&&"PREPARED".equals(summary.get("delivery")));
+        return Optional.of(fetch);
     }
     static void validateSuite(Element suite,PlanCredentials key)throws Exception {
         structure(suite,MD,"EntityDescriptor");require(!suite.getAttribute("entityID").isBlank());var role=single(suite,MD,"SPSSODescriptor");

@@ -110,11 +110,9 @@ public final class DefaultAlgorithmPreventionProbeTestCase implements TestCase,B
     private Configuration configuration(CaseContext context)throws Exception {
         require(context.interaction().allowBrowserSteps());
         require(context.transcriptComplete()&&context.targetRole()==TargetRole.IDP&&"browser_sso_idp".equals(profiles.apply(context.runId())));
-        var preparation=evidence.preparation(context).orElseThrow();
-        var key=keys.apply(context.runId()).orElseThrow();var prepared=context.transcript().list(context.runId()).stream()
-                .filter(e->"MetadataPrepared".equals(e.samlSummary().get("type"))&&"control".equals(e.samlSummary().get("variant"))&&"live".equals(e.samlSummary().get("feed"))).toList();
-        require(prepared.size()==1&&context.runId().equals(prepared.getFirst().runId()));
-        var bytes=content.readDecodedSaml(prepared.getFirst());require(DefaultAlgorithmPreventionEvidence.hash(bytes).equals(prepared.getFirst().samlSummary().get("metadataSha256")));
+        var bound=evidence.boundPreparation(context).orElseThrow();var preparation=bound.nativePreparation();
+        var key=keys.apply(context.runId()).orElseThrow();
+        var bytes=bound.metadataBytes();
         var suite=SecureXml.parse(bytes).getDocumentElement();DefaultAlgorithmPreventionEvidence.validateSuite(suite,key);
         var target=SecureXml.parse(metadata.apply(context.runId())).getDocumentElement();DefaultAlgorithmPreventionEvidence.structure(target,DefaultAlgorithmPreventionEvidence.MD,"EntityDescriptor");
         require(!target.getAttribute("entityID").isBlank()&&!MetadataAlgorithmEvidence.signingKeys(target).isEmpty());

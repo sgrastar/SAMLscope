@@ -30,6 +30,123 @@ def require(value, message):
         raise RuntimeError(message)
 
 
+def qualified_runtime_dependencies(parent: Path, runtime_lib: Path) -> list[Path]:
+    """Resolve the host runtime only after matching the qualified parent's bytes."""
+    record = json.loads((parent / 'isolated-test-overlay.json').read_text())
+    expected = record.get('runtimeDependencySha256')
+    legacy = {}
+    for value, digest in record.get('dependencySha256', {}).items():
+        path = Path(value)
+        if path.parent.resolve() != runtime_lib.resolve():
+            continue  # The parent also records its test-only JUnit dependencies.
+        require(path.name not in legacy and path.name not in PROJECT_JARS,
+                'Duplicate or project dependency in parent qualification')
+        require('..' not in path.parts, 'Aliased dependency in parent qualification')
+        legacy[path.name] = digest
+    if expected is None:
+        expected = legacy
+    else:
+        require(isinstance(expected, dict) and (not legacy or legacy == expected),
+                'Parent dependency inventories disagree')
+    require(expected and all(Path(name).name == name and name.endswith('.jar')
+                            and name not in PROJECT_JARS
+                            and isinstance(digest, str) and re.fullmatch(r'[0-9a-f]{64}', digest)
+                            for name, digest in expected.items()), 'Invalid parent runtime dependencies')
+    runtime_path = parent / 'runtime-live-verification.json'
+    runtime = json.loads(runtime_path.read_text())
+    native = json.loads((parent / 'runtime-third-party-verification.json').read_text())
+    require(native.get('schema') == 'samlscope-runtime-third-party-verification-v1'
+            and native.get('parentRuntimeVerificationSha256') == sha(runtime_path)
+            and re.fullmatch(r'sha256:[0-9a-f]{64}', runtime.get('imageId', ''))
+            and native.get('imageId') == runtime['imageId']
+            and native.get('suiteContainerId') == runtime.get('suiteContainerId')
+            and isinstance(runtime.get('suiteContainerId'), str) and runtime['suiteContainerId']
+            and native.get('liveEqualsHostAndQualifiedParent') is True
+            and native.get('thirdPartyJars') == expected,
+            'Parent native runtime dependency proof differs from qualification')
+    require(runtime_lib.is_dir() and not runtime_lib.is_symlink(), 'Invalid host runtime library')
+    actual = {p.name: p for p in runtime_lib.glob('*.jar') if p.name not in PROJECT_JARS}
+    require(set(actual) == set(expected), 'Host runtime dependency inventory differs from parent')
+    for name, path in actual.items():
+        require(path.is_file() and not path.is_symlink() and sha(path) == expected[name],
+                'Host runtime dependency differs from parent: ' + name)
+    return [actual[name] for name in sorted(actual)]
+
+
+def copy_independent_snapshot(source: Path, target: Path, expected_sha: str) -> Path:
+    """Copy a pinned input without sharing an inode or overwriting an alias."""
+    require(source.is_file() and not source.is_symlink(), 'Invalid snapshot source')
+    require(not target.exists() and not target.is_symlink(), 'Snapshot target already exists')
+    target.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(source, target)
+    require(target.stat().st_nlink == 1 and sha(target) == expected_sha,
+            'Snapshot copy differs from pinned source')
+    target.chmod(0o444)
+    return target
+
+
+def tree_inventory(root: Path, *, independent: bool = False) -> dict[str, str]:
+    require(root.is_dir() and not root.is_symlink(), 'Invalid snapshot directory')
+    inventory = {}
+    for path in sorted(root.rglob('*')):
+        require(not path.is_symlink() and (path.is_dir() or path.is_file()), 'Invalid snapshot entry')
+        if path.is_file():
+            require(not independent or path.stat().st_nlink == 1, 'Snapshot input shares an inode')
+            inventory[str(path.relative_to(root))] = sha(path)
+    return inventory
+
+
+def snapshot_test_resources(resource_roots: list[Path], target_root: Path) -> tuple[list[Path], dict[str, str]]:
+    require(not target_root.exists() and not target_root.is_symlink(), 'Resource snapshot already exists')
+    target_root.mkdir(parents=True)
+    snapshots = []
+    for index, source in enumerate(resource_roots):
+        require(not source.is_symlink(), 'Symbolic test resource directory')
+        if not source.exists():
+            continue
+        originals = tree_inventory(source)
+        target = target_root / str(index)
+        target.mkdir()
+        for directory in sorted(p for p in source.rglob('*') if p.is_dir()):
+            (target / directory.relative_to(source)).mkdir(parents=True, exist_ok=True)
+        for name, digest in originals.items():
+            copy_independent_snapshot(source / name, target / name, digest)
+        require(tree_inventory(source) == originals, 'Test resource source changed during capture')
+        snapshots.append(target)
+    return snapshots, tree_inventory(target_root, independent=True)
+
+
+def require_snapshot_unchanged(root: Path, expected: dict[str, str]) -> None:
+    require(tree_inventory(root, independent=True) == expected, 'Snapshot inventory or bytes changed')
+
+
+def archive_hashes(archive: Path) -> dict[str, str]:
+    require(archive.is_dir() and not archive.is_symlink()
+            and {p.name for p in archive.iterdir()} == set(PROJECT_JARS), 'Invalid six-JAR archive inventory')
+    for name in PROJECT_JARS:
+        path = archive / name
+        require(path.is_file() and not path.is_symlink() and path.stat().st_nlink == 1,
+                'Archive JAR is not independent: ' + name)
+    return {name: sha(archive / name) for name in PROJECT_JARS}
+
+
+def require_archive_unchanged(archive: Path, expected: dict[str, str]) -> None:
+    require(archive_hashes(archive) == expected, 'Packaged archive changed during testing')
+
+
+def dockerfile_for_qualified_parent(runtime: dict, changed_jars: list[str]) -> str:
+    image, image_id = runtime.get('image'), runtime.get('imageId')
+    require(isinstance(image, str) and re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_.:/-]*', image)
+            and not image.startswith('sha256:')
+            and isinstance(image_id, str) and re.fullmatch(r'sha256:[0-9a-f]{64}', image_id),
+            'Qualified parent tag or image ID unavailable')
+    # A Docker image ID is not a registry distribution digest accepted by FROM.
+    # The deployer must verify this tag or an owned local alias against image_id.
+    return ('# Qualified parent image ID: ' + image_id + '\n'
+            '# Parent tag requires exact image-ID verification before build.\n'
+            'FROM ' + image + '\nCOPY ' + ' '.join(changed_jars) + ' /opt/samlscope/lib/\n')
+
+
 def protected_sources():
     tree = ast.parse((ROOT / 'tools/g2_validate.py').read_text())
     constants = {}
@@ -56,6 +173,7 @@ def main():
     parser.add_argument('--parent-image', required=True)
     parser.add_argument('--main-source', required=True, action='append', type=Path)
     parser.add_argument('--test-source', required=True, action='append', type=Path)
+    parser.add_argument('--resource-source', action='append', type=Path, default=[])
     parser.add_argument('--selector', required=True, action='append')
     parser.add_argument('--bound-class', action='append', default=[])
     parser.add_argument('--expected-tests', required=True, type=int)
@@ -69,6 +187,7 @@ def main():
     for kind, values in [('main', args.main_source), ('test', args.test_source)]:
         for value in values:
             source = value.absolute()
+            require('..' not in source.parts, 'Parent traversal in source path')
             require(not any(p.is_symlink() for p in (source, *source.parents)), 'Symbolic source')
             relative = str(source.relative_to(ROOT))
             module = source.relative_to(ROOT).parts[0]
@@ -76,20 +195,50 @@ def main():
             require(relative not in protected and not relative.startswith(prefixes), 'Signed protected source selected')
             require(source.is_file(), 'Missing source')
             sources.append((kind, module, source))
-    baseline = json.loads((parent / 'runtime-live-verification.json').read_text())['projectJars']
+    resources = []
+    for value in args.resource_source:
+        source = value.absolute()
+        require('..' not in source.parts, 'Parent traversal in resource path')
+        require(not any(p.is_symlink() for p in (source, *source.parents)), 'Symbolic resource')
+        relative = str(source.relative_to(ROOT))
+        module = source.relative_to(ROOT).parts[0]
+        base = ROOT / module / 'src/main/resources'
+        require(module in MODULES and source.is_relative_to(base)
+                and relative not in protected and not relative.startswith(prefixes), 'Unexpected or protected resource')
+        require(source.is_file() and source.suffix == '.json' and source.stat().st_size <= 1_048_576,
+                'Only bounded public JSON resources are accepted')
+        jar_name = str(source.relative_to(base))
+        require(jar_name.startswith('com/samlscope/' + module + '/') and '..' not in Path(jar_name).parts,
+                'Resource outside its module namespace')
+        resources.append((module, source, jar_name))
+    parent_runtime = json.loads((parent / 'runtime-live-verification.json').read_text())
+    baseline = parent_runtime['projectJars']
+    require(args.parent_image in (parent_runtime.get('image'), parent_runtime.get('imageId')),
+            'Parent image argument differs from qualified runtime')
     archive = parent / 'runtime-built'
-    for name in PROJECT_JARS:
-        require((archive / name).stat().st_nlink == 1 and sha(archive / name) == baseline[name], 'Parent archive differs')
+    require(archive_hashes(archive) == baseline, 'Parent archive differs')
+    parent_qualification = json.loads((parent / 'isolated-test-overlay.json').read_text())
+    require(parent_qualification.get('projectJars') == baseline
+            and parent_qualification.get('packagedReplayExitCode') == 0,
+            'Parent dependency qualification is not bound to its runtime')
     work = output / 'isolated-compile'
     work.mkdir(parents=True)
     builder = work / 'builder-source.py'
     builder.write_bytes(Path(__file__).read_bytes())
+    parent_proof_names = ('runtime-live-verification.json', 'isolated-test-overlay.json',
+                          'runtime-third-party-verification.json')
+    parent_proof_hashes = {name: sha(parent / name) for name in parent_proof_names}
+    for name, digest in parent_proof_hashes.items():
+        copy_independent_snapshot(parent / name, work / 'parent-proof' / name, digest)
+    require(json.loads((work / 'parent-proof/runtime-live-verification.json').read_text()) == parent_runtime
+            and json.loads((work / 'parent-proof/isolated-test-overlay.json').read_text()) == parent_qualification,
+            'Parent qualification changed during capture')
     source_hashes, families, mains, tests = {}, {}, [], []
     for kind, module, source in sources:
         target = work / 'sources' / module / kind / source.name
         target.parent.mkdir(parents=True, exist_ok=True)
         require(not target.exists(), 'Duplicate source')
-        shutil.copyfile(source, target)
+        copy_independent_snapshot(source, target, sha(source))
         source_hashes[str(source.relative_to(ROOT))] = sha(target)
         (mains if kind == 'main' else tests).append(target)
         if kind == 'main':
@@ -98,14 +247,36 @@ def main():
             family = match.group(1).replace('.', '/') + '/' + source.stem
             require(family not in families, 'Duplicate main class family')
             families[family] = module + '-0.1.0.jar'
-    dependencies = sorted(p for p in (ROOT / 'api/build/install/samlscope/lib').glob('*.jar') if p.name not in PROJECT_JARS)
+    resource_bytes = {}
+    for module, source, jar_name in resources:
+        target = work / 'resources' / module / jar_name
+        target.parent.mkdir(parents=True, exist_ok=True)
+        require(not target.exists(), 'Duplicate resource')
+        copy_independent_snapshot(source, target, sha(source))
+        source_hashes[str(source.relative_to(ROOT))] = sha(target)
+        key = (module + '-0.1.0.jar', jar_name)
+        require(key not in resource_bytes and jar_name not in families, 'Duplicate resource family')
+        resource_bytes[key] = target.read_bytes()
+    dependency_sources = qualified_runtime_dependencies(work / 'parent-proof', ROOT / 'api/build/install/samlscope/lib')
     cache = Path.home() / '.gradle/caches/modules-2/files-2.1'
     junit = []
     for group, version in [('org.junit.jupiter', '6.1.3'), ('org.junit.platform', '6.1.3'),
                            ('org.apiguardian', '1.1.2'), ('org.opentest4j', '1.3.0')]:
         junit.extend(p for p in (cache / group).rglob('*.jar') if version in p.parts)
-    require(junit, 'JUnit unavailable')
-    dependency_hashes = {str(p): sha(p) for p in dependencies + junit}
+    junit = sorted(junit)
+    require(junit and len({p.name for p in junit}) == len(junit), 'JUnit unavailable or ambiguous')
+    dependency_hashes = {str(p): sha(p) for p in dependency_sources + junit}
+    runtime_dependency_hashes = {p.name: dependency_hashes[str(p)] for p in dependency_sources}
+    dependencies = [copy_independent_snapshot(p, work / 'dependencies/runtime' / p.name, dependency_hashes[str(p)])
+                    for p in dependency_sources]
+    junit = [copy_independent_snapshot(p, work / 'dependencies/junit' / p.name, dependency_hashes[str(p)])
+             for p in junit]
+    dependency_snapshot_hashes = tree_inventory(work / 'dependencies', independent=True)
+    source_snapshot_hashes = tree_inventory(work / 'sources', independent=True)
+    main_resource_snapshot_hashes = tree_inventory(work / 'resources', independent=True) if resources else {}
+    resource_roots = [ROOT / m / 'src/test/resources' for m in MODULES]
+    test_resource_source_hashes = {str(root): tree_inventory(root) for root in resource_roots if root.exists()}
+    test_resource_paths, test_resource_hashes = snapshot_test_resources(resource_roots, work / 'test-resources')
     support, support_hashes = [], {}
     for module in MODULES:
         source = ROOT / module / 'build/classes/java/test'
@@ -137,12 +308,15 @@ def main():
     differences = {}
     for name in PROJECT_JARS:
         scoped = {f for f, jar in families.items() if jar == name}
-        if not scoped:
+        scoped_resources = {n: raw for (jar, n), raw in resource_bytes.items() if jar == name}
+        if not scoped and not scoped_resources:
             shutil.copyfile(archive / name, runtime / name)
             differences[name] = {'changed': [], 'added': [], 'removed': []}
             continue
         selected = {n: raw for n, raw in replacements.items()
                     if any(n == f + '.class' or n.startswith(f + '$') for f in scoped)}
+        require(not set(selected).intersection(scoped_resources), 'Resource collides with compiled class')
+        selected.update(scoped_resources)
         with zipfile.ZipFile(archive / name) as before, zipfile.ZipFile(runtime / name, 'w') as after:
             prior = {n for n in before.namelist() if any(n == f + '.class' or n.startswith(f + '$') for f in scoped)}
             require(prior.issubset(selected), 'Class family member removed; full build required')
@@ -154,12 +328,12 @@ def main():
             a, b = set(before.namelist()), set(after.namelist())
             changed = sorted(n for n in a & b if before.read(n) != after.read(n))
             added, removed = sorted(b - a), sorted(a - b)
-            require(not removed and all(any(n == f + '.class' or n.startswith(f + '$') for f in scoped)
+            require(not removed and all(n in scoped_resources or any(n == f + '.class' or n.startswith(f + '$') for f in scoped)
                                        for n in changed + added), 'Unexpected JAR differences')
             differences[name] = {'changed': changed, 'added': added, 'removed': removed}
+    tested_archive_hashes = archive_hashes(runtime)
     cp = ':'.join(map(str, [*(runtime / n for n in PROJECT_JARS), *dependencies, *junit]))
-    resources = [ROOT / m / 'src/test/resources' for m in MODULES]
-    test_cp = ':'.join(map(str, [test_classes, *support])) + ':' + cp + ':' + ':'.join(map(str, resources))
+    test_cp = ':'.join(map(str, [test_classes, *support])) + ':' + cp + ':' + ':'.join(map(str, test_resource_paths))
     execute('test-compile', [str(JAVA / 'javac'), '--release', '21', '-sourcepath', '', '-cp', test_cp,
                              '-d', str(test_classes), *map(str, tests)])
     bound = {f.replace('/', '.'): jar for f, jar in families.items()}
@@ -196,22 +370,48 @@ public final class RunPackagedProjectTests {
                                'RunPackagedProjectTests', str(runtime)])
     require(all(sha(Path(p)) == expected for p, expected in dependency_hashes.items()), 'Dependency changed')
     require(all(sha(ROOT / p) == expected for p, expected in source_hashes.items()), 'Source changed')
-    hashes = {n: sha(runtime / n) for n in PROJECT_JARS}
-    require(all((runtime / n).stat().st_nlink == 1 for n in PROJECT_JARS), 'Archive not independent')
+    require_snapshot_unchanged(work / 'dependencies', dependency_snapshot_hashes)
+    require_snapshot_unchanged(work / 'sources', source_snapshot_hashes)
+    if resources:
+        require_snapshot_unchanged(work / 'resources', main_resource_snapshot_hashes)
+    require_snapshot_unchanged(work / 'test-resources', test_resource_hashes)
+    require({str(root): tree_inventory(root) for root in resource_roots if root.exists()}
+            == test_resource_source_hashes, 'Test resource source changed during testing')
+    require_archive_unchanged(runtime, tested_archive_hashes)
+    require_archive_unchanged(archive, baseline)
+    require_snapshot_unchanged(work / 'parent-proof', parent_proof_hashes)
+    require(all(sha(parent / name) == digest for name, digest in parent_proof_hashes.items()),
+            'Parent qualification changed during testing')
+    hashes = tested_archive_hashes
     context = output / 'docker-context'
     context.mkdir()
     changed_jars = [n for n in PROJECT_JARS if hashes[n] != baseline[n]]
     require(changed_jars and 'api-0.1.0.jar' not in changed_jars, 'Protected API changed or empty overlay')
-    (context / 'Dockerfile').write_text('FROM ' + args.parent_image + '\nCOPY ' + ' '.join(changed_jars) + ' /opt/samlscope/lib/\n')
+    (context / 'Dockerfile').write_text(dockerfile_for_qualified_parent(parent_runtime, changed_jars))
     for n in changed_jars:
         shutil.copyfile(runtime / n, context / n)
+        require(sha(context / n) == hashes[n], 'Docker context copy differs from tested archive')
+    require_archive_unchanged(runtime, tested_archive_hashes)
     record = {'schema': 'samlscope-project-isolated-overlay-qualification-v1',
               'recordedAt': datetime.datetime.now(datetime.timezone.utc).isoformat(),
               'parent': str(parent.relative_to(ROOT)), 'sourceSha256': source_hashes,
+              'parentImageId': parent_runtime['imageId'], 'parentProofSha256': parent_proof_hashes,
+              'DockerfileParentTagRequiresIdVerification': True,
               'builderSha256': sha(builder), 'testSupportSha256': support_hashes,
               'dependencySha256': dependency_hashes, 'testCount': args.expected_tests,
+              'runtimeDependencySha256': runtime_dependency_hashes,
+              'parentRuntimeDependencySha256': runtime_dependency_hashes,
+              'dependencySnapshotSha256': dependency_snapshot_hashes,
+              'dependencyPriority': [str(p.relative_to(work)) for p in dependencies + junit],
+              'testResourceSourceSha256': test_resource_source_hashes,
+              'testResourceSnapshotSha256': test_resource_hashes,
+              'testResourcePriority': [str(p.relative_to(work)) for p in test_resource_paths],
+              'sourceSnapshotSha256': source_snapshot_hashes,
+              'mainResourceSnapshotSha256': main_resource_snapshot_hashes,
+              'testedArchiveSha256': tested_archive_hashes, 'archiveUnchangedAfterTesting': True,
               'packagedReplayExitCode': 0, 'projectJars': hashes, 'jarDifferences': differences,
               'changedProjectJars': changed_jars, 'mainClassSourcesBoundToArchive': True,
+              'resourceSources': [str(source.relative_to(ROOT)) for _, source, _ in resources],
               'signedProtectedSourcesIncluded': False, 'unrelatedWorktreeSourcesIncluded': False,
               'allArchiveLinkCountsOne': True, 'personOperations': 0, 'productSettings': 0,
               'runtimeDeployed': False}

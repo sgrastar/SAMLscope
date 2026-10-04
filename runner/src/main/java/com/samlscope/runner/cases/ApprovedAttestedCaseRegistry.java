@@ -84,7 +84,19 @@ public final class ApprovedAttestedCaseRegistry {
                             SuiteRunProfileLookup.configuredDataDirectory().resolve("force-authn-mechanism-evidence"),
                             transcriptContent == null ? bridge::content : transcriptContent,
                             targetMetadata == null ? bridge::targetMetadata : targetMetadata,
-                            bridge::primaryKey));
+                            bridge::primaryKey),
+                    new SimpleSamlPhpForceAuthnMechanismEvidence(
+                            SuiteRunProfileLookup.configuredDataDirectory().resolve("force-authn-mechanism-evidence"),
+                            transcriptContent == null ? bridge::content : transcriptContent,
+                            targetMetadata == null ? bridge::targetMetadata : targetMetadata,
+                            new SuiteRunProfileLookup(SuiteRunProfileLookup.configuredDataDirectory())::profile),
+                    new KeycloakForceAuthnMechanismEvidence(
+                            SuiteRunProfileLookup.configuredDataDirectory().resolve("force-authn-mechanism-evidence"),
+                            transcriptContent == null ? bridge::content : transcriptContent,
+                            targetMetadata == null ? bridge::targetMetadata : targetMetadata,
+                            new DefaultAlgorithmSourceRunStore(
+                                    SuiteRunProfileLookup.configuredDataDirectory(),
+                                    definition.id(), definition.caseDigest())));
         }
         if (idpScenarioConfigurations != null
                 && IdpTimePrecisionScenarioTestCase.CASE_ID.equals(definition.id())) {
@@ -111,9 +123,15 @@ public final class ApprovedAttestedCaseRegistry {
                                 "violated", Outcome.VIOLATED, "attestation.violated"),
                         AttestationOption.notVerified(
                                 "unable_to_verify", "attestation.unavailable", "attestation_unavailable")));
+        if ((targetMetadata != null || (publicBase != null && transcriptContent != null))
+                && KeycloakPersistentIdentifierEvidence.DIGESTS.containsKey(definition.id())
+                && KeycloakPersistentIdentifierEvidence.DIGESTS.get(definition.id()).equals(definition.caseDigest())) {
+            return withNativePersistentIdentifiers(fallback, SuiteRunProfileLookup.configuredDataDirectory(),
+                    transcriptContent, targetMetadata);
+        }
         if (DefaultAlgorithmPreventionProbeTestCase.CASE.equals(definition.id())) {
             return withNativeDefaultAlgorithms(fallback, SuiteRunProfileLookup.configuredDataDirectory(),
-                    transcriptContent, targetMetadata);
+                    transcriptContent, targetMetadata, definition.caseDigest());
         }
         if (SloRegisteredSignerEvidence.CASE.equals(definition.id())) {
             return withNativeSloRegisteredSigner(fallback,SuiteRunProfileLookup.configuredDataDirectory(),
@@ -149,20 +167,50 @@ public final class ApprovedAttestedCaseRegistry {
         return fallback;
     }
 
+    static com.samlscope.core.caseexec.TestCase withNativePersistentIdentifiers(
+            com.samlscope.core.caseexec.TestCase fallback, java.nio.file.Path data,
+            com.samlscope.core.transcript.TranscriptContentReader transcriptContent,
+            Function<String, byte[]> targetMetadata) {
+        var bridge = new KeycloakNativeRunEvidenceBridge(data);
+        var stores = new java.util.LinkedHashMap<String, DefaultAlgorithmSourceRunStore>();
+        KeycloakPersistentIdentifierEvidence.DIGESTS.forEach((id, digest) ->
+                stores.put(id, new DefaultAlgorithmSourceRunStore(data, id, digest)));
+        return new NativePersistentIdentifierEvidenceTestCase(fallback,
+                new KeycloakPersistentIdentifierEvidence(data.resolve("persistent-identifier-evidence"),
+                        transcriptContent == null ? bridge::content : transcriptContent,
+                        targetMetadata == null ? bridge::targetMetadata : targetMetadata, stores));
+    }
+
     static com.samlscope.core.caseexec.TestCase withNativeDefaultAlgorithms(
             com.samlscope.core.caseexec.TestCase fallback, java.nio.file.Path data,
             com.samlscope.core.transcript.TranscriptContentReader transcriptContent,
             Function<String, byte[]> targetMetadata) {
+        return withNativeDefaultAlgorithms(fallback, data, transcriptContent, targetMetadata, null);
+    }
+
+    static com.samlscope.core.caseexec.TestCase withNativeDefaultAlgorithms(
+            com.samlscope.core.caseexec.TestCase fallback, java.nio.file.Path data,
+            com.samlscope.core.transcript.TranscriptContentReader transcriptContent,
+            Function<String, byte[]> targetMetadata, String caseDigest) {
         var bridge = new KeycloakNativeRunEvidenceBridge(data);
         var content = transcriptContent == null
                 ? (com.samlscope.core.transcript.TranscriptContentReader) bridge::content : transcriptContent;
         var profiles = new SuiteRunProfileLookup(data);
         // The original control metadata advertises the polling control key, not the Plan primary key.
-        return new DefaultAlgorithmPreventionProbeTestCase(fallback, content,
-                targetMetadata == null ? bridge::targetMetadata : targetMetadata,
+        Function<String, byte[]> metadata = targetMetadata == null ? bridge::targetMetadata : targetMetadata;
+        var nativeAdapter = new ShibbolethDefaultAlgorithmNativeAdapter(content);
+        var probe = new DefaultAlgorithmPreventionProbeTestCase(fallback, content,
+                metadata,
                 run -> bridge.key(run, "control"), profiles::profile,
                 data.resolve("default-algorithm-evidence"),
-                new ShibbolethDefaultAlgorithmNativeAdapter(content));
+                nativeAdapter);
+        if (caseDigest == null) return probe;
+        var sourceReader = new DefaultAlgorithmPreventionEvidence(data.resolve("default-algorithm-evidence"),
+                content, metadata, run -> bridge.key(run, "control"), profiles::profile, nativeAdapter);
+        var sourceEvidence = new DefaultAlgorithmSourceRunEvidence(data.resolve("default-algorithm-source-bindings"),
+                data.resolve("default-algorithm-evidence"), new DefaultAlgorithmSourceRunStore(data, caseDigest),
+                content, metadata, sourceReader, new ShibbolethDefaultAlgorithmSourceRunPolicy(content));
+        return new DefaultAlgorithmSourceRunTestCase(probe, sourceEvidence);
     }
 
     static com.samlscope.core.caseexec.TestCase withNativeSloRegisteredSigner(
