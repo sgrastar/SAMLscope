@@ -1,0 +1,60 @@
+schema_version: 1
+spikes:
+  - id: S1
+    target: ECP and SAML-EC
+    status: PASS
+    assertions:
+      - claim_en: s1ForwarderRemovesEveryServiceProviderHeader proves the production ECP forwarding boundary removes every SOAP header block received from the SP.
+        verified_by: saml:G2FeasibilitySpikeTest.s1ForwarderRemovesEveryServiceProviderHeader
+      - claim_en: s1ForwarderPreservesGeneratedKeyAdvice proves removing SP headers preserves GeneratedKey and Advice evidence in the SOAP body.
+        verified_by: saml:G2FeasibilitySpikeTest.s1ForwarderPreservesGeneratedKeyAdvice
+      - claim_en: s1ChannelBindingVariantsRemainDistinguishable proves matching, mismatching, request-only, header-only, and signed-request inputs remain distinct.
+        verified_by: saml:G2FeasibilitySpikeTest.s1ChannelBindingVariantsRemainDistinguishable
+    limitations_en: The production boundary proves XML and state separation; target credentials and transport remain runtime preconditions and are never persisted.
+  - id: S2
+    target: SLO and Asynchronous SLO
+    status: PASS
+    assertions:
+      - claim_en: s2FrontChannelAndSoapShareSemanticModelWithoutLosingTransport proves both transports share a semantic logout model while retaining transport identity.
+        verified_by: saml:G2FeasibilitySpikeTest.s2FrontChannelAndSoapShareSemanticModelWithoutLosingTransport
+      - claim_en: s2AsyncExtensionIsIndependentlyObservable proves the Asynchronous SLO extension remains separate from the base logout message.
+        verified_by: saml:G2FeasibilitySpikeTest.s2AsyncExtensionIsIndependentlyObservable
+      - claim_en: s2SessionDestructionRequiresResponseObservation proves a destructive case cannot invalidate its session before response evidence is captured.
+        verified_by: saml:G2FeasibilitySpikeTest.s2SessionDestructionRequiresResponseObservation
+    limitations_en: The production model proves representation and ordering; product-specific logout UI steps remain BROWSER instructions.
+  - id: S3
+    target: MDQ and metadata variants
+    status: PASS
+    assertions:
+      - claim_en: s3OriginalVariantSelectorSurvivesAllRequiredRedirects proves the original selector is preserved across 301, 302, and 307 from one registered source URL.
+        verified_by: saml:G2FeasibilitySpikeTest.s3OriginalVariantSelectorSurvivesAllRequiredRedirects
+      - claim_en: s3StableMetadataUrlExposesSelectedDeterministicVariant proves one stable metadata identity returns a deterministic plan-selected variant without URL replacement.
+        verified_by: saml:G2FeasibilitySpikeTest.s3StableMetadataUrlExposesSelectedDeterministicVariant
+    limitations_en: A target that cannot be forced to refresh produces not_verified(target_config_unavailable), not a target violation.
+  - id: S4
+    target: secondary_peer
+    status: PASS
+    assertions:
+      - claim_en: s4SecondaryPeerHasDistinctDeterministicEntityId proves the production identity helper creates a stable entityID distinct from the primary peer.
+        verified_by: peer:PeerG2FeasibilityTest.s4SecondaryPeerHasDistinctDeterministicEntityId
+      - claim_en: s4SecondaryPeerHasIndependentMetadataRegistrationPath proves the secondary Test IdP has its own production metadata registration path.
+        verified_by: peer:PeerG2FeasibilityTest.s4SecondaryPeerHasIndependentMetadataRegistrationPath
+    limitations_en: The second entity remains optional plan configuration and is requested only by cases that need a second Test IdP.
+  - id: S5
+    target: Raw XML generation
+    status: PASS
+    assertions:
+      - claim_en: s5ProductionRawBuilderPreservesExactBytes proves the concrete abnormal-message builder preserves DTDs, attributes, entities, and character references byte for byte.
+        verified_by: saml:G2FeasibilitySpikeTest.s5ProductionRawBuilderPreservesExactBytes
+      - claim_en: s5BoundaryLengthsUseCodePointsWithoutIsolatedSurrogates proves boundary strings count Unicode code points and contain no isolated surrogate values.
+        verified_by: saml:G2FeasibilitySpikeTest.s5BoundaryLengthsUseCodePointsWithoutIsolatedSurrogates
+    limitations_en: Raw fixtures intentionally bypass the normal OpenSAML builder and remain subject to size and outbound-policy controls.
+  - id: S6
+    target: HTTP-Redirect raw query signatures
+    status: PASS
+    assertions:
+      - claim_en: s6SignatureInputPreservesRawEncodedOctetsAndCanonicalParameterOrder proves signature input uses original encoded values in binding-defined parameter order.
+        verified_by: saml:G2FeasibilitySpikeTest.s6SignatureInputPreservesRawEncodedOctetsAndCanonicalParameterOrder
+      - claim_en: s6AmbiguousOrMalformedSignedParametersAreRejected proves duplicate signed parameters, mixed request and response, malformed pairs, and non-ASCII input fail closed.
+        verified_by: saml:G2FeasibilitySpikeTest.s6AmbiguousOrMalformedSignedParametersAreRejected
+    limitations_en: Duplicate signed parameters are rejected as ambiguous rather than selecting a parser-dependent value.

@@ -108,7 +108,7 @@ generation, and only the unmodified owned temporary file is removed on exit.
 Use fresh report paths. The locally retained acceptance originals and independent
 runtime archives are ignored operational evidence, not committed reference data.
 
-## Independent G2 renewal
+## Initial independent G2 renewal
 
 The protected implementation delta is limited to the Artifact transport factory
 composition in `SamlScopeApplication` and metadata collector composition in
@@ -169,3 +169,72 @@ parser; the whole Run export is explicitly incomplete. The selected originals
 and their byte hashes were exported before the owned synthetic container and
 test-data volume were removed. The main Suite's TLS settings were unchanged.
 These synthetic results likewise add no reference-product conclusions.
+
+## Initial login in the campaign browser
+
+The optional browser preparation now performs the initial normal SSO in the
+collector's own visible browser context. Subsequent actions reuse that context
+only when the Suite explicitly permits session reuse; fresh and passive actions
+still use separate empty contexts. The test user enters credentials in the target
+page, and the collector does not fill or export them.
+
+An owned actual Suite Run verified the cold preparation path: no case execution,
+outbox action, or Recorder operation existed before preflight or after the empty
+evaluation that prepared pinned result membership. The normal SSO then completed
+with independently verified Redirect, Response, and Assertion signatures. Formal
+cases were not started. This qualifies initial preparation and its original
+correlation; subsequent session reuse was checked separately in the synthetic
+Chrome integration and was not measured in this actual Suite Run.
+
+A timed-out normal operation retains its live page and request handle in the
+collector process. Resuming polls that existing operation without resubmitting
+the start URL. Explicit stop closes the collector's resources without claiming
+that the Suite operation completed. Human login and click counts remain
+unmeasured, rather than being inferred from browser-context creation counts.
+
+## Saved results across definition updates
+
+The application retains the exact public functional-profile bundle from the
+signed initial target and its approval descendant. A closed manifest binds the
+original profiles, case catalog, coverage, predicates, specifications, controls,
+and approval records. A Run cannot supply a replacement manifest or select a
+newer definition merely by naming the same profile.
+
+Retained results are assembled with their own case catalog, obligation levels,
+conditions, source URLs, and component digests. Cached result and report bytes
+are read unchanged. A missing report can wrap an existing result without storing
+or re-evaluating either artifact. An existing report does not permit replacement
+of a missing result with a new determination. Older definitions outside the
+retained bundle remain unavailable; their stored artifacts and physical evidence
+records are still exposed without interpretation through current catalogs.
+
+The workspace presents these Runs as saved records and hides setup and execution
+actions. New execution under a retained definition is held until exact runtime
+compatibility is independently established. Valid arriving protocol originals
+are preserved, but they do not advance an old campaign, consume its execution
+intent, claim a propagation participant, or generate a new peer response. Current
+Runs retain their normal execution path. This preserves evidence without claiming
+that every historical test can resume under a newer implementation.
+
+Independent review checked cached and asymmetric artifact pairs, retired case
+IDs, owning evaluation semantics, queued reads, public continuation and receipt
+paths, and their current positive controls. The changes do not modify approved
+case meaning, functional-profile membership, or the reference inventory. The
+NameID interpretation correction remains separate.
+
+The retained release shares an immutable source inventory across its profiles.
+Installed typed catalogs may be reused only after the closed manifest and every
+retained original have been verified again. Current inputs must match the exact
+source bytes, profile bytes, and declared digest keys before sharing those
+models; changed inputs use their own resolver. Injected resource readers are
+always validated and parsed independently. Outcomes and applicability decisions
+are not cached. This removes duplicated catalog parsing without enlarging the
+test heap or weakening original-byte verification.
+
+The independent follow-up review checked the final memory changes, immutable
+ingress and reads, fresh original verification, and changed-input controls.
+The complete offline build check passed with the unchanged heap configuration.
+The protected composition changes require renewal of the existing signed G2
+bundle before publication. The target and its immediate approval descendant
+retain the case-design digests and external validator pins; the renewal does
+not represent new case definitions or new reference-product conclusions.

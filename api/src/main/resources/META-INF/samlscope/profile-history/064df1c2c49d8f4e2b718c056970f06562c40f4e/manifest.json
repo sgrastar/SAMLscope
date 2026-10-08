@@ -1,0 +1,97 @@
+{
+  "schema": "samlscope-installed-historical-profile-bundle-v1",
+  "sourceCommit": "064df1c2c49d8f4e2b718c056970f06562c40f4e",
+  "approvalCommit": "769b93a9a40bb392277ecc6f3dc0b4dfc18c5c9b",
+  "files": {
+    "tests/coverage.yaml": {
+      "sha256": "sha256:2bee3db74c9be9908710bbe18935c73454f1ed4c5c0f06bdab1cf18deaef843c",
+      "bytes": 1291634,
+      "sourceRevision": "064df1c2c49d8f4e2b718c056970f06562c40f4e"
+    },
+    "tests/cases.yaml": {
+      "sha256": "sha256:431d9aa863d5d882d37266667a8fd20547d1fe6d037274b8d59ff66347f5ecd4",
+      "bytes": 2524764,
+      "sourceRevision": "064df1c2c49d8f4e2b718c056970f06562c40f4e"
+    },
+    "tests/predicates.yaml": {
+      "sha256": "sha256:ea0aec770d743d0c8315c706ae80fb5979a103021ebdc4fcf86187c052e90262",
+      "bytes": 19131,
+      "sourceRevision": "064df1c2c49d8f4e2b718c056970f06562c40f4e"
+    },
+    "tests/specs.yaml": {
+      "sha256": "sha256:acee5ce8c348fbc5e02f77bd2f5b8703a632dd69aea857b14b97812ff6cc39d9",
+      "bytes": 9267,
+      "sourceRevision": "064df1c2c49d8f4e2b718c056970f06562c40f4e"
+    },
+    "tests/approvals/g1.yaml": {
+      "sha256": "sha256:198d8cabd1b6468b2bc88ad61dcf24f2141a8b80c2b285a51d7cc02691197818",
+      "bytes": 105054,
+      "sourceRevision": "064df1c2c49d8f4e2b718c056970f06562c40f4e"
+    },
+    "tests/approvals/g2.yaml": {
+      "sha256": "sha256:3a391cbce4f354e32d19057c4af5538fd3f1bf9c60b54c0ec8deb9a22f960ea3",
+      "bytes": 143559,
+      "sourceRevision": "769b93a9a40bb392277ecc6f3dc0b4dfc18c5c9b"
+    },
+    "tests/feasibility.yaml": {
+      "sha256": "sha256:b18ee0e940fafc841a6b0aada0000294d64e17099b0ba2a5ad03e4e829820b41",
+      "bytes": 5042,
+      "sourceRevision": "064df1c2c49d8f4e2b718c056970f06562c40f4e"
+    },
+    "tests/mutants/baselines.yaml": {
+      "sha256": "sha256:87c7ec91c4ae47e40b6b38f3e9bf5bcf9f4253539fa80fa40cc37ff7b7cfdc18",
+      "bytes": 184167,
+      "sourceRevision": "064df1c2c49d8f4e2b718c056970f06562c40f4e"
+    },
+    "tests/mutants/catalog.yaml": {
+      "sha256": "sha256:3051113742c6396086f87682291f87c0d31449789f0c65a573e1b765135c667f",
+      "bytes": 1348486,
+      "sourceRevision": "064df1c2c49d8f4e2b718c056970f06562c40f4e"
+    },
+    "tests/mutants/control-mutants.yaml": {
+      "sha256": "sha256:a918bf462b959e8f9bcaf3a7fe0abc8eee4e80f20bd5121ebb88c5ceee894208",
+      "bytes": 14913,
+      "sourceRevision": "064df1c2c49d8f4e2b718c056970f06562c40f4e"
+    },
+    "profiles/release-pins.properties": {
+      "sha256": "sha256:f909640ddee14ae3a09328e8c52e411e1203c5e4415771c042a9119f1b50a6e9",
+      "bytes": 683,
+      "sourceRevision": "064df1c2c49d8f4e2b718c056970f06562c40f4e"
+    },
+    "profiles/browser_sso_idp.json": {
+      "sha256": "sha256:8841ab92288146c657efb5f3df5ded60970c890448459f0a80fd141eb7fd5c5f",
+      "bytes": 28845,
+      "sourceRevision": "064df1c2c49d8f4e2b718c056970f06562c40f4e"
+    },
+    "profiles/browser_sso_sp.json": {
+      "sha256": "sha256:159c8e15f6a3e06b434d2e2464c75d40829ed8f54b0de23e1b1f4d566aa3228b",
+      "bytes": 18603,
+      "sourceRevision": "064df1c2c49d8f4e2b718c056970f06562c40f4e"
+    },
+    "profiles/ecp_idp.json": {
+      "sha256": "sha256:f930459e44962ea682d00fc4b8efac5440682ddb550da4ac54c114d523281d5e",
+      "bytes": 6495,
+      "sourceRevision": "064df1c2c49d8f4e2b718c056970f06562c40f4e"
+    },
+    "profiles/metadata_idp.json": {
+      "sha256": "sha256:5b1e904ef9b19bc6267bca6d54f44e9ea06dcd76acb35dad39cb1b1a5f1198fd",
+      "bytes": 20031,
+      "sourceRevision": "064df1c2c49d8f4e2b718c056970f06562c40f4e"
+    },
+    "profiles/metadata_sp.json": {
+      "sha256": "sha256:3deeb97b95062dec6670aa5b5211a1c9b26406b28283047cf87788dba426dc93",
+      "bytes": 20020,
+      "sourceRevision": "064df1c2c49d8f4e2b718c056970f06562c40f4e"
+    },
+    "profiles/single_logout_idp.json": {
+      "sha256": "sha256:0158baceb4c032f36c8a9fdbeb89916163a3b61ae567e898b5cd6ed6df06f846",
+      "bytes": 9263,
+      "sourceRevision": "064df1c2c49d8f4e2b718c056970f06562c40f4e"
+    },
+    "profiles/single_logout_sp.json": {
+      "sha256": "sha256:4d8d77c4e0d22d69d6e44c2b896b4c4df45c46d2486311d4b519ae1ce9ebb92a",
+      "bytes": 9282,
+      "sourceRevision": "064df1c2c49d8f4e2b718c056970f06562c40f4e"
+    }
+  }
+}

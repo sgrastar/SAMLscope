@@ -19,12 +19,21 @@ public final class CatalogApplicabilityProvider implements ApplicabilityProvider
     private final Map<String, PredicateCatalog.Definition> predicates;
     private final ApplicabilityInputProvider inputs;
     private final java.util.function.Function<TestPlan,FunctionalCaseDefinition> profileDefinitions;
+    private final java.util.function.Function<TestPlan,FunctionalReleaseContext> releaseContexts;
 
     public CatalogApplicabilityProvider(
             CoverageCatalog coverage,
             PredicateCatalog predicates,
             ApplicabilityInputProvider inputs,
             java.util.function.Function<TestPlan,FunctionalCaseDefinition> profileDefinitions) {
+        this(coverage, predicates, inputs, profileDefinitions, null);
+    }
+
+    public CatalogApplicabilityProvider(CoverageCatalog coverage, PredicateCatalog predicates,
+            ApplicabilityInputProvider inputs,
+            java.util.function.Function<TestPlan,FunctionalCaseDefinition> profileDefinitions,
+            java.util.function.Function<TestPlan,FunctionalReleaseContext> releaseContexts) {
+        this.releaseContexts = releaseContexts;
         this.coverage = Objects.requireNonNull(coverage, "coverage");
         this.predicates = Objects.requireNonNull(predicates, "predicates").byKey();
         this.inputs = Objects.requireNonNull(inputs, "inputs");
@@ -43,15 +52,19 @@ public final class CatalogApplicabilityProvider implements ApplicabilityProvider
         Objects.requireNonNull(plan, "plan");
         var predicateInputs = new LinkedHashMap<String, ApplicabilityInput>();
         var result = new ArrayList<ApplicabilityEvaluation>();
-        var selected = profileDefinitions.apply(plan).selectedCoverage(coverage).byKey().keySet();
-        for (var obligation : coverage.obligations()) {
+        var release = releaseContexts == null ? null : releaseContexts.apply(plan);
+        var ownerCoverage = release == null ? coverage : release.coverage();
+        var ownerPredicates = release == null ? predicates : release.predicates().byKey();
+        var definition = release == null ? profileDefinitions.apply(plan) : release.definition();
+        var selected = definition.selectedCoverage(ownerCoverage).byKey().keySet();
+        for (var obligation : ownerCoverage.obligations()) {
             if (!selected.contains(obligation.key()) || obligation.condition() == null) continue;
-            var definition = predicates.get(obligation.condition());
-            var input = predicateInputs.computeIfAbsent(definition.key(), ignored ->
-                    Objects.requireNonNull(inputs.input(definition, run, plan),
-                            "Applicability input provider returned null for " + definition.key()));
+            var predicate = ownerPredicates.get(obligation.condition());
+            var input = predicateInputs.computeIfAbsent(predicate.key(), ignored ->
+                    Objects.requireNonNull(inputs.input(predicate, run, plan),
+                            "Applicability input provider returned null for " + predicate.key()));
             result.add(ApplicabilityEngine.evaluate(
-                    obligation.key(), definition.key(), definition.kind(), input));
+                    obligation.key(), predicate.key(), predicate.kind(), input));
         }
         return java.util.List.copyOf(result);
     }

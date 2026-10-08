@@ -29,6 +29,79 @@ test('loads all evidence through one request without competing section reads', a
   expect(calls).toHaveLength(5)
 })
 
+test.each([
+  ['retained-definition-read-only', true],
+  ['historical-definition-unavailable', false],
+])('reads saved historical records without setup or target requests: %s', async (code, definitionAvailable) => {
+  const calls: Array<{ url: string; method: string }> = []
+  vi.stubGlobal('fetch', vi.fn(async (url: string, init?: RequestInit) => {
+    calls.push({ url, method: init?.method ?? 'GET' })
+    if (url.endsWith('/workspace-evidence')) return json({
+      interactions: [{ caseId: 'old-case', kind: 'CONFIGURATION', answerValues: ['confirmed'] }],
+      bootstrapContracts: [], protocolEvidence: protocolEvidence(),
+      activeProbe: { state: 'READY', startUrl: 'https://target.example/should-not-open' },
+      campaigns: null,
+      definitionAvailability: { code, definitionAvailable, readOnlyStored: true,
+        liveEvaluationAvailable: false, newRunRequired: true },
+      storedHistoricalState: { runId: 'run_test', slots: [
+        { caseId: 'retired-old-case', status: 'RUNNING', storedOutcome: null, evidence: [] },
+        { caseId: 'old-confirmed-case', status: 'FINISHED', storedOutcome: 'SATISFIED',
+          evidence: [{ kind: 'transcript', reference: 'tx_old_request' }, { kind: 'transcript', reference: 'tx_old_response' }] },
+      ] },
+    })
+    if (url === '/api/health') return json({ mode: 'selfhosted' })
+    if (url === '/api/plans') return json([{
+      plan: { id: 'plan', name: 'Saved historical target', profile: 'single_logout_idp',
+        target: { kind: 'IDP', entityId: 'https://target.example/entity' } },
+    }])
+    if (url === '/api/runs/run_test') return json({ id: 'run_test', planId: 'plan', status: 'COMPLETED', context: {} })
+    throw new Error(`Historical view attempted setup or target access: ${url}`)
+  }))
+  render(<RunManagement runId="run_test" />)
+  expect(await screen.findByText('Saved run · read only')).toBeTruthy()
+  expect(screen.getByText(definitionAvailable
+    ? /uses an earlier test definition/
+    : /test definition used by this run is unavailable/)).toBeTruthy()
+  expect(screen.getByText(/No new conformance determination has been made/)).toBeTruthy()
+  const slots = screen.getByRole('region', { name: 'Saved test records' })
+  expect(within(slots).getByText('retired-old-case')).toBeTruthy()
+  expect(within(slots).getByText('Running')).toBeTruthy()
+  expect(within(slots).getByText('Satisfied')).toBeTruthy()
+  expect(within(slots).getByText('2')).toBeTruthy()
+  expect(screen.getByRole('link', { name: 'Download saved result.json' }).getAttribute('href')).toBe('/api/runs/run_test/result.json')
+  expect(screen.getByRole('link', { name: 'Download saved report.html' }).getAttribute('href')).toBe('/api/runs/run_test/report.html')
+  expect(screen.getByRole('link', { name: 'Open saved result' }).getAttribute('href')).toBe('/reports/run_test')
+  expect(screen.getByRole('link', { name: 'Open stored transcript' }).getAttribute('href')).toBe('/api/runs/run_test/transcript')
+  expect(screen.getByRole('link', { name: 'Create a new Test Plan' }).getAttribute('href')).toBe('/')
+  expect(screen.queryByRole('button', { name: 'Run preflight' })).toBeNull()
+  expect(screen.queryByRole('button', { name: 'Start or resume tests' })).toBeNull()
+  expect(screen.queryByRole('link', { name: 'Open one browser check' })).toBeNull()
+  expect(screen.queryByText('Register the Test Peer.')).toBeNull()
+  expect(calls).toHaveLength(4)
+  expect(calls.every(call => call.method === 'GET')).toBe(true)
+  fireEvent.click(screen.getByRole('button', { name: 'Refresh' }))
+  await waitFor(() => expect(calls).toHaveLength(8))
+  expect(calls.some(call => /metadata-lab|target-initiated|supplemental-decryption-keys/.test(call.url))).toBe(false)
+  expect(calls.every(call => call.url.startsWith('/api/'))).toBe(true)
+})
+
+test('does not display foreign stored slots when the historical snapshot belongs to another Run', async () => {
+  vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+    if (url.endsWith('/workspace-evidence')) return json({
+      interactions: [], bootstrapContracts: [], protocolEvidence: protocolEvidence(), activeProbe: { state: 'NOT_STARTED' }, campaigns: null,
+      definitionAvailability: { code: 'historical-definition-unavailable', definitionAvailable: false, readOnlyStored: true, liveEvaluationAvailable: false, newRunRequired: true },
+      storedHistoricalState: { runId: 'run_foreign', slots: [{ caseId: 'foreign-case', status: 'FINISHED', storedOutcome: 'SATISFIED', evidence: [] }] },
+    })
+    if (url === '/api/health') return json({ mode: 'selfhosted' })
+    if (url === '/api/plans') return json([])
+    if (url === '/api/runs/run_test') return json({ id: 'run_test', planId: 'plan', context: {} })
+    throw new Error(`Unexpected historical request: ${url}`)
+  }))
+  render(<RunManagement runId="run_test" />)
+  expect(await screen.findByText('Saved test records for this run are unavailable.')).toBeTruthy()
+  expect(screen.queryByText('foreign-case')).toBeNull()
+})
+
 test.each([false, true])('starts the whole profile and explains ECP prerequisites (%s)', async (ecpProbesRequired) => {
   const posts: string[] = []
   vi.stubGlobal('fetch', vi.fn(async (url: string, init?: RequestInit) => {

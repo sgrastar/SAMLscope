@@ -111,9 +111,6 @@ public final class SamlScopeApplication {
         var metadata = MetadataUiAssetConfiguration.create(config.peerBaseUrl(), keyStore, signer, clock);
         var preflight = new PreflightService(config.peerBaseUrl(), plans, runs, runService, metadataCache,
                 metadataParser, new OutboundPolicy(config.outboundAllowPrivate()), clock, json.mapper());
-        var idpPeer = new IdpPeerService(plans, runs, runService, metadataCache, metadataParser, saml, transcript, clock);
-        var secondaryIdpPeer = new IdpPeerService(
-                plans, runs, runService, metadataCache, metadataParser, saml, transcript, clock, true);
         var caseExecutions = new SqliteCaseExecutionRepository(database, json);
         var hostedRunProvisioner = new com.samlscope.store.SqliteHostedRunProvisioner(database, json, config.mode() == AppConfig.Mode.HOSTED);
         var ephemeralCredentials = new InMemoryEphemeralCredentialProvider();
@@ -135,11 +132,17 @@ public final class SamlScopeApplication {
         var authorization = new ManagementAuthorization(oidc,
                 new com.samlscope.store.SqlitePlanOwnerRepository(database), plans, runs, m1);
         transcript.onRecorded(m1::reconcileTranscriptEvidenceAutomatically);
+        var idpPeer = new IdpPeerService(
+                plans, runs, runService, metadataCache, metadataParser, saml, transcript, clock,
+                false, m1::requireRunDefinition);
+        var secondaryIdpPeer = new IdpPeerService(
+                plans, runs, runService, metadataCache, metadataParser, saml, transcript, clock,
+                true, m1::requireRunDefinition);
         var spPeer = new SpPeerService(
                 plans, runs, runService, metadataCache, metadataParser, saml, transcript, clock,
-                m1::acceptActiveProbe, targetInitiated);
+                m1::acceptActiveProbe, targetInitiated, m1::requireRunDefinition);
         var sloPeer = new SloPeerService(plans, runs, metadataCache, metadataParser, saml, transcript, clock,
-                m1::acceptActiveSloProbe, targetInitiated);
+                m1::acceptActiveSloProbe, targetInitiated, m1::requireRunDefinition);
         var preloadedMetadataCache = new BoundedByteArrayCache(128);
 
         var managementWrites = new java.util.concurrent.Semaphore(1, true);
@@ -345,6 +348,19 @@ public final class SamlScopeApplication {
                                     Duration.ofMinutes(1)));
                 });
             }
+            javalin.routes.before("/api/runs/{id}/*", ctx -> {
+                if (!java.util.Set.of("GET","HEAD","OPTIONS").contains(ctx.method().name())
+                        && !ctx.path().endsWith("/publish"))
+                    m1.requireRunDefinition(ctx.pathParam("id"));
+            });
+            // Both initial dispatch and explicit continuation must belong to this exact active Run.
+            for (var executionPath : java.util.List.of("/p/{plan}/start/*", "/p/{plan}/continue/*"))
+            javalin.routes.before(executionPath, ctx -> {
+                var runId = requiredQuery(ctx,"run");
+                var run = requireRun(runs,runId);
+                if (!ctx.pathParam("plan").equals(run.planId())) throw new IllegalArgumentException("Run belongs to another Test Plan");
+                m1.requireRunDefinition(runId);
+            });
             TargetConnectionRoutes.register(
                     javalin, config, authorization, targetConnections, clock, preflight,
                     hostedRateLimiter);
@@ -491,6 +507,7 @@ public final class SamlScopeApplication {
         javalin.routes.get("/api/plans/{id}/runs", ctx -> ctx.json(runs.listForPlan(ctx.pathParam("id"))));
         javalin.routes.post("/api/plans/{id}/runs", ctx -> {
             var requestedPlan = requirePlan(plans, ctx.pathParam("id"));
+            m1.requirePlanDefinition(requestedPlan);
             com.samlscope.core.run.TestRun run;
             String managementUrl;
             if (config.managementProtected()) {
@@ -1039,6 +1056,8 @@ public final class SamlScopeApplication {
             if (parts.length != 4 || !parts[1].equals(consumed.metadataProbeRunId())) {
                 throw new IllegalArgumentException("Invalid automatic metadata campaign correlation");
             }
+            // The original callback has already been recorded; do not advance a retained campaign.
+            m1.requireRunDefinition(parts[1]);
             var index = Integer.parseInt(parts[3]);
             var current = metadataLab.state(parts[1]);
             if (!current.selectedVariant().equals(consumed.metadataProbeVariant())) {

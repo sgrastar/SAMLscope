@@ -23,6 +23,22 @@ class SloPropagationSoapParticipantTest {
     @TempDir java.nio.file.Path directory;
     static final String P="urn:oasis:names:tc:SAML:2.0:protocol", A="urn:oasis:names:tc:SAML:2.0:assertion";
 
+    @Test void heldPreparedPropagationRecordsOneOriginalWithoutClaimOrResponse() {
+        var f=fixture();prepare(f,"failure",f.saml.prepareSloPropagationMetadata(f.plan,f.run,"failure",f.at),Map.of());
+        var held=new SloPeerService(f.plans,f.runs,f.cache,new TargetMetadataParser(),f.saml,f.recorder,f.serviceClock,
+                (r,a,x,e)->{},new com.samlscope.runner.TargetInitiatedIntents(),r->{throw new IllegalStateException("historical-read-only");});
+        var url=f.saml.sloPropagationEndpoint(f.plan,f.run,"failure","fail").toString();var raw=request(f,url,f.plan.target().entityId());
+        int prior=f.recorder.list(f.run).size();var before=f.runs.find(f.run).orElseThrow();
+        assertThrows(IllegalStateException.class,()->held.consume(f.plan.id(),SloPeerService.Transport.SOAP,"POST",null,raw,Map.of(),url));
+        assertEquals(before,f.runs.find(f.run).orElseThrow());var entries=f.recorder.list(f.run);assertEquals(prior+1,entries.size());
+        var arrivals=entries.stream().filter(e->e.direction()==Direction.INBOUND).toList();assertEquals(1,arrivals.size());
+        var observed=arrivals.getFirst();assertEquals(Direction.INBOUND,observed.direction());assertArrayEquals(raw,f.recorder.readDecodedSaml(observed));
+        assertFalse(observed.samlSummary().containsKey("propagationOrdinal"));assertFalse(observed.samlSummary().containsKey("propagationFixture"));
+        // A denied observation did not consume the prepared participant's first claim.
+        var result=consume(f,f.service,url,requestId(url));
+        assertEquals(1,result.summary().get("propagationOrdinal"));
+    }
+
     @Test void preparedFailureAndAllSuccessProduceSignedParticipantScopedRepliesOnlyAtReturnBoundary() {
         for (var trial : List.of("failure", "all-success")) {
             var f=fixture(); prepare(f, trial, f.saml.prepareSloPropagationMetadata(f.plan,f.run,trial,f.at),Map.of());
