@@ -14,6 +14,7 @@ public final class ResultPublicationService implements ResultArtifactQuery, Repo
     private final ResultJsonWriter json;
     private final RunArtifactRepository artifacts;
     private final ReportHtmlWriter reportHtml;
+    private final HistoricalArtifactCacheReader historicalCache;
 
     public ResultPublicationService(
             CoverageCatalog catalog,
@@ -28,6 +29,7 @@ public final class ResultPublicationService implements ResultArtifactQuery, Repo
         this.json = Objects.requireNonNull(json, "json");
         this.artifacts = Objects.requireNonNull(artifacts, "artifacts");
         this.reportHtml = Objects.requireNonNull(reportHtml, "reportHtml");
+        this.historicalCache = new HistoricalArtifactCacheReader(artifacts, reportHtml::write);
     }
 
     public byte[] generate(String runId) {
@@ -35,7 +37,7 @@ public final class ResultPublicationService implements ResultArtifactQuery, Repo
         var context = contexts.context(
                 snapshot.run(), snapshot.plan(), snapshot.cases(), snapshot.result());
         var document = ResultDocumentAssembler.assemble(
-                snapshot.definition().selectedCoverage(catalog), snapshot.plan(), snapshot.run(),
+                snapshot.definition().selectedCoverage(evaluation.catalogFor(snapshot.plan())), snapshot.plan(), snapshot.run(),
                 snapshot.result(), snapshot.cases(), context);
         var bytes = json.write(document).getBytes(StandardCharsets.UTF_8);
         var report = reportHtml.write(bytes);
@@ -43,6 +45,9 @@ public final class ResultPublicationService implements ResultArtifactQuery, Repo
         artifacts.saveReport(runId, report);
         return bytes.clone();
     }
+
+    public byte[] requireHistoricalResult(String runId) { return historicalCache.result(runId, () -> generate(runId)); }
+    public byte[] requireHistoricalReport(String runId) { return historicalCache.report(runId, () -> generate(runId)); }
 
     @Override
     public byte[] require(String runId) {

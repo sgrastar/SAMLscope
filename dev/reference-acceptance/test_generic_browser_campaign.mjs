@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { deflateRawSync } from 'node:zlib';
 import { validateTask, probeUrl, sessionPolicy, validateMembership, validateM0Guard,
-  samlMessage, bindProtocolOriginals, collectSelected } from './generic_browser_campaign.mjs';
+  samlMessage, bindProtocolOriginals, collectSelected, publicJson } from './generic_browser_campaign.mjs';
 
 const RUN = 'run_0123456789ABCDEFGHJKMNPQRS';
 const PLAN = 'plan_0123456789ABCDEFGHJKMNPQRS';
@@ -13,7 +13,7 @@ const task = overrides => validateTask({ suiteBaseUrl: 'https://suite.example', 
   targetOrigins: ['https://idp.example'], caseIds: [CASE], outputDirectory: '/private/tmp/generic-browser-test', ...overrides });
 const ready = (number, id = CASE, fresh = false) => ({ state: 'READY', caseId: id, actionId: action(number),
   startUrl: `https://suite.example/p/${PLAN}/probe/${action(number)}?run=${RUN}`, requiresFreshSession: fresh });
-const run = { id: RUN, planId: PLAN, status: 'COMPLETED' };
+const run = { id: RUN, planId: PLAN, status: 'COMPLETED', context: { authnRequestId: '_m0' } };
 const plan = { plan: { id: PLAN, profile: 'browser_sso_idp', target: { kind: 'IDP', entityId: 'https://idp.example/idp' } } };
 const result = { run: { id: RUN }, requirements: [{ cases: [{ id: CASE }, { id: OTHER }] }] };
 const m0 = [{ id: 'tx_m0_request', runId: RUN, direction: 'OUTBOUND', samlSummary: { type: 'AuthnRequest', id: '_m0' } },
@@ -245,4 +245,134 @@ test('repeated one-use action fails closed and preserves counts without replay',
   await assert.rejects(collectSelected(task(), fake.api, fake.browser, fake.record), /one-use action/);
   assert.equal(fake.operations.length, 1);
   assert.equal(fake.records['operation-counts.json'].skippedBeforeTargetSubmission, 1);
+});
+
+function coldCampaign({ status = 'CREATED', context = {}, timeout = false, badM0 = false, cases = 0, badMembership = false } = {}) {
+  const fake = fakeCampaign([ready(1)], { badMembership });
+  let currentRun = { ...run, status, context: { ...context } };
+  let transcript = status === 'WAITING_BROWSER' ? [m0[0]] : [];
+  let resultReady = status === 'WAITING_BROWSER';
+  const normalCalls = [];
+  const beforeNormal = [];
+  const originalApi = fake.api;
+  fake.api = async (path, body) => {
+    if (normalCalls.length === 0) beforeNormal.push({ path, body });
+    if (path === `/api/runs/${RUN}`) return structuredClone(currentRun);
+    if (path.endsWith('/transcript')) return structuredClone(transcript);
+    if (path.endsWith('/campaigns')) return { runId: RUN, cases, classifications: [], campaigns: [] };
+    if (path.endsWith('/protocol-evidence')) return { eligibleCases: 0, readyCases: 0, cases: [] };
+    if (path.endsWith('/interactions')) return [];
+    if (path.endsWith('/active-probe') && currentRun.status !== 'COMPLETED') return { state: 'NOT_STARTED' };
+    if (path.endsWith('/preflight')) { currentRun.status = 'RUNNING'; return { checks: [{ status: 'PASS' }] }; }
+    if (path.endsWith('/evaluate') && currentRun.status !== 'COMPLETED') {
+      resultReady = true; return { completed: [], remaining: { eligibleCases: 0, readyCases: 0, cases: [] } };
+    }
+    if (path.endsWith('/result.json') && !resultReady) throw new Error('Result does not yet exist');
+    return originalApi(path, body);
+  };
+  const complete = () => {
+    currentRun = { ...currentRun, status: 'COMPLETED', context: { authnRequestId: '_m0' } };
+    transcript = structuredClone(m0);
+    if (badM0) transcript[1].samlSummary.inResponseTo = '_unrelated';
+  };
+  fake.browser.normalFlow = async (url, timeoutSeconds, poll) => {
+    normalCalls.push({ kind: 'start', url });
+    currentRun.status = 'WAITING_BROWSER'; currentRun.context.authnRequestId = '_m0'; transcript = [m0[0]];
+    if (!timeout) complete();
+    return { recorded: timeout ? false : await poll(), browserPageRetained: timeout, manualAuthenticationCheckpoints: 1 };
+  };
+  fake.browser.resumeNormalFlow = async (handle, timeoutSeconds, poll) => {
+    normalCalls.push({ kind: 'poll-only', handle });
+    if (!timeout) complete();
+    return { recorded: timeout ? false : await poll(), browserPageRetained: timeout, manualAuthenticationCheckpoints: 0 };
+  };
+  return { ...fake, normalCalls, beforeNormal, complete };
+}
+
+test('opt-in cold M0 obtains actual membership by empty evaluation, then retains the same strong gate', async () => {
+  const fake = coldCampaign();
+  const collected = await collectSelected(task({ completeNormalFlow: true, startTests: true }), fake.api, fake.browser, fake.record);
+  assert.equal(collected.counts.normalPreflightCalls, 1);
+  assert.equal(collected.counts.normalEmptyEvaluations, 1);
+  assert.equal(collected.counts.normalLoginContexts, 1);
+  assert.equal(collected.counts.initialNormalFlowSubmissions, 1);
+  assert.equal(fake.normalCalls.length, 1);
+  assert.deepEqual(fake.beforeNormal.filter(call => call.body !== undefined).map(call => call.path.split('/').at(-1)), ['preflight', 'evaluate']);
+  assert.equal(fake.records['normal-scope-after-empty-evaluation.json'].actualCaseExecutions, 0);
+  assert.equal(fake.records['normal-scope-after-empty-evaluation.json'].outboxCountMeasured, false);
+  assert.equal(fake.records['m0-guard.json'].acceptedNormalFlowReferences[0], 'tx_m0_response');
+  assert.equal(fake.records['operation-counts.json'].actualHumanLoginCountMeasured, false);
+});
+
+test('normal completion opt-in rejects unsafe cold states, preexisting cases and ambiguous double-start flags', async () => {
+  assert.throws(() => task({ completeNormalFlow: true, initialNormalFlow: true }));
+  assert.throws(() => task({ completeNormalFlow: 'true' }));
+  for (const options of [{ status: 'RUNNING' }, { status: 'ABORTED' }, { context: { authnRequestId: '_old' } }, { cases: 1 }]) {
+    const fake = coldCampaign(options);
+    await assert.rejects(collectSelected(task({ completeNormalFlow: true }), fake.api, fake.browser, fake.record));
+    assert.equal(fake.normalCalls.length, 0);
+    assert.equal(fake.operations.length, 0);
+    assert.equal(fake.records['operation-counts.json'].initialNormalFlowSubmissions, 0);
+  }
+});
+
+test('cold membership or unrelated completed Response cannot authorize tests/start or target actions', async () => {
+  for (const options of [{ badMembership: true }, { badM0: true }]) {
+    const fake = coldCampaign(options);
+    await assert.rejects(collectSelected(task({ completeNormalFlow: true, startTests: true }), fake.api, fake.browser, fake.record));
+    assert.equal(fake.operations.length, 0);
+    assert.equal(fake.calls.some(call => call.path.endsWith('/tests/start')), false);
+  }
+});
+
+test('timeout retains the identified M0 and subsequent collection polls without GET/start, preflight or evaluate', async () => {
+  const fake = coldCampaign({ timeout: true });
+  const first = await collectSelected(task({ completeNormalFlow: true, startTests: true }), fake.api, fake.browser, fake.record);
+  assert.equal(first.collectionState, 'WAITING_M0');
+  assert.equal(first.pendingNormalFlow.authnRequestId, '_m0');
+  assert.equal(first.pendingNormalFlow.browserPageRetained, true);
+  assert.equal(fake.operations.length, 0);
+  assert.equal(fake.records['evaluation.json'].performed, false);
+  const second = await collectSelected(task({ completeNormalFlow: true, startTests: true }), fake.api, fake.browser, fake.record);
+  assert.equal(second.collectionState, 'WAITING_M0');
+  assert.equal(second.counts.normalPreflightCalls, 0);
+  assert.equal(second.counts.normalEmptyEvaluations, 0);
+  assert.equal(second.counts.initialNormalFlowSubmissions, 0);
+  assert.deepEqual(fake.normalCalls.map(call => call.kind), ['start', 'poll-only']);
+  assert.equal(fake.calls.some(call => call.path.endsWith('/tests/start')), false);
+});
+
+test('normal protocol originals use M0 provenance without invented Case or action IDs', () => {
+  const raw = Buffer.from('<AuthnRequest ID="_m0"/>');
+  const captured = samlMessage(task(), fakeRequest('https://idp.example/sso?' + new URLSearchParams({
+    SAMLRequest: deflateRawSync(raw).toString('base64'), RelayState: RUN })), { operationKind: 'M0_NORMAL' });
+  assert.equal(captured.record.operationKind, 'M0_NORMAL');
+  assert.equal('caseId' in captured.record, false);
+  assert.equal('actionId' in captured.record, false);
+  const entry = { ...m0[0], decodedSamlBytes: raw.length, samlSummary: { ...m0[0].samlSummary, decodedSha256: captured.record.sha256 } };
+  assert.equal(bindProtocolOriginals(task(), [{ ...captured, file: 'normal.xml' }], [entry, m0[1]], validateM0Guard(task(), run, plan, m0))[0].bindingState, 'recorder-hash-and-normal-flow-bound');
+});
+
+test('valid old M0 in the same Run cannot satisfy the current nonce or qualify a stale captured original', () => {
+  const laterRun = { ...run, context: { authnRequestId: '_current' } };
+  const newRequest = { ...m0[0], id: 'tx_current_request', samlSummary: { ...m0[0].samlSummary, id: '_current' } };
+  assert.throws(() => validateM0Guard(task(), laterRun, plan, [...m0, newRequest]), /normal SSO control/);
+  assert.throws(() => validateM0Guard(task(), { ...run, context: {} }, plan, m0));
+  const newResponse = { ...m0[1], id: 'tx_current_response', correlationId: '_current', samlSummary: { ...m0[1].samlSummary, inResponseTo: '_current' } };
+  const oldRequest = { ...m0[0], decodedSamlBytes: 3, samlSummary: { ...m0[0].samlSummary, decodedSha256: 'old-hash' } };
+  const graph = [oldRequest, m0[1], newRequest, newResponse], guard = validateM0Guard(task(), laterRun, plan, graph);
+  assert.deepEqual(guard.acceptedNormalFlowReferences, ['tx_current_response']); assert.equal(guard.activeAuthnRequestId, '_current');
+  const capture = { record: { operationKind: 'M0_NORMAL', direction: 'OUTBOUND', bytes: 3, sha256: 'old-hash' }, file: 'old.xml' };
+  assert.equal(bindProtocolOriginals(task(), [capture], graph, guard)[0].bindingState, 'original-captured-recorder-hash-unavailable');
+  assert.equal(bindProtocolOriginals(task(), [capture], graph)[0].bindingState, 'original-captured-recorder-hash-unavailable');
+  assert.throws(() => validateM0Guard(task(), run, plan, [...m0, { ...m0[1], id: 'tx_duplicate_response' }]), /ambiguous/);
+});
+
+test('public Suite JSON boundary rejects nested management URLs and explicit secrets before retention', () => {
+  assert.deepEqual(publicJson({ managementUrl: null, result: { outcome: 'NOT_VERIFIED' } }), { managementUrl: null, result: { outcome: 'NOT_VERIFIED' } });
+  for (const bad of [{ managementUrl: 'never-export' }, { nested: [{ access_token: 'never-export' }] }, { Cookie: 'never-export' }]) {
+    assert.throws(() => publicJson(bad), /Non-public Suite JSON omitted/);
+  }
+  const raw = Buffer.from('<AuthnRequest/>').toString('base64');
+  assert.equal(samlMessage(task(), fakeRequest('https://idp.example/sso', 'POST', new URLSearchParams({ SAMLRequest: raw, password: 'never-export' }).toString()), { operationKind: 'M0_NORMAL' }), null);
 });

@@ -5,6 +5,7 @@ import {
   api, type ActiveProbeStatus, type BootstrapContract, type MetadataLab, type PendingInteraction, type Plan,
   type ProtocolEvidenceStatus, type CampaignReport, type Run, type SupplementalDecryptionKeyStatus,
   type TargetInitiatedIntent,
+  type DefinitionAvailability, type StoredHistoricalState,
 } from './api'
 import { formatDate, humanize } from './format'
 import { idpRoundTripReady, idpRoundTripUrl } from './peerUrls'
@@ -52,6 +53,8 @@ export function RunManagement({ runId, csrfToken, focusCaseId, navigateTo }: {
   const [supplementalKeys, setSupplementalKeys] = useState<SupplementalDecryptionKeyStatus>()
   const [supplementalKeysError, setSupplementalKeysError] = useState('')
   const [targetInitiated, setTargetInitiated] = useState<TargetInitiatedIntent | null>(null)
+  const [definitionAvailability, setDefinitionAvailability] = useState<DefinitionAvailability>()
+  const [storedHistoricalState, setStoredHistoricalState] = useState<StoredHistoricalState>()
   const caseDrawerRef = useRef<HTMLElement | null>(null)
   const caseDrawerCloseRef = useRef<HTMLButtonElement>(null)
   const lastCaseTriggerRef = useRef<HTMLButtonElement | null>(null)
@@ -115,24 +118,31 @@ export function RunManagement({ runId, csrfToken, focusCaseId, navigateTo }: {
 
   const refresh = async () => {
     // Hosted evidence reads share one lock and one rate-limit admission.
-    const [workspace, lab, run, plans, health] = await Promise.all([
-      api.workspaceEvidence(runId), api.metadataLab(runId),
+    const [workspace, run, plans, health] = await Promise.all([
+      api.workspaceEvidence(runId),
       api.run(runId), api.plans(), api.health(),
     ])
     const { interactions: nextInteractions, bootstrapContracts: contracts,
-      protocolEvidence: evidence, activeProbe: probe, campaigns: campaignReport } = workspace
+      protocolEvidence: evidence, activeProbe: probe, campaigns: campaignReport,
+      definitionAvailability: availability, storedHistoricalState: stored } = workspace
+    const readOnly = availability?.readOnlyStored === true || availability?.definitionAvailable === false
+      || availability?.liveEvaluationAvailable === false
+    // Historical views must not call lazy setup endpoints or reuse state from an earlier current Run.
+    const lab = readOnly ? undefined : await api.metadataLab(runId)
+    setDefinitionAvailability(availability)
+    setStoredHistoricalState(stored?.runId === runId ? stored : undefined)
     setInteractions(nextInteractions)
     setBootstrapContracts(contracts)
     setMetadataLab(lab)
     setProtocolEvidence(evidence)
     setActiveProbe(probe)
-    if (Array.isArray(campaignReport?.plans)) setCampaigns(campaignReport)
+    setCampaigns(Array.isArray(campaignReport?.plans) ? campaignReport ?? undefined : undefined)
     setRunSummary(run)
     setPlanId(run.planId)
     const selectedPlan = plans.find(value => value.plan.id === run.planId)
     setPlan(selectedPlan)
     setProfile(selectedPlan?.plan.profile ?? '')
-    if (selectedPlan?.plan.profile === 'single_logout_idp') {
+    if (!readOnly && selectedPlan?.plan.profile === 'single_logout_idp') {
       try {
         setSupplementalKeys(await api.supplementalDecryptionKeys(runId))
         setSupplementalKeysError('')
@@ -145,7 +155,7 @@ export function RunManagement({ runId, csrfToken, focusCaseId, navigateTo }: {
       setSupplementalKeys(undefined)
       setSupplementalKeysError('')
     }
-    if (selectedPlan?.plan.profile === 'browser_sso_idp' || selectedPlan?.plan.profile === 'single_logout_idp') {
+    if (!readOnly && (selectedPlan?.plan.profile === 'browser_sso_idp' || selectedPlan?.plan.profile === 'single_logout_idp')) {
       setTargetInitiated(await api.targetInitiated(runId).catch(() => null))
     } else {
       setTargetInitiated(null)
@@ -653,6 +663,50 @@ export function RunManagement({ runId, csrfToken, focusCaseId, navigateTo }: {
   </section> : <section className="report-skeleton run-workspace-skeleton" aria-label="Loading Run workspace" aria-busy="true">
     <span /><span /><span /><span />
   </section>
+
+  if (definitionAvailability?.readOnlyStored || definitionAvailability?.definitionAvailable === false
+    || definitionAvailability?.liveEvaluationAvailable === false) {
+    const stored = storedHistoricalState?.runId === runId ? storedHistoricalState : undefined
+    const encodedRun = encodeURIComponent(runId)
+    return <section className="management workspace">
+      <header className="workspace-masthead">
+        <div>
+          <p className="eyebrow">Run workspace</p>
+          <h1>{plan?.plan.name ?? 'Saved Run'}</h1>
+          <p className="workspace-context"><code>{runId}</code></p>
+        </div>
+        <span className="run-status">Saved run · read only</span>
+      </header>
+      <section className="run-next-step" aria-label="Historical Run guidance">
+        <h2>Saved records</h2>
+        <p>{definitionAvailability.definitionAvailable
+          ? 'This run uses an earlier test definition. Its saved results and evidence remain available.'
+          : 'The test definition used by this run is unavailable. You can still open its saved results and evidence.'}</p>
+        <p>No new conformance determination has been made. Create a new plan to run more tests.</p>
+        <div className="actions">
+          <a href={`/api/runs/${encodedRun}/result.json`} download>Download saved result.json</a>
+          <a href={`/api/runs/${encodedRun}/report.html`} download>Download saved report.html</a>
+          <a href={`/reports/${encodedRun}`}>Open saved result</a>
+          <a href={`/api/runs/${encodedRun}/transcript`}>Open stored transcript</a>
+          <button type="button" onClick={() => void refresh().catch(cause => setError((cause as Error).message))}>Refresh</button>
+          <a href="/">Create a new Test Plan</a>
+        </div>
+      </section>
+      {error && <p className="error" role="alert">{error}</p>}
+      <section aria-label="Saved test records">
+        <h2>Saved test records</h2>
+        {stored && stored.slots.length > 0 ? <table>
+          <thead><tr><th>Case</th><th>Recorded status</th><th>Recorded outcome</th><th>Evidence references</th></tr></thead>
+          <tbody>{stored.slots.map(slot => <tr key={slot.caseId}>
+            <td><code>{slot.caseId}</code></td>
+            <td>{humanize(slot.status)}</td>
+            <td>{slot.storedOutcome ? humanize(slot.storedOutcome) : '—'}</td>
+            <td>{slot.evidence.length}</td>
+          </tr>)}</tbody>
+        </table> : <p>{stored ? 'No saved test records are available.' : 'Saved test records for this run are unavailable.'}</p>}
+      </section>
+    </section>
+  }
 
   return <section className="management workspace">
     <header className="workspace-masthead">

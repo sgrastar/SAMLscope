@@ -17,6 +17,7 @@ import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { createHash } from 'node:crypto';
 import { inflateRawSync } from 'node:zlib';
+import { createInterface } from 'node:readline';
 
 const sha = bytes => createHash('sha256').update(bytes).digest('hex');
 const RUN = /^run_[0-9A-HJKMNP-TV-Z]{26}$/;
@@ -24,6 +25,16 @@ const PLAN = /^plan_[0-9A-HJKMNP-TV-Z]{26}$/;
 const CASE = /^IIP-[A-Za-z0-9]+-[A-Za-z0-9]+-idp-01$/;
 const ACTION = /^action_[a-f0-9]{32}$/;
 const sleep = milliseconds => new Promise(done => setTimeout(done, milliseconds));
+const SENSITIVE = new Set(['managementurl', 'token', 'accesstoken', 'refreshtoken', 'idtoken', 'clientsecret',
+  'privatekey', 'password', 'passwd', 'authorization', 'proxyauthorization', 'cookie', 'setcookie',
+  'credential', 'credentials', 'bearertoken', 'apikey', 'apisecret']);
+export function publicJson(value) {
+  if (value && typeof value === 'object') for (const [key, child] of Object.entries(value)) {
+    if (SENSITIVE.has(key.replace(/[_-]/g, '').toLowerCase()) && child !== null) throw new Error('Non-public Suite JSON omitted');
+    publicJson(child);
+  }
+  return value;
+}
 
 export function checkedOrigin(value) {
   const url = new URL(value);
@@ -34,7 +45,7 @@ export function checkedOrigin(value) {
 
 export function validateTask(input) {
   const allowedFields = new Set(['suiteBaseUrl', 'runId', 'planId', 'caseIds', 'targetOrigins',
-    'outputDirectory', 'maxActions', 'actionTimeoutSeconds', 'startTests', 'initialNormalFlow']);
+    'outputDirectory', 'maxActions', 'actionTimeoutSeconds', 'startTests', 'initialNormalFlow', 'completeNormalFlow']);
   if (input && Object.keys(input).some(key => !allowedFields.has(key))) throw new Error('Unexpected task field; credentials are not accepted');
   if (!input || !RUN.test(input.runId) || !PLAN.test(input.planId)
       || !Array.isArray(input.caseIds) || !input.caseIds.length
@@ -46,6 +57,8 @@ export function validateTask(input) {
   if (targets.includes(suite) || new Set(targets).size !== targets.length) throw new Error('Invalid target origin list');
   if (input.startTests !== undefined && typeof input.startTests !== 'boolean') throw new Error('Invalid startTests policy');
   if (input.initialNormalFlow !== undefined && typeof input.initialNormalFlow !== 'boolean') throw new Error('Invalid initial flow policy');
+  if (input.completeNormalFlow !== undefined && typeof input.completeNormalFlow !== 'boolean') throw new Error('Invalid normal completion policy');
+  if (input.completeNormalFlow && input.initialNormalFlow) throw new Error('Two normal-flow submissions are forbidden');
   const maxActions = input.maxActions ?? 400;
   const actionTimeoutSeconds = input.actionTimeoutSeconds ?? 300;
   if (!Number.isInteger(maxActions) || maxActions < 1 || maxActions > 2000
@@ -54,7 +67,117 @@ export function validateTask(input) {
   if (typeof input.outputDirectory !== 'string' || !input.outputDirectory) throw new Error('Output directory is required');
   return Object.freeze({ ...input, suiteBaseUrl: suite, targetOrigins: targets,
     outputDirectory: resolve(input.outputDirectory), maxActions, actionTimeoutSeconds,
-    startTests: input.startTests === true, initialNormalFlow: input.initialNormalFlow === true });
+    startTests: input.startTests === true, initialNormalFlow: input.initialNormalFlow === true,
+    completeNormalFlow: input.completeNormalFlow === true });
+}
+
+const actualRun = run => run.run ?? run;
+const actualPlan = plan => plan.plan?.plan ?? plan.plan ?? plan;
+function normalIdentity(task, run, plan) {
+  if (actualRun(run).id !== task.runId || actualRun(run).planId !== task.planId
+      || actualPlan(plan).id !== task.planId || actualPlan(plan).profile !== 'browser_sso_idp'
+      || actualPlan(plan).target?.kind !== 'IDP') throw new Error('Normal flow identity/profile mismatch');
+}
+
+/** Public zero-execution projections. There is no public outbox-count endpoint. */
+export async function assertEmptyNormalScope(task, api, run, { cold = false } = {}) {
+  const current = actualRun(run);
+  if (cold && (current.status !== 'CREATED' || current.context?.authnRequestId != null)) {
+    throw new Error('Cold normal flow requires CREATED without an AuthnRequest');
+  }
+  const campaigns = await api(`/api/runs/${task.runId}/campaigns`);
+  const protocol = await api(`/api/runs/${task.runId}/protocol-evidence`);
+  const interactions = await api(`/api/runs/${task.runId}/interactions`);
+  const probe = await api(`/api/runs/${task.runId}/active-probe`);
+  if (campaigns.runId !== task.runId || campaigns.cases !== 0
+      || !Array.isArray(campaigns.classifications) || campaigns.classifications.length
+      || !Array.isArray(campaigns.campaigns) || campaigns.campaigns.length
+      || protocol.eligibleCases !== 0 || protocol.readyCases !== 0
+      || !Array.isArray(protocol.cases) || protocol.cases.length
+      || !Array.isArray(interactions) || interactions.length
+      || probe.state !== 'NOT_STARTED') throw new Error('Normal flow requires zero actual case executions');
+  return { runId: task.runId, runStatus: current.status, actualCaseExecutions: 0,
+    pendingInteractions: 0, readyOrLiveCaseActions: 0, outboxCountMeasured: false,
+    targetSamlSendCountMeasured: false, source: 'official-public-zero-execution-projections' };
+}
+
+/** An existing M0 handle is observed, never reissued by GET/start or preflight. */
+export async function completeNormalControl(task, api, browser, record, counts, initialRun, plan) {
+  let run = initialRun;
+  normalIdentity(task, run, plan);
+  let transcript = await api(`/api/runs/${task.runId}/transcript`);
+  if (actualRun(run).status === 'COMPLETED') {
+    const membership = validateMembership(task, run, plan, await api(`/api/runs/${task.runId}/result.json`));
+    await record('m0-guard.json', validateM0Guard(task, run, plan, transcript));
+    return { run, transcript, membership, pendingNormalFlow: null };
+  }
+  const cold = actualRun(run).status === 'CREATED' && actualRun(run).context?.authnRequestId == null;
+  if (cold) {
+    if (!Array.isArray(transcript) || transcript.length) throw new Error('Cold normal flow has existing Recorder operations');
+    await record('normal-scope-before-preflight.json', await assertEmptyNormalScope(task, api, run, { cold: true }));
+    counts.normalPreflightCalls++;
+    const preflight = await api(`/api/runs/${task.runId}/preflight`, {});
+    await record('normal-preflight.json', preflight);
+    if (!Array.isArray(preflight.checks) || preflight.checks.some(check => check.status === 'FAIL')) throw new Error('Normal preflight failed');
+    run = await api(`/api/runs/${task.runId}`);
+    if (actualRun(run).status !== 'RUNNING' || actualRun(run).context?.authnRequestId != null) throw new Error('Preflight changed normal flow unexpectedly');
+    await assertEmptyNormalScope(task, api, run);
+    counts.normalEmptyEvaluations++;
+    const evaluated = await api(`/api/runs/${task.runId}/protocol-evidence/evaluate`, {});
+    if (!Array.isArray(evaluated.completed) || evaluated.completed.length
+        || evaluated.remaining?.eligibleCases !== 0 || evaluated.remaining?.readyCases !== 0
+        || !Array.isArray(evaluated.remaining?.cases) || evaluated.remaining.cases.length) throw new Error('Cold evaluation executed a case');
+    await record('normal-empty-evaluation.json', evaluated);
+    run = await api(`/api/runs/${task.runId}`);
+    if (actualRun(run).status !== 'RUNNING' || actualRun(run).context?.authnRequestId != null) throw new Error('Cold evaluation started M0');
+    transcript = await api(`/api/runs/${task.runId}/transcript`);
+    if (transcript.length) throw new Error('Cold evaluation recorded an outbound operation');
+    await record('normal-scope-after-empty-evaluation.json', await assertEmptyNormalScope(task, api, run));
+  } else if (actualRun(run).status !== 'WAITING_BROWSER'
+      || typeof actualRun(run).context?.authnRequestId !== 'string'
+      || !/^_[A-Za-z0-9_-]+$/.test(actualRun(run).context.authnRequestId)) {
+    throw new Error('Normal flow is neither safe cold scope nor an existing live M0');
+  } else {
+    await assertEmptyNormalScope(task, api, run);
+    if (!transcript.some(entry => entry.runId === task.runId && entry.direction === 'OUTBOUND'
+        && entry.samlSummary?.type === 'AuthnRequest' && entry.samlSummary.id === actualRun(run).context.authnRequestId)) {
+      throw new Error('Existing live M0 has no matching Recorder request');
+    }
+  }
+  const membership = validateMembership(task, run, plan, await api(`/api/runs/${task.runId}/result.json`));
+  await record('membership.json', membership);
+  let guard;
+  const poll = async () => {
+    run = await api(`/api/runs/${task.runId}`);
+    if (actualRun(run).status !== 'COMPLETED') return false;
+    transcript = await api(`/api/runs/${task.runId}/transcript`);
+    guard = validateM0Guard(task, run, plan, transcript); // Success HTML cannot satisfy this.
+    return true;
+  };
+  let observed;
+  if (cold) {
+    counts.initialNormalFlowSubmissions++;
+    counts.normalLoginContexts++;
+    observed = await browser.normalFlow(`${task.suiteBaseUrl}/p/${task.planId}/start/m0-roundtrip?run=${task.runId}`,
+      task.actionTimeoutSeconds, poll);
+  } else {
+    const handle = { runId: task.runId, planId: task.planId, authnRequestId: actualRun(run).context.authnRequestId };
+    counts.normalPollOnlyResumes++;
+    observed = await browser.resumeNormalFlow(handle, task.actionTimeoutSeconds, poll);
+  }
+  counts.manualAuthenticationCheckpoints += observed.manualAuthenticationCheckpoints ?? 0;
+  await record('normal-flow-observation.json', observed);
+  if (await poll()) {
+    await record('m0-guard.json', guard);
+    return { run, transcript, membership, pendingNormalFlow: null };
+  }
+  const authnRequestId = actualRun(run).context?.authnRequestId;
+  if (actualRun(run).status !== 'WAITING_BROWSER' || typeof authnRequestId !== 'string'
+      || !/^_[A-Za-z0-9_-]+$/.test(authnRequestId)) throw new Error('Pending M0 handle is unproven');
+  counts.liveNormalFlowsRetained++;
+  return { run, transcript, membership, pendingNormalFlow: { runId: task.runId, planId: task.planId,
+    authnRequestId, state: 'WAITING_BROWSER', browserPageRetained: observed.browserPageRetained === true,
+    resumePolicy: 'poll-only-no-start-resend' } };
 }
 
 export function probeUrl(task, status) {
@@ -95,9 +218,11 @@ export function validateMembership(task, run, plan, result) {
 }
 
 export function validateM0Guard(task, run, plan, transcript) {
+  normalIdentity(task, run, plan);
   const effectiveRun = run.run ?? run;
   const effectivePlan = plan.plan?.plan ?? plan.plan ?? plan;
-  if (effectiveRun.status !== 'COMPLETED' || !Array.isArray(transcript)
+  const nonce = effectiveRun.context?.authnRequestId;
+  if (effectiveRun.status !== 'COMPLETED' || typeof nonce !== 'string' || !/^_[A-Za-z0-9_-]+$/.test(nonce) || !Array.isArray(transcript)
       || new Set(transcript.map(entry => entry.id)).size !== transcript.length
       || transcript.some(entry => entry.runId !== task.runId)) throw new Error('Normal-flow Run completion is unproven');
   const controls = transcript.filter(entry => entry.direction === 'INBOUND'
@@ -106,10 +231,14 @@ export function validateM0Guard(task, run, plan, transcript) {
     && entry.samlSummary?.issuer === effectivePlan.target.entityId
     && entry.samlSummary?.destination === `${task.suiteBaseUrl}/p/${task.planId}/sp/acs/0`
     && entry.url === entry.samlSummary.destination && entry.correlationId === entry.samlSummary.inResponseTo
-    && transcript.some(request => request.direction === 'OUTBOUND'
-      && request.samlSummary?.type === 'AuthnRequest' && request.samlSummary?.id === entry.samlSummary.inResponseTo));
-  if (!controls.length) throw new Error('Accepted, correlated normal SSO control is missing');
-  return { completedRunStatus: effectiveRun.status,
+    && entry.samlSummary.inResponseTo === nonce
+    && transcript.filter(request => request.direction === 'OUTBOUND'
+      && request.samlSummary?.type === 'AuthnRequest' && request.samlSummary?.id === nonce).length === 1);
+  if (controls.length !== 1) throw new Error('Accepted, correlated normal SSO control is missing or ambiguous');
+  const requests = transcript.filter(request => request.direction === 'OUTBOUND'
+    && request.samlSummary?.type === 'AuthnRequest' && request.samlSummary?.id === nonce);
+  return { runId: task.runId, planId: task.planId, completedRunStatus: effectiveRun.status, activeAuthnRequestId: nonce,
+    normalAuthnRequestReferences: requests.map(entry => entry.id),
     acceptedNormalFlowReferences: controls.map(entry => entry.id),
     source: 'official-Suite-Recorder-normalFlowAccepted', additionalTargetInteraction: false };
 }
@@ -131,6 +260,7 @@ export function samlMessage(task, request, action) {
     binding = 'HTTP-Redirect';
   } else return null;
   const field = isSuite ? 'SAMLResponse' : 'SAMLRequest';
+  if ([...fields.keys()].some(key => !['SAMLRequest', 'SAMLResponse', 'RelayState', 'SigAlg', 'Signature'].includes(key))) return null;
   if (fields.getAll(field).length !== 1 || fields.has(isSuite ? 'SAMLRequest' : 'SAMLResponse')) return null;
   const encoded = fields.get(field);
   if (!/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(encoded) || !encoded) throw new Error('Malformed SAML base64');
@@ -138,17 +268,27 @@ export function samlMessage(task, request, action) {
   if (binding === 'HTTP-Redirect') bytes = inflateRawSync(bytes, { maxOutputLength: 4 * 1024 * 1024 });
   if (bytes.length > 4 * 1024 * 1024) throw new Error('Oversized SAML message');
   return { bytes, record: { runId: task.runId, planId: task.planId,
-    caseId: action.caseId, actionId: action.actionId, fixtureContext: action.fixtureContext ?? null,
+    ...(action.operationKind === 'M0_NORMAL' ? { operationKind: 'M0_NORMAL' }
+      : { caseId: action.caseId, actionId: action.actionId, fixtureContext: action.fixtureContext ?? null }),
     direction: isSuite ? 'INBOUND' : 'OUTBOUND', binding,
     // URLs can contain opaque login state. Keep the public endpoint without its query.
     endpoint: url.origin + url.pathname, sha256: sha(bytes), bytes: bytes.length,
     observedAtUtc: new Date().toISOString() } };
 }
 
-export function bindProtocolOriginals(task, captures, transcript) {
+export function bindProtocolOriginals(task, captures, transcript, normalGuard = null) {
   if (!Array.isArray(transcript) || new Set(transcript.map(entry => entry.id)).size !== transcript.length
       || transcript.some(entry => entry.runId !== task.runId)) throw new Error('Transcript is not uniquely bound to this Run');
   const bindings = [];
+  const normalRefs = direction => direction === 'INBOUND' ? normalGuard?.acceptedNormalFlowReferences : normalGuard?.normalAuthnRequestReferences;
+  const normalGuardBound = normalGuard?.source === 'official-Suite-Recorder-normalFlowAccepted'
+    && normalGuard?.runId === task.runId && normalGuard?.planId === task.planId
+    && /^_[A-Za-z0-9_-]+$/.test(normalGuard.activeAuthnRequestId ?? '')
+    && ['INBOUND', 'OUTBOUND'].every(direction => Array.isArray(normalRefs(direction)) && normalRefs(direction).length === 1
+      && transcript.some(entry => entry.id === normalRefs(direction)[0] && entry.direction === direction
+        && (direction === 'INBOUND' ? entry.samlSummary?.normalFlowAccepted === true
+          && entry.samlSummary?.inResponseTo === normalGuard.activeAuthnRequestId && entry.correlationId === normalGuard.activeAuthnRequestId
+          : entry.samlSummary?.id === normalGuard.activeAuthnRequestId)));
   for (const capture of captures) {
     // Recorder summary includes the actual decoded message hash. Exported browser
     // messages are supplemental originals until this equality is established.
@@ -156,13 +296,17 @@ export function bindProtocolOriginals(task, captures, transcript) {
       && entry.decodedSamlBytes === capture.record.bytes
       && (entry.samlSummary?.decodedSha256 === capture.record.sha256
         || entry.samlSummary?.decoded_sha256 === capture.record.sha256));
-    const owned = matches.filter(entry => capture.record.direction === 'INBOUND'
+    const owned = matches.filter(entry => capture.record.operationKind === 'M0_NORMAL'
+      ? entry.samlSummary?.type === (capture.record.direction === 'INBOUND' ? 'Response' : 'AuthnRequest')
+        && normalGuardBound && normalRefs(capture.record.direction).includes(entry.id)
+      : capture.record.direction === 'INBOUND'
       ? entry.correlationId === '_' + capture.record.actionId
       : entry.correlationId === capture.record.actionId
         && entry.samlSummary?.scenario_case_id === capture.record.caseId);
     bindings.push({ ...capture.record, file: capture.file,
       transcriptReferences: owned.map(entry => entry.id),
-      bindingState: owned.length === 1 ? 'recorder-hash-and-action-bound' : 'original-captured-recorder-hash-unavailable',
+      bindingState: owned.length === 1 ? (capture.record.operationKind === 'M0_NORMAL'
+        ? 'recorder-hash-and-normal-flow-bound' : 'recorder-hash-and-action-bound') : 'original-captured-recorder-hash-unavailable',
       conformanceConclusionAssigned: false });
   }
   return bindings;
@@ -178,15 +322,39 @@ export async function collectSelected(task, api, browser, record) {
       credentialValuesPersisted: 0, automatedCredentialPosts: 0,
     productSettingWriteAttempts: 0, productSettingWrites: 0, restorationWrites: 0,
     productRestarts: 0, fullProfileStartCalls: 0, initialNormalFlowSubmissions: 0,
+    normalPreflightCalls: 0, normalEmptyEvaluations: 0, normalLoginContexts: 0,
+    normalPollOnlyResumes: 0, liveNormalFlowsRetained: 0,
     conclusionAssignments: 0, liveActionsRetained: 0 };
-  const run = await api(`/api/runs/${task.runId}`);
+  let run = await api(`/api/runs/${task.runId}`);
   const plan = await api(`/api/plans/${task.planId}`);
-  const result = await api(`/api/runs/${task.runId}/result.json`);
-  const membership = validateMembership(task, run, plan, result);
+  let membership;
+  let beforeTranscript;
+  const recordCounts = async () => record('operation-counts.json', { ...counts, settingsWereNotModifiedByCollector: true,
+    restorationRequired: false, sessionStorageExported: false, credentialFieldsFilledByCollector: false,
+    normalLoginContextIsBrowserReuseNotMeasuredHumanLoginCount: true,
+    actualHumanLoginCount: null, actualHumanLoginCountMeasured: false,
+    fullProfileMayStartUnselectedCases: task.startTests,
+    fullProfileCaseMembershipCount: membership?.actualRunCaseCount ?? null,
+    fullProfileQueueChangeCount: null, fullProfileQueueChangesMeasured: false,
+    manualAuthenticationCheckpointsAreNotCredentialSubmissionCounts: true, verdictAdopted: false });
+  try {
+    if (task.completeNormalFlow) {
+      const normal = await completeNormalControl(task, api, browser, record, counts, run, plan);
+      ({ run, membership, transcript: beforeTranscript } = normal);
+      if (normal.pendingNormalFlow) {
+        await recordCounts();
+        await record('evaluation.json', { performed: false, reason: 'live-normal-flow-retained' });
+        return { counts, membership, steps: [], collectionState: 'WAITING_M0', pendingAction: null,
+          pendingNormalFlow: normal.pendingNormalFlow };
+      }
+    } else {
+      membership = validateMembership(task, run, plan, await api(`/api/runs/${task.runId}/result.json`));
+      beforeTranscript = await api(`/api/runs/${task.runId}/transcript`);
+      await record('m0-guard.json', validateM0Guard(task, run, plan, beforeTranscript));
+    }
+  } catch (error) { await recordCounts(); throw error; }
   await record('membership.json', membership);
-  const beforeTranscript = await api(`/api/runs/${task.runId}/transcript`);
   await record('transcript-before.json', beforeTranscript);
-  await record('m0-guard.json', validateM0Guard(task, run, plan, beforeTranscript));
   if (task.initialNormalFlow) {
     counts.initialNormalFlowSubmissions++;
     const observed = await browser.normalFlow(`${task.suiteBaseUrl}/p/${task.planId}/start/m0-roundtrip?run=${task.runId}`, task.actionTimeoutSeconds);
@@ -280,26 +448,21 @@ export async function collectSelected(task, api, browser, record) {
       collectionState: pendingAction ? 'AWAITING_RESPONSE' : 'COLLECTED', pendingAction };
   } finally {
     await record('steps.json', steps);
-    await record('operation-counts.json', { ...counts, settingsWereNotModifiedByCollector: true,
-      restorationRequired: false, sessionStorageExported: false,
-      credentialFieldsFilledByCollector: false,
-      fullProfileMayStartUnselectedCases: task.startTests,
-      fullProfileCaseMembershipCount: membership.actualRunCaseCount,
-      fullProfileQueueChangeCount: null,
-      fullProfileQueueChangesMeasured: false,
-      manualAuthenticationCheckpointsAreNotCredentialSubmissionCounts: true,
-      verdictAdopted: false });
+    await recordCounts();
   }
 }
 
 export async function playwrightAdapter(task, chromium, record, originals) {
   const browser = await chromium.launch({ channel: process.env.SAML_SCOPE_BROWSER_CHANNEL || 'chrome', headless: false });
-  const authenticated = await browser.newContext();
+  let authenticated;
+  try { authenticated = await browser.newContext(); } catch (error) { await browser.close(); throw error; }
   const suiteOrigin = task.suiteBaseUrl;
   const allowed = new Set([suiteOrigin, ...task.targetOrigins]);
   let active = null;
   let captureFailure = null;
   let sequence = 0;
+  let normalPage = null;
+  let normalCheckpoint = false;
   const monitored = new Set();
   async function monitor(context) {
     if (monitored.has(context)) return;
@@ -324,21 +487,37 @@ export async function playwrightAdapter(task, chromium, record, originals) {
     const response = await authenticated.request.fetch(suiteOrigin + path, { method: body === undefined ? 'GET' : 'POST',
       ...(body === undefined ? {} : { data: body }), timeout: 30000, maxRedirects: 0 });
     if (!response.ok()) throw new Error(`Suite API status ${response.status()}`);
-    return response.json();
+    if (!/^application\/json(?:;|$)/i.test(response.headers()['content-type'] ?? '')) throw new Error('Non-JSON Suite body omitted');
+    return publicJson(await response.json());
   };
-  async function navigate(url, context, timeoutSeconds, status, poll) {
-    const page = await context.newPage();
-    let checkpoint = false;
+  async function navigate(url, context, timeoutSeconds, status, poll, normal = false) {
+    // A resume supplies no URL and cannot invoke page.goto or another M0 GET.
+    if (normal && !url && (!normalPage || normalPage.isClosed())) {
+      return { recorded: false, reason: 'no-live-browser-page', browserPageRetained: false, manualAuthenticationCheckpoints: 0 };
+    }
+    const page = normal && normalPage ? normalPage : await context.newPage();
+    if (normal) normalPage = page;
+    let checkpoint = normal && normalCheckpoint;
+    let retain = false;
     let terminalStatus = null;
     let lastNavigationStatus = null;
-    page.on('response', response => {
+    const observeResponse = response => {
       if (response.request().isNavigationRequest() && response.frame() === page.mainFrame()) {
         lastNavigationStatus = response.status();
         if (task.targetOrigins.includes(new URL(response.url()).origin) && response.status() >= 400) terminalStatus = response.status();
       }
-    });
+    };
+    page.on('response', observeResponse);
     try {
-      await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
+      if (url) {
+        try { await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 }); }
+        catch (error) {
+          if (!normal) throw error;
+          retain = !page.isClosed();
+          return { recorded: false, reason: 'normal-navigation-observation-error', browserPageRetained: retain,
+            manualAuthenticationCheckpoints: checkpoint ? 1 : 0 };
+        }
+      }
       if (status) {
         if (page.url() !== url) throw new Error('The Suite probe redirected before deliberate submission');
         const confirmation = page.locator('input[name="freshSessionConfirmed"]');
@@ -351,7 +530,8 @@ export async function playwrightAdapter(task, chromium, record, originals) {
       const until = Date.now() + timeoutSeconds * 1000;
       while (Date.now() < until) {
         if (captureFailure) throw captureFailure;
-        if (poll && await poll()) return { recorded: true, manualAuthenticationCheckpoints: checkpoint ? 1 : 0 };
+        if (poll && await poll()) return { recorded: true, browserPageRetained: false,
+          manualAuthenticationCheckpoints: checkpoint && (!normal || !normalCheckpoint) ? 1 : 0 };
         if (page.isClosed()) {
           // Suite receipt pages close after recording. Require server-side progression.
           if (poll) { await sleep(100); continue; }
@@ -371,9 +551,11 @@ export async function playwrightAdapter(task, chromium, record, originals) {
         }
         if (terminalStatus !== null && await page.locator('input[name="SAMLResponse"]').count() === 0) {
           const landing = new URL(page.url());
+          if (normal) retain = true;
           return { recorded: false, reason: 'target-http-error-without-saml',
             httpStatus: terminalStatus, observedTerminalUrl: landing.origin + landing.pathname,
-            responseBodyExported: false, manualAuthenticationCheckpoints: checkpoint ? 1 : 0 };
+            responseBodyExported: false, browserPageRetained: retain,
+            manualAuthenticationCheckpoints: checkpoint && (!normal || !normalCheckpoint) ? 1 : 0 };
         }
         if (!poll && new URL(page.url()).origin === suiteOrigin
             && await page.getByText('M0 SSO round trip completed', { exact: false }).count()) {
@@ -381,13 +563,33 @@ export async function playwrightAdapter(task, chromium, record, originals) {
         }
         await sleep(300);
       }
+      if (normal) retain = !page.isClosed();
       return { recorded: false, reason: 'observation-timeout', lastNavigationStatus,
-        manualAuthenticationCheckpoints: checkpoint ? 1 : 0 };
-    } finally { if (!page.isClosed()) await page.close(); }
+        browserPageRetained: retain, manualAuthenticationCheckpoints: checkpoint && (!normal || !normalCheckpoint) ? 1 : 0 };
+    } finally {
+      page.off('response', observeResponse);
+      if (normal) normalCheckpoint = checkpoint;
+      if (!retain && !page.isClosed()) await page.close();
+      if (normal && !retain) normalPage = null;
+    }
   }
   return {
     api,
-    async normalFlow(url, timeout) { return navigate(url, authenticated, timeout, null, null); },
+    async normalFlow(url, timeout, poll) {
+      if (normalPage) throw new Error('Existing normal page cannot be reissued');
+      if (!poll) return navigate(url, authenticated, timeout, null, null); // legacy explicit extra flow
+      active = { operationKind: 'M0_NORMAL' };
+      const observed = await navigate(url, authenticated, timeout, null, poll, true);
+      if (!observed.browserPageRetained) active = null;
+      return observed;
+    },
+    async resumeNormalFlow(handle, timeout, poll) {
+      if (handle.runId !== task.runId || handle.planId !== task.planId) throw new Error('Normal handle mismatch');
+      active = { operationKind: 'M0_NORMAL' };
+      const observed = await navigate(null, authenticated, timeout, null, poll, true);
+      if (!observed.browserPageRetained) active = null;
+      return observed;
+    },
     async prepareWithoutTarget(currentTask, status) {
       const response = await authenticated.request.post(probeUrl(currentTask, status), {
         form: { freshSessionConfirmed: 'true' }, maxRedirects: 0, timeout: 30000 });
@@ -404,10 +606,11 @@ export async function playwrightAdapter(task, chromium, record, originals) {
             return after.actionId !== status.actionId || !['READY', 'AWAITING_RESPONSE'].includes(after.state); });
       } finally { active = null; if (context !== authenticated) await context.close(); }
     },
-    async close() {
+    async close(reason = 'collector-finished') {
       await browser.close();
       if (browser.isConnected()) throw new Error('Browser closure is unproven');
-      return { browserContextsClosed: true };
+      normalPage = null;
+      return { browserContextsClosed: true, reason };
     },
   };
 }
@@ -421,37 +624,84 @@ async function main() {
   const dependency = process.env.SAML_SCOPE_PLAYWRIGHT;
   if (!dependency || !dependency.startsWith('/')) throw new Error('Set SAML_SCOPE_PLAYWRIGHT to the installed absolute package path');
   const { chromium } = require(dependency);
-  const record = async (name, value) => writeFile(resolve(task.outputDirectory, name), JSON.stringify(value, null, 2) + '\n');
+  let approvedNormalGuard = null;
+  const record = async (name, value) => {
+    publicJson(value);
+    if (name === 'm0-guard.json') approvedNormalGuard = value;
+    await writeFile(resolve(task.outputDirectory, name), JSON.stringify(value, null, 2) + '\n');
+  };
   await record('task.json', task);
   const originals = [];
   const adapter = await playwrightAdapter(task, chromium, record, originals);
   let succeeded = false;
   let collected = null;
   let transcript = null;
+  let explicitlyStopped = false;
+  let commands;
+  let commandIterator;
+  const totalCounts = {};
+  const exported = new Set();
+  const flushOriginals = async () => {
+    await mkdir(resolve(task.outputDirectory, 'browser-saml-originals'), { recursive: true });
+    for (const capture of originals) {
+      if (exported.has(capture.file)) continue;
+      await writeFile(resolve(task.outputDirectory, capture.file), capture.bytes, { flag: 'wx' });
+      exported.add(capture.file);
+    }
+    await record('browser-saml-manifest.json', transcript
+      ? bindProtocolOriginals(task, originals, transcript, approvedNormalGuard)
+      : originals.map(capture => ({ ...capture.record, file: capture.file,
+          transcriptReferences: [], bindingState: 'original-captured-recorder-unavailable', conformanceConclusionAssigned: false })));
+  };
   try {
-    collected = await collectSelected(task, adapter.api, adapter, record);
-    await record('collection-state.json', { state: collected.collectionState, pendingAction: collected.pendingAction });
-    transcript = await adapter.api(`/api/runs/${task.runId}/transcript`);
-    await record('transcript.json', transcript);
-    await record('result.json', await adapter.api(`/api/runs/${task.runId}/result.json`));
-    succeeded = true;
+    if (task.completeNormalFlow) {
+      commands = createInterface({ input: process.stdin, terminal: false });
+      commandIterator = commands[Symbol.asyncIterator]();
+    }
+    for (let attempt = 1; ; attempt++) {
+      const attemptPath = `attempt-${String(attempt).padStart(4, '0')}`;
+      if (task.completeNormalFlow) await mkdir(resolve(task.outputDirectory, attemptPath));
+      const attemptRecord = task.completeNormalFlow ? async (name, value) => {
+        await record(`${attemptPath}/${name}`, value); await record(name, value);
+      } : record;
+      collected = await collectSelected(task, adapter.api, adapter, attemptRecord);
+      for (const [key, value] of Object.entries(collected.counts)) totalCounts[key] = (totalCounts[key] ?? 0) + value;
+      await record('collection-state.json', { state: collected.collectionState, pendingAction: collected.pendingAction,
+        pendingNormalFlow: collected.pendingNormalFlow ?? null });
+      transcript = await adapter.api(`/api/runs/${task.runId}/transcript`);
+      await record('transcript.json', transcript);
+      await record('result.json', await adapter.api(`/api/runs/${task.runId}/result.json`));
+      await flushOriginals();
+      if (!collected.pendingNormalFlow?.browserPageRetained) { succeeded = collected.collectionState !== 'WAITING_M0'; break; }
+      const handle = collected.pendingNormalFlow;
+      await record('live-normal-flow.json', { ...handle, processRetained: true, pageOrSessionExported: false });
+      process.stderr.write(`M0 retained: ${handle.runId} ${handle.authnRequestId}. Type resume to poll the same page, or stop to close it.\n`);
+      let command;
+      while (true) {
+        const next = await commandIterator.next();
+        command = next.done ? 'stop' : next.value.trim();
+        if (command === 'resume' || command === 'stop') break;
+        process.stderr.write('Use resume or stop; no target request is resent.\n');
+      }
+      if (command === 'stop') { explicitlyStopped = true; break; }
+    }
+    await record('campaign-operation-counts.json', { ...totalCounts, actualHumanLoginCount: null,
+      actualHumanLoginCountMeasured: false, normalLoginContextIsBrowserReuseNotMeasuredHumanLoginCount: true,
+      credentialsOrCookiesExported: false, verdictAdopted: false });
   } finally {
     let browserContextsClosed = false;
     try {
       // Keep public protocol originals from failed attempts as well. Without a
       // server transcript they remain explicitly unqualified supplemental bytes.
-      await mkdir(resolve(task.outputDirectory, 'browser-saml-originals'));
-      for (const capture of originals) await writeFile(resolve(task.outputDirectory, capture.file), capture.bytes, { flag: 'wx' });
-      await record('browser-saml-manifest.json', transcript
-        ? bindProtocolOriginals(task, originals, transcript)
-        : originals.map(capture => ({ ...capture.record, file: capture.file,
-            transcriptReferences: [], bindingState: 'original-captured-recorder-unavailable',
-            conformanceConclusionAssigned: false })));
+      await flushOriginals();
     } finally {
-      try { browserContextsClosed = (await adapter.close()).browserContextsClosed === true; }
+      commands?.close();
+      try { browserContextsClosed = (await adapter.close(explicitlyStopped ? 'explicit-stop-or-input-closed' : 'collector-finished')).browserContextsClosed === true; }
       finally {
         await record('collector-completion.json', { succeeded, verdictAdopted: false,
           collectionState: collected?.collectionState ?? 'FAILED', pendingAction: collected?.pendingAction ?? null,
+          pendingNormalFlow: collected?.pendingNormalFlow ?? null, explicitlyStopped,
+          existingSuiteM0AbortedOrRestarted: false,
           browserContextsClosed, credentialsOrCookiesExported: false,
           collectorChangedProductSettings: false, restorationRequired: false,
           protocolOriginalsCaptured: originals.length });

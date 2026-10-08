@@ -32,6 +32,24 @@ export interface Run {
   updatedAt?: string | number
 }
 
+export interface DefinitionAvailability {
+  code: string
+  definitionAvailable: boolean
+  readOnlyStored: boolean
+  liveEvaluationAvailable: boolean
+  newRunRequired: boolean
+}
+
+export interface StoredHistoricalState {
+  runId: string
+  slots: Array<{
+    caseId: string
+    status: string
+    storedOutcome: string | null
+    evidence: Array<{ kind: string; reference: string }>
+  }>
+}
+
 export interface RunCreated {
   run: Run
   managementUrl: string | null
@@ -412,7 +430,9 @@ export const api = {
   interactions: (runId: string) => request<PendingInteraction[]>(`/api/runs/${runId}/interactions`),
   workspaceEvidence: (runId: string) => request<{
     interactions: PendingInteraction[]; bootstrapContracts: BootstrapContract[];
-    protocolEvidence: ProtocolEvidenceStatus; activeProbe: ActiveProbeStatus; campaigns: CampaignReport;
+    protocolEvidence: ProtocolEvidenceStatus; activeProbe: ActiveProbeStatus; campaigns: CampaignReport | null;
+    definitionAvailability?: DefinitionAvailability;
+    storedHistoricalState?: StoredHistoricalState | null;
   }>(`/api/runs/${runId}/workspace-evidence`),
   campaigns: (runId: string) => request<CampaignReport>(`/api/runs/${runId}/campaigns`),
   bootstrapContracts: (runId: string) => request<BootstrapContract[]>(`/api/runs/${runId}/bootstrap-contracts`),

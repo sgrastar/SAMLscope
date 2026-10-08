@@ -22,6 +22,7 @@ public final class ApprovedCaseStarter {
     private final CaseExecutionService executions;
     private final ApplicabilityProvider applicability;
     private final java.util.function.Function<TestPlan,FunctionalCaseDefinition> profileDefinitions;
+    private final java.util.function.Function<TestPlan,FunctionalReleaseContext> releaseContexts;
 
     public ApprovedCaseStarter(
             CoverageCatalog coverage,
@@ -30,6 +31,14 @@ public final class ApprovedCaseStarter {
             CaseExecutionService executions,
             ApplicabilityProvider applicability,
             java.util.function.Function<TestPlan,FunctionalCaseDefinition> profileDefinitions) {
+        this(coverage, definitions, registry, executions, applicability, profileDefinitions, null);
+    }
+
+    public ApprovedCaseStarter(CoverageCatalog coverage, CaseDefinitionCatalog definitions,
+            TestCaseRegistry registry, CaseExecutionService executions, ApplicabilityProvider applicability,
+            java.util.function.Function<TestPlan,FunctionalCaseDefinition> profileDefinitions,
+            java.util.function.Function<TestPlan,FunctionalReleaseContext> releaseContexts) {
+        this.releaseContexts = releaseContexts;
         this.obligations = Objects.requireNonNull(coverage, "coverage").byKey();
         this.definitions = Objects.requireNonNull(definitions, "definitions");
         this.registry = Objects.requireNonNull(registry, "registry");
@@ -60,12 +69,15 @@ public final class ApprovedCaseStarter {
             throw new IllegalArgumentException("Plan profile belongs to another target role");
         }
         var applicable = applicableByObligation(run, plan);
-        var selectedCases = profileDefinitions.apply(plan).caseIds();
+        var release = releaseContexts == null ? null : releaseContexts.apply(plan);
+        var ownerDefinitions = release == null ? definitions : release.cases();
+        var ownerObligations = release == null ? obligations : release.coverage().byKey();
+        var selectedCases = release == null ? profileDefinitions.apply(plan).caseIds() : release.definition().caseIds();
         var started = new ArrayList<CaseExecution>();
         for (var testCase : registry.forRole(context.targetRole())) {
-            var definition = definitions.require(testCase.id());
-            var obligation = obligations.get(definition.obligation());
             if (!selectedCases.contains(testCase.id())) continue;
+            var definition = ownerDefinitions.require(testCase.id());
+            var obligation = ownerObligations.get(definition.obligation());
             if (obligation.condition() != null
                     && applicable.getOrDefault(obligation.key(), ApplicabilityEvaluation.EffectiveResult.UNKNOWN)
                             != ApplicabilityEvaluation.EffectiveResult.TRUE) {

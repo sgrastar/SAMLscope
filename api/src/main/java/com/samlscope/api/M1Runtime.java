@@ -91,8 +91,9 @@ final class M1Runtime {
     private final CaseTimeoutService timeouts;
     private final RunCampaignService campaigns;
     private final com.samlscope.runner.CampaignActionCompletionService campaignActions;
-    private final PinnedFunctionalCaseDefinitionResolver profileDefinitions;
+    private final com.samlscope.runner.FunctionalReleaseRegistry profileDefinitions;
     private final com.samlscope.core.evaluation.CoverageCatalog coverage;
+    private final com.samlscope.runner.HistoricalRunReadPolicy historicalReads;
     private final com.samlscope.runner.ApplicabilityProvider applicability;
 
     private M1Runtime(
@@ -121,7 +122,7 @@ final class M1Runtime {
             CaseTimeoutService timeouts,
             RunCampaignService campaigns,
             com.samlscope.runner.CampaignActionCompletionService campaignActions,
-            PinnedFunctionalCaseDefinitionResolver profileDefinitions,
+            com.samlscope.runner.FunctionalReleaseRegistry profileDefinitions,
             com.samlscope.core.evaluation.CoverageCatalog coverage,
             com.samlscope.runner.ApplicabilityProvider applicability,
             com.samlscope.runner.SupplementalDecryptionKeyService supplementalKeys,
@@ -160,6 +161,7 @@ final class M1Runtime {
         this.campaigns = campaigns;
         this.campaignActions = campaignActions;
         this.profileDefinitions = profileDefinitions;
+        this.historicalReads = new com.samlscope.runner.HistoricalRunReadPolicy(profileDefinitions);
     }
 
     static M1Runtime create(
@@ -234,20 +236,24 @@ final class M1Runtime {
         var coverage = CoverageCatalogMapper.fromDocument(documents.parsed("tests/coverage.yaml"));
         var predicates = PredicateCatalogMapper.fromDocument(documents.parsed("tests/predicates.yaml"));
         var definitions = CaseDefinitionCatalogMapper.fromDocument(documents.parsed("tests/cases.yaml"));
-        var profileDefinitions = new PinnedFunctionalCaseDefinitionResolver(
-                profileArtifacts, approvedProfileDigests,
-                Map.of(
-                        "tests/coverage.yaml", documents.bytes("tests/coverage.yaml"),
-                        "tests/cases.yaml", documents.bytes("tests/cases.yaml"),
-                        "tests/predicates.yaml", documents.bytes("tests/predicates.yaml")),
-                definitions, coverage);
+        // The protected composition binds the closed manifest to the retained signed C/A bytes.
+        if (!"sha256:1e9c8bfb902ffaced1720b60d0b4e6590df04cc1838b467a1ba395d810e1f2f3"
+                .equals(HistoricalFunctionalProfileDocuments.MANIFEST_SHA)) {
+            throw new IllegalStateException("Historical release authority changed");
+        }
+        var currentProfileBundle = new FunctionalProfileDocuments.Bundle(profileArtifacts, approvedProfileDigests);
+        // Reverify all retained originals before constructing any registry; typed catalogs are immutable.
+        var retainedDefinitions = HistoricalFunctionalProfileDocuments.load(
+                currentProfileBundle, documents, definitions, coverage, predicates);
+        var profileDefinitions = new com.samlscope.runner.FunctionalReleaseRegistry(
+                HistoricalFunctionalProfileDocuments.current(
+                        currentProfileBundle, documents, definitions, coverage, predicates), retainedDefinitions);
         java.util.function.Function<com.samlscope.core.plan.TestPlan,
-                com.samlscope.core.profile.FunctionalCaseDefinition> definitionForPlan = plan -> {
-            if (plan.definitionIdentity() == null) {
-                throw new IllegalStateException("Test Plan has no pinned functional profile definition");
-            }
-            return profileDefinitions.resolve(plan.definitionIdentity());
-        };
+                com.samlscope.runner.FunctionalReleaseContext> releaseForPlan = plan ->
+                profileDefinitions.require(plan.definitionIdentity());
+        java.util.function.Function<com.samlscope.core.plan.TestPlan,
+                com.samlscope.core.profile.FunctionalCaseDefinition> definitionForPlan = plan ->
+                releaseForPlan.apply(plan).definition();
         java.util.function.Function<String, byte[]> runMetadata = runId -> {
             var run = runs.find(runId).orElseThrow(() -> new IllegalArgumentException("Unknown Run"));
             return metadataCache.getRunSnapshot(run.id(), run.planId());
@@ -314,7 +320,7 @@ final class M1Runtime {
         var applicability = new CatalogApplicabilityProvider(
                 coverage, predicates,
                 new PersistedApplicabilityInputProvider(new SqliteApplicabilityInputRepository(database, json)),
-                definitionForPlan);
+                definitionForPlan, releaseForPlan);
         var m1Attested = ApprovedAttestedCaseRegistry.create(
                 definitions, com.samlscope.core.casedef.CaseDefinitionCatalog.Milestone.M1,
                 config.publicBaseUrl(),
@@ -549,19 +555,19 @@ final class M1Runtime {
                 runId -> keys.getOrCreate(runs.find(runId).orElseThrow().planId()));
         var starters = Map.of(
                 com.samlscope.core.casedef.CaseDefinitionCatalog.Milestone.M1, List.of(
-                        new ApprovedCaseStarter(coverage, definitions, m1Attested, executionService, applicability, definitionForPlan),
-                        new ApprovedCaseStarter(coverage, definitions, m1Config, executionService, applicability, definitionForPlan),
-                        new ApprovedCaseStarter(coverage, definitions, m1Browser, executionService, applicability, definitionForPlan)),
+                        new ApprovedCaseStarter(coverage, definitions, m1Attested, executionService, applicability, definitionForPlan, releaseForPlan),
+                        new ApprovedCaseStarter(coverage, definitions, m1Config, executionService, applicability, definitionForPlan, releaseForPlan),
+                        new ApprovedCaseStarter(coverage, definitions, m1Browser, executionService, applicability, definitionForPlan, releaseForPlan)),
                 com.samlscope.core.casedef.CaseDefinitionCatalog.Milestone.M2, List.of(
-                        new ApprovedCaseStarter(coverage, definitions, m2Automated, executionService, applicability, definitionForPlan),
-                        new ApprovedCaseStarter(coverage, definitions, m2Attested, executionService, applicability, definitionForPlan),
-                        new ApprovedCaseStarter(coverage, definitions, m2Config, executionService, applicability, definitionForPlan),
-                        new ApprovedCaseStarter(coverage, definitions, m2Browser, executionService, applicability, definitionForPlan)),
+                        new ApprovedCaseStarter(coverage, definitions, m2Automated, executionService, applicability, definitionForPlan, releaseForPlan),
+                        new ApprovedCaseStarter(coverage, definitions, m2Attested, executionService, applicability, definitionForPlan, releaseForPlan),
+                        new ApprovedCaseStarter(coverage, definitions, m2Config, executionService, applicability, definitionForPlan, releaseForPlan),
+                        new ApprovedCaseStarter(coverage, definitions, m2Browser, executionService, applicability, definitionForPlan, releaseForPlan)),
                 com.samlscope.core.casedef.CaseDefinitionCatalog.Milestone.M3, List.of(
-                        new ApprovedCaseStarter(coverage, definitions, m3Automated, executionService, applicability, definitionForPlan),
-                        new ApprovedCaseStarter(coverage, definitions, m3Attested, executionService, applicability, definitionForPlan),
-                        new ApprovedCaseStarter(coverage, definitions, m3Config, executionService, applicability, definitionForPlan),
-                        new ApprovedCaseStarter(coverage, definitions, m3Browser, executionService, applicability, definitionForPlan)));
+                        new ApprovedCaseStarter(coverage, definitions, m3Automated, executionService, applicability, definitionForPlan, releaseForPlan),
+                        new ApprovedCaseStarter(coverage, definitions, m3Attested, executionService, applicability, definitionForPlan, releaseForPlan),
+                        new ApprovedCaseStarter(coverage, definitions, m3Config, executionService, applicability, definitionForPlan, releaseForPlan),
+                        new ApprovedCaseStarter(coverage, definitions, m3Browser, executionService, applicability, definitionForPlan, releaseForPlan)));
         var pendingInteractions = new PendingInteractionService(caseExecutions, interactiveRegistry);
         var bootstrapContracts = new BootstrapContractService(
                 definitions, caseExecutions, plans, runs, transcript, metadataLab);
@@ -579,8 +585,12 @@ final class M1Runtime {
                 campaigns, interactiveRegistry, browserCompletions);
         var evaluator = new RunEvaluationService(
                 coverage, plans, runs,
-                new CaseRunProjection(caseExecutions, definitions.byId().keySet()), applicability,
-                new OutboxIncidentProjection(caseExecutions), definitionForPlan);
+                new com.samlscope.runner.ReleaseBoundCaseRunProjection(caseExecutions, runId -> {
+                    var run = runs.find(runId).orElseThrow(() -> new IllegalArgumentException("Unknown Run"));
+                    var plan = plans.find(run.planId()).orElseThrow(() -> new IllegalStateException("Run has no Test Plan"));
+                    return releaseForPlan.apply(plan);
+                }), applicability,
+                new OutboxIncidentProjection(caseExecutions), definitionForPlan, releaseForPlan);
         var artifacts = new FileRunArtifactRepository(config.dataDirectory());
         ResultPublicationService results = null;
         if (!config.suiteImageDigest().isBlank()) {
@@ -596,8 +606,14 @@ final class M1Runtime {
                     URI.create("https://github.com/sgrastar/samlscope/blob/main/tests/cases.yaml"),
                     run -> metadataCache.getRunSnapshot(run.id(), run.planId()),
                     campaigns::report);
+            var historicalContexts = new DefaultResultContextProvider(
+                    new ResultDocumentContext.Suite("SAMLscope", "0.1.0", config.suiteImageDigest(),
+                            config.mode().name().toLowerCase(Locale.ROOT)), components,
+                    URI.create("https://github.com/sgrastar/samlscope/blob/main/docs/04-requirement-coverage.md"),
+                    URI.create("https://github.com/sgrastar/samlscope/blob/main/tests/cases.yaml"),
+                    run -> metadataCache.getRunSnapshot(run.id(), run.planId()));
             results = new ResultPublicationService(
-                    coverage, evaluator, contexts, new ResultJsonWriter(), artifacts,
+                    coverage, evaluator, new com.samlscope.runner.result.ReleaseBoundResultContextProvider(contexts, historicalContexts, profileDefinitions), new ResultJsonWriter(), artifacts,
                     new ReportHtmlWriter(
                             resource("/META-INF/samlscope/LICENSE"),
                             resource("/META-INF/samlscope/LICENSING.md"),
@@ -634,6 +650,7 @@ final class M1Runtime {
     }
 
     TargetInitiatedView prepareTargetInitiated(String runId, String kindText) {
+        historicalReads.requireExecution(requirePlan(requireRun(runId)).definitionIdentity());
         return withManualEvidenceWork(runId, () -> {
             var run = requireRun(runId);
             var plan = requirePlan(run);
@@ -681,6 +698,7 @@ final class M1Runtime {
     record TestStartResult(boolean ecpProbesRequired) {}
 
     TestStartResult startTests(String runId) {
+        historicalReads.requireExecution(requirePlan(requireRun(runId)).definitionIdentity());
         return withManualEvidenceWork(runId, () -> {
             var run = requireRun(runId);
             var plan = requirePlan(run);
@@ -688,7 +706,7 @@ final class M1Runtime {
                 throw new IllegalArgumentException("Complete the initial login before starting the profile tests");
             }
             freezeSupplementalKeys(run, plan);
-            quickCheck.executeApplicable(runId, coverage, applicability);
+            quickCheck.executeApplicable(runId, profileDefinitions.require(plan.definitionIdentity()).coverage(), applicability);
             boolean ecpProbesRequired = plan.profile() == com.samlscope.core.profile.FunctionalProfile.ECP_IDP
                     && !com.samlscope.runner.outbox.EcpProbeService.allRequiredFixturesSent(caseExecutions, runId);
             for (var milestone : com.samlscope.core.casedef.CaseDefinitionCatalog.Milestone.values()) {
@@ -703,11 +721,12 @@ final class M1Runtime {
     }
 
     QuickCheckService.QuickCheckResult quickCheck(String runId) {
+        historicalReads.requireExecution(requirePlan(requireRun(runId)).definitionIdentity());
         return withManualEvidenceWork(runId, () -> {
             var run = requireRun(runId);
             var plan = requirePlan(run);
             freezeSupplementalKeys(run, plan);
-            var value = quickCheck.executeApplicable(runId, coverage, applicability);
+            var value = quickCheck.executeApplicable(runId, profileDefinitions.require(plan.definitionIdentity()).coverage(), applicability);
             startInteractive(run, plan, com.samlscope.core.casedef.CaseDefinitionCatalog.Milestone.M1);
             reconcileTranscriptEvidenceNow(runId);
             if (results != null) results.generate(runId);
@@ -726,7 +745,8 @@ final class M1Runtime {
     }
 
     private void reconcileTranscriptEvidenceNow(String runId) {
-        requireRun(runId);
+        var run = requireRun(runId);
+        if (!usesActiveDefinition(runId)) return;
         var expiredProbe = activeProbes.expireReady(runId);
         var expired = timeouts.expireReady(runId, caseContext(runId));
         metadataFetches.collect(runId);
@@ -738,6 +758,10 @@ final class M1Runtime {
     }
 
     ActiveProbeCoordinator.Status activeProbeStatus(String runId) {
+        if (!usesActiveDefinition(runId)) {
+            requireTranscriptEvidenceComplete(runId);
+            return storedView(runId).activeStatus(requireRun(runId).planId(), "Stored historical state; use an available definition for new automatic checks.");
+        }
         return withManualEvidenceWork(runId, () -> {
             reconcileTranscriptEvidenceNow(runId);
             return activeProbes.status(runId);
@@ -747,6 +771,7 @@ final class M1Runtime {
     /** Public probe routes need only the coordinator state; Transcript automation runs separately. */
     ActiveProbeCoordinator.Status activeProbeRouteStatus(String runId) {
         requireRun(runId);
+        if (!usesActiveDefinition(runId)) return storedView(runId).activeStatus(requireRun(runId).planId(), "Stored historical state; use an available definition for new automatic checks.");
         var expired = activeProbes.expireReady(runId);
         if (expired.isPresent() && results != null) results.generate(runId);
         return activeProbes.status(runId);
@@ -754,7 +779,7 @@ final class M1Runtime {
 
     ActiveProbeCoordinator.PreparedProbe prepareActiveProbe(
             String runId, String actionId, boolean freshSessionConfirmed) {
-        requireRun(runId);
+        historicalReads.requireExecution(requirePlan(requireRun(runId)).definitionIdentity());
         return activeProbes.prepare(runId, actionId, freshSessionConfirmed);
     }
 
@@ -763,18 +788,20 @@ final class M1Runtime {
             String actionId,
             byte[] decodedSaml,
             com.samlscope.core.evaluation.EvidenceRef evidence) {
+        requireRunDefinition(runId);
         var status = activeProbes.accept(runId, actionId, decodedSaml, evidence);
         return publishActiveProbeResponse(runId, actionId, status);
     }
 
     ActiveProbeCoordinator.Status acceptActiveSloProbe(String runId, String actionId, byte[] decodedSaml,
             com.samlscope.core.evaluation.EvidenceRef evidence) {
+        requireRunDefinition(runId);
         return publishActiveProbeResponse(runId, actionId, activeProbes.acceptLogout(runId, actionId, decodedSaml, evidence));
     }
 
     private ActiveProbeCoordinator.Status publishActiveProbeResponse(String runId, String actionId,
             ActiveProbeCoordinator.Status status) {
-        if (results != null) {
+        if (results != null && profileDefinitions.find(requirePlan(requireRun(runId)).definitionIdentity()).isPresent()) {
             // The coordinator may already be reporting the next case in the chain.
             // Publish the outcome of the case that received this response instead
             // of waiting for every queued scenario to finish.
@@ -788,6 +815,7 @@ final class M1Runtime {
     }
 
     ActiveProbeCoordinator.Status abortActiveProbe(String runId) {
+        requireRunDefinition(runId);
         requireRun(runId);
         var status = activeProbes.abort(runId);
         if (results != null) results.generate(runId);
@@ -810,6 +838,7 @@ final class M1Runtime {
 
     ActiveProbeCoordinator.Status reportActiveProbeBrowserResponse(
             String runId, com.samlscope.api.ApiModels.BrowserResponse response) {
+        requireRunDefinition(runId);
         requireRun(runId);
         var status = activeProbes.reportBrowserResponse(
                 runId, response.actionId(), response.status(), response.url(), response.body());
@@ -817,6 +846,7 @@ final class M1Runtime {
     }
 
     ActiveProbeCoordinator.Status retryActiveProbe(String runId) {
+        requireRunDefinition(runId);
         requireRun(runId);
         return activeProbes.retry(runId);
     }
@@ -826,18 +856,29 @@ final class M1Runtime {
             java.util.List<com.samlscope.runner.BootstrapContractQuery.BootstrapContract> bootstrapContracts,
             com.samlscope.runner.ProtocolEvidenceAutomationService.Status protocolEvidence,
             ActiveProbeCoordinator.Status activeProbe,
-            com.samlscope.runner.RunCampaignQuery.CampaignReport campaigns) {}
+            com.samlscope.runner.RunCampaignQuery.CampaignReport campaigns,
+            com.samlscope.runner.HistoricalRunReadPolicy.Availability definitionAvailability,
+            com.samlscope.runner.HistoricalStoredRunView storedHistoricalState) {}
 
     WorkspaceEvidence workspaceEvidence(String runId) {
+        if (!usesActiveDefinition(runId)) {
+            requireTranscriptEvidenceComplete(runId);
+            var stored = storedView(runId);
+            return new WorkspaceEvidence(List.of(), List.of(),
+                    new com.samlscope.runner.ProtocolEvidenceAutomationService.Status(0,0,List.of()),
+                    stored.activeStatus(requireRun(runId).planId(), "Stored historical state; no automatic dispatch from this view."),
+                    null, definitionAvailability(runId), stored);
+        }
         return withManualEvidenceWork(runId, () -> {
             reconcileTranscriptEvidenceNow(runId);
             return new WorkspaceEvidence(pendingInteractions.pending(runId),
                     bootstrapContracts.contracts(runId), protocolEvidence.status(runId),
-                    activeProbes.status(runId), campaigns.report(runId));
+                    activeProbes.status(runId), campaigns.report(runId), definitionAvailability(runId), null);
         });
     }
 
     java.util.List<com.samlscope.runner.InteractionQuery.PendingInteraction> pending(String runId) {
+        if (!usesActiveDefinition(runId)) { requireTranscriptEvidenceComplete(runId); return List.of(); }
         return withManualEvidenceWork(runId, () -> {
             reconcileTranscriptEvidenceNow(runId);
             return pendingInteractions.pending(runId);
@@ -845,6 +886,7 @@ final class M1Runtime {
     }
 
     com.samlscope.runner.RunCampaignQuery.CampaignReport campaigns(String runId) {
+        if (!usesActiveDefinition(runId)) { requireTranscriptEvidenceComplete(runId); requireRunDefinition(runId); return null; }
         return withManualEvidenceWork(runId, () -> {
             reconcileTranscriptEvidenceNow(runId);
             return campaigns.report(runId);
@@ -852,10 +894,12 @@ final class M1Runtime {
     }
 
     java.util.List<com.samlscope.runner.BootstrapContractQuery.BootstrapContract> bootstrapContracts(String runId) {
+        if (!usesActiveDefinition(runId)) { requireTranscriptEvidenceComplete(runId); return List.of(); }
         return withManualEvidenceWork(runId, () -> bootstrapContracts.contracts(runId));
     }
 
     com.samlscope.runner.ProtocolEvidenceAutomationService.Status protocolEvidence(String runId) {
+        if (!usesActiveDefinition(runId)) { requireTranscriptEvidenceComplete(runId); return new com.samlscope.runner.ProtocolEvidenceAutomationService.Status(0,0,List.of()); }
         return withManualEvidenceWork(runId, () -> {
             reconcileTranscriptEvidenceNow(runId);
             return protocolEvidence.status(runId);
@@ -864,6 +908,7 @@ final class M1Runtime {
 
     com.samlscope.runner.ProtocolEvidenceAutomationService.Evaluation evaluateProtocolEvidence(String runId, byte[] sharedKey) {
         try {
+            historicalReads.requireExecution(requirePlan(requireRun(runId)).definitionIdentity());
             return withManualEvidenceWork(runId, () -> {
                 requireRun(runId);
                 return runDecryptionKeys.evaluate(runId, sharedKey, () -> {
@@ -877,6 +922,7 @@ final class M1Runtime {
     }
 
     com.samlscope.runner.ProtocolEvidenceAutomationService.Evaluation evaluateProtocolEvidence(String runId) {
+        historicalReads.requireExecution(requirePlan(requireRun(runId)).definitionIdentity());
         return withManualEvidenceWork(runId, () -> {
             metadataFetches.collect(runId);
             var value = protocolEvidence.evaluateReady(runId);
@@ -887,6 +933,7 @@ final class M1Runtime {
 
     com.samlscope.runner.ProtocolEvidenceAutomationService.Evaluation confirmProtocolEvidenceAttempts(
             String runId) {
+        historicalReads.requireExecution(requirePlan(requireRun(runId)).definitionIdentity());
         return withManualEvidenceWork(runId, () -> {
             var value = protocolEvidence.evaluateAttempted(runId);
             if (results != null) results.generate(runId);
@@ -896,6 +943,7 @@ final class M1Runtime {
 
     com.samlscope.runner.AttestationExecutor.Result attest(
             String runId, String caseId, String value, String note) {
+        historicalReads.requireExecution(requirePlan(requireRun(runId)).definitionIdentity());
         return withManualEvidenceWork(runId, () -> {
             var result = attestations.attest(runId, caseId, value, note);
             if (results != null) results.generate(runId);
@@ -905,6 +953,7 @@ final class M1Runtime {
 
     com.samlscope.runner.ConfigurationExecutor.Result configure(
             String runId, String caseId, String value, String note) {
+        historicalReads.requireExecution(requirePlan(requireRun(runId)).definitionIdentity());
         return withManualEvidenceWork(runId, () -> {
             var result = configurations.answer(runId, caseId, value, note);
             if (results != null) results.generate(runId);
@@ -913,6 +962,7 @@ final class M1Runtime {
     }
 
     com.samlscope.runner.BrowserCompletionExecutor.Result completeBrowser(String runId, String caseId) {
+        historicalReads.requireExecution(requirePlan(requireRun(runId)).definitionIdentity());
         return withManualEvidenceWork(runId, () -> {
             var result = browserCompletions.complete(runId, caseId);
             if (results != null) results.generate(runId);
@@ -922,6 +972,7 @@ final class M1Runtime {
 
     com.samlscope.runner.CampaignActionCompletionService.Result completeCampaignAction(
             String runId, String campaignId, String actionId) {
+        historicalReads.requireExecution(requirePlan(requireRun(runId)).definitionIdentity());
         return withManualEvidenceWork(runId, () -> {
             var result = campaignActions.complete(runId, campaignId, actionId);
             if (results != null) results.generate(runId);
@@ -931,6 +982,7 @@ final class M1Runtime {
 
     java.util.List<com.samlscope.core.caseexec.CaseExecution> startMilestone(
             String runId, String milestoneName) {
+        historicalReads.requireExecution(requirePlan(requireRun(runId)).definitionIdentity());
         return withManualEvidenceWork(runId, () -> {
             var milestone = parseMilestone(milestoneName);
             var run = requireRun(runId);
@@ -950,23 +1002,59 @@ final class M1Runtime {
     }
 
     byte[] requireResult(String runId) {
+        var run = requireRun(runId);
         if (config.mode() == AppConfig.Mode.HOSTED) requireTranscriptEvidenceComplete(runId);
-        else reconcileTranscriptEvidenceNow(runId);
-        return artifacts.findResult(runId)
-                .orElseThrow(() -> new IllegalArgumentException(
-                        results == null
-                                ? "Result generation requires SAMLSCOPE_IMAGE_DIGEST"
-                                : "Result artifact has not been generated"));
+        return historicalReads.readForRuntime(requirePlan(run).definitionIdentity(), () -> artifacts.findResult(runId),
+                () -> currentResult(runId), () -> historicalResult(runId));
+    }
+
+    private byte[] historicalResult(String runId) {
+        if (results == null) throw new IllegalArgumentException("Result generation requires SAMLSCOPE_IMAGE_DIGEST");
+        historicalReads.requireEvaluation(requirePlan(requireRun(runId)).definitionIdentity());
+        return results.requireHistoricalResult(runId); // Existing partner is preserved; pure owning publication only if both absent.
+    }
+
+    private byte[] historicalReport(String runId) {
+        if (results == null) throw new IllegalArgumentException("Report generation requires SAMLSCOPE_IMAGE_DIGEST");
+        historicalReads.requireEvaluation(requirePlan(requireRun(runId)).definitionIdentity());
+        return results.requireHistoricalReport(runId); // Wrap exact cached JSON without store or re-evaluation.
+    }
+
+    private byte[] currentResult(String runId) {
+        if (config.mode() != AppConfig.Mode.HOSTED) reconcileTranscriptEvidenceNow(runId);
+        return artifacts.findResult(runId).orElseThrow(() -> new IllegalArgumentException(
+                results == null ? "Result generation requires SAMLSCOPE_IMAGE_DIGEST" : "Result artifact has not been generated"));
     }
 
     byte[] requireReport(String runId) {
-        if (results == null) throw new IllegalArgumentException("Report generation requires SAMLSCOPE_IMAGE_DIGEST");
+        var run = requireRun(runId);
         if (config.mode() == AppConfig.Mode.HOSTED) requireTranscriptEvidenceComplete(runId);
-        else reconcileTranscriptEvidenceNow(runId);
+        return historicalReads.readForRuntime(requirePlan(run).definitionIdentity(), () -> artifacts.findReport(runId),
+                () -> currentReport(runId), () -> historicalReport(runId));
+    }
+
+    private byte[] currentReport(String runId) {
+        if (results == null) throw new IllegalArgumentException("Report generation requires SAMLSCOPE_IMAGE_DIGEST");
+        if (config.mode() != AppConfig.Mode.HOSTED) reconcileTranscriptEvidenceNow(runId);
         return results.requireReport(runId);
     }
 
+    com.samlscope.runner.HistoricalRunReadPolicy.Availability definitionAvailability(String runId) {
+        return historicalReads.availability(requirePlan(requireRun(runId)).definitionIdentity());
+    }
+
+    void requirePlanDefinition(com.samlscope.core.plan.TestPlan plan) { historicalReads.requireExecution(plan.definitionIdentity()); }
+    void requireRunDefinition(String runId) { requirePlanDefinition(requirePlan(requireRun(runId))); }
+    private boolean usesActiveDefinition(String runId) {
+        return profileDefinitions.find(requirePlan(requireRun(runId)).definitionIdentity())
+                .map(release -> release.kind() == com.samlscope.runner.FunctionalReleaseContext.Kind.CURRENT).orElse(false);
+    }
+    private com.samlscope.runner.HistoricalStoredRunView storedView(String runId) {
+        return com.samlscope.runner.HistoricalStoredRunView.from(runId,caseExecutions.list(runId));
+    }
+
     PublicationRoutes.Published publish(String runId) {
+        historicalReads.requireEvaluation(requirePlan(requireRun(runId)).definitionIdentity());
         if (config.mode() != AppConfig.Mode.HOSTED || !config.publishEnabled()) {
             throw new IllegalArgumentException("Hosted publication is disabled; export report.html locally instead");
         }
@@ -974,7 +1062,8 @@ final class M1Runtime {
         if (results == null) throw new IllegalArgumentException("Publication requires SAMLSCOPE_IMAGE_DIGEST");
         return withManualEvidenceWork(runId, () -> {
             reconcileTranscriptEvidenceNow(runId);
-            results.generate(runId);
+            if (usesActiveDefinition(runId)) results.generate(runId);
+            else historicalResult(runId);
             if (!publications.publish(runId, clock.instant())) {
                 throw new IllegalArgumentException(
                         "This Run cannot be published because Transcript evidence was rejected at its capacity limit");

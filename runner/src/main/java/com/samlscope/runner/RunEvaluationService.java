@@ -20,6 +20,7 @@ public final class RunEvaluationService {
     private final ApplicabilityProvider applicability;
     private final SuiteIncidentProvider incidents;
     private final java.util.function.Function<TestPlan,FunctionalCaseDefinition> profileDefinitions;
+    private final java.util.function.Function<TestPlan,FunctionalReleaseContext> releaseContexts;
 
     public RunEvaluationService(
             CoverageCatalog catalog,
@@ -29,6 +30,14 @@ public final class RunEvaluationService {
             ApplicabilityProvider applicability,
             SuiteIncidentProvider incidents,
             java.util.function.Function<TestPlan,FunctionalCaseDefinition> profileDefinitions) {
+        this(catalog, plans, runs, caseRuns, applicability, incidents, profileDefinitions, null);
+    }
+
+    public RunEvaluationService(CoverageCatalog catalog, PlanRepository plans, RunRepository runs,
+            CaseRunProvider caseRuns, ApplicabilityProvider applicability, SuiteIncidentProvider incidents,
+            java.util.function.Function<TestPlan,FunctionalCaseDefinition> profileDefinitions,
+            java.util.function.Function<TestPlan,FunctionalReleaseContext> releaseContexts) {
+        this.releaseContexts = releaseContexts;
         this.catalog = Objects.requireNonNull(catalog, "catalog");
         this.plans = Objects.requireNonNull(plans, "plans");
         this.runs = Objects.requireNonNull(runs, "runs");
@@ -47,14 +56,18 @@ public final class RunEvaluationService {
         if (runId == null || runId.isBlank()) throw new IllegalArgumentException("runId must not be blank");
         var run = runs.find(runId).orElseThrow(() -> new IllegalArgumentException("Unknown Run"));
         var plan = plans.find(run.planId()).orElseThrow(() -> new IllegalStateException("Run has no Test Plan"));
-        var definition = profileDefinitions.apply(plan);
+        var definition = releaseContexts == null ? profileDefinitions.apply(plan) : releaseContexts.apply(plan).definition();
         var completedCases = caseRuns.completed(runId);
         var evaluation = Evaluator.evaluateFunctionalCaseSnapshot(
-                definition, catalog,
+                definition, catalogFor(plan),
                 applicability.evaluations(run, plan),
                 completedCases,
                 incidents.incidents(runId));
         return new EvaluatedRun(plan, run, definition, evaluation.cases(), evaluation.result());
+    }
+
+    public CoverageCatalog catalogFor(TestPlan plan) {
+        return releaseContexts == null ? catalog : releaseContexts.apply(plan).coverage();
     }
 
     public record EvaluatedRun(

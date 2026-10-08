@@ -52,6 +52,7 @@ public final class SloPeerService {
     private final Clock clock;
     private final ActiveProbeResponseHandler activeProbeResponses;
     private final TargetInitiatedIntents targetInitiated;
+    private final java.util.function.Consumer<String> receiptExecutionPolicy;
     private final com.samlscope.core.transcript.TranscriptContentReader content;
     // Locks protect only one prepared trial; the durable claim itself is its Recorder original.
     private final java.util.concurrent.ConcurrentHashMap<PropagationScope, Object> propagationLocks = new java.util.concurrent.ConcurrentHashMap<>();
@@ -79,6 +80,14 @@ public final class SloPeerService {
             TargetMetadataParser parser, SamlProtocolService saml, TranscriptRecorder transcript,
             Clock clock, ActiveProbeResponseHandler activeProbeResponses,
             TargetInitiatedIntents targetInitiated) {
+        this(plans, runs, metadata, parser, saml, transcript, clock, activeProbeResponses,
+                targetInitiated, runId -> { });
+    }
+
+    public SloPeerService(PlanRepository plans, RunRepository runs, MetadataCache metadata,
+            TargetMetadataParser parser, SamlProtocolService saml, TranscriptRecorder transcript,
+            Clock clock, ActiveProbeResponseHandler activeProbeResponses,
+            TargetInitiatedIntents targetInitiated, java.util.function.Consumer<String> receiptExecutionPolicy) {
         this.plans = java.util.Objects.requireNonNull(plans, "plans");
         this.runs = java.util.Objects.requireNonNull(runs, "runs");
         this.metadata = java.util.Objects.requireNonNull(metadata, "metadata");
@@ -88,6 +97,7 @@ public final class SloPeerService {
         this.clock = java.util.Objects.requireNonNull(clock, "clock");
         this.activeProbeResponses = java.util.Objects.requireNonNull(activeProbeResponses, "activeProbeResponses");
         this.targetInitiated = java.util.Objects.requireNonNull(targetInitiated, "targetInitiated");
+        this.receiptExecutionPolicy = java.util.Objects.requireNonNull(receiptExecutionPolicy, "receiptExecutionPolicy");
         this.content = transcript instanceof com.samlscope.core.transcript.TranscriptContentReader reader ? reader : null;
     }
 
@@ -128,7 +138,7 @@ public final class SloPeerService {
             // A target-initiated LogoutRequest carries no Suite correlation. Accept it only
             // when exactly one Run of this plan has explicitly prepared the check, and verify
             // the issuer before consuming the single-use intent.
-            var intent = targetInitiated.resolvePlan(planId, TargetInitiatedIntents.Kind.TARGET_LOGOUT, clock);
+            var intent = targetInitiated.peekPlan(planId, TargetInitiatedIntents.Kind.TARGET_LOGOUT, clock);
             if (intent.isEmpty()) throw new SamlException("SLO message has no Run correlation");
             var issuer = decodedIssuer(decoded);
             var targetPlan = plans.find(planId).orElseThrow(() -> new SamlException("Unknown Test Plan"));
@@ -177,20 +187,22 @@ public final class SloPeerService {
             throw new SamlException("Not a SAML logout message");
         }
         var propagation = propagationPreparation(plan, run.id(), transport, method, requestUrl, root, arrivedAt);
-        var inboundSummary = new java.util.LinkedHashMap<String, Object>();
-        inboundSummary.put("type", messageType); inboundSummary.put("transport", transport.name());
-        inboundSummary.putAll(propagation);
+        var inboundSummary = Map.<String,Object>of("type", messageType, "transport", transport.name());
         var transcriptXml = transport == Transport.SOAP ? rawBody : decoded.message().xml();
         if (propagation.isEmpty()) {
             transcript.record(new TranscriptInput(run.id(), Direction.INBOUND, arrivedAt, root.getAttribute("ID"), method,
                     requestUrl, 200, sanitized(headers), rawBody, transport == Transport.SOAP ? "text/xml" : contentType(method),
                     rawQuery, transcriptXml, inboundSummary));
+            if ("LogoutResponse".equals(messageType)) return new Result(run.id(), messageType, null, null);
+            receiptExecutionPolicy.accept(run.id());
         } else {
             propagation = claimPropagation(run.id(), root, arrivedAt, method, requestUrl, headers, rawBody,
                     rawQuery, transcriptXml, propagation);
         }
-        if ("LogoutResponse".equals(messageType)) return new Result(run.id(), messageType, null, null);
-        if (targetInitiatedLogout) { /* single-use intent already consumed by resolvePlan */ }
+        if (targetInitiatedLogout && !targetInitiated.consumeForRun(
+                run.id(), TargetInitiatedIntents.Kind.TARGET_LOGOUT, clock)) {
+            throw new SamlException("Target-initiated logout intent was already consumed");
+        }
 
         var target = parser.parse(propagation.isEmpty() ? metadata.get(plan.id())
                 : metadata.getRunSnapshot(run.id(), plan.id()), plan.target().entityId());
@@ -329,12 +341,16 @@ public final class SloPeerService {
                     && q.samlSummary().get("propagationParticipant").equals(a.samlSummary().get("propagationParticipant"))
                     && !a.timestamp().isAfter(arrivedAt))))
                 throw new SamlException("Concurrent SOAP propagation cannot establish sequential continuation");
+            // A retained arrival keeps exactly one original, without claiming an ordinal.
+            var observed = transcript.record(new TranscriptInput(run, Direction.INBOUND, arrivedAt,
+                    request.getAttribute("ID"), method, url, 200, sanitized(headers), rawBody,
+                    "text/xml", rawQuery, transcriptXml, Map.of("type", "LogoutRequest", "transport", "SOAP")));
+            receiptExecutionPolicy.accept(run);
             var summary = new java.util.LinkedHashMap<String, Object>(prepared);
             summary.put("propagationOrdinal", claims.size() + 1);
             var inbound = new java.util.LinkedHashMap<String, Object>(summary);
             inbound.put("type", "LogoutRequest"); inbound.put("transport", "SOAP");
-            transcript.record(new TranscriptInput(run, Direction.INBOUND, arrivedAt, request.getAttribute("ID"), method,
-                    url, 200, sanitized(headers), rawBody, "text/xml", rawQuery, transcriptXml, inbound));
+            transcript.updateSamlAnalysis(observed.id(), request.getAttribute("ID"), inbound);
             return Map.copyOf(summary);
         }
     }

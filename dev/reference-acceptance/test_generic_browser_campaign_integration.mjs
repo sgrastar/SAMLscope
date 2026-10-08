@@ -38,7 +38,7 @@ test('real browser preserves three authenticated operations and isolates passive
     const suite = createServer(async (request, response) => {
       try {
         const url = new URL(request.url, suiteOrigin);
-        if (url.pathname === `/api/runs/${RUN}`) return json(response, { id: RUN, planId: PLAN, status: 'COMPLETED' });
+        if (url.pathname === `/api/runs/${RUN}`) return json(response, { id: RUN, planId: PLAN, status: 'COMPLETED', context: { authnRequestId: '_m0' } });
         if (url.pathname === `/api/plans/${PLAN}`) return json(response, { plan: { id: PLAN, profile: 'browser_sso_idp', target: { kind: 'IDP', entityId: targetOrigin + '/idp' } } });
         if (url.pathname.endsWith('/transcript')) return json(response, [
           { id: 'tx_m0_request', runId: RUN, direction: 'OUTBOUND', samlSummary: { type: 'AuthnRequest', id: '_m0' } },

@@ -29,6 +29,7 @@ public final class IdpPeerService {
     private final TranscriptRecorder transcript;
     private final Clock clock;
     private final boolean secondary;
+    private final java.util.function.Consumer<String> receiptExecutionPolicy;
 
     public IdpPeerService(PlanRepository plans, RunRepository runs, RunService runService,
                           MetadataCache metadataCache, TargetMetadataParser metadataParser,
@@ -40,6 +41,14 @@ public final class IdpPeerService {
                           MetadataCache metadataCache, TargetMetadataParser metadataParser,
                           SamlProtocolService saml, TranscriptRecorder transcript, Clock clock,
                           boolean secondary) {
+        this(plans, runs, runService, metadataCache, metadataParser, saml, transcript, clock,
+                secondary, runId -> { });
+    }
+
+    public IdpPeerService(PlanRepository plans, RunRepository runs, RunService runService,
+                          MetadataCache metadataCache, TargetMetadataParser metadataParser,
+                          SamlProtocolService saml, TranscriptRecorder transcript, Clock clock,
+                          boolean secondary, java.util.function.Consumer<String> receiptExecutionPolicy) {
         this.plans = plans;
         this.runs = runs;
         this.runService = runService;
@@ -49,6 +58,7 @@ public final class IdpPeerService {
         this.transcript = transcript;
         this.clock = clock;
         this.secondary = secondary;
+        this.receiptExecutionPolicy = java.util.Objects.requireNonNull(receiptExecutionPolicy, "receiptExecutionPolicy");
     }
 
     public SamlProtocolService.ResponseMessage consume(
@@ -71,6 +81,8 @@ public final class IdpPeerService {
         var requestRoot = request.parsed().document().getDocumentElement();
         transcript.updateSamlAnalysis(
                 transcriptEntry.id(), requestRoot.getAttribute("ID"), request.parsed().summary());
+        // A late historical request remains recorded; it must not issue a new signed response.
+        receiptExecutionPolicy.accept(run.id());
         var metadata = metadataParser.parse(
                 metadataCache.getRunSnapshot(run.id(), plan.id()), plan.target().entityId());
         var requestedAcs = requestRoot.getAttribute("AssertionConsumerServiceURL");

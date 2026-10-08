@@ -35,6 +35,7 @@ public final class SpPeerService {
     private final Clock clock;
     private final ActiveProbeResponseHandler activeProbeResponses;
     private final TargetInitiatedIntents targetInitiated;
+    private final java.util.function.Consumer<String> receiptExecutionPolicy;
 
     public SpPeerService(PlanRepository plans, RunRepository runs, RunService runService,
                          MetadataCache metadataCache, TargetMetadataParser metadataParser,
@@ -56,6 +57,17 @@ public final class SpPeerService {
                          SamlProtocolService saml, TranscriptRecorder transcript, Clock clock,
                          ActiveProbeResponseHandler activeProbeResponses,
                          TargetInitiatedIntents targetInitiated) {
+        this(plans, runs, runService, metadataCache, metadataParser, saml, transcript, clock,
+                activeProbeResponses, targetInitiated, runId -> { });
+    }
+
+    /** The runtime policy holds late historical observations after recording, before execution. */
+    public SpPeerService(PlanRepository plans, RunRepository runs, RunService runService,
+                         MetadataCache metadataCache, TargetMetadataParser metadataParser,
+                         SamlProtocolService saml, TranscriptRecorder transcript, Clock clock,
+                         ActiveProbeResponseHandler activeProbeResponses,
+                         TargetInitiatedIntents targetInitiated,
+                         java.util.function.Consumer<String> receiptExecutionPolicy) {
         this.plans = plans;
         this.runs = runs;
         this.runService = runService;
@@ -67,6 +79,8 @@ public final class SpPeerService {
         this.activeProbeResponses = java.util.Objects.requireNonNull(
                 activeProbeResponses, "activeProbeResponses");
         this.targetInitiated = java.util.Objects.requireNonNull(targetInitiated, "targetInitiated");
+        this.receiptExecutionPolicy = java.util.Objects.requireNonNull(
+                receiptExecutionPolicy, "receiptExecutionPolicy");
     }
 
     public URI start(String planId, String runId) {
@@ -166,6 +180,7 @@ public final class SpPeerService {
                 com.samlscope.runner.cases.ArtifactBindingEvidence.sha256(metadataCache.getRunSnapshot(run.id(),planId)));
         var original=transcript.record(new TranscriptInput(run.id(),Direction.INBOUND,clock.instant(),expectedAction,method,
                 requestUrl,200,Map.copyOf(cleaned),body,type,query,new byte[0],summary));
+        receiptExecutionPolicy.accept(run.id());
         activeProbeResponses.accept(run.id(),expectedAction,input.artifact().bytes(),new EvidenceRef("transcript",original.id()));
         return new ConsumeResult(summary,run.id(),expectedAction,null,null,input.relayState(),run.id());
     }
@@ -211,6 +226,7 @@ public final class SpPeerService {
                     "parseStatus", "error",
                     "errorCategory", "malformed-saml-response");
             transcript.updateSamlAnalysis(transcriptEntry.id(), transcriptCorrelation, summary);
+            receiptExecutionPolicy.accept(run.id());
             activeProbeResponses.accept(
                     run.id(), activeProbe.orElseThrow().actionId(), rawMessage.xml(),
                     new EvidenceRef("transcript", transcriptEntry.id()));
@@ -244,6 +260,12 @@ public final class SpPeerService {
         } else {
             var correlated = !expected.isBlank() && expected.equals(actual);
             var relayMatched = run.id().equals(message.relayState());
+            // A one-use target-initiated intent is execution state too. Preserve the original
+            // and parsed analysis before the policy can hold it, rather than consume the intent.
+            if (!correlated && actual.isBlank() && (relayMatched || unsolicitedByPlan)) {
+                transcript.updateSamlAnalysis(transcriptEntry.id(), actual, analyzedSummary);
+                receiptExecutionPolicy.accept(run.id());
+            }
             if (!correlated && actual.isBlank() && (relayMatched || unsolicitedByPlan)
                     && unsolicitedResponseAllowed(run, planId, requestUrl, message, relayMatched)) {
                 // Explicitly prepared IdP-initiated check. The intent is single use and the
@@ -255,6 +277,7 @@ public final class SpPeerService {
             analyzedSummary.put("normalFlowAccepted", correlated || unsolicitedAccepted);
         }
         transcript.updateSamlAnalysis(transcriptEntry.id(), actual, analyzedSummary);
+        receiptExecutionPolicy.accept(run.id());
         if (!metadataProbe && activeProbe.isEmpty() && !unsolicitedAccepted
                 && (expected.isBlank() || !expected.equals(actual))) {
             throw new SamlException("SAMLResponse InResponseTo does not match the active AuthnRequest");
