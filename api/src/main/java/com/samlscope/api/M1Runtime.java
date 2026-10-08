@@ -78,6 +78,7 @@ final class M1Runtime {
     private final PendingInteractionService pendingInteractions;
     private final BootstrapContractService bootstrapContracts;
     private final ProtocolEvidenceAutomationService protocolEvidence;
+    private final com.samlscope.runner.MetadataFetchAutomationService metadataFetches;
     private final AttestationService attestations;
     private final ConfigurationService configurations;
     private final BrowserCompletionService browserCompletions;
@@ -108,6 +109,7 @@ final class M1Runtime {
             PendingInteractionService pendingInteractions,
             BootstrapContractService bootstrapContracts,
             ProtocolEvidenceAutomationService protocolEvidence,
+            com.samlscope.runner.MetadataFetchAutomationService metadataFetches,
             AttestationService attestations,
             ConfigurationService configurations,
             BrowserCompletionService browserCompletions,
@@ -145,6 +147,7 @@ final class M1Runtime {
         this.pendingInteractions = pendingInteractions;
         this.bootstrapContracts = bootstrapContracts;
         this.protocolEvidence = protocolEvidence;
+        this.metadataFetches = metadataFetches;
         this.attestations = attestations;
         this.configurations = configurations;
         this.browserCompletions = browserCompletions;
@@ -399,6 +402,14 @@ final class M1Runtime {
                 config.dataDirectory().resolve("metadata-key-evidence"));
         m2Config = ApprovedConfigCaseRegistry.withMetadataRejection(m2Config, transcriptContent, runMetadata,
                 config.dataDirectory().resolve("metadata-rejection-evidence"));
+        m2Config = ApprovedConfigCaseRegistry.withAdditionalMetadataLocations(
+                m2Config, definitions, transcriptContent, runMetadata, caseExecutions,
+                runId -> {
+                    var scopedRun = runs.find(runId).orElseThrow();
+                    var scopedPlan = plans.find(scopedRun.planId()).orElseThrow();
+                    return new com.samlscope.runner.cases.AdditionalMetadataLocationEvidence.Scope(
+                            runId, scopedPlan.profile().name(), scopedPlan.target().entityId());
+                });
         m2Config = ApprovedConfigCaseRegistry.withNativeCertificates(m2Config, transcriptContent, runMetadata,
                 config.dataDirectory().resolve("certificate-evidence"));
         var m2Browser = ApprovedBrowserCaseRegistry.create(
@@ -556,6 +567,8 @@ final class M1Runtime {
                 definitions, caseExecutions, plans, runs, transcript, metadataLab);
         var protocolEvidence = new ProtocolEvidenceAutomationService(
                 caseExecutions, interactiveRegistry, executionService, caseContexts);
+        var metadataFetches = new com.samlscope.runner.MetadataFetchAutomationService(
+                caseExecutions, interactiveRegistry, outboundDispatcher, caseContexts);
         var attestations = new AttestationService(interactiveRegistry, executionService, caseContexts);
         var configurations = new ConfigurationService(interactiveRegistry, executionService, caseContexts);
         var browserCompletions = new BrowserCompletionService(interactiveRegistry, executionService, caseContexts);
@@ -595,7 +608,7 @@ final class M1Runtime {
         var publications = new SqlitePublicationRepository(database);
         return new M1Runtime(
                 config, quickCheck, results, artifacts, access, plans, runs, transcript, clock,
-                starters, pendingInteractions, bootstrapContracts, protocolEvidence, attestations,
+                starters, pendingInteractions, bootstrapContracts, protocolEvidence, metadataFetches, attestations,
                 configurations, browserCompletions, caseExecutions, publications,
                 reconciliationLimiter, hostedRunProvisioner, activeProbes, timeouts,
                 campaigns, campaignActions, profileDefinitions, coverage, applicability, supplementalKeys,
@@ -716,6 +729,7 @@ final class M1Runtime {
         requireRun(runId);
         var expiredProbe = activeProbes.expireReady(runId);
         var expired = timeouts.expireReady(runId, caseContext(runId));
+        metadataFetches.collect(runId);
         var evaluation = protocolEvidence.evaluateReady(runId);
         if ((expiredProbe.isPresent() || !expired.isEmpty() || !evaluation.completed().isEmpty())
                 && results != null) {
@@ -853,6 +867,7 @@ final class M1Runtime {
             return withManualEvidenceWork(runId, () -> {
                 requireRun(runId);
                 return runDecryptionKeys.evaluate(runId, sharedKey, () -> {
+                    metadataFetches.collect(runId);
                     var value = protocolEvidence.evaluateReady(runId);
                     if (results != null) results.generate(runId);
                     return value;
@@ -863,6 +878,7 @@ final class M1Runtime {
 
     com.samlscope.runner.ProtocolEvidenceAutomationService.Evaluation evaluateProtocolEvidence(String runId) {
         return withManualEvidenceWork(runId, () -> {
+            metadataFetches.collect(runId);
             var value = protocolEvidence.evaluateReady(runId);
             if (results != null) results.generate(runId);
             return value;

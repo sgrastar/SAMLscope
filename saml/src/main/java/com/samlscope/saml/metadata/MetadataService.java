@@ -422,6 +422,12 @@ public final class MetadataService {
         // Deliberately advertise a Redirect ACS so SSO01.x can detect a target that emits a
         // advertising it never turns the binding into an allowed target behavior.
         service(document, sp, "AssertionConsumerService", REDIRECT, endpoint(plan, "/sp/acs/3", endpointVariant, runId), 3, false);
+        if (plan.profile() == com.samlscope.core.profile.FunctionalProfile.BROWSER_SSO_IDP
+                && Boolean.TRUE.equals(plan.declaredFeatures().get("artifact_binding"))
+                && variant == Variant.BASELINE) {
+            service(document,sp,"AssertionConsumerService","urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Artifact",
+                    endpoint(plan,"/sp/acs/4"),4,false);
+        }
         applyDefaultAcsFixture(sp, variant);
         root.appendChild(sp);
 

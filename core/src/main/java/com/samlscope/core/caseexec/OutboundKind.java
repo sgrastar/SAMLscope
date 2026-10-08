@@ -8,7 +8,8 @@ public enum OutboundKind {
     LOGOUT_REQUEST(Retry.UNSAFE),
     LOGOUT_PROBE(Retry.UNSAFE),
     ECP_SOAP(Retry.UNSAFE),
-    SOAP_SLO(Retry.UNSAFE);
+    SOAP_SLO(Retry.UNSAFE),
+    ARTIFACT_RESOLVE(Retry.UNSAFE);
 
     private final Retry retry;
 

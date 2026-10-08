@@ -31,6 +31,9 @@ public final class ApprovedBrowserCaseRegistry {
                         : testCase instanceof IdpVersionMismatchScenarioTestCase versionMismatch
                         ? versionMismatch.withNativeEvidence(directory.getParent().resolve("version-mismatch-evidence"),
                                 content, metadata)
+                        : testCase instanceof IdpAcsSelectionScenarioTestCase acs
+                            && IdpAcsSelectionScenarioTestCase.BINDING_CASE.equals(testCase.id())
+                        ? acs.withArtifactInput(content, metadata)
                         : testCase instanceof IdpExecutableBrowserFixtureScenarioTestCase scenario
                             && IdpExecutableBrowserFixtureScenarioTestCase.G03_CASE.equals(testCase.id())
                         ? scenario.withNativeDtdEvidence(directory.getParent().resolve("dtd-rejection-evidence"),
@@ -392,8 +395,15 @@ public final class ApprovedBrowserCaseRegistry {
         if (idpScenarioConfigurations != null && List.of(
                 IdpErrorAssertionScenarioTestCase.SUBJECT_ERROR_CASE,
                 IdpErrorAssertionScenarioTestCase.ERROR_ASSERTION_CASE).contains(definition.id())) {
-            return new IdpErrorAssertionScenarioTestCase(
+            var scenario = new IdpErrorAssertionScenarioTestCase(
                     definition.id(), idpScenarioConfigurations);
+            if (IdpErrorAssertionScenarioTestCase.ERROR_ASSERTION_CASE.equals(definition.id())
+                    && transcriptContent != null && suiteCredentials != null) {
+                return new IdpErrorAssertionRecordedEvidenceTestCase(scenario,
+                        idpScenarioConfigurations, transcriptContent, suiteCredentials,
+                        targetEntityIds, targetSigningCertificates);
+            }
+            return scenario;
         }
         if (idpScenarioConfigurations != null
                 && IdpUnknownExtensionScenarioTestCase.CASE_ID.equals(definition.id())) {
@@ -462,6 +472,12 @@ public final class ApprovedBrowserCaseRegistry {
                 IdpAcsSelectionScenarioTestCase.BINDING_CASE,
                 IdpAcsSelectionScenarioTestCase.UNREGISTERED_URL_CASE,
                 IdpAcsSelectionScenarioTestCase.UNKNOWN_INDEX_CASE).contains(definition.id())) {
+            if (IdpAcsSelectionScenarioTestCase.BINDING_CASE.equals(definition.id())
+                    && transcriptContent != null && suiteCredentials != null) {
+                return new IdpAcsSelectionScenarioTestCase(
+                        definition.id(), idpScenarioConfigurations, transcriptContent,
+                        targetEntityIds, targetSigningCertificates, suiteCredentials);
+            }
             return new IdpAcsSelectionScenarioTestCase(
                     definition.id(), idpScenarioConfigurations);
         }

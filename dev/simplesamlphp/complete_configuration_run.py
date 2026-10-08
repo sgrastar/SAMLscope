@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-"""Complete one approved CONFIG source Run's real initial round trip, then restore.
+"""Complete a CONFIG source Run's initial round trip and start its full profile.
 
-This does not dispatch any profile test action. Credentials and cookies remain
-in memory. The previous native key epoch and its originals remain unchanged.
+Profile start is not a selected-case API. Record its actual message and outbox
+changes instead of claiming zero dispatches. Credentials and cookies remain in
+memory. The previous native key epoch and its originals remain unchanged.
 """
 import argparse,hashlib,json,os,re,subprocess,sys,time
 from datetime import datetime,timezone
@@ -11,6 +12,7 @@ sys.dont_write_bytecode=True
 from transient_allow_create_campaign import REPO,CONTAINER,IDP,BASE,api,save,batch,settled,raw
 sys.path.insert(0,str(REPO/'dev/keycloak'))
 from reference_flow import Client
+from initial_roundtrip_accounting import OperationSnapshots, difference
 
 def require(value,reason):
     if not value:raise ValueError(reason)
@@ -51,14 +53,22 @@ def main():
             if fields and any('password' in str(k).lower() for k in fields):
                 require(self.credentialPosts==0,'No repeated credential submission');self.credentialPosts+=1
             return super().request(url,fields)
-    client=CountingClient();attempted=0
+    client=CountingClient();attempted=0;profile_counts=None;initial_counts=None
     try:
-        remote.apply(parser['php'].encode());(out/'remote-configured.php').write_bytes(settled(remote.container_path,remote.expected));time.sleep(3)
-        attempted=1
-        receipt=client.flow(entity+'/start/m0-roundtrip?run='+run,None,user,password)
-        save(out/'flow.json',dict(runId=run,receipt=receipt));current=api('/api/runs/'+run);save(out/'run-after.json',current)
-        require(current['status']=='COMPLETED','Initial normal round trip did not complete; no retry')
-        save(out/'tests-start.json',api('/api/runs/'+run+'/tests/start',{}));save(out/'result.json',api('/api/runs/'+run+'/result.json'))
+        with OperationSnapshots(REPO,out,run) as counters:
+            before=counters.capture('before-initial')
+            require(not before['caseExecutions'] and not before['outboxActions'],
+                'This source prerequisite helper requires an unstarted profile')
+            remote.apply(parser['php'].encode());(out/'remote-configured.php').write_bytes(settled(remote.container_path,remote.expected));time.sleep(3)
+            attempted=1
+            receipt=client.flow(entity+'/start/m0-roundtrip?run='+run,None,user,password)
+            save(out/'flow.json',dict(runId=run,receipt=receipt));current=api('/api/runs/'+run);save(out/'run-after.json',current)
+            require(current['status']=='COMPLETED','Initial normal round trip did not complete; no retry')
+            ready=counters.capture('before-profile-start');initial_counts=difference(before,ready)
+            save(out/'tests-start.json',api('/api/runs/'+run+'/tests/start',{}))
+            started=counters.capture('after-profile-start');profile_counts=difference(ready,started)
+            save(out/'recorded-operation-differences.json',dict(initial=initial_counts,fullProfileStart=profile_counts))
+            save(out/'result.json',api('/api/runs/'+run+'/result.json'))
     finally:
         try:
             restoration=remote.restore();(out/'remote-final.php').write_bytes(settled(remote.container_path,remote.original));save(out/'restoration.json',restoration)
@@ -66,8 +76,11 @@ def main():
             save(out/'operation-counts.json',dict(productConfigurationWriteAttempts=remote.write_count,successfulHostWrites=remote.write_count,nativeApplications=remote.applied_count,
                 restorationWrites=remote.restoration_writes,initialNormalProtocolOperationsAttempted=attempted,credentialPosts=client.credentialPosts,
                 dockerCommandsAttempted=len(operations),failedDockerCommands=sum(x.get('exitCode',-1)!=0 for x in operations),
-                profileTestProtocolDispatches=0,humanOperations=0,restored=restoration['restored']))
+                schema='samlscope-initial-roundtrip-operation-counts-v2',
+                initialRecordedOperations=initial_counts,fullProfileStartRecordedOperations=profile_counts,
+                networkAttemptCount=None,networkAttemptCountBasis='Recorded messages/outbox states only; unrecorded network retries are not inferred.',
+                humanOperations=0,restored=restoration['restored']))
             require(restoration['restored'],'Native remote peer restoration failed')
         finally:subprocess.run=original_run
-    print(run,'actual initial round trip completed; native peer restored; no profile protocol test dispatch')
+    print(run,'actual initial round trip completed; full-profile operation changes recorded; native peer restored')
 if __name__=='__main__':main()

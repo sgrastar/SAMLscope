@@ -4,7 +4,7 @@ This inventory covers NOT_VERIFIED observations remaining after the previous fol
 
 | Before retesting | Conclusive (Success / Failed / Warning) | Currently unverified | Distinct unverified case IDs |
 |---:|---:|---:|---:|
-| 594 | 403 | 191 | 80 |
+| 594 | 404 | 190 | 80 |
 
 ## Breakdown
 
@@ -12,7 +12,7 @@ This inventory covers NOT_VERIFIED observations remaining after the previous fol
 |---|---:|---|
 | No automated evaluation after browser completion | 0 | Suite implementation |
 | Only some test conditions are implemented | 25 | Suite implementation |
-| Evidence verification and attestation after configuration | 56 | Configuration and evidence |
+| Evidence verification and attestation after configuration | 55 | Configuration and evidence |
 | Attestation is disabled | 62 | Configuration and evidence |
 | Additional metadata tests and observations are missing | 10 | Test-path investigation |
 | Additional browser and SLO observations are missing | 12 | Test-path investigation |
@@ -131,7 +131,7 @@ Inspect reason codes and positive controls to distinguish Suite, configuration, 
 | `IIP-IDP18-c-idp-01` | Not verified: slo.redirect-request.not-observed | Success | Success |
 | `IIP-IDP18-d-idp-01` | Not verified: slo.redirect-response.not-observed | Not verified: slo.redirect-response.unavailable | Not verified: slo.redirect-response.not-observed |
 | `IIP-IDP19-a-idp-01` | Not verified: slo.encrypted-id.key-unavailable | Success | Not verified: slo.encrypted-id.negative-control-failed |
-| `IIP-IDP19-b-idp-01` | Not verified (outside this retest scope) | Success | Not verified (outside this retest scope) |
+| `IIP-IDP19-b-idp-01` | Not verified (outside this retest scope) | Success | Success |
 | `IIP-IDP19-c-idp-01` | Not verified: slo.encrypted-id.multiple-keys.key-unavailable | Success | Failed (Product) |
 | `IIP-MD01-a-idp-01` | Success | Success | Success |
 | `IIP-MD02-a-idp-01` | Success | Success | Success |
@@ -263,7 +263,7 @@ Product columns list profiles with remaining unverified observations. Where a ca
 | `IIP-IDP18-c-idp-01` | single_logout_idp | — | — | Executed without a conclusive result |
 | `IIP-IDP18-d-idp-01` | single_logout_idp | single_logout_idp | single_logout_idp | Executed without a conclusive result |
 | `IIP-IDP19-a-idp-01` | single_logout_idp | — | single_logout_idp | Executed without a conclusive result |
-| `IIP-IDP19-b-idp-01` | single_logout_idp | — | single_logout_idp | Evidence verification and attestation after configuration |
+| `IIP-IDP19-b-idp-01` | single_logout_idp | — | — | Evidence verification and attestation after configuration |
 | `IIP-IDP19-c-idp-01` | single_logout_idp | — | — | Executed without a conclusive result |
 | `IIP-IDP20-a-idp-01` | single_logout_idp | single_logout_idp | single_logout_idp | Evidence verification and attestation after configuration |
 | `IIP-IDP21-a-idp-01` | single_logout_idp | single_logout_idp | single_logout_idp | Attestation is disabled |
@@ -327,7 +327,7 @@ This classification describes unverified reasons without changing Verdicts. feat
 
 | Diagnosis | Count | Meaning | Proposed display |
 |---|---:|---|---|
-| `suite-observation-gap` | 115 | The Suite observation or execution path is not connected | Not verified that can be resolved by implementing the Suite path |
+| `suite-observation-gap` | 114 | The Suite observation or execution path is not connected | Not verified that can be resolved by implementing the Suite path |
 | `operator-attestation-available` | 62 | Can be verified through attestation or operator testimony | Can be verified through operator testimony, with one answer per case. Attestation is disabled in the current Plan |
 | `evidence-form-mismatch` | 10 | The product response does not match the evidence format required by the approved evaluation conditions | Not verified because the evidence format does not match the approved conditions; requirement interpretation needs review |
 | `role-inapplicable` | 4 | A variant requests an artifact that the target does not consume in its role | The variant is not consumed in the IdP role and is outside the execution scope; inapplicability has been established |

@@ -102,11 +102,11 @@ Additional results adopted in the inventory are included in the comparison after
 
 ## Breakdown of Not verified observations
 
-The table adopts 192 case-result observations. Cases marked † adopt additional evidence from new Runs; other existing evidence is retained. These counts do not represent a single Run or a complete rerun of all tests. Earlier FAIL results reclassified as configuration gaps in the comparison are excluded from this NOT_VERIFIED total.
+The table adopts 191 case-result observations. Cases marked † adopt additional evidence from new Runs; other existing evidence is retained. These counts do not represent a single Run or a complete rerun of all tests. Earlier FAIL results reclassified as configuration gaps in the comparison are excluded from this NOT_VERIFIED total.
 
 | Reason | Keycloak | Shibboleth IdP | SimpleSAMLphp | Required follow-up |
 |---|---:|---:|---:|---|
-| `case.pending-interaction` | 34 | 13 | 31 | Includes configuration and reception waits as well as unimplemented evaluation paths. See the complete inventory |
+| `case.pending-interaction` | 34 | 13 | 30 | Includes configuration and reception waits as well as unimplemented evaluation paths. See the complete inventory |
 | `attestation.interaction-disallowed` | 20 | 20 | 22 | Attestation is disabled. Do not submit an attestation without verification |
 | `browser_fixture_partial` | 7 | 7 | 11 | Only some tests were executed; evidence for remaining variants is missing |
 | `idp.acs-probe.inconclusive` | 1 | 2 | 1 | Further inspect the case response, target configuration, and positive controls |
@@ -520,7 +520,7 @@ Removing Chrome and approval blocks alone cannot resolve these observations. Mis
 | `IIP-IDP18-c-idp-01` | Not verified † | Success † | Success † |
 | `IIP-IDP18-d-idp-01` | Not verified † | Not verified † | Not verified † |
 | `IIP-IDP19-a-idp-01` | Not verified † | Success † | Not verified † |
-| `IIP-IDP19-b-idp-01` | Not verified | Success † | Not verified |
+| `IIP-IDP19-b-idp-01` | Not verified | Success † | Success † |
 | `IIP-IDP19-c-idp-01` | Not verified † | Success † | **Failed (Product)** † |
 | `IIP-IDP20-a-idp-01` | Not verified | Not verified | Not verified |
 | `IIP-IDP21-a-idp-01` | Not verified | Not verified | Not verified |
@@ -1025,5 +1025,6 @@ Removing Chrome and approval blocks alone cannot resolve these observations. Mis
 | single_logout_idp († listed supplemental cases only) | simplesamlphp | `run_AYKGN0WFF79RMY2SZQ0TTFRV2R` | `build/acceptance/reference-20260918/ssp-slo-propagation-v3` |
 | single_logout_idp († listed supplemental cases only) | simplesamlphp | `run_JFRMKZS33R0GXK8F1Q3KRY7GDT` | `build/acceptance/reference-20260915/peer-intent/simplesamlphp/slo_audit` |
 | single_logout_idp († listed supplemental cases only) | simplesamlphp | `run_45Q1TW5SXTWCH4WMZ7JFSXP5YA` | `build/acceptance/reference-20260914/slo-encrypted-id-integrated/simplesamlphp/single_logout_idp` |
+| single_logout_idp († listed supplemental cases only) | simplesamlphp | `run_5WJCN84233GZCN0DGBFM67TEWQ` | `build/acceptance/reference-20261008/ssp-configuration-source-run-r1/adoption` |
 | single_logout_idp († listed supplemental cases only) | simplesamlphp | `run_1E0KV60F7802V0EECYD52V7V92` | `build/acceptance/reference-20261001/ssp-encrypted-logout-native-v186-r7/evaluation` |
 | single_logout_idp | simplesamlphp | `run_DVCVA0CEB6PRZGXWWMV4AKMR1K` | `simplesamlphp/single_logout_idp/browser2` |

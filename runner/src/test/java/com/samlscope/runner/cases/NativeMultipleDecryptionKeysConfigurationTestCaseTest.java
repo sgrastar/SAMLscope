@@ -30,8 +30,8 @@ class NativeMultipleDecryptionKeysConfigurationTestCaseTest {
         public Optional<CaseOutcome> reevaluateRecordedEvidence(CaseContext c, CaseOutcome previous) { return Optional.of(legacy); }
         public boolean resolvedFromExternalEvidence(CaseExecution e) { return e != null && legacy.equals(e.outcome()); }
     }
-    private NativeMultipleDecryptionKeysConfigurationTestCase test(LegacyProof fallback) {
-        return (NativeMultipleDecryptionKeysConfigurationTestCase) ApprovedConfigCaseRegistry.withNativeMultipleDecryptionKeys(
+    private NativeConfigurationSourceRunTestCase test(LegacyProof fallback) {
+        return (NativeConfigurationSourceRunTestCase) ApprovedConfigCaseRegistry.withNativeMultipleDecryptionKeys(
                 fallback, directory, entry -> { throw new AssertionError("Missing originals must not be read"); }, run -> new byte[0]);
     }
     private CaseExecution saved(CaseOutcome outcome) {
@@ -48,6 +48,23 @@ class NativeMultipleDecryptionKeysConfigurationTestCaseTest {
         assertEquals(RunCampaignQuery.EvidenceClass.PROTOCOL_OBSERVED, t.evidenceClass(saved(fallback.legacy)));
         assertEquals(RunCampaignQuery.ActionKind.NONE, t.evidenceActionKind(saved(fallback.legacy)));
         assertFalse(BrowserFrontChannelScenario.class.isInstance(t));
+    }
+    @Test void existingNativeWrapperGetsOneSourceWrapperAndRepeatedDecorationPreservesIdentity() {
+        var fallback=new LegacyProof();
+        var sameRun=new NativeMultipleDecryptionKeysConfigurationTestCase(fallback,
+                new SimpleSamlPhpMultipleDecryptionKeysEvidence(directory.resolve("multiple-decryption-keys-evidence"),
+                        entry->{throw new AssertionError();},run->new byte[0],
+                        new DefaultAlgorithmSourceRunStore(directory,SimpleSamlPhpMultipleDecryptionKeysEvidence.CASE,SimpleSamlPhpMultipleDecryptionKeysEvidence.DIGEST)));
+        var first=ApprovedConfigCaseRegistry.withNativeMultipleDecryptionKeys(sameRun,directory,null,null);
+        assertInstanceOf(NativeConfigurationSourceRunTestCase.class,first);
+        assertSame(first,ApprovedConfigCaseRegistry.withNativeMultipleDecryptionKeys(first,directory,null,null));
+        var decorated=ApprovedConfigCaseRegistry.withMultipleDecryptionKeys(new TestCaseRegistry(List.of(sameRun)),
+                run->{throw new AssertionError("Missing native proof must not construct supplemental keys");},(run,id)->Optional.empty());
+        var outer=assertInstanceOf(NativeConfigurationSourceRunTestCase.class,decorated.require(fallback.id()));
+        assertEquals(fallback.start(context),outer.start(context));
+        assertEquals(sameRun.evidenceCampaignId(),outer.evidenceCampaignId());
+        assertSame(outer,ApprovedConfigCaseRegistry.withMultipleDecryptionKeys(decorated,
+                run->{throw new AssertionError("Repeated decoration must not construct keys");},(run,id)->Optional.empty()).require(fallback.id()));
     }
     @Test void malformedOwnedProofCannotBorrowSuccessOrOfferAnotherHumanAction() throws Exception {
         var fallback = new LegacyProof(); var t = test(fallback);

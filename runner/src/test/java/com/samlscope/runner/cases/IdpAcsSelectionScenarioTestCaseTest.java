@@ -54,20 +54,10 @@ class IdpAcsSelectionScenarioTestCaseTest {
     }
 
     @Test
-    void unsupportedBindingNeedsAnErrorRatherThanSilentPostFallback() {
+    void bindingScenarioCannotUseAnUnbackedXmlEventAsProof() {
         var testCase = testCase(IdpAcsSelectionScenarioTestCase.BINDING_CASE);
-        var waiting = (CaseStep.AwaitInbound) testCase.start(context());
-        assertTrue(new String(waiting.actions().getFirst().payload(), StandardCharsets.UTF_8)
-                .contains("urn:samlscope:unsupported:response-binding"));
-        var error = (CaseStep.Finish) testCase.resume(
-                context(), waiting.next(), inbound(waiting.next(), response(waiting.next(), "Responder", ACS0)));
-        assertEquals(Outcome.SATISFIED, error.outcome().outcome());
-
-        var fallback = testCase(IdpAcsSelectionScenarioTestCase.BINDING_CASE);
-        var second = (CaseStep.AwaitInbound) fallback.start(context());
-        var inconclusive = (CaseStep.Finish) fallback.resume(
-                context(), second.next(), inbound(second.next(), response(second.next(), "Success", ACS0)));
-        assertEquals(Outcome.NOT_VERIFIED, inconclusive.outcome().outcome());
+        var unavailable = assertInstanceOf(CaseStep.Finish.class, testCase.start(context()));
+        assertEquals(Outcome.NOT_VERIFIED, unavailable.outcome().outcome());
     }
 
     @Test

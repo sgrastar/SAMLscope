@@ -11,7 +11,7 @@ import urllib.request
 
 ROOT = Path(__file__).resolve().parents[2]
 PROJECT_JARS = {n + '-0.1.0.jar' for n in ('api', 'core', 'peer', 'runner', 'saml', 'store')}
-ALLOWED_CHANGED = {n + '-0.1.0.jar' for n in ('peer', 'runner', 'saml')}
+ALLOWED_CHANGED = {n + '-0.1.0.jar' for n in ('core', 'store', 'peer', 'runner', 'saml')}
 
 
 def sha(path):

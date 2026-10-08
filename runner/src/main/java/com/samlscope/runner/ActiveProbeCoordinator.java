@@ -142,7 +142,8 @@ public final class ActiveProbeCoordinator {
                 .filter(value -> value.action().actionId().equals(
                         current.waitCondition().inboundMatcher().criteria().get("ScenarioActionId")))
                 .findFirst().orElseThrow(() -> new IllegalStateException("Active probe has no matching outbox action"));
-        if (action.action().kind() == com.samlscope.core.caseexec.OutboundKind.LOGOUT_PROBE) {
+        if (action.action().kind() == com.samlscope.core.caseexec.OutboundKind.LOGOUT_PROBE
+                || action.action().kind() == com.samlscope.core.caseexec.OutboundKind.ARTIFACT_RESOLVE) {
             // Suite-side delivery: the response body is recorded as Transcript evidence and routed
             // back to the waiting case. Unknown delivery never becomes a target failure.
             var dispatched = dispatcher.dispatch(action.action().actionId());
@@ -152,9 +153,17 @@ public final class ActiveProbeCoordinator {
                 if (entryId == null || entryId.isBlank()) {
                     throw new IllegalStateException("Direct probe delivery has no transcript entry");
                 }
-                var router = new InboundCaseRouter(repository, scenarioCases, executionService);
-                router.route(runId, "saml-response", Map.of("ScenarioActionId", action.action().actionId()),
-                        entryId.getBytes(java.nio.charset.StandardCharsets.UTF_8),
+                var router = new InboundCaseRouter(repository, new TestCaseRegistry(List.of(testCase)), executionService);
+                byte[] observed = entryId.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+                if(action.action().kind() == com.samlscope.core.caseexec.OutboundKind.ARTIFACT_RESOLVE){
+                    if(!(transcript instanceof com.samlscope.core.transcript.TranscriptContentReader content)){
+                        executionService.resume(runId,testCase,contexts.contextFor(runId),new CaseEvent.InboundUnavailable("artifact-original-reader-unavailable"));continue;
+                    }
+                    var originals=transcript.list(runId).stream().filter(e->entryId.equals(e.id())).toList();
+                    if(originals.size()!=1)throw new IllegalStateException("Artifact outbox reply is not unique");
+                    observed=content.readDecodedSaml(originals.getFirst());
+                }
+                router.route(runId, "saml-response", Map.of("ScenarioActionId", action.action().actionId()), observed,
                         new EvidenceRef("transcript", entryId), contexts.contextFor(runId));
             } else if (dispatched.state() == com.samlscope.runner.outbox.OutboundDispatcher.State.UNKNOWN_DELIVERY) {
                 executionService.resume(runId, testCase, contexts.contextFor(runId),
@@ -294,6 +303,17 @@ public final class ActiveProbeCoordinator {
             return status(runId);
         }
         var testCase = scenario(outbox.caseId(), run).orElseThrow();
+        var recorded = transcript.listBounded(runId,10000).stream().filter(e->e.id().equals(evidence.reference())).toList();
+        if(recorded.size()==1 && "ArtifactReceived".equals(recorded.getFirst().samlSummary().get("type"))){
+            if(!(testCase instanceof com.samlscope.runner.cases.ArtifactProtocolBindingTestCase)
+                    || !com.samlscope.runner.cases.ArtifactBindingEvidence.PHASE.equals(current.state().phase())
+                    || !actionId.equals(recorded.getFirst().correlationId()) || !runId.equals(recorded.getFirst().runId())){
+                throw new IllegalArgumentException("Artifact callback is outside the conditional case operation");
+            }
+            executionService.resume(runId,testCase,contexts.contextFor(runId),
+                    new CaseEvent.InboundMessage(decodedSaml,evidence));
+            return status(runId);
+        }
         var router = new InboundCaseRouter(
                 repository, new TestCaseRegistry(List.of(testCase)), executionService);
         router.route(
@@ -460,8 +480,16 @@ public final class ActiveProbeCoordinator {
             }
             return Optional.of(new IdpErrorResponseTestCase(configurations.apply(plan, run.id()), decryptionKey));
         }
-        return scenarioCases.find(caseId)
-                .filter(value -> value instanceof BrowserFrontChannelScenario);
+        return scenarioCases.find(caseId).map(value->{
+            var plan=plans.find(run.planId()).orElseThrow();
+            if(value instanceof com.samlscope.runner.cases.IdpAcsSelectionScenarioTestCase acs
+                    && com.samlscope.runner.cases.IdpAcsSelectionScenarioTestCase.BINDING_CASE.equals(caseId)
+                    && plan.profile()==com.samlscope.core.profile.FunctionalProfile.BROWSER_SSO_IDP
+                    && Boolean.TRUE.equals(plan.declaredFeatures().get("artifact_binding"))) {
+                return acs.artifactScenario(repository::findOutbox);
+            }
+            return value;
+        }).filter(value -> value instanceof BrowserFrontChannelScenario);
     }
 
     private static String url(String value) {

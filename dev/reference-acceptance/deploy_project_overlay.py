@@ -18,7 +18,7 @@ REPO = Path(__file__).resolve().parents[2]
 SUITE = 'samlscope-reference-suite'
 FORWARD = 'samlscope-reference-local-forward-v116'
 PROJECT_JARS = tuple(name + '-0.1.0.jar' for name in ('api', 'core', 'peer', 'runner', 'saml', 'store'))
-OVERLAY_JARS = {'runner-0.1.0.jar', 'saml-0.1.0.jar', 'peer-0.1.0.jar'}
+OVERLAY_JARS = {'core-0.1.0.jar', 'store-0.1.0.jar', 'runner-0.1.0.jar', 'saml-0.1.0.jar', 'peer-0.1.0.jar'}
 SHA = lambda raw: hashlib.sha256(raw).hexdigest()
 
 
@@ -184,7 +184,7 @@ def main():
             and changed and len(set(changed)) == len(changed) and set(changed) <= OVERLAY_JARS
             and qualification['mainClassSourcesBoundToArchive'] is True
             and qualification['signedProtectedSourcesIncluded'] is False,
-            'Only qualified unprotected Runner, SAML, and Peer changes allowed')
+            'Only qualified unprotected project changes allowed')
     require(set(qualification['projectJars']) == set(PROJECT_JARS)
             and set(prior['projectJars']) == set(PROJECT_JARS), 'Incomplete runtime identity')
     require(qualification['parentImageId'] == prior['imageId']

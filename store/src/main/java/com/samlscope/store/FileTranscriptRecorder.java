@@ -55,10 +55,17 @@ public final class FileTranscriptRecorder implements TranscriptRecorder, Transcr
             Files.createDirectories(runDirectory);
             bodyRef = writeIfPresent(runDirectory, id + ".body", clean.body());
             samlRef = writeIfPresent(runDirectory, id + ".saml.xml", input.decodedSaml());
+            var summary = new java.util.LinkedHashMap<String,Object>(input.samlSummary());
+            if (summary.get("type") instanceof String type
+                    && java.util.Set.of("ArtifactReceived", "ArtifactResolve", "ArtifactResponse",
+                            "MetadataFetchResponse", "SuiteMetadataNamespaceControl").contains(type)) {
+                summary.put("body_sha256", java.util.HexFormat.of().formatHex(java.security.MessageDigest
+                        .getInstance("SHA-256").digest(clean.body())));
+            }
             var entry = new TranscriptEntry(
                     id, input.runId(), input.direction(), input.timestamp(), input.correlationId(), input.method(),
                     clean.url(), input.status(), clean.headers(), bodyRef, clean.body().length, samlRef,
-                    input.decodedSaml().length, input.contentType(), clean.rawQuery(), input.samlSummary());
+                    input.decodedSaml().length, input.contentType(), clean.rawQuery(), summary);
             try (var statement = connection.prepareStatement(
                          "INSERT INTO transcript_entries(id, run_id, timestamp, document_json) VALUES(?, ?, ?, ?)")) {
                 statement.setString(1, id);
@@ -77,7 +84,7 @@ public final class FileTranscriptRecorder implements TranscriptRecorder, Transcr
                 throw new StoreException("Could not persist Transcript rejection state", commitFailure);
             }
             throw e;
-        } catch (IOException | SQLException e) {
+        } catch (IOException | SQLException | java.security.NoSuchAlgorithmException e) {
             rollback(connection);
             deleteWrittenContent(bodyRef, samlRef);
             throw new StoreException("Could not record transcript entry", e);
@@ -225,6 +232,41 @@ public final class FileTranscriptRecorder implements TranscriptRecorder, Transcr
             return bytes;
         } catch (IOException e) {
             throw new StoreException("Could not read decoded SAML content", e);
+        }
+    }
+
+    @Override
+    public byte[] readBody(TranscriptEntry entry) {
+        if (entry == null || entry.bodyRef() == null || entry.bodyBytes() <= 0
+                || !entry.runId().matches("run_[0-9A-HJKMNP-TV-Z]{26}")
+                || !entry.id().matches("tx_[0-9A-HJKMNP-TV-Z]{26}")) {
+            throw new IllegalArgumentException("Transcript entry has no original body");
+        }
+        var expected = "transcripts/" + entry.runId() + "/" + entry.id() + ".body";
+        if (!expected.equals(entry.bodyRef())) throw new IllegalArgumentException("Original body reference is outside its Run entry");
+        try (var connection = database.open();
+             var select = connection.prepareStatement("SELECT document_json FROM transcript_entries WHERE id = ? AND run_id = ?")) {
+            select.setString(1, entry.id()); select.setString(2, entry.runId());
+            try (var rows = select.executeQuery()) {
+                if (!rows.next() || !entry.equals(json.read(rows.getString(1), TranscriptEntry.class)) || rows.next()) {
+                    throw new IllegalArgumentException("Original body entry does not match its Recorder row");
+                }
+            }
+        } catch (SQLException unavailable) { throw new StoreException("Could not read original body Recorder row", unavailable); }
+        var root = directory.getParent().toAbsolutePath().normalize();
+        var path = root.resolve(expected).normalize();
+        try {
+            for (var current = path; current != null && current.startsWith(root); current = current.getParent()) {
+                if (Files.isSymbolicLink(current)) throw new IllegalArgumentException("Original body reference contains a symbolic link");
+            }
+            if (!Files.isRegularFile(path, java.nio.file.LinkOption.NOFOLLOW_LINKS)
+                    || Files.size(path) != entry.bodyBytes()) throw new StoreException("Original body size does not match its Transcript entry");
+            var bytes = Files.readAllBytes(path);
+            var hash = java.util.HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256").digest(bytes));
+            if (!hash.equals(entry.samlSummary().get("body_sha256"))) throw new StoreException("Original body integrity does not match its Recorder row");
+            return bytes;
+        } catch (IOException | java.security.NoSuchAlgorithmException unreadable) {
+            throw new StoreException("Could not read original Transcript body", unreadable);
         }
     }
 

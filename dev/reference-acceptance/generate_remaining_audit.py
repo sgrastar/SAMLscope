@@ -1517,6 +1517,23 @@ def render(root,definitions,output):
             if (source_root/'result-final.json').is_file():
                 from verify_default_algorithm_source_run_acceptance import verify_adoption as verify_default_algorithm_source_run
                 selected=check_once(verify_default_algorithm_source_run, source_root, live=False)
+        # Only this native CONFIG observation has independent completion proof.
+        # Its source stays incomplete; the completed recipient supplies identity
+        # originals, without claiming protocol use or metadata consumption.
+        if row['product']=='simplesamlphp' and row['profile']=='single_logout_idp' \
+                and row['case']=='IIP-IDP19-b-idp-01':
+            source_root=root.parent.parent/'reference-20261008'/'ssp-configuration-source-run-r1'/'adoption'
+            if (source_root/'acceptance-originals.json').is_file():
+                from verify_simplesamlphp_multiple_decryption_keys_source_run_acceptance import verify_adoption as verify_ssp_config_source
+                selected=check_once(verify_ssp_config_source,source_root,live=False)
+                if set(selected[1])!={row['case']}:
+                    raise ValueError('Independent CONFIG source adoption has an unexpected case scope')
+                summary_path=source_root/'operation-summary.json'
+                row['source_run_binding']={'scope':'independent-multiple-decryption-key-configuration',
+                    'operation_summary':str(summary_path),
+                    'operation_summary_sha256':hashlib.sha256(summary_path.read_bytes()).hexdigest(),
+                    'source_global_transcript_complete':False,'new_login_operations':0,
+                    'new_protocol_operations':0,'protocol_or_metadata_consumption_claimed':False}
         if row['product']=='keycloak' and row['profile']=='metadata_idp' \
                 and row['case']=='IIP-MD05-fg-idp-01':
             from verify_keycloak_ui_safety_acceptance import verify_adoption as verify_keycloak_ui_safety

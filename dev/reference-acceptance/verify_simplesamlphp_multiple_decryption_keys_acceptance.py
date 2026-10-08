@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 """Replay and adopt one approved native multiple-decryption-key CONFIG observation."""
-import argparse,base64,hashlib,json,pathlib,re,secrets,shutil,subprocess,tempfile,urllib.request,zipfile
+import argparse,base64,hashlib,json,pathlib,re,secrets,shutil,subprocess,sys,tempfile,urllib.request,zipfile
 
 REPO=pathlib.Path(__file__).resolve().parents[2]
+sys.path.insert(0,str(REPO/'dev/simplesamlphp'))
+from initial_roundtrip_accounting import difference as operation_difference
 SUITE='samlscope-reference-suite';HELPER='VerifySimpleSamlPhpMultipleDecryptionKeys'
 JARS=['runner','core','saml','store','api','peer']
 CASES={'IIP-IDP19-b-idp-01':'sha256:f0804b19a640f8dc668635a12630d2ac5dbb50193f04bed346a0e4afcc2ab9a8'}
@@ -142,7 +144,16 @@ def verify_initial_supplement(folder):
     require((initial/'remote-configured.php').read_bytes()==original+b'\n'+parser['php'].encode()+b'\n','Supplement used another native peer')
     base=READ(folder/'operation-counts.json');more=READ(initial/'operation-counts.json')
     require(base['restored'] and more['restored'] and base['credentialPosts']==0 and base['samlProtocolOperations']==0
-        and more['credentialPosts']<=1 and more['initialNormalProtocolOperationsAttempted']==1 and more['profileTestProtocolDispatches']==0,'CONFIG/prerequisite burden differs')
+        and more['credentialPosts']<=1 and more['initialNormalProtocolOperationsAttempted']==1
+        and more.get('schema')=='samlscope-initial-roundtrip-operation-counts-v2','CONFIG/prerequisite burden differs')
+    before=READ(initial/'before-initial-operations.json');ready=READ(initial/'before-profile-start-operations.json');started=READ(initial/'after-profile-start-operations.json')
+    require(all(row['runId']==created['id'] and row['planId']==created['planId'] for row in [before,ready,started])
+        and not before['caseExecutions'] and not before['outboxActions']
+        and ready['runStatus']==started['runStatus']=='COMPLETED','Foreign or already-started prerequisite operation snapshots')
+    initial_work=operation_difference(before,ready);profile_work=operation_difference(ready,started)
+    require(READ(initial/'recorded-operation-differences.json')==dict(initial=initial_work,fullProfileStart=profile_work)
+        and more['initialRecordedOperations']==initial_work and more['fullProfileStartRecordedOperations']==profile_work
+        and more['networkAttemptCount'] is None,'Recorded prerequisite work differs; no inferred dispatch count is allowed')
     for field,value in {'productConfigurationWriteAttempts':4,'successfulHostWrites':4,'nativeApplications':2,'restorationWrites':2,'nativeObservationInvocations':2,'nativeEphemeralFilesCreated':3,'nativeEphemeralFilesRemoved':3}.items():
         require(base[field]==value,'Native epoch burden differs: '+field)
     for field,value in {'productConfigurationWriteAttempts':2,'successfulHostWrites':2,'nativeApplications':1,'restorationWrites':1}.items():
@@ -150,7 +161,10 @@ def verify_initial_supplement(folder):
     require(base['dockerCommandsAttempted']==len(READ(folder/'operations.json')) and base['failedDockerCommands']==0
         and more['dockerCommandsAttempted']==len(READ(initial/'operations.json')) and more['failedDockerCommands']==0,'Native operation ledger differs')
     combined={field:base[field]+more[field] for field in ['productConfigurationWriteAttempts','successfulHostWrites','nativeApplications','restorationWrites','credentialPosts','humanOperations','dockerCommandsAttempted','failedDockerCommands']}
-    combined.update(initialNormalProtocolOperationsAttempted=1,profileTestProtocolDispatches=0,configObservationProtocolDispatches=0,restored=True,
+    combined.update(initialNormalProtocolOperationsAttempted=1,initialRecordedOperations=initial_work,
+        fullProfileStartRecordedOperations=profile_work,networkAttemptCount=None,
+        networkAttemptCountBasis='Recorded messages and outbox states; unrecorded network retries are not inferred.',
+        configObservationProtocolDispatches=0,restored=True,
         nativeObservationInvocations=base['nativeObservationInvocations'],nativeEphemeralFilesCreated=base['nativeEphemeralFilesCreated'],nativeEphemeralFilesRemoved=base['nativeEphemeralFilesRemoved'])
     return combined
 def receipt_inventory(folder):
