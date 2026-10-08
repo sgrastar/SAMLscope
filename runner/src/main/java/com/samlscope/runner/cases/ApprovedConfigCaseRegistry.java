@@ -22,6 +22,19 @@ public final class ApprovedConfigCaseRegistry {
 
     private ApprovedConfigCaseRegistry() {}
 
+    /** Explicit composition seam. Production connection requires the independently approved Runtime patch. */
+    public static TestCaseRegistry withAdditionalMetadataLocations(TestCaseRegistry registry,
+            CaseDefinitionCatalog definitions, TranscriptContentReader content, Function<String, byte[]> metadata,
+            com.samlscope.core.caseexec.CaseExecutionRepository executions,
+            Function<String, AdditionalMetadataLocationEvidence.Scope> scopes) {
+        return new TestCaseRegistry(registry.all().stream().map(testCase -> {
+            if (!AdditionalMetadataLocationEvidence.supports(testCase.id())
+                    || testCase instanceof AdditionalMetadataLocationConfigurationTestCase) return testCase;
+            return (TestCase) new AdditionalMetadataLocationConfigurationTestCase(testCase,
+                    new AdditionalMetadataLocationEvidence(definitions.require(testCase.id()), content, metadata, executions, scopes));
+        }).toList());
+    }
+
     public static TestCaseRegistry withMetadataKeySelection(TestCaseRegistry registry,
             TranscriptContentReader content, Function<String, byte[]> metadata, java.nio.file.Path directory) {
         return new TestCaseRegistry(registry.all().stream().map(testCase ->
@@ -131,7 +144,10 @@ public final class ApprovedConfigCaseRegistry {
             Function<String,com.samlscope.runner.SupplementalDecryptionKeyService.KeySet> keys,
             java.util.function.BiFunction<String,String,java.util.Optional<com.samlscope.core.caseexec.CaseExecution>> executions) {
         return new TestCaseRegistry(registry.all().stream().map(testCase ->
-                testCase instanceof NativeMultipleDecryptionKeysConfigurationTestCase ? testCase
+                testCase instanceof NativeConfigurationSourceRunTestCase ? testCase
+                : testCase instanceof NativeMultipleDecryptionKeysConfigurationTestCase
+                        ? withNativeMultipleDecryptionKeys(testCase,
+                                SuiteRunProfileLookup.configuredDataDirectory(), null, null)
                 : MultipleDecryptionKeysConfigurationTestCase.ID.equals(testCase.id())
                         ? withNativeMultipleDecryptionKeys(
                                 new MultipleDecryptionKeysConfigurationTestCase(testCase,keys,executions),
@@ -140,14 +156,20 @@ public final class ApprovedConfigCaseRegistry {
 
     static TestCase withNativeMultipleDecryptionKeys(TestCase fallback, java.nio.file.Path data,
             TranscriptContentReader content, Function<String, byte[]> metadata) {
-        if (fallback instanceof NativeMultipleDecryptionKeysConfigurationTestCase) return fallback;
+        if (fallback instanceof NativeConfigurationSourceRunTestCase) return fallback;
         var bridge = new KeycloakNativeRunEvidenceBridge(data);
-        return new NativeMultipleDecryptionKeysConfigurationTestCase(fallback,
-                new SimpleSamlPhpMultipleDecryptionKeysEvidence(data.resolve("multiple-decryption-keys-evidence"),
-                        content == null ? bridge::content : content,
-                        metadata == null ? bridge::targetMetadata : metadata,
-                        new DefaultAlgorithmSourceRunStore(data, SimpleSamlPhpMultipleDecryptionKeysEvidence.CASE,
-                                SimpleSamlPhpMultipleDecryptionKeysEvidence.DIGEST)));
+        var originals = content == null ? (TranscriptContentReader)bridge::content : content;
+        var targetMetadata = metadata == null ? (Function<String, byte[]>)bridge::targetMetadata : metadata;
+        var sameRun = fallback instanceof NativeMultipleDecryptionKeysConfigurationTestCase ? fallback
+                : new NativeMultipleDecryptionKeysConfigurationTestCase(fallback,
+                        new SimpleSamlPhpMultipleDecryptionKeysEvidence(data.resolve("multiple-decryption-keys-evidence"),
+                                originals, targetMetadata,
+                                new DefaultAlgorithmSourceRunStore(data, SimpleSamlPhpMultipleDecryptionKeysEvidence.CASE,
+                                        SimpleSamlPhpMultipleDecryptionKeysEvidence.DIGEST)));
+        return new NativeConfigurationSourceRunTestCase(sameRun,
+                new NativeConfigurationSourceRunEvidence(data,
+                        data.resolve("native-configuration-source-bindings"),
+                        data.resolve("native-configuration-source-evidence"), originals, targetMetadata));
     }
 
     public static TestCaseRegistry create(CaseDefinitionCatalog definitions) {

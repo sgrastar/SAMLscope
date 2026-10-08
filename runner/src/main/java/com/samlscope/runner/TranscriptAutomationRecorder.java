@@ -105,6 +105,7 @@ public final class TranscriptAutomationRecorder
         return snapshot.entries;
     }
     @Override public byte[] readDecodedSaml(TranscriptEntry entry) { return content.readDecodedSaml(entry); }
+    @Override public byte[] readBody(TranscriptEntry entry) { return content.readBody(entry); }
 
     @Override
     public void close() {

@@ -99,6 +99,9 @@ public final class SpPeerService {
 
     public ConsumeResult consumeDetailed(
             String planId, byte[] rawBody, Map<String, List<String>> headers, String requestUrl) {
+        if(hasArtifact(new String(rawBody,java.nio.charset.StandardCharsets.UTF_8))){
+            return consumeArtifact(planId,"POST",rawBody,null,headers,requestUrl);
+        }
         return consumeRaw(
                 planId, saml.decodePostRaw(rawBody, "SAMLResponse"), "POST", rawBody,
                 "application/x-www-form-urlencoded", null, headers, requestUrl);
@@ -108,9 +111,63 @@ public final class SpPeerService {
     public ConsumeResult consumeRedirectDetailed(
             String planId, String rawQuery, Map<String, List<String>> headers, String requestUrl) {
         if (rawQuery == null || rawQuery.isBlank()) throw new SamlException("Redirect Response has no query");
+        if(hasArtifact(rawQuery))return consumeArtifact(planId,"GET",new byte[0],rawQuery,headers,requestUrl);
         return consumeRaw(
                 planId, saml.decodeRedirectRaw(rawQuery, "SAMLResponse"), "GET", new byte[0],
                 null, rawQuery, headers, requestUrl);
+    }
+
+    private static boolean hasArtifact(String form){
+        if(form==null || form.length()>8192)return false;
+        for(var part:form.split("&",-1)){
+            int at=part.indexOf('=');if(at<0)continue;
+            try{if("SAMLart".equals(java.net.URLDecoder.decode(part.substring(0,at),java.nio.charset.StandardCharsets.UTF_8)))return true;}
+            catch(IllegalArgumentException malformed){throw new SamlException("Invalid Artifact form encoding");}
+        }
+        return false;
+    }
+    private ConsumeResult consumeArtifact(String planId,String method,byte[] body,String query,
+            Map<String,List<String>> headers,String requestUrl){
+        var plan=plans.find(planId).orElseThrow(()->new SamlException("Unknown Artifact Test Plan"));
+        if(plan.profile()!=com.samlscope.core.profile.FunctionalProfile.BROWSER_SSO_IDP
+                || !Boolean.TRUE.equals(plan.declaredFeatures().get("artifact_binding")))throw new SamlException("Artifact observation was not prepared");
+        var form="GET".equals(method)?query:new String(body,java.nio.charset.StandardCharsets.UTF_8);
+        String relay=null;
+        for(var part:form.split("&",-1)){
+            int at=part.indexOf('=');if(at<0)throw new SamlException("Malformed Artifact form");
+            if("RelayState".equals(java.net.URLDecoder.decode(part.substring(0,at),java.nio.charset.StandardCharsets.UTF_8))){
+                if(relay!=null)throw new SamlException("Duplicate Artifact RelayState");
+                relay=java.net.URLDecoder.decode(part.substring(at+1),java.nio.charset.StandardCharsets.UTF_8);
+            }
+        }
+        var correlation=ActiveProbeCorrelation.parse(relay).orElseThrow(()->new SamlException("Artifact callback has no active-probe correlation"));
+        var run=runs.find(correlation.runId()).orElseThrow(()->new SamlException("Unknown Artifact Run"));
+        if(!planId.equals(run.planId()))throw new SamlException("Artifact callback belongs to another Plan");
+        var expectedAction=com.samlscope.core.caseexec.ActionIds.derive(run.id(),
+                com.samlscope.runner.cases.ArtifactBindingEvidence.CASE,com.samlscope.runner.cases.ArtifactBindingEvidence.PHASE,0);
+        if(!expectedAction.equals(correlation.actionId()) || !(transcript instanceof com.samlscope.core.transcript.TranscriptContentReader content))throw new SamlException("Artifact callback belongs to another operation");
+        var requests=transcript.listBounded(run.id(),10000).stream().filter(e->e.direction()==Direction.OUTBOUND
+                && expectedAction.equals(e.correlationId())
+                && com.samlscope.runner.cases.ArtifactBindingEvidence.FIXTURE.equals(e.samlSummary().get("fixture_id"))).toList();
+        if(requests.size()!=1)throw new SamlException("Artifact callback has no unique original AuthnRequest");
+        var request=com.samlscope.saml.normal.SecureXml.parse(content.readDecodedSaml(requests.getFirst())).getDocumentElement();
+        var acs=URI.create(request.getAttribute("AssertionConsumerServiceURL"));
+        String type=null;
+        if("POST".equals(method)){
+            var contentTypes=headers.entrySet().stream().filter(e->"content-type".equalsIgnoreCase(e.getKey())).flatMap(e->e.getValue().stream()).toList();
+            if(contentTypes.size()!=1)throw new SamlException("Artifact POST has no unique form Content-Type");type=contentTypes.getFirst();
+        }
+        var input=com.samlscope.runner.cases.ArtifactBindingEvidence.delivery(method,requestUrl,type,body,query,run.id(),expectedAction,acs);
+        var cleaned=new LinkedHashMap<String,List<String>>();headers.forEach((name,values)->{
+            if(!java.util.Set.of("authorization","proxy-authorization","cookie","set-cookie").contains(name.toLowerCase(java.util.Locale.ROOT)))cleaned.put(name,List.copyOf(values));
+        });
+        var summary=Map.<String,Object>of("type","ArtifactReceived","scenario_case_id",com.samlscope.runner.cases.ArtifactBindingEvidence.CASE,
+                "authn_action_id",expectedAction,"artifact_sha256",input.artifact().sha256(),"target_metadata_sha256",
+                com.samlscope.runner.cases.ArtifactBindingEvidence.sha256(metadataCache.getRunSnapshot(run.id(),planId)));
+        var original=transcript.record(new TranscriptInput(run.id(),Direction.INBOUND,clock.instant(),expectedAction,method,
+                requestUrl,200,Map.copyOf(cleaned),body,type,query,new byte[0],summary));
+        activeProbeResponses.accept(run.id(),expectedAction,input.artifact().bytes(),new EvidenceRef("transcript",original.id()));
+        return new ConsumeResult(summary,run.id(),expectedAction,null,null,input.relayState(),run.id());
     }
 
     private ConsumeResult consumeRaw(

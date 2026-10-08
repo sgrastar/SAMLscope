@@ -10,6 +10,9 @@ public final class SamlAcsSelectionRequestFactory {
     private static final String PROTOCOL = "urn:oasis:names:tc:SAML:2.0:protocol";
     private static final String ASSERTION = "urn:oasis:names:tc:SAML:2.0:assertion";
     public static final String POST = "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST";
+    public static final String REDIRECT = "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect";
+    public static final String ARTIFACT = "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Artifact";
+    public static final String UNSUPPORTED = "urn:samlscope:unsupported:response-binding";
 
     public byte[] build(
             Fixture fixture,
@@ -58,9 +61,14 @@ public final class SamlAcsSelectionRequestFactory {
                     "AssertionConsumerServiceURL", defaultAcs.resolve("999999").toString());
             case OTHER_ENTITY_URL -> request.setAttribute(
                     "AssertionConsumerServiceURL", otherEntityAcs.toString());
-            case UNSUPPORTED_BINDING -> {
+            case POST_BINDING, REDIRECT_BINDING, ARTIFACT_BINDING, UNSUPPORTED_BINDING -> {
                 request.setAttribute("AssertionConsumerServiceURL", defaultAcs.toString());
-                request.setAttribute("ProtocolBinding", "urn:samlscope:unsupported:response-binding");
+                request.setAttribute("ProtocolBinding", switch (fixture) {
+                    case POST_BINDING -> POST;
+                    case REDIRECT_BINDING -> REDIRECT;
+                    case ARTIFACT_BINDING -> ARTIFACT;
+                    default -> UNSUPPORTED;
+                });
             }
         }
         document.appendChild(request);
@@ -77,6 +85,9 @@ public final class SamlAcsSelectionRequestFactory {
         URL_ONE,
         UNKNOWN_URL,
         OTHER_ENTITY_URL,
+        POST_BINDING,
+        REDIRECT_BINDING,
+        ARTIFACT_BINDING,
         UNSUPPORTED_BINDING
     }
 

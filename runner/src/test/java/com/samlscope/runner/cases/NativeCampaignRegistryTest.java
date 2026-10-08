@@ -188,7 +188,7 @@ class NativeCampaignRegistryTest {
                 ignored -> new SupplementalDecryptionKeyService.KeySet(List.of(), List.of()),
                 (run, id) -> Optional.empty());
         var test = actual.require(SimpleSamlPhpMultipleDecryptionKeysEvidence.CASE);
-        assertInstanceOf(NativeMultipleDecryptionKeysConfigurationTestCase.class, test);
+        assertInstanceOf(NativeConfigurationSourceRunTestCase.class, test);
         assertEquals(bare.ids(), actual.ids());
         assertEquals(((ConfigurationPrompt) fallback).instructionEn(),
                 ((ConfigurationPrompt) test).instructionEn());

@@ -15,7 +15,7 @@ It aims to be the SAML equivalent of the OIDF Conformance Suite.
 | Trust model for published results | **Level 0 (local export) + Level 2 (shared URLs only for Hosted Runs)**. Uploading self-hosted results is not adopted |
 | Backend | **Java 21 + Javalin/Jetty + OpenSAML 5 + Apache Santuario + SQLite** |
 | Frontend | **React + Vite (TypeScript)**. `report.html` is also a static build of the same application |
-| Hosted-version administrative access | **Secret URLs when OIDC is off; account-only access and admin roles when OIDC is on**; integration pending renewed G2 approval ([17](17-oidc-authentication.md)) |
+| Hosted-version administrative access | **Secret URLs when OIDC is off; account-only access and admin roles when OIDC is on** ([17](17-oidc-authentication.md)) |
 | Reference implementation results | **Published as version-pinned samples**. Run in CI, but do not publish continuously |
 | Build / repository | **Gradle (Kotlin DSL)** / **single repository** |
 | Quoting specification source text | **ID + original summary + link to the original-text anchor**. Do not reproduce the full text (inquiry to Kantara in parallel) |
@@ -28,7 +28,7 @@ See [09-open-decisions.md](09-open-decisions.md) for the decision history.
 
 ## Status of Design Gate G1
 
-**G1 and G2 have signed approval records. The OIDC integration changes signed boundary files and requires renewed G2 approval before release. The `PENDING_REVIEW` fields inside authored catalogs remain unchanged by design; approval evidence lives outside the reviewed target commit.**
+**G1 and G2 have signed approval records. New production connections require the signed boundary renewal described in [82](82-generic-evidence-and-configuration-binding.md). The `PENDING_REVIEW` fields inside authored catalogs remain unchanged by design; approval evidence lives outside the reviewed target commit.**
 
 | Artifact | Contents |
 |---|---|
@@ -210,3 +210,4 @@ not by differences in reference-implementation results ([00 §5](00-concept.md))
 - [Native signature-mode capability](77-signature-mode-capability.md) — independent Response/Assertion signing observation and native configuration campaigns.
 - [Measured SimpleSAMLphp encrypted responses](78-simplesamlphp-native-encryption.md)
 - [Metadata key selection and unpublished-key controls](79-metadata-key-selection.md)
+- [Generic evidence collection and independent configuration completion](82-generic-evidence-and-configuration-binding.md)

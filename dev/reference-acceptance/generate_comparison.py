@@ -100,6 +100,20 @@ def render(root, output):
                 or signer_row["reason_code"] != signer_case["reason_code"]
                 or signer_row["evidence"] != signer_case["evidence"]):
             raise ValueError("Native SLO signer comparison selection differs from its verified Run")
+    config_source_key=('simplesamlphp','single_logout_idp','IIP-IDP19-b-idp-01')
+    config_source_row=ledger_selection.get(config_source_key)
+    if config_source_row is not None and config_source_row.get('verdict')!='NOT_VERIFIED':
+        from verify_simplesamlphp_multiple_decryption_keys_source_run_acceptance import verify_adoption as verify_ssp_config_source
+        path,verified=check_once(verify_ssp_config_source,
+            root.parent/'reference-20261008'/'ssp-configuration-source-run-r1'/'adoption',live=False)
+        raw=path.read_bytes();native_case=verified[config_source_key[2]]
+        if (set(verified)!={config_source_key[2]}
+                or config_source_row['run']!=json.loads(raw)['run']['id']
+                or config_source_row['result_sha256']!=hashlib.sha256(raw).hexdigest()
+                or config_source_row['verdict']!=native_case['verdict']
+                or config_source_row['reason_code']!=native_case['reason_code']
+                or config_source_row['evidence']!=native_case['evidence']):
+            raise ValueError('Independent CONFIG comparison selection differs from its verified recipient Run')
     version_key = ("simplesamlphp", "browser_sso_idp", "IIP-SSO01-ep-idp-01")
     version_row = ledger_selection.get(version_key)
     if version_row is not None and version_row.get("verdict") != "NOT_VERIFIED":

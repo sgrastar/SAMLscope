@@ -61,16 +61,39 @@ public final class SimpleSamlPhpMultipleDecryptionKeysEvidence {
     private Path folder(String run){return directory.resolve(run+SUFFIX);}
     public boolean exists(String run){return run!=null&&run.matches("run_[0-9A-HJKMNP-TV-Z]{26}")&&Files.exists(folder(run),LinkOption.NOFOLLOW_LINKS);}
     public Optional<CaseOutcome> read(CaseContext context) {
+        return read(context, false, null);
+    }
+
+    /** This one CONFIG obligation has a complete zero-protocol native proof.
+     * A source binding keeps its actual incomplete Run and does not synthesize a case execution.
+     * The caller must independently fence the entire source and completed recipient. */
+    Optional<CaseOutcome> readIndependentConfigurationSource(CaseContext context, String expectedManifestSha256) {
+        return read(context, true, expectedManifestSha256);
+    }
+
+    private Optional<CaseOutcome> read(CaseContext context, boolean independentSource, String expectedManifestSha256) {
         if(!exists(context.runId()))return Optional.empty();String stage="source-run";
         try {
-            require(context.transcriptComplete()&&context.targetRole()==TargetRole.IDP);
-            Path f=folder(context.runId());safe(f);var m=json.readTree(original(f,"manifest.json"));
+            require(context.targetRole()==TargetRole.IDP
+                &&(independentSource?!context.transcriptComplete():context.transcriptComplete()));
+            Path f=folder(context.runId());safe(f);byte[] manifestRaw=original(f,"manifest.json");
+            if(independentSource)require(expectedManifestSha256!=null&&expectedManifestSha256.matches("[0-9a-f]{64}")&&hash(manifestRaw).equals(expectedManifestSha256));
+            var m=json.readTree(manifestRaw);
             require(SCHEMA.equals(text(m,"schema"))&&CASE.equals(text(m,"caseId"))&&DIGEST.equals(text(m,"caseDigest"))
                 &&context.runId().equals(text(m,"runId"))&&TARGET.equals(text(m,"targetEntityId"))
                 &&"native-multiple-decryption-keys".equals(text(m,"campaignId"))&&!m.path("outcomeAssigned").asBoolean(true));
             var files=m.path("files");require(files.isObject()&&files.size()>15&&files.size()<=600);
             long bytes=0;var names=files.fieldNames();while(names.hasNext()){String name=names.next();byte[] value=checked(f,files,name);bytes+=value.length;require(bytes<=33554432);}
-            var source=store.execution(context.runId());require(TARGET.equals(source.plan().target().entityId())&&"single_logout_idp".equals(source.plan().profile().id())
+            var source=independentSource?store.planned(context.runId()):store.execution(context.runId());
+            if(independentSource) {
+                require(source.actions().isEmpty()&&source.snapshot().path("outbox").isArray()
+                    &&source.snapshot().path("outbox").isEmpty()
+                    &&!source.snapshot().has("caseExecutionSha256")
+                    &&source.plan().parameters().equals(context.parameters())
+                    &&source.plan().interaction().equals(context.interaction())
+                    &&source.run().targetToSuiteReachability()==context.reachability());
+            }
+            require(TARGET.equals(source.plan().target().entityId())&&"single_logout_idp".equals(source.plan().profile().id())
                 &&stable(source.snapshot()).equals(node(f,files,"source-store.json")));
             var entries=context.transcript().list(context.runId());require(store.history(context.runId(),entries,content).equals(node(f,files,"source-history.json")));
             byte[] target=metadata.apply(context.runId());require(target!=null&&Arrays.equals(target,checked(f,files,"target-metadata.xml"))
@@ -108,7 +131,8 @@ public final class SimpleSamlPhpMultipleDecryptionKeysEvidence {
                     &&hash(checked(f,files,"native-"+phase+".stdout")).equals(text(op,"stdoutSha256"))
                     &&signedObservation(f,files,"native-"+phase+".stdout",2).equals(phase.equals("before")?before:after)
                     &&hash(checked(f,files,"native-"+phase+".stderr")).equals(text(op,"stderrSha256"))
-                    &&checked(f,files,"native-"+phase+".stderr").length==0&&!at(op,"finishedAt").isBefore(at(op,"startedAt")));}
+                    &&!at(op,"finishedAt").isBefore(at(op,"startedAt")));
+                verifyDecryptionDiagnostics(checked(f,files,"native-"+phase+".stderr"),phase.equals("before")?before:after);}
             require(at(operation(operations,"native-before"),"finishedAt").isBefore(at(operation(operations,"native-after"),"startedAt")));
             stage="configuration-restoration";
             for(String name:List.of("hosted","remote"))require(Arrays.equals(checked(f,files,name+"-original.php"),checked(f,files,name+"-final.php")));
@@ -137,6 +161,8 @@ public final class SimpleSamlPhpMultipleDecryptionKeysEvidence {
                 &&hash(checked(f,files,"native-restored.stdout")).equals(text(restoredOp,"stdoutSha256"))
                 &&hash(checked(f,files,"native-restored-input.json")).equals(text(restoredOp,"stdinSha256"))
                 &&at(restoredOp,"startedAt").isAfter(at(operation(operations,"native-after"),"finishedAt"))&&at(restoredOp,"finishedAt").isBefore(at(remove,"startedAt")));
+            require(hash(checked(f,files,"native-restored.stderr")).equals(text(restoredOp,"stderrSha256")));
+            verifyExpiredMetadataWarnings(checked(f,files,"native-restored.stderr"),checked(f,files,"remote-original.php"),at(restoredOp,"finishedAt"));
             var restoredInput=((ObjectNode)input).deepCopy();restoredInput.put("mode","restored");require(restoredInput.equals(node(f,files,"native-restored-input.json")));
             var counts=node(f,files,"operation-counts.json");require(counts.path("restored").asBoolean(false)&&counts.path("nativeObservationInvocations").asInt(-1)==2
                 &&counts.path("credentialPosts").asInt(-1)==0&&counts.path("samlProtocolOperations").asInt(-1)==0&&counts.path("humanOperations").asInt(-1)==0);
@@ -153,7 +179,7 @@ public final class SimpleSamlPhpMultipleDecryptionKeysEvidence {
                 new EvidenceRef("native-multiple-decryption-keys",context.runId()+SUFFIX+"/manifest.json"));
             return Optional.of(new CaseOutcome(Outcome.SATISFIED,null,REASON,REASON,refs,
                 Map.of("evidence_adapter",SCHEMA,"run_id",context.runId(),"case_digest",DIGEST,"native_evidence_adapter","simplesamlphp-two-decryption-keys","distinct_usable_native_private_keys",2,
-                    "capability_removal_control_verified",true,"configuration_restored",true,"logout_decryption_claimed",false,"attested",false)));
+                    "capability_removal_control_verified",true,"configuration_restored",true,"logout_decryption_claimed",false,"attested",false,"native_manifest_sha256",hash(manifestRaw))));
         }catch(Exception unproven){return Optional.of(CaseOutcome.notVerified("native-multiple-decryption-keys."+stage,"configuration.multiple-decryption-keys.native-unproven"));}
     }
 
@@ -225,6 +251,9 @@ public final class SimpleSamlPhpMultipleDecryptionKeysEvidence {
     }
     static void verifyPayloadSignatures(byte[] payload,JsonNode report,JsonNode signatures,List<PublicKey> selected)throws Exception {
         var rows=report.path(selected.size()==2?"baselineKeys":"keys");
+        verifyPayloadSignaturesWithRows(payload,rows,signatures,selected);
+    }
+    static void verifyPayloadSignaturesWithRows(byte[] payload,JsonNode rows,JsonNode signatures,List<PublicKey> selected)throws Exception {
         require(rows.isArray()&&rows.size()==selected.size()&&signatures.size()==selected.size());
         var seen=new HashSet<String>();
         for(int index=0;index<selected.size();index++){
@@ -251,6 +280,54 @@ public final class SimpleSamlPhpMultipleDecryptionKeysEvidence {
             require(labels.equals(Set.of("baseline:0","baseline:1","capability-removed:0")));}
     }
     public static JsonNode stable(JsonNode snapshot){var copy=((ObjectNode)snapshot).deepCopy();copy.remove(List.of("runDocumentSha256","caseExecutionSha256"));return copy;}
+    static Map<String,String> nativeClassDigests(){return SOURCES;}
+    /** Expected failed native decryptions log diagnostics. They do not supply the oracle:
+     * the signed, independently verified success/failure matrix remains authoritative. */
+    static void verifyDecryptionDiagnostics(byte[] raw,JsonNode report) {
+        int failures=0,successes=0;
+        var controls=report.path("decryptionControls");require(controls.isArray()&&controls.size()==2);
+        for(var control:controls)for(var attempt:control.path("attempts")) {
+            require(attempt.path("decrypted").isBoolean());
+            if(attempt.path("decrypted").booleanValue())successes++;else failures++;
+        }
+        require(failures==3&&successes==3&&raw.length<=16384);
+        String value=new String(raw,StandardCharsets.UTF_8);require(Arrays.equals(raw,value.getBytes(StandardCharsets.UTF_8)));
+        var lines=value.lines().toList();require(lines.size()==failures*3);
+        String correlation=null;
+        var first=java.util.regex.Pattern.compile("%date\\{M j H:i:s\\} simplesamlphp ERR \\[([A-Za-z0-9]+)\\] Failed to decrypt symmetric key: Failure decrypting Data \\(openssl private\\) - error:(?:02000079:rsa routines::oaep decoding error|0200006C:rsa routines::data greater than mod len)");
+        for(int i=0;i<failures;i++) {
+            var match=first.matcher(lines.get(i*3));require(match.matches()&&match.group(1).matches("CL[0-9a-f]{8}"));
+            if(correlation==null)correlation=match.group(1);require(correlation.equals(match.group(1)));
+            String parser=lines.get(i*3+1),prefix="%date{M j H:i:s} simplesamlphp ERR ["+correlation+"] Decryption failed: Unable to parse XML - ";
+            require(parser.startsWith(prefix));String diagnostic=parser.substring(prefix.length());
+            require(diagnostic.equals("\"FATAL[77]\": \"Premature end of data in tag root line 1")
+                ||diagnostic.matches("\"FATAL\\[9\\]\": \"PCDATA invalid Char value (?:19|27)"));
+            var location=java.util.regex.Pattern.compile("\" in \"\\(string\\)\" at line ([12]) on column ([1-9][0-9]*)\"").matcher(lines.get(i*3+2));
+            require(location.matches());
+        }
+    }
+    /** Only expiry diagnostics for literal Suite-owned peers in the restored native file qualify. */
+    static void verifyExpiredMetadataWarnings(byte[] raw,byte[] remoteOriginal,Instant observedAt) {
+        require(raw.length<=65536);String value=new String(raw,StandardCharsets.UTF_8);
+        require(Arrays.equals(raw,value.getBytes(StandardCharsets.UTF_8)));if(value.isEmpty())return;
+        String configuration=new String(remoteOriginal,StandardCharsets.UTF_8);
+        var declaration=java.util.regex.Pattern.compile("(?m)^(?:\\$metadata\\[|  )'([^'\\r\\n]+)'(?:\\]\\s*=|\\s*=>)\\s*array\\s*\\(");
+        var declarations=new ArrayList<java.util.regex.MatchResult>();var matcher=declaration.matcher(configuration);
+        while(matcher.find())declarations.add(matcher.toMatchResult());
+        var expiries=new HashMap<String,Instant>();
+        for(int i=0;i<declarations.size();i++) {
+            var match=declarations.get(i);String block=configuration.substring(match.end(),i+1<declarations.size()?declarations.get(i+1).start():configuration.length());
+            if(!match.group(1).matches("http://localhost:18080/p/plan_[0-9A-HJKMNP-TV-Z]{26}(?:/[A-Za-z0-9_/-]+)?"))continue;
+            var expiration=java.util.regex.Pattern.compile("'expire'\\s*=>\\s*([0-9]+)").matcher(block);
+            if(expiration.find()){Instant at=Instant.ofEpochSecond(Long.parseLong(expiration.group(1)));require(!expiration.find()&&expiries.put(match.group(1),at)==null);}
+        }
+        var warning=java.util.regex.Pattern.compile("%date\\{M j H:i:s\\} simplesamlphp WARNING \\[CL[0-9a-f]{8}\\] Dropping metadata entity '([^']+)', expired ([0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z)\\.");
+        var seen=new HashSet<String>();
+        for(String line:value.lines().toList()) {
+            var match=warning.matcher(line);require(match.matches());Instant expired=Instant.parse(match.group(2));
+            require(seen.add(match.group(1))&&expired.equals(expiries.get(match.group(1)))&&!expired.isAfter(observedAt));
+        }
+    }
     private static JsonNode operation(JsonNode operations,String label){JsonNode found=null;for(var op:operations)if(label.equals(op.path("label").asText())){require(found==null);found=op;}require(found!=null);return found;}
     private JsonNode node(Path f,JsonNode files,String name)throws Exception{return json.readTree(checked(f,files,name));}
     private byte[] checked(Path f,JsonNode files,String name)throws Exception{byte[] raw=original(f,name);require(hash(raw).equals(text(files,name)));return raw;}

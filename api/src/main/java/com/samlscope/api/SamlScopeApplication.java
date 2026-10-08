@@ -118,7 +118,8 @@ public final class SamlScopeApplication {
         var hostedRunProvisioner = new com.samlscope.store.SqliteHostedRunProvisioner(database, json, config.mode() == AppConfig.Mode.HOSTED);
         var ephemeralCredentials = new InMemoryEphemeralCredentialProvider();
         var outboundDispatcher = new OutboundDispatcher(
-                caseExecutions, HttpOutboundSender.create(transcript, clock), ephemeralCredentials,
+                caseExecutions, HttpOutboundSender.create(transcript, clock,
+                        runId -> runs.find(runId).map(run -> keyStore.getOrCreate(run.planId()))), ephemeralCredentials,
                 new OutboundPolicy(config.outboundAllowPrivate()), clock);
         outboundDispatcher.recoverAfterRestart();
         var ecpProbe = new EcpProbeRuntime(

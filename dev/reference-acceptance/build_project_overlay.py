@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Build selected unprotected sources together against an immutable runtime.
 
-Only explicit Runner, SAML and Peer class families enter the overlay. Tests run
+Only explicit, unprotected Core, Store, Runner, SAML and Peer class families enter the overlay. Tests run
 against the actual resulting JARs, not mutable Gradle main outputs.
 """
 import argparse
@@ -17,7 +17,7 @@ import zipfile
 
 ROOT = Path(__file__).resolve().parents[2]
 JAVA = Path('/Library/Java/JavaVirtualMachines/jdk-21.jdk/Contents/Home/bin')
-MODULES = ('runner', 'saml', 'peer')
+MODULES = ('core', 'store', 'runner', 'saml', 'peer')
 PROJECT_JARS = tuple(n + '-0.1.0.jar' for n in ('api', 'core', 'peer', 'runner', 'saml', 'store'))
 
 
@@ -243,7 +243,9 @@ def main():
         (mains if kind == 'main' else tests).append(target)
         if kind == 'main':
             match = re.search(r'^package\s+([\w.]+)\s*;', target.read_text(), re.M)
-            require(match is not None and match.group(1).startswith('com.samlscope.' + module + '.'), 'Module/package mismatch')
+            namespace = 'com.samlscope.' + module
+            require(match is not None and (match.group(1) == namespace
+                    or match.group(1).startswith(namespace + '.')), 'Module/package mismatch')
             family = match.group(1).replace('.', '/') + '/' + source.stem
             require(family not in families, 'Duplicate main class family')
             families[family] = module + '-0.1.0.jar'

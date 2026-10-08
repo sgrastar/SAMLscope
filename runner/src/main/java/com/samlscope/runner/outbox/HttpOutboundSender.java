@@ -25,11 +25,28 @@ public final class HttpOutboundSender implements OutboundSender {
     private final HttpClient client;
     private final TranscriptRecorder transcript;
     private final Clock clock;
+    private final ArtifactResolutionOutboundSender artifactSender;
+    private final MetadataFetchOutboundSender metadataSender;
 
     public HttpOutboundSender(HttpClient client, TranscriptRecorder transcript, Clock clock) {
+        this(client,transcript,clock,new ArtifactResolutionOutboundSender(client,transcript,clock));
+    }
+    private HttpOutboundSender(HttpClient client, TranscriptRecorder transcript, Clock clock,
+            ArtifactResolutionOutboundSender artifactSender) {
         this.client = Objects.requireNonNull(client, "client");
         this.transcript = Objects.requireNonNull(transcript, "transcript");
         this.clock = Objects.requireNonNull(clock, "clock");
+        this.artifactSender = Objects.requireNonNull(artifactSender);
+        this.metadataSender = new MetadataFetchOutboundSender(transcript, clock);
+    }
+
+    /** Closed PKIX/hostname authority is available only through this production factory. */
+    public static HttpOutboundSender create(TranscriptRecorder transcript, Clock clock,
+            com.samlscope.runner.cases.SamlPlanCredentialsProvider suiteKeys) {
+        var common = HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NEVER)
+                .connectTimeout(Duration.ofSeconds(20)).build();
+        return new HttpOutboundSender(common,transcript,clock,
+                ArtifactResolutionOutboundSender.create(transcript,clock,suiteKeys));
     }
 
     public static HttpOutboundSender create(TranscriptRecorder transcript, Clock clock) {
@@ -41,6 +58,12 @@ public final class HttpOutboundSender implements OutboundSender {
 
     @Override
     public SendResult send(String runId, OutboundAction action, byte[] ephemeralCredential) throws Exception {
+        if (action.kind() == OutboundKind.METADATA_FETCH) {
+            return metadataSender.send(runId, action, ephemeralCredential);
+        }
+        if (action.kind() == OutboundKind.ARTIFACT_RESOLVE) {
+            return artifactSender.send(runId, action, ephemeralCredential);
+        }
         if (action.kind() == OutboundKind.LOGOUT_PROBE) {
             return sendLogoutProbe(runId, action);
         }
