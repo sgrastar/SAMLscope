@@ -127,3 +127,45 @@ through the normal trusted wrapper without changing or bypassing its boundary.
 Runtime deployment and new product conclusions require their own evidence after
 the signed renewal and build checks. Unit or integration test success alone does
 not reduce the reference inventory.
+
+## Deployed API qualification
+
+The signed composition has been deployed to the local Suite. The installed
+distribution, running JARs, and launcher agree byte for byte; the existing data
+volume and application inputs are retained. Signed release-policy verification
+also passes for this source revision.
+
+An owned synthetic IdP exercised the actual public Plan, Run, preflight, signed
+normal-login, and milestone-start APIs. AdditionalMetadataLocation matching and
+mismatching namespaces produced the expected first stored outcomes before any
+result API read. No second configuration answer or attestation was submitted.
+Duplicate declarations shared one recorded retrieval, and the stored normal
+Response and Assertion signatures were checked against the Run metadata.
+
+Separate synthetic Runs exercised HTML, redirects, and an HTTP service error.
+Their cases remained unverified. HTML content was discarded, redirect targets
+were not fetched, and an HTTP error was not classified as product nonconformance.
+The temporary read-only inspection helper was removed after each campaign;
+the database was inspected in place and was not copied.
+
+These checks qualify production composition and automatic evidence completion.
+They do not establish reference-product conformance and add no observations to
+the generated comparison. The investigated reference metadata does not publish
+AdditionalMetadataLocation declarations, so its namespace cases still need the
+approved evidence prerequisites. Operational originals and synthetic operation
+counts are retained separately under the ignored acceptance evidence directory.
+
+The same image also completed the approved ProtocolBinding case through the
+actual public API, first with a signed ArtifactResponse and then with an unsigned
+ArtifactResponse authenticated by closed PKIX and hostname-verified TLS. The
+POST control, Redirect error, unsupported-binding error, and Artifact exchange
+were all observed. An independent reader checked the signed normal flow,
+persisted unsafe SOAP action, original request and reply, outer and inner
+correlation, issuer, destination, and Suite-signed TLS receipt.
+
+Only the selected case and normal-flow originals were qualified. Unselected DTD
+fixtures were not sent to the target and remain rejected by the secure XML
+parser; the whole Run export is explicitly incomplete. The selected originals
+and their byte hashes were exported before the owned synthetic container and
+test-data volume were removed. The main Suite's TLS settings were unchanged.
+These synthetic results likewise add no reference-product conclusions.
