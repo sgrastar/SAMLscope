@@ -2,7 +2,7 @@
 
 The approved NameID omission semantics now have a new native Keycloak observation. The source is a newly created public-CI environment, not a reinterpretation of the earlier literal-equality Run. The exact current profile and case digest, original signed runtime, target image, metadata, native client configuration and restoration are verified by `dev/reference-acceptance/verify_owned_keycloak_nameid_acceptance.py`.
 
-Formal ledger adoption remains pending. The final complete generation stopped because an existing SimpleSAMLphp source-Run verifier requires its older six-module archive to match the currently running Suite, including in its offline path. Inventory, comparison, baseline and saved results remain unchanged. The independently verified native observation is retained without counting it as a completed reduction. No further repair or generation retry was attempted at this checkpoint.
+Formal ledger adoption is complete for the exact native Keycloak browser observation. The inventory and comparison generators replayed the required evidence and controls in one generation. The earlier SimpleSAMLphp blocker was corrected by reading the actual Store through the qualified historical archive and comparing every stored-state field with the sealed original. Archive authority is recorded separately from installed-runtime authority; the live verification path retains its original module checks. Other conclusions and selected sources are unchanged, and earlier saved results are not rewritten.
 
 ## Actual native observation
 
@@ -27,6 +27,8 @@ The immutable operation records are in the local `build/acceptance/reference-202
 The new read-only `GET /api/runs/{id}/transcript/{txId}/original-digest` returns only the native decoded SAML SHA-256, size and exact Run and transcript identity. It does not expose raw XML, headers or configuration. The reader checks native row ownership, the expected file reference, bounded size, symlinks and a matching SAML protocol root. Originals are read again rather than accepted from an outcome cache.
 
 The route uses the same read authorization and shared hosted quotas as Transcript access. The collector obtains digests only for selected action or normal-control candidates and keeps their proof separate from persisted summaries. Unavailable or rate-limited originals remain supplemental and unqualified. No guessed hashes or new Verdict assignments are introduced. Hosted per-Run quotas can prevent immediate proof of every original in one generation; this does not change the Suite result.
+
+The endpoint is deployed in the qualified local v239 distribution. Every packaged JAR and the standard launcher matched the signed source qualification, and digest read-back matched every selected physical native original. This deployment verification required no new Run, target protocol exchange, login or product configuration change.
 
 ## Signature-gate usability
 

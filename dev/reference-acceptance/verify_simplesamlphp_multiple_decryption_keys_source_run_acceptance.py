@@ -254,6 +254,94 @@ def remote(folder, mode, output):
         command(['docker', 'exec', '--user', '0', SUITE, 'rm', '-rf', '--', temporary])
 
 
+
+ARCHIVED_STATE_HELPER = 'ReadArchivedNativeConfigurationSourceState'
+MODULE_CLASSES = dict(runner='com.samlscope.runner.cases.NativeConfigurationSourceRunEvidence',
+    core='com.samlscope.core.evaluation.Evaluator', saml='com.samlscope.saml.normal.SecureXml',
+    store='com.samlscope.store.JsonCodec', api='com.samlscope.api.SamlScopeApplication',
+    peer='com.samlscope.peer.sp.SpPeerService')
+
+
+def historical_state_payload(original, pins):
+    """Validate captured installed authority before comparing its unchanged Store fields."""
+    origins = original.get('actualModuleCodeSources')
+    expected = {n: dict(path='/opt/samlscope/lib/' + n + '-0.1.0.jar',
+        sha256=pins['archiveSha256'][n + '-0.1.0.jar'], **{'class': MODULE_CLASSES[n]}) for n in MODULES}
+    require(origins == expected, 'Historical installed module authority differs from its qualified archive')
+    return {k: v for k, v in original.items() if k != 'actualModuleCodeSources'}
+
+
+def archived_state_payload(report, original, pins, archive_root):
+    require(report.get('schema') == 'samlscope-archived-native-configuration-state-v1'
+        and report.get('authority') == 'qualified-historical-project-archive'
+        and report.get('installedRuntimeClaimed') is False and report.get('targetOperations') == 0,
+        'Archived state is not an installed runtime assertion')
+    require(isinstance(archive_root, str) and archive_root.startswith('/tmp/ssp-config-source-archive-state-')
+        and len(archive_root.rsplit('-', 1)[-1]) == 24
+        and all(c in '0123456789abcdef' for c in archive_root.rsplit('-', 1)[-1]), 'Foreign archived state root')
+    expected = {n: dict(path=archive_root + '/' + n + '-0.1.0.jar',
+        sha256=pins['archiveSha256'][n + '-0.1.0.jar'], **{'class': MODULE_CLASSES[n]}) for n in MODULES}
+    require(report.get('archivedModuleCodeSources') == expected, 'Fresh archived class/JAR authority differs')
+    state = report.get('storedState')
+    require(state == historical_state_payload(original, pins), 'Fresh actual historical Store state differs')
+    return state
+
+
+def archived_state(folder, original, output):
+    """Read the real Store with old pinned code, without claiming the new installed registry."""
+    folder, value, source, binding = campaign(folder)
+    selected, pins = reader(folder)
+    historical_state_payload(original, pins)
+    require(not pathlib.Path(output).exists(), 'Immutable archived state output exists')
+    with tempfile.TemporaryDirectory(prefix='ssp-config-source-archive-state-') as local:
+        local = pathlib.Path(local)
+        classes = local / 'classes'
+        helper = REPO / 'dev/reference-acceptance' / (ARCHIVED_STATE_HELPER + '.java')
+        cp = ':'.join(str(REPO / p) for p in (*pins['projectPaths'].values(), *pins['dependencyPaths'].values()))
+        command([JAVA / 'javac', '--release', '21', '-sourcepath', '', '-cp', cp, '-d', classes, helper])
+        require(set(files_unowned(classes)) == {'com/samlscope/runner/cases/' + ARCHIVED_STATE_HELPER + '.class'},
+            'Archived state helper shadows production classes')
+        temporary = '/tmp/ssp-config-source-archive-state-' + secrets.token_hex(12)
+        authority = local / 'authority.json'
+        save(authority, dict(schema='samlscope-archived-native-configuration-authority-v1', archiveRoot=temporary,
+            modules={n: pins['archiveSha256'][n + '-0.1.0.jar'] for n in MODULES}))
+        def dependency_readback():
+            raw = command(['docker', 'exec', SUITE, 'sha256sum', *['/opt/samlscope/lib/' + n for n in pins['dependencyPaths']]])
+            return {line.split()[1].rsplit('/', 1)[-1]: line.split()[0] for line in raw.decode().splitlines()}
+        dependencies = {n: pins['archiveSha256'][n] for n in pins['dependencyPaths']}
+        require(dependency_readback() == dependencies, 'Actual dependency bytes differ before archived state')
+        command(['docker', 'exec', SUITE, 'mkdir', '-p', temporary + '/sources', temporary + '/bindings'])
+        try:
+            for name, path in pins['projectPaths'].items():
+                command(['docker', 'cp', REPO / path, SUITE + ':' + temporary + '/' + name])
+            command(['docker', 'cp', classes, SUITE + ':' + temporary + '/classes'])
+            command(['docker', 'cp', authority, SUITE + ':' + temporary + '/authority.json'])
+            command(['docker', 'cp', source, SUITE + ':' + temporary + '/sources/' + source.name])
+            command(['docker', 'cp', binding, SUITE + ':' + temporary + '/bindings/' + binding.name])
+            command(['docker', 'exec', '--user', '0', SUITE, 'chmod', '-R', 'a+rwX', temporary])
+            cp = ':'.join(temporary + '/' + n + '-0.1.0.jar' for n in MODULES) + ':' + temporary + '/classes:' + ':'.join('/opt/samlscope/lib/' + n for n in pins['dependencyPaths'])
+            command(['docker', 'exec', SUITE, 'java', '-Xmx512m', '-cp', cp,
+                'com.samlscope.runner.cases.' + ARCHIVED_STATE_HELPER, '/data', value['recipientRunId'], value['sourceRunId'],
+                temporary + '/sources/' + source.name, temporary + '/bindings/' + binding.name,
+                temporary + '/authority.json', temporary + '/output.json'], 300)
+            command(['docker', 'cp', SUITE + ':' + temporary + '/output.json', output])
+            require(dependency_readback() == dependencies, 'Actual dependencies changed during archived state')
+            return archived_state_payload(READ(output), original, pins, temporary)
+        finally:
+            command(['docker', 'exec', '--user', '0', SUITE, 'rm', '-rf', '--', temporary])
+
+
+def files_unowned(folder):
+    """Only inventory fresh compiler output; unlike original evidence, this owned temp is unsealed."""
+    result = {}
+    for p in sorted(folder.rglob('*')):
+        require(not p.is_symlink(), 'Compiled helper symlink')
+        if p.is_file():
+            require(p.stat().st_nlink == 1, 'Compiled helper hard link')
+            require(p.name.endswith('.class'), 'Unexpected compiled helper file')
+            result[str(p.relative_to(folder))] = SHA(p.read_bytes())
+    return result
+
 def installed_readback(folder):
     _, value, source, binding = campaign(folder)
     destinations = {'source': '/data/native-configuration-source-evidence/' + source.name,
@@ -443,11 +531,24 @@ def verify_adoption(folder, live=False):
     with tempfile.TemporaryDirectory(prefix='ssp-config-source-final-replay-') as temporary:
         temp = pathlib.Path(temporary)
         observed = remote(folder, 'replay', temp / 'replay.json')
-        state = remote(folder, 'state', temp / 'state.json')
-        require(observed == READ(folder / 'closed-reader-replay.json') and state == READ(folder / 'state-final.json'), 'Fresh reader/state differs')
+        original_state = READ(folder / 'state-final.json')
+        if live:
+            state = remote(folder, 'state', temp / 'state.json')
+            require(state == original_state, 'Fresh installed state differs')
+        else:
+            state = archived_state(folder, original_state, temp / 'archived-state.json')
+        require(observed == READ(folder / 'closed-reader-replay.json'), 'Fresh production reader/control replay differs')
         cp = ':'.join(str(REPO / p) for p in pins['projectPaths'].values()) + ':' + str(selected / 'classes') + ':' + ':'.join(str(REPO / p) for p in pins['dependencyPaths'].values())
         command([JAVA / 'java', '-cp', cp, 'com.samlscope.runner.cases.' + HELPER, 'offline', folder / 'state-final.json', temp / 'central.json'])
-        require(READ(temp / 'central.json') == state, 'Archived central Evaluator differs')
+        central = READ(temp / 'central.json')
+        require(central == original_state and (central == state if live else historical_state_payload(central, pins) == state),
+            'Fresh actual Store / archived central Evaluator differs')
+        if not live:
+            for name in ('state-before.json', 'state-transition.json', 'actual-registry-final.json'):
+                historical_state_payload(READ(folder / name), pins)
+            registry = READ(folder / 'actual-registry-final.json')
+            require(registry.get('targetOperations') == 0 and registry.get('actualRegistryOutcome') == replay_ok(observed),
+                'Historical actual registry outcome differs from fresh original replay')
     after = transition_ok(folder, observed)
     result = READ(folder / 'result-final.json')
     matches = [case for requirement in result['requirements'] for case in requirement.get('cases', []) if case['id'] == CASE]
