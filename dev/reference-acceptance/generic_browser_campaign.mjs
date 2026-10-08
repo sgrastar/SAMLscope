@@ -22,6 +22,7 @@ import { createInterface } from 'node:readline';
 const sha = bytes => createHash('sha256').update(bytes).digest('hex');
 const RUN = /^run_[0-9A-HJKMNP-TV-Z]{26}$/;
 const PLAN = /^plan_[0-9A-HJKMNP-TV-Z]{26}$/;
+const TX = /^tx_[0-9A-HJKMNP-TV-Z]{26}$/;
 const CASE = /^IIP-[A-Za-z0-9]+-[A-Za-z0-9]+-idp-01$/;
 const ACTION = /^action_[a-f0-9]{32}$/;
 const sleep = milliseconds => new Promise(done => setTimeout(done, milliseconds));
@@ -34,6 +35,67 @@ export function publicJson(value) {
     publicJson(child);
   }
   return value;
+}
+
+/** Public Recorder projection: omit only irreversible Cookie metadata, never raw values. */
+export function publicTranscriptProjection(raw, runId) {
+  const fail = () => { throw new Error('Malformed or non-public Transcript omitted'); };
+  if (!(raw instanceof Uint8Array) || raw.length > 6 * 1024 * 1024 || !RUN.test(runId)) fail();
+  let text; try { text = new TextDecoder('utf-8', { fatal: true }).decode(raw); } catch { fail(); }
+  let offset = 0;
+  const space = () => { while (/\s/.test(text[offset] ?? '') && offset < text.length) offset++; };
+  const string = () => {
+    if (text[offset] !== '"') fail(); const start = offset++;
+    while (offset < text.length) {
+      const character = text[offset++]; if (character === '\\') { offset++; continue; }
+      if (character === '"') { try { return JSON.parse(text.slice(start, offset)); } catch { fail(); } }
+    }
+    fail();
+  };
+  const value = () => {
+    space(); const first = text[offset];
+    if (first === '{') {
+      offset++; space(); const keys = new Set(); if (text[offset] === '}') { offset++; return; }
+      while (true) {
+        space(); const key = string(); if (keys.has(key)) fail(); keys.add(key); space(); if (text[offset++] !== ':') fail(); value(); space();
+        const next = text[offset++]; if (next === '}') return; if (next !== ',') fail();
+      }
+    }
+    if (first === '[') {
+      offset++; space(); if (text[offset] === ']') { offset++; return; }
+      while (true) { value(); space(); const next = text[offset++]; if (next === ']') return; if (next !== ',') fail(); }
+    }
+    if (first === '"') { string(); return; }
+    const primitive = /^(?:null|true|false|-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?)/.exec(text.slice(offset));
+    if (!primitive || !['null', 'true', 'false'].includes(primitive[0]) && !Number.isFinite(Number(primitive[0]))) fail();
+    offset += primitive[0].length;
+  };
+  value(); space(); if (offset !== text.length) fail();
+  let rows; try { rows = JSON.parse(text); } catch { fail(); }
+  if (!Array.isArray(rows) || rows.some(row => !row || row.runId !== runId || typeof row.id !== 'string')
+      || new Set(rows.map(row => row.id)).size !== rows.length) fail();
+  for (const row of rows) {
+    if (row.headers === undefined || row.headers === null) continue;
+    if (typeof row.headers !== 'object' || Array.isArray(row.headers)) fail();
+    const cookieKeys = Object.keys(row.headers).filter(key => key.toLowerCase() === 'cookie');
+    if (cookieKeys.length > 1) fail();
+    for (const key of cookieKeys) {
+      const headers = row.headers[key]; const names = new Set();
+      if (headers !== null) {
+        if (!Array.isArray(headers) || headers.length === 0) fail();
+        for (const header of headers) {
+          if (typeof header !== 'string') fail();
+          for (const part of header.split('; ')) {
+            const matched = /^([!#$%&'*+\-.^_`|~0-9A-Za-z]+)=<redacted: (0|[1-9][0-9]*) bytes>$/.exec(part);
+            if (!matched || !Number.isSafeInteger(Number(matched[2])) || names.has(matched[1])) fail();
+            names.add(matched[1]);
+          }
+        }
+      }
+      delete row.headers[key];
+    }
+  }
+  return publicJson(rows); // Global rejection of all other credential fields stays unchanged.
 }
 
 export function checkedOrigin(value) {
@@ -276,10 +338,8 @@ export function samlMessage(task, request, action) {
     observedAtUtc: new Date().toISOString() } };
 }
 
-export function bindProtocolOriginals(task, captures, transcript, normalGuard = null) {
-  if (!Array.isArray(transcript) || new Set(transcript.map(entry => entry.id)).size !== transcript.length
-      || transcript.some(entry => entry.runId !== task.runId)) throw new Error('Transcript is not uniquely bound to this Run');
-  const bindings = [];
+function protocolOriginalCandidates(task, capture, transcript, normalGuard) {
+  if (capture.record.runId !== task.runId || capture.record.planId !== task.planId) throw new Error('Capture belongs to another Run or Plan');
   const normalRefs = direction => direction === 'INBOUND' ? normalGuard?.acceptedNormalFlowReferences : normalGuard?.normalAuthnRequestReferences;
   const normalGuardBound = normalGuard?.source === 'official-Suite-Recorder-normalFlowAccepted'
     && normalGuard?.runId === task.runId && normalGuard?.planId === task.planId
@@ -289,22 +349,60 @@ export function bindProtocolOriginals(task, captures, transcript, normalGuard = 
         && (direction === 'INBOUND' ? entry.samlSummary?.normalFlowAccepted === true
           && entry.samlSummary?.inResponseTo === normalGuard.activeAuthnRequestId && entry.correlationId === normalGuard.activeAuthnRequestId
           : entry.samlSummary?.id === normalGuard.activeAuthnRequestId)));
+  return transcript.filter(entry => TX.test(entry.id) && entry.direction === capture.record.direction
+    && entry.decodedSamlBytes === capture.record.bytes
+    && entry.decodedSamlRef === `transcripts/${task.runId}/${entry.id}.saml.xml`
+    && entry.samlSummary?.type === (capture.record.direction === 'INBOUND' ? 'Response' : 'AuthnRequest')
+    && (capture.record.operationKind === 'M0_NORMAL'
+      ? normalGuardBound && normalRefs(capture.record.direction).includes(entry.id)
+      : task.caseIds.includes(capture.record.caseId) && ACTION.test(capture.record.actionId ?? '')
+        && (capture.record.direction === 'INBOUND'
+          ? entry.correlationId === '_' + capture.record.actionId
+          : entry.correlationId === capture.record.actionId && entry.samlSummary?.scenario_case_id === capture.record.caseId)));
+}
+
+function checkedTranscript(task, transcript) {
+  if (!Array.isArray(transcript) || new Set(transcript.map(entry => entry.id)).size !== transcript.length
+      || transcript.some(entry => entry.runId !== task.runId)) throw new Error('Transcript is not uniquely bound to this Run');
+}
+
+export function validateNativeOriginalDigest(task, txId, value) {
+  publicJson(value);
+  if (!TX.test(txId) || !value || Object.keys(value).sort().join(',') !== 'decodedSamlBytes,decodedSamlSha256,runId,schema,txId'
+      || value.schema !== 'samlscope-transcript-original-digest-v1' || value.runId !== task.runId || value.txId !== txId
+      || !/^[a-f0-9]{64}$/.test(value.decodedSamlSha256 ?? '') || !Number.isSafeInteger(value.decodedSamlBytes)
+      || value.decodedSamlBytes <= 0 || value.decodedSamlBytes > 4 * 1024 * 1024) throw new Error('Invalid native original digest omitted');
+  return value;
+}
+
+/** Fetch each selected, correlated native original once per collector generation. */
+export async function collectNativeOriginalDigests(task, captures, transcript, readDigest, normalGuard = null, proofs = new Map()) {
+  checkedTranscript(task, transcript);
+  if (!(proofs instanceof Map)) throw new Error('Invalid native proof map');
+  for (const capture of captures) for (const entry of protocolOriginalCandidates(task, capture, transcript, normalGuard)) {
+    if (proofs.has(entry.id)) continue;
+    try { proofs.set(entry.id, validateNativeOriginalDigest(task, entry.id, await readDigest(entry.id))); }
+    catch { proofs.set(entry.id, { runId: task.runId, txId: entry.id, state: 'unavailable',
+      reason: 'native-original-unavailable-or-invalid', originalContentExported: false }); }
+  }
+  return proofs;
+}
+
+export function bindProtocolOriginals(task, captures, transcript, normalGuard = null, nativeProofs = new Map()) {
+  checkedTranscript(task, transcript);
+  if (!(nativeProofs instanceof Map)) throw new Error('Invalid native proof map');
+  const bindings = [];
   for (const capture of captures) {
-    // Recorder summary includes the actual decoded message hash. Exported browser
-    // messages are supplemental originals until this equality is established.
-    const matches = transcript.filter(entry => entry.direction === capture.record.direction
-      && entry.decodedSamlBytes === capture.record.bytes
-      && (entry.samlSummary?.decodedSha256 === capture.record.sha256
-        || entry.samlSummary?.decoded_sha256 === capture.record.sha256));
-    const owned = matches.filter(entry => capture.record.operationKind === 'M0_NORMAL'
-      ? entry.samlSummary?.type === (capture.record.direction === 'INBOUND' ? 'Response' : 'AuthnRequest')
-        && normalGuardBound && normalRefs(capture.record.direction).includes(entry.id)
-      : capture.record.direction === 'INBOUND'
-      ? entry.correlationId === '_' + capture.record.actionId
-      : entry.correlationId === capture.record.actionId
-        && entry.samlSummary?.scenario_case_id === capture.record.caseId);
+    const owned = protocolOriginalCandidates(task, capture, transcript, normalGuard).filter(entry => {
+      try {
+        const proof = validateNativeOriginalDigest(task, entry.id, nativeProofs.get(entry.id));
+        return proof.decodedSamlBytes === capture.record.bytes && proof.decodedSamlSha256 === capture.record.sha256;
+      } catch { return false; }
+    });
     bindings.push({ ...capture.record, file: capture.file,
-      transcriptReferences: owned.map(entry => entry.id),
+      transcriptReferences: owned.length === 1 ? [owned[0].id] : [],
+      ...(owned.length === 1 ? { nativeDigestReference: `/api/runs/${task.runId}/transcript/${owned[0].id}/original-digest`,
+        bindingProofSource: 'native-original-digest-api' } : {}),
       bindingState: owned.length === 1 ? (capture.record.operationKind === 'M0_NORMAL'
         ? 'recorder-hash-and-normal-flow-bound' : 'recorder-hash-and-action-bound') : 'original-captured-recorder-hash-unavailable',
       conformanceConclusionAssigned: false });
@@ -488,7 +586,12 @@ export async function playwrightAdapter(task, chromium, record, originals) {
       ...(body === undefined ? {} : { data: body }), timeout: 30000, maxRedirects: 0 });
     if (!response.ok()) throw new Error(`Suite API status ${response.status()}`);
     if (!/^application\/json(?:;|$)/i.test(response.headers()['content-type'] ?? '')) throw new Error('Non-JSON Suite body omitted');
+    if (path === `/api/runs/${task.runId}/transcript`) return publicTranscriptProjection(await response.body(), task.runId);
     return publicJson(await response.json());
+  };
+  const readOriginalDigest = txId => {
+    if (!TX.test(txId)) throw new Error('Invalid Transcript identifier');
+    return api(`/api/runs/${task.runId}/transcript/${txId}/original-digest`);
   };
   async function navigate(url, context, timeoutSeconds, status, poll, normal = false) {
     // A resume supplies no URL and cannot invoke page.goto or another M0 GET.
@@ -575,6 +678,7 @@ export async function playwrightAdapter(task, chromium, record, originals) {
   }
   return {
     api,
+    readOriginalDigest,
     async normalFlow(url, timeout, poll) {
       if (normalPage) throw new Error('Existing normal page cannot be reissued');
       if (!poll) return navigate(url, authenticated, timeout, null, null); // legacy explicit extra flow
@@ -641,6 +745,7 @@ async function main() {
   let commandIterator;
   const totalCounts = {};
   const exported = new Set();
+  const nativeOriginalProofs = new Map();
   const flushOriginals = async () => {
     await mkdir(resolve(task.outputDirectory, 'browser-saml-originals'), { recursive: true });
     for (const capture of originals) {
@@ -648,8 +753,11 @@ async function main() {
       await writeFile(resolve(task.outputDirectory, capture.file), capture.bytes, { flag: 'wx' });
       exported.add(capture.file);
     }
+    if (transcript) await collectNativeOriginalDigests(task, originals, transcript,
+      adapter.readOriginalDigest, approvedNormalGuard, nativeOriginalProofs);
+    await record('native-original-digest-proofs.json', [...nativeOriginalProofs.values()]);
     await record('browser-saml-manifest.json', transcript
-      ? bindProtocolOriginals(task, originals, transcript, approvedNormalGuard)
+      ? bindProtocolOriginals(task, originals, transcript, approvedNormalGuard, nativeOriginalProofs)
       : originals.map(capture => ({ ...capture.record, file: capture.file,
           transcriptReferences: [], bindingState: 'original-captured-recorder-unavailable', conformanceConclusionAssigned: false })));
   };
@@ -686,6 +794,8 @@ async function main() {
       if (command === 'stop') { explicitlyStopped = true; break; }
     }
     await record('campaign-operation-counts.json', { ...totalCounts, actualHumanLoginCount: null,
+      nativeOriginalDigestReadAttempts: nativeOriginalProofs.size,
+      nativeOriginalDigestsAvailable: [...nativeOriginalProofs.values()].filter(value => value.schema === 'samlscope-transcript-original-digest-v1').length,
       actualHumanLoginCountMeasured: false, normalLoginContextIsBrowserReuseNotMeasuredHumanLoginCount: true,
       credentialsOrCookiesExported: false, verdictAdopted: false });
   } finally {

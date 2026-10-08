@@ -29,6 +29,46 @@ EXPECTED = {
 }
 
 
+HISTORICAL_CATALOG_COMMIT = '064df1c2c49d8f4e2b718c056970f06562c40f4e'
+HISTORICAL_CASES_SHA256 = '431d9aa863d5d882d37266667a8fd20547d1fe6d037274b8d59ff66347f5ecd4'
+
+
+def unchanged_signature_case_semantics(old, current):
+    import yaml
+    old_cases = {row['id']: row for row in yaml.safe_load(old['cases'])['cases']}
+    current_cases = {row['id']: row for row in yaml.safe_load(current['cases'])['cases']}
+    coverage = [{o['key']: (r, o) for r in yaml.safe_load(source['coverage'])['requirements'] for o in r['obligations']} for source in [old, current]]
+    assert old['specs'] == current['specs'] and old['predicates'] == current['predicates'], 'Owning normative source/predicates changed'
+    pending=[]
+    for case in CASES:
+        row=old_cases[case];assert row == current_cases[case], 'Owning signature case semantics changed'
+        canonical={k:v for k,v in row.items() if k not in ['case_digest','review']}
+        assert row['case_digest']=='sha256:'+SHA(json.dumps(canonical,sort_keys=True,separators=(',',':'),ensure_ascii=False).encode()), 'Owning case canonical digest differs'
+        pending.append(row['obligation'])
+    seen=set()
+    while pending:
+        key=pending.pop()
+        if key in seen:continue
+        seen.add(key);old_req,old_row=coverage[0][key];new_req,new_row=coverage[1][key]
+        assert old_row == new_row and {k:v for k,v in old_req.items() if k!='obligations'} == {k:v for k,v in new_req.items() if k!='obligations'}, 'Owning or linked signature obligation/source binding changed'
+        for link in old_row.get('linked_obligations',[]):
+            assert isinstance(link,dict) and link.get('obligation') in coverage[0], 'Unknown owning link'
+            pending.append(link['obligation'])
+
+
+def owning_signature_catalog(folder, repository):
+    retained=json.loads((folder/'production-case-replay.json').read_bytes())['catalog_sha256']
+    current={name:(repository/'tests'/ (name+'.yaml')).read_bytes() for name in ['cases','coverage','specs','predicates']}
+    if SHA(current['cases'])==retained:return current['cases']
+    assert retained==HISTORICAL_CASES_SHA256, 'Unrecognized owning signature catalog'
+    proof=subprocess.run(['git','verify-commit',HISTORICAL_CATALOG_COMMIT],cwd=repository,capture_output=True)
+    assert proof.returncode==0, 'Owning signed signature catalog is unverified'
+    old={name:subprocess.run(['git','show',HISTORICAL_CATALOG_COMMIT+':tests/'+name+'.yaml'],cwd=repository,capture_output=True,check=True).stdout for name in current}
+    assert SHA(old['cases'])==retained, 'Owning signed cases bytes differ'
+    unchanged_signature_case_semantics(old,current)
+    return old['cases']
+
+
 def replay_helpers(folder, runtime):
     """Run the pinned production refusal reader and all four case implementations again."""
     repository = Path(__file__).resolve().parents[2]
@@ -43,12 +83,14 @@ def replay_helpers(folder, runtime):
         subprocess.run(['javac', '-cp', classpath, '-d', str(classes), *[
             str(repository / 'dev/reference-acceptance' / (helper + '.java')) for helper in helpers]],
             cwd=repository, capture_output=True, check=True)
+        owning_catalog = temporary/'owning-cases.yaml'
+        owning_catalog.write_bytes(owning_signature_catalog(folder,repository))
         results = {}
         for helper, filename in zip(helpers, ['native-signature-rejection-replay.json', 'production-case-replay.json']):
             report = temporary / filename
             arguments = [str(folder), str(report)]
             if helper.endswith('Campaign'):
-                arguments.append(str(repository / 'tests/cases.yaml'))
+                arguments.append(str(owning_catalog))
             subprocess.run(['java', '-cp', str(classes) + ':' + classpath,
                 'com.samlscope.runner.cases.' + helper, *arguments],
                 cwd=repository, capture_output=True, check=True)

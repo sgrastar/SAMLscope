@@ -211,3 +211,5 @@ not by differences in reference-implementation results ([00 §5](00-concept.md))
 - [Measured SimpleSAMLphp encrypted responses](78-simplesamlphp-native-encryption.md)
 - [Metadata key selection and unpublished-key controls](79-metadata-key-selection.md)
 - [Generic evidence collection and independent configuration completion](82-generic-evidence-and-configuration-binding.md)
+
+- [Native NameID acceptance and portable original digests](83-native-nameid-and-original-digests.md) — New approved-definition native evidence, session reuse, restoration accounting and digest-only matching.

@@ -154,10 +154,10 @@ final class MetadataSignatureVerificationEvidenceFile {
                         "finalReference", "finalSha256", context.runId(), targetEntityId, content).entry();
         require(java.util.Arrays.equals(content.readDecodedSaml(restoredOriginal),
                 content.readDecodedSaml(restoredFinal)));
-        require(!java.util.Arrays.equals(content.readDecodedSaml(restoredOriginal),
-                content.readDecodedSaml(configuration.entry())));
         require(!restoredOriginal.timestamp().isAfter(configuration.entry().timestamp()));
 
+        // The positive trust configuration may already be installed. The mandatory embedded-only
+        // control still proves the alternate trust source before exact restoration of the baseline.
         var lastNegative = verifyNegativeControls(receipt.path("negativeControls"), entries, preparedByVariant, content,
                 context.runId(), campaignId, targetEntityId, configuration, anchor, positive, nativeSources);
 
@@ -556,7 +556,8 @@ final class MetadataSignatureVerificationEvidenceFile {
             TranscriptContentReader content) throws Exception {
         var artifact = readArtifact(entries, ref, referenceField, hashField, RESTORED_ARTIFACT, runId,
                 targetEntityId, content);
-        require(artifact.json().path("restored").asBoolean(false) && trustAnchors(artifact.json()).isEmpty());
+        require(artifact.json().path("restored").asBoolean(false));
+        trustAnchors(artifact.json());
         return artifact;
     }
 

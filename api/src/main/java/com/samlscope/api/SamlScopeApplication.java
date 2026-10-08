@@ -333,7 +333,9 @@ public final class SamlScopeApplication {
                         }
                     });
                 }
-                javalin.routes.before("/api/runs/{id}/transcript", ctx -> {
+                for (var transcriptPath : List.of("/api/runs/{id}/transcript",
+                        "/api/runs/{id}/transcript/{txId}/original-digest"))
+                javalin.routes.before(transcriptPath, ctx -> {
                     authorization.authorizeRun(ctx, false);
                     if (config.mode() == AppConfig.Mode.HOSTED) hostedRateLimiter.requireAllowedTogether(
                             new HostedRateLimiter.Rule(
@@ -370,6 +372,12 @@ public final class SamlScopeApplication {
                     idpPeer, secondaryIdpPeer, sloPeer, saml, m1,
                     hostedRateLimiter, hostedRunProvisioner, preloadedMetadataCache, authorization, clock,
                     targetConnections);
+            var originalDigests = new com.samlscope.store.TranscriptOriginalDigestReader(
+                    database, json, config.dataDirectory());
+            TranscriptOriginalDigestRoutes.register(javalin, (runId, txId) -> {
+                if (runs.find(runId).isEmpty()) throw new com.samlscope.store.TranscriptOriginalDigestReader.Unavailable();
+                return originalDigests.read(runId, txId);
+            });
             javalin.routes.exception(MisdirectedRequest.class, (error, ctx) ->
                     ctx.status(421).json(new ApiModels.ErrorView("misdirected_request", error.getMessage())));
             javalin.routes.exception(IllegalArgumentException.class, (error, ctx) -> {

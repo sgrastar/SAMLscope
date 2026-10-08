@@ -42,7 +42,8 @@ class OidcLoginIntegrationTest {
             var bob = login("bob");
             assertEquals("[]", call("GET", "/api/plans", null, bob, false).body());
             for (var path : new String[]{"/api/plans/" + planId, "/api/plans/" + planId + "/runs",
-                    "/api/runs/" + runId, "/api/runs/" + runId + "/transcript", "/api/runs/" + runId + "/result.json"}) {
+                    "/api/runs/" + runId, "/api/runs/" + runId + "/transcript", "/api/runs/" + runId + "/result.json",
+                    "/api/runs/" + runId + "/transcript/tx_00000000000000000000000000/original-digest"}) {
                 assertEquals(403, call("GET", path, null, bob, false).statusCode(), path);
                 assertEquals(403, call("GET", path, null, null, false).statusCode(), path);
             }
@@ -50,6 +51,11 @@ class OidcLoginIntegrationTest {
             assertEquals(403, call("POST", "/api/runs/" + runId + "/quick-check", "{}", bob, true).statusCode());
             assertEquals(403, call("POST", "/api/runs/" + runId + "/tests/start", "{}", bob, true).statusCode());
             assertEquals(403, call("POST", "/api/runs/" + runId + "/tests/start", "{}", alice, false).statusCode());
+            assertEquals(200, call("GET", "/api/runs/" + runId + "/transcript", null, alice, false).statusCode());
+            var digestPath = "/api/runs/" + runId + "/transcript/tx_00000000000000000000000000/original-digest";
+            assertEquals(404, call("GET", digestPath, null, alice, false).statusCode());
+            assertEquals(mode == AppConfig.Mode.HOSTED ? 429 : 404,
+                    call("GET", digestPath, null, alice, false).statusCode());
             assertEquals(403, call("POST", "/auth/logout", null, alice, false).statusCode());
             assertEquals(403, send("POST", "/auth/logout", null, alice.cookie(), alice.csrf(), "https://evil.example").statusCode());
             assertEquals(204, call("POST", "/auth/logout", null, alice, true).statusCode());

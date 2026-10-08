@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { deflateRawSync } from 'node:zlib';
 import { validateTask, probeUrl, sessionPolicy, validateMembership, validateM0Guard,
-  samlMessage, bindProtocolOriginals, collectSelected, publicJson } from './generic_browser_campaign.mjs';
+  samlMessage, bindProtocolOriginals, collectSelected, publicJson, publicTranscriptProjection } from './generic_browser_campaign.mjs';
 
 const RUN = 'run_0123456789ABCDEFGHJKMNPQRS';
 const PLAN = 'plan_0123456789ABCDEFGHJKMNPQRS';
@@ -21,6 +21,27 @@ const m0 = [{ id: 'tx_m0_request', runId: RUN, direction: 'OUTBOUND', samlSummar
     url: `https://suite.example/p/${PLAN}/sp/acs/0`, samlSummary: { normalFlowAccepted: true, type: 'Response',
       statusCode: 'urn:oasis:names:tc:SAML:2.0:status:Success', issuer: 'https://idp.example/idp',
       destination: `https://suite.example/p/${PLAN}/sp/acs/0`, inResponseTo: '_m0' } }];
+
+test('Recorder Cookie projection omits ordinary irreversible redactions without relaxing global credential rejection', () => {
+  const input = [{ ...m0[1], headers: { Cookie: ['JSESSIONID=<redacted: 32 bytes>; arbitrary-session=<redacted: 0 bytes>'], Accept: ['public-control'] } }];
+  const projected = publicTranscriptProjection(Buffer.from(JSON.stringify(input)), RUN);
+  assert.equal('Cookie' in projected[0].headers, false); assert.deepEqual(projected[0].headers.Accept, ['public-control']);
+  assert.deepEqual(projected[0].samlSummary, input[0].samlSummary);
+  assert.equal(input[0].headers.Cookie.length, 1, 'input public metadata remains unchanged');
+  assert.throws(() => publicJson(input), /Non-public Suite/);
+  const base = JSON.stringify(input);
+  for (const bad of [base.replace('<redacted: 32 bytes>', 'raw-private-control'), base.replace('32 bytes', '032 bytes'),
+    base.replace('JSESSIONID=<redacted: 32 bytes>', 'bare-cookie'), base.replace('32 bytes>', '32 bytes'),
+    base.replace('arbitrary-session', 'JSESSIONID'), base.replace(RUN, 'run_1123456789ABCDEFGHJKMNPQRS'),
+    base.replace('"Cookie":', '"Cookie":null,"Cookie":'), base.replace('"Cookie":', '"cookie":null,"Cookie":'),
+    base.replace('"Accept":["public-control"]', '"Authorization":["<redacted: Basic, 12 bytes>"]'),
+    base.replace('"Accept":["public-control"]', '"Set-Cookie":["sid=<redacted: 4 bytes>; HttpOnly"]'),
+    base.replace('"Accept":["public-control"]', '"token":"private-control"'),
+    '[{"id":"tx_1","runId":"'+RUN+'","headers":{},"managementUrl":"private-control"}]',
+    base.replace('"Cookie":', '"\\u0043ookie":null,"Cookie":')]) assert.throws(() => publicTranscriptProjection(Buffer.from(bad), RUN));
+  assert.throws(() => publicTranscriptProjection(Buffer.from([0xff]), RUN));
+  assert.throws(() => publicTranscriptProjection(Buffer.from('<html>private-control</html>'), RUN));
+});
 
 test('task accepts remote IdP origins and rejects credential fields, malformed identifiers and transport credentials', () => {
   assert.equal(task().targetOrigins[0], 'https://idp.example');
@@ -96,14 +117,18 @@ test('credential submissions, unrelated origins, another peer and duplicate SAML
   assert.equal(samlMessage(task(), fakeRequest('https://idp.example/sso?SAMLRequest=' + raw), null), null);
 });
 
-test('captured originals are not promoted without a unique Recorder hash, correct action and same Run', () => {
-  const captured = { record: { runId: RUN, direction: 'OUTBOUND', caseId: CASE, actionId: action(1), bytes: 5, sha256: 'digest' }, file: '1.xml' };
-  const entry = { id: 'tx_one', runId: RUN, direction: 'OUTBOUND', correlationId: action(1), decodedSamlBytes: 5,
-    samlSummary: { scenario_case_id: CASE, decodedSha256: 'digest' } };
-  assert.equal(bindProtocolOriginals(task(), [captured], [entry])[0].bindingState, 'recorder-hash-and-action-bound');
+test('captured originals are not promoted without a unique native digest, correct action and same Run', () => {
+  const txId = 'tx_' + '1'.repeat(26), digest = 'a'.repeat(64);
+  const captured = { record: { runId: RUN, planId: PLAN, direction: 'OUTBOUND', caseId: CASE, actionId: action(1), bytes: 5, sha256: digest }, file: '1.xml' };
+  const entry = { id: txId, runId: RUN, direction: 'OUTBOUND', correlationId: action(1), decodedSamlBytes: 5,
+    decodedSamlRef: `transcripts/${RUN}/${txId}.saml.xml`, samlSummary: { type: 'AuthnRequest', scenario_case_id: CASE } };
+  const proof = new Map([[txId, { schema: 'samlscope-transcript-original-digest-v1', runId: RUN, txId,
+    decodedSamlBytes: 5, decodedSamlSha256: digest }]]);
+  assert.equal(bindProtocolOriginals(task(), [captured], [entry])[0].bindingState, 'original-captured-recorder-hash-unavailable');
+  assert.equal(bindProtocolOriginals(task(), [captured], [entry], null, proof)[0].bindingState, 'recorder-hash-and-action-bound');
   for (const changed of [{ ...entry, samlSummary: {} }, { ...entry, correlationId: action(2) },
     { ...entry, samlSummary: { ...entry.samlSummary, scenario_case_id: OTHER } }]) {
-    assert.equal(bindProtocolOriginals(task(), [captured], [changed])[0].bindingState, 'original-captured-recorder-hash-unavailable');
+    assert.equal(bindProtocolOriginals(task(), [captured], [changed], null, proof)[0].bindingState, 'original-captured-recorder-hash-unavailable');
   }
   assert.throws(() => bindProtocolOriginals(task(), [captured], [{ ...entry, runId: 'run_other' }]));
   assert.throws(() => bindProtocolOriginals(task(), [captured], [entry, entry]));
@@ -349,8 +374,11 @@ test('normal protocol originals use M0 provenance without invented Case or actio
   assert.equal(captured.record.operationKind, 'M0_NORMAL');
   assert.equal('caseId' in captured.record, false);
   assert.equal('actionId' in captured.record, false);
-  const entry = { ...m0[0], decodedSamlBytes: raw.length, samlSummary: { ...m0[0].samlSummary, decodedSha256: captured.record.sha256 } };
-  assert.equal(bindProtocolOriginals(task(), [{ ...captured, file: 'normal.xml' }], [entry, m0[1]], validateM0Guard(task(), run, plan, m0))[0].bindingState, 'recorder-hash-and-normal-flow-bound');
+  const txId = 'tx_' + '1'.repeat(26);
+  const entry = { ...m0[0], id: txId, decodedSamlBytes: raw.length, decodedSamlRef: `transcripts/${RUN}/${txId}.saml.xml` };
+  const graph = [entry, m0[1]], proof = new Map([[txId, { schema: 'samlscope-transcript-original-digest-v1', runId: RUN,
+    txId, decodedSamlBytes: raw.length, decodedSamlSha256: captured.record.sha256 }]]);
+  assert.equal(bindProtocolOriginals(task(), [{ ...captured, file: 'normal.xml' }], graph, validateM0Guard(task(), run, plan, graph), proof)[0].bindingState, 'recorder-hash-and-normal-flow-bound');
 });
 
 test('valid old M0 in the same Run cannot satisfy the current nonce or qualify a stale captured original', () => {
@@ -362,7 +390,7 @@ test('valid old M0 in the same Run cannot satisfy the current nonce or qualify a
   const oldRequest = { ...m0[0], decodedSamlBytes: 3, samlSummary: { ...m0[0].samlSummary, decodedSha256: 'old-hash' } };
   const graph = [oldRequest, m0[1], newRequest, newResponse], guard = validateM0Guard(task(), laterRun, plan, graph);
   assert.deepEqual(guard.acceptedNormalFlowReferences, ['tx_current_response']); assert.equal(guard.activeAuthnRequestId, '_current');
-  const capture = { record: { operationKind: 'M0_NORMAL', direction: 'OUTBOUND', bytes: 3, sha256: 'old-hash' }, file: 'old.xml' };
+  const capture = { record: { runId: RUN, planId: PLAN, operationKind: 'M0_NORMAL', direction: 'OUTBOUND', bytes: 3, sha256: 'old-hash' }, file: 'old.xml' };
   assert.equal(bindProtocolOriginals(task(), [capture], graph, guard)[0].bindingState, 'original-captured-recorder-hash-unavailable');
   assert.equal(bindProtocolOriginals(task(), [capture], graph)[0].bindingState, 'original-captured-recorder-hash-unavailable');
   assert.throws(() => validateM0Guard(task(), run, plan, [...m0, { ...m0[1], id: 'tx_duplicate_response' }]), /ambiguous/);

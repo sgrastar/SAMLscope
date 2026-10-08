@@ -1,6 +1,7 @@
 package com.samlscope.runner.cases;
 
 import static com.samlscope.runner.cases.MetadataSignatureVerificationTestSupport.EMBEDDED_DER;
+import static com.samlscope.runner.cases.MetadataSignatureVerificationTestSupport.ANCHOR_DER;
 import static com.samlscope.runner.cases.MetadataSignatureVerificationTestSupport.FIXTURE;
 import static com.samlscope.runner.cases.MetadataSignatureVerificationTestSupport.RUN;
 import static com.samlscope.runner.cases.MetadataSignatureVerificationTestSupport.TARGET;
@@ -19,6 +20,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -54,6 +56,57 @@ class MetadataSignatureVerificationConfigurationTestCaseTest {
     @Test
     void completeSignatureVerificationEvidencePermitsSatisfied() throws Exception {
         assertEquals(Outcome.SATISFIED, evaluate(entries(), true, receipt -> receipt, Map.of()));
+    }
+
+    @Test
+    void restoringAnOriginalNonemptyAnchorSetPermitsSatisfiedAfterAlternateKeyControl() throws Exception {
+        assertEquals(Outcome.SATISFIED, evaluatePretrusted(entries(), receipt -> receipt,
+                restoredConfiguration(ANCHOR_DER), Map.of()));
+    }
+
+    @Test
+    void pretrustedConfigurationStillRequiresTheAlternateKeyConfigurationOriginal() throws Exception {
+        var entries = new ArrayList<>(entries());
+        entries.removeIf(entry -> entry.id().equals(tx(130)));
+        assertEquals(Outcome.NOT_VERIFIED, evaluatePretrusted(entries, receipt -> receipt,
+                restoredConfiguration(ANCHOR_DER), Map.of()));
+    }
+
+    @Test
+    void pretrustedConfigurationWithNoOpAlternateKeyConfigurationStaysNotVerified() throws Exception {
+        var noOp = configurationArtifact(ANCHOR_DER).getBytes(StandardCharsets.UTF_8);
+        // Rebind the receipt to the actual no-op bytes: rejection must come from the control's
+        // trust-source semantics, rather than a stale SHA-256.
+        assertEquals(Outcome.NOT_VERIFIED, evaluatePretrusted(entries(), receipt -> receipt.replace(
+                sha(configurationArtifact(EMBEDDED_DER).getBytes(StandardCharsets.UTF_8)), sha(noOp)),
+                restoredConfiguration(ANCHOR_DER), Map.of("config-embedded", noOp)));
+    }
+
+    @Test
+    void pretrustedAlternateControlThatRetainsThePositiveAnchorStaysNotVerified() throws Exception {
+        var overlapping = configurationArtifact(EMBEDDED_DER).replace("\"]}", "\",\""
+                + Base64.getEncoder().encodeToString(ANCHOR_DER) + "\"]}")
+                .getBytes(StandardCharsets.UTF_8);
+        assertEquals(Outcome.NOT_VERIFIED, evaluatePretrusted(entries(), receipt -> receipt.replace(
+                sha(configurationArtifact(EMBEDDED_DER).getBytes(StandardCharsets.UTF_8)), sha(overlapping)),
+                restoredConfiguration(ANCHOR_DER), Map.of("config-embedded", overlapping)));
+    }
+
+    @Test
+    void malformedNonemptyRestorationAnchorStaysNotVerifiedEvenWithTruthfulHashes() throws Exception {
+        var malformed = new String(restoredConfiguration(ANCHOR_DER), StandardCharsets.UTF_8)
+                .replace(Base64.getEncoder().encodeToString(ANCHOR_DER), "invalid-base64!")
+                .getBytes(StandardCharsets.UTF_8);
+        assertEquals(Outcome.NOT_VERIFIED, evaluateRestoration(entries(), receipt -> receipt,
+                malformed, malformed, Map.of()));
+    }
+
+    @Test
+    void restoringADifferentValidNonemptyAnchorSetStaysNotVerified() throws Exception {
+        // Both restoration originals have truthful hashes and valid anchor arrays, but their
+        // bytes differ. A successful control cannot replace exact restoration of the baseline.
+        assertEquals(Outcome.NOT_VERIFIED, evaluatePretrusted(entries(), receipt -> receipt,
+                restoredConfiguration(EMBEDDED_DER), Map.of()));
     }
 
     @Test
@@ -203,6 +256,44 @@ class MetadataSignatureVerificationConfigurationTestCaseTest {
         var start = (CaseStep.AwaitConfig) testCase.start(context);
         return ((CaseStep.Finish) testCase.resume(
                 context, start.next(), new CaseEvent.ConfigConfirmed())).outcome().outcome();
+    }
+
+    private Outcome evaluatePretrusted(List<TranscriptEntry> entries, UnaryOperator<String> mutate,
+            byte[] restoredFinal, Map<String, byte[]> overrides) throws Exception {
+        return evaluateRestoration(entries, mutate, restoredConfiguration(ANCHOR_DER), restoredFinal, overrides);
+    }
+
+    private Outcome evaluateRestoration(List<TranscriptEntry> entries, UnaryOperator<String> mutate,
+            byte[] restoredOriginal, byte[] restoredFinal, Map<String, byte[]> overrides) throws Exception {
+        var content = new HashMap<>(overrides);
+        content.put("config-original", restoredOriginal);
+        content.put("config-final", restoredFinal);
+        var originals = entries.stream().map(entry -> {
+            var bytes = content.get(entry.decodedSamlRef());
+            return bytes == null ? entry : new TranscriptEntry(entry.id(), entry.runId(), entry.direction(),
+                    entry.timestamp(), entry.correlationId(), entry.method(), entry.url(), entry.status(),
+                    entry.headers(), entry.bodyRef(), entry.bodyBytes(), entry.decodedSamlRef(), bytes.length,
+                    entry.contentType(), entry.rawQuery(), entry.samlSummary());
+        }).toList();
+        return evaluate(originals, true, receipt -> {
+            var json = new com.fasterxml.jackson.databind.ObjectMapper();
+            try {
+                var root = json.readTree(receipt);
+                var restoration = (com.fasterxml.jackson.databind.node.ObjectNode) root.path("restorationReadBack");
+                restoration.put("originalSha256", sha(restoredOriginal));
+                restoration.put("finalSha256", sha(restoredFinal));
+                return mutate.apply(json.writeValueAsString(root));
+            } catch (java.io.IOException failure) {
+                throw new IllegalArgumentException(failure);
+            }
+        }, content);
+    }
+
+    private static byte[] restoredConfiguration(byte[] anchor) {
+        return MetadataSignatureVerificationTestSupport.restorationArtifact().replace(
+                "\"trustAnchorCertificates\":[]", "\"trustAnchorCertificates\":[\""
+                        + Base64.getEncoder().encodeToString(anchor) + "\"]")
+                .getBytes(StandardCharsets.UTF_8);
     }
 
     private List<TranscriptEntry> entries() {
