@@ -51,8 +51,13 @@ class HistoricalFunctionalProfileDocumentsTest {
             assertEquals(FunctionalReleaseContext.Kind.CURRENT,releases.require(release.identity()).kind());
             assertEquals(release.sourceDigests(),releases.require(release.identity()).sourceDigests());
         }
-        var oldBrowser = releases.require(releases.identity(FunctionalProfile.BROWSER_SSO_IDP));
-        assertEquals("sha256:eac0ed91cf492475301d9a3ea651749ad9cf0228a240fb918497b170e6ba4fca",oldBrowser.definition().cases().stream().filter(c->c.id().equals("IIP-IDP10-d-idp-01")).findFirst().orElseThrow().caseDigest());
+        var currentBrowser = releases.require(releases.identity(FunctionalProfile.BROWSER_SSO_IDP));
+        assertEquals("sha256:a02075559dff2bf93b50bcc17a601f9037093d5405a9ee93ff5f7f0e80fa346a",currentBrowser.cases().require("IIP-IDP10-d-idp-01").caseDigest());
+        var retainedBrowser = HistoricalFunctionalProfileDocuments.load().stream()
+                .filter(r->r.identity().profile()==FunctionalProfile.BROWSER_SSO_IDP).findFirst().orElseThrow();
+        assertEquals("sha256:eac0ed91cf492475301d9a3ea651749ad9cf0228a240fb918497b170e6ba4fca",releases.require(retainedBrowser.identity()).cases().require("IIP-IDP10-d-idp-01").caseDigest());
+        assertEquals(FunctionalReleaseContext.Kind.HISTORICAL,releases.require(retainedBrowser.identity()).kind());
+        assertNotEquals(currentBrowser.identity(),retainedBrowser.identity());
     }
     @Test void installedModelsAndSourcesAreSharedButInjectedResourcesRemainFreshAndTamperRejecting() throws Exception {
         var first = HistoricalFunctionalProfileDocuments.load();var second = HistoricalFunctionalProfileDocuments.load();
@@ -69,10 +74,13 @@ class HistoricalFunctionalProfileDocumentsTest {
         assertSame(first,HistoricalFunctionalProfileDocuments.load());
     }
 
-    @Test void warmCurrentReusePreservesStrictPinsAndNeverAliasesAChangedValidArtifact() throws Exception {
+    @Test void warmCurrentReleaseKeepsReviewedCatalogSeparateFromRetainedInputsAndRejectsAlteredPins() throws Exception {
         var retained=HistoricalFunctionalProfileDocuments.load();var bundle=FunctionalProfileDocuments.load();var documents=CatalogDocuments.load();
         var matching=HistoricalFunctionalProfileDocuments.current(bundle,documents);
-        assertSame(retained.getFirst().sourceInventory(),matching.getFirst().sourceInventory());
+        assertNotSame(retained.getFirst().sourceInventory(),matching.getFirst().sourceInventory());
+        assertNotEquals(retained.getFirst().sourceDigests(),matching.getFirst().sourceDigests());
+        var currentBrowser=matching.stream().filter(r->r.identity().profile()==FunctionalProfile.BROWSER_SSO_IDP).findFirst().orElseThrow();
+        assertEquals("sha256:a02075559dff2bf93b50bcc17a601f9037093d5405a9ee93ff5f7f0e80fa346a",currentBrowser.cases().require("IIP-IDP10-d-idp-01").caseDigest());
         var wrongPins=new HashMap<FunctionalProfile,String>(bundle.digests());wrongPins.put(null,"sha256:"+"a".repeat(64));
         assertThrows(IllegalArgumentException.class,()->HistoricalFunctionalProfileDocuments.current(new FunctionalProfileDocuments.Bundle(bundle.artifacts(),wrongPins),documents));
         var artifacts=new EnumMap<FunctionalProfile,byte[]>(FunctionalProfile.class);artifacts.putAll(bundle.artifacts());
