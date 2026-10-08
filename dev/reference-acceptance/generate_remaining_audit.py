@@ -1571,6 +1571,17 @@ def render(root,definitions,output):
         if row['product']=='keycloak' and row['profile']=='browser_sso_idp' and row['case']=='IIP-IDP11-a-idp-01':
             from verify_keycloak_nameid_omission_absence import verify_adoption as verify_keycloak_nameid_absence
             selected=check_once(verify_keycloak_nameid_absence, root.parent.parent/'reference-20260930')
+        if (row['product'],row['profile'],row['case'])==('keycloak','browser_sso_idp','IIP-IDP10-d-idp-01'):
+            native_root=root.parent.parent/'reference-20261008'
+            if (native_root/'owned-keycloak-nameid-native-r1/runtime.json').is_file():
+                from verify_owned_keycloak_nameid_acceptance import verify_adoption as verify_owned_nameid, source_provenance
+                selected=check_once(verify_owned_nameid,native_root,live=False)
+                if set(selected[1])!={row['case']}:
+                    raise ValueError('Owned native NameID adoption scope is not exactly one approved case')
+                provenance=source_provenance(native_root)
+                row['source_run_binding']=provenance
+                row['adoptedDefinitionIdentity']=provenance['adoptedDefinitionIdentity']
+                row['adoptedCaseDigest']=provenance['adoptedCaseDigest']
         if row['product']=='shibboleth' and row['profile']=='browser_sso_idp' and row['case'] in {
                 'IIP-SSO01-ga-idp-01','IIP-SSO01-gb-idp-01','IIP-SSO01-gc-idp-01','IIP-SSO01-gj-idp-01'}:
             from verify_authn_context_acceptance import verify as verify_authn_context

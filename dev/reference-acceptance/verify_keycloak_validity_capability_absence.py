@@ -8,7 +8,7 @@ key.  Each conclusion remains gated by its own approved definition and controls.
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 import copy
 import hashlib
 import json
@@ -141,19 +141,102 @@ def decoded_originals(folder: Path, transcript: list[dict]) -> dict[str, bytes]:
     return originals
 
 
+SIGNED_RENEWAL = "a5eb099ea3e2f70e4820a3ca7ea990e851e43ea7"
+
+
+def signed_renewed_approvals() -> dict:
+    proof = subprocess.run(["git", "verify-commit", SIGNED_RENEWAL], cwd=REPO, capture_output=True)
+    require(proof.returncode == 0, "Signed renewal authority verification failed")
+    raw = subprocess.run(["git", "show", SIGNED_RENEWAL + ":tests/approvals/g2.yaml"],
+                         cwd=REPO, check=True, capture_output=True).stdout
+    rows = yaml.safe_load(raw)["approvals"]
+    require(len({row["case"] for row in rows}) == len(rows), "Signed renewal contains duplicate cases")
+    return {row["case"]: row for row in rows}
+
+
+def current_renewal_rows(document: dict, anchor: dict, lower: datetime, upper: datetime) -> dict:
+    rows = document.get("approvals") or []
+    current = {row.get("case"): row for row in rows}
+    require(len(current) == len(rows), "Current signed renewal contains duplicate cases")
+    for case in CASE_DIGESTS:
+        row = current.get(case); original = anchor.get(case)
+        require(isinstance(row, dict) and isinstance(original, dict)
+                and {key: value for key, value in row.items() if key != "approved_at"}
+                    == {key: value for key, value in original.items() if key != "approved_at"},
+                "Current renewal changes anchored case digest or reviewer")
+        try:
+            value = datetime.fromisoformat(str(row.get("approved_at")).replace("Z", "+00:00"))
+            require(value.tzinfo is not None and lower <= value <= upper, "Renewed approval timestamp is outside signed C..A")
+        except (ValueError, TypeError):
+            raise AssertionError("Renewed approval timestamp is invalid") from None
+    return current
+
+
+def require_renewal_principal(principal: str, document: dict) -> None:
+    reviewers = (document.get("evidence") or {}).get("reviewers")
+    require(principal == "hoshina@gmail.com" and isinstance(reviewers, list)
+            and set(reviewers) == {"hoshina@gmail.com"}, "Current renewal signer differs from anchored reviewer authority")
+
+
+def signed_current_renewal(anchor: dict) -> dict:
+    relative = "tests/approvals/g2.yaml"
+    def git(*args):
+        result = subprocess.run(["git", *args], cwd=REPO, capture_output=True)
+        require(result.returncode == 0, "Current signed renewal provenance check failed")
+        return result.stdout
+    commit = git("log", "-1", "--format=%H", "--", relative).decode().strip()
+    require(re.fullmatch(r"[0-9a-f]{40}", commit) is not None, "Latest approval commit is not exact")
+    git("verify-commit", commit)
+    raw = git("show", commit + ":" + relative)
+    require(raw == (REPO / relative).read_bytes(), "Current approval bytes are not the latest signed record")
+    document = yaml.safe_load(raw); target = document.get("target_commit")
+    require_renewal_principal(git("show", "-s", "--format=%GS", commit).decode().strip(), document)
+    require(isinstance(target, str) and re.fullmatch(r"[0-9a-f]{40}", target), "Current target commit is not exact")
+    git("verify-commit", target); git("merge-base", "--is-ancestor", target, commit)
+    require(git("diff", "--name-only", target + ".." + commit).decode().splitlines() == [relative],
+            "Current C..A is not a singleton approval change")
+    # This bounded compatibility path changes only approval time, never any G1/G2 definition.
+    for name in ("cases", "coverage", "specs", "predicates"):
+        path = "tests/" + name + ".yaml"; signed = git("show", target + ":" + path)
+        require(signed == git("show", SIGNED_RENEWAL + ":" + path) == (REPO / path).read_bytes()
+                and document.get("artifact_digests", {}).get(path) == "sha256:" + SHA(signed),
+                "Renewal changes anchored source or case semantics")
+    lower = datetime.fromtimestamp(int(git("show", "-s", "--format=%ct", target).decode()), tz=timezone.utc)
+    upper = datetime.fromtimestamp(int(git("show", "-s", "--format=%ct", commit).decode()), tz=timezone.utc)
+    return current_renewal_rows(document, anchor, lower, upper)
+
+
+def matching_approval_record(approval: dict | None, case: str, digest: str, renewed: dict, current: dict | None = None) -> bool:
+    if not isinstance(approval, dict) or approval.get("case") != case \
+            or approval.get("case_digest") != digest or approval.get("reviewer") != "hoshina@gmail.com":
+        return False
+    if approval.get("approved_at") == "2026-09-22T05:58:38+09:00":
+        return True
+    # Reapproval metadata is accepted only from the exact independently verified
+    # signed record; a new date, signer or receipt assertion alone is insufficient.
+    return approval == renewed.get(case) or current is not None and approval == current.get(case)
+
+
+def same_case_definition(row: dict, digest: str) -> bool:
+    canonical = {key: value for key, value in row.items() if key not in ("case_digest", "review")}
+    computed = "sha256:" + SHA(json.dumps(canonical, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode())
+    return row.get("case_digest") == digest == computed
+
+
 def verify_approved_definitions() -> None:
     rows = yaml.safe_load((REPO / "tests/cases.yaml").read_text())["cases"]
     by_id = {row["id"]: row for row in rows}
     approvals = yaml.safe_load((REPO / "tests/approvals/g2.yaml").read_text())["approvals"]
     approved_by_id = {row["case"]: row for row in approvals}
+    renewed = signed_renewed_approvals()
+    current = None
+    if any(not matching_approval_record(approved_by_id.get(case), case, digest, renewed) for case, digest in CASE_DIGESTS.items()):
+        current = signed_current_renewal(renewed)
     for case, digest in CASE_DIGESTS.items():
         row = by_id[case]
         approval = approved_by_id.get(case)
-        require(row["case_digest"] == digest and row["mode"] == "CONFIG"
-                and row["role"] == "idp" and approval is not None
-                and approval.get("case_digest") == digest
-                and approval.get("reviewer") == "hoshina@gmail.com"
-                and approval.get("approved_at") == "2026-09-22T05:58:38+09:00",
+        require(same_case_definition(row, digest) and row["mode"] == "CONFIG"
+                and row["role"] == "idp" and matching_approval_record(approval, case, digest, renewed, current),
                 case + " approved digest/identity changed")
     require(all(by_id[case]["configuration_failure_semantics"] == "normative_capability"
                 for case in CASES), "MD04 configuration failure semantics changed")

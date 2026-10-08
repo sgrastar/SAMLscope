@@ -114,6 +114,25 @@ def render(root, output):
                 or config_source_row['reason_code']!=native_case['reason_code']
                 or config_source_row['evidence']!=native_case['evidence']):
             raise ValueError('Independent CONFIG comparison selection differs from its verified recipient Run')
+    # Keep S1 for every legacy/unknown source; only this independently replayed v2
+    # native row can replace the old literal-equality observation.
+    owned_nameid_key=('keycloak','browser_sso_idp','IIP-IDP10-d-idp-01')
+    owned_nameid_row=ledger_selection.get(owned_nameid_key)
+    owned_nameid_verified=False
+    if owned_nameid_row is not None and owned_nameid_row.get('verdict')!='NOT_VERIFIED':
+        from verify_owned_keycloak_nameid_acceptance import verify_adoption as verify_owned_nameid, source_provenance
+        owned_path,owned_cases=check_once(verify_owned_nameid,root.parent/'reference-20261008',live=False)
+        owned_raw=owned_path.read_bytes();owned_case=owned_cases[owned_nameid_key[2]]
+        provenance=source_provenance(root.parent/'reference-20261008')
+        if (set(owned_cases)!={owned_nameid_key[2]} or owned_nameid_row['run']!=json.loads(owned_raw)['run']['id']
+                or owned_nameid_row['result_sha256']!=hashlib.sha256(owned_raw).hexdigest()
+                or owned_nameid_row['verdict']!=owned_case['verdict'] or owned_nameid_row['reason_code']!=owned_case['reason_code']
+                or owned_nameid_row['evidence']!=owned_case['evidence']
+                or owned_nameid_row.get('adoptedDefinitionIdentity')!=provenance['adoptedDefinitionIdentity']
+                or owned_nameid_row.get('adoptedCaseDigest')!=provenance['adoptedCaseDigest']
+                or owned_nameid_row.get('source_run_binding')!=provenance):
+            raise ValueError('Owned native NameID comparison row differs from verified v2 source provenance')
+        owned_nameid_verified=True
     version_key = ("simplesamlphp", "browser_sso_idp", "IIP-SSO01-ep-idp-01")
     version_row = ledger_selection.get(version_key)
     if version_row is not None and version_row.get("verdict") != "NOT_VERIFIED":
@@ -441,6 +460,8 @@ def render(root, output):
                     cells.append("Not run")
                     continue
                 qualification = QUALIFICATIONS.get((product, case_id))
+                if owned_nameid_verified and (product,profile,case_id)==owned_nameid_key:
+                    qualification=None
                 if qualification:
                     if qualification[1] in {"S1", "S2"} and case["verdict"] != "NOT_VERIFIED":
                         raise ValueError(f"Suite safeguard not reflected in result: {product} {case_id}")

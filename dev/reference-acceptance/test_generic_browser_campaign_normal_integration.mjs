@@ -8,7 +8,7 @@ import { spawn } from 'node:child_process';
 import { mkdtemp, writeFile, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
-import { validateTask, playwrightAdapter, collectSelected, bindProtocolOriginals } from './generic_browser_campaign.mjs';
+import { validateTask, playwrightAdapter, collectSelected, bindProtocolOriginals, collectNativeOriginalDigests } from './generic_browser_campaign.mjs';
 
 const dependency = process.env.SAML_SCOPE_PLAYWRIGHT;
 const RUN = 'run_0123456789ABCDEFGHJKMNPQRS', PLAN = 'plan_0123456789ABCDEFGHJKMNPQRS', CASE = 'IIP-SSO01-f-idp-01';
@@ -21,23 +21,36 @@ const json = (response, value) => { response.writeHead(200, { 'Content-Type': 'a
 const html = (response, value, headers = {}) => { response.writeHead(200, { 'Content-Type': 'text/html', ...headers }); response.end(value); };
 const form = (url, field, raw, submit = true) => `<form id="saml" method="post" action="${url}"><input name="${field}" value="${raw.toString('base64')}"></form>${submit ? '<script>document.querySelector("#saml").submit()</script>' : ''}`;
 
-async function fixture({ delay = false, unrelated = false, passiveLogin = false } = {}) {
+async function fixture({ delay = false, unrelated = false, passiveLogin = false, rawCookie = false, digestUnavailable = false } = {}) {
   let suiteOrigin, targetOrigin, adapter, fixtureFailure;
   let runStatus = 'CREATED', authnRequestId, resultReady = false, released = !delay, index = 0, cases = 0, outbox = 0, awaiting = false;
   const entries = [], wire = [], records = {}, originals = [], beforeM0 = [];
+  const nativeBytes = new Map(), digestReads = [];
   const counts = { normalStartGets: 0, preflight: 0, emptyEvaluate: 0, testsStart: 0, cookieValuesExported: 0 };
   const current = () => cases === 0 ? { state: 'NOT_STARTED' } : index >= 4 ? { state: 'FINISHED' }
     : { state: awaiting ? 'AWAITING_RESPONSE' : 'READY', caseId: CASE, actionId: action(index), requiresFreshSession: index === 3,
       startUrl: `${suiteOrigin}/p/${PLAN}/probe/${action(index)}?run=${RUN}` };
-  const add = (direction, raw, summary, correlationId) => entries.push({ id: `tx_fixture_${entries.length}`, runId: RUN, direction,
-    url: `${suiteOrigin}/p/${PLAN}/sp/acs/0`, correlationId, decodedSamlBytes: raw.length,
-    samlSummary: { ...summary, decodedSha256: sha(raw) } });
+  const add = (direction, raw, summary, correlationId) => {
+    const id = `tx_${String(entries.length).padStart(26, '0')}`; nativeBytes.set(id, raw);
+    entries.push({ id, runId: RUN, direction,
+      headers: direction === 'INBOUND' ? { Cookie: [rawCookie ? 'ordinary-fixture-session=public-raw-negative-control' : 'ordinary-fixture-session=<redacted: 3 bytes>'] } : {},
+      url: `${suiteOrigin}/p/${PLAN}/sp/acs/0`, correlationId, decodedSamlBytes: raw.length,
+      decodedSamlRef: `transcripts/${RUN}/${id}.saml.xml`,
+      samlSummary: { ...summary, type: direction === 'OUTBOUND' ? 'AuthnRequest' : 'Response' } });
+  };
   const suite = createServer(async (request, response) => {
     try {
       const url = new URL(request.url, suiteOrigin);
       if (url.pathname === `/api/runs/${RUN}`) return json(response, { id: RUN, planId: PLAN, status: runStatus, context: authnRequestId ? { authnRequestId } : {} });
       if (url.pathname === `/api/plans/${PLAN}`) return json(response, { plan: { id: PLAN, profile: 'browser_sso_idp', target: { kind: 'IDP', entityId: targetOrigin + '/idp' } } });
       if (url.pathname.endsWith('/transcript')) return json(response, entries);
+      const original = new RegExp(`^/api/runs/${RUN}/transcript/(tx_[0-9A-HJKMNP-TV-Z]{26})/original-digest$`).exec(url.pathname);
+      if (original && nativeBytes.has(original[1])) {
+        const raw = nativeBytes.get(original[1]); digestReads.push(original[1]);
+        if (digestUnavailable) { response.writeHead(404, { 'Content-Type': 'text/html' }); return response.end('private unavailable sentinel'); }
+        return json(response, { schema: 'samlscope-transcript-original-digest-v1', runId: RUN, txId: original[1],
+          decodedSamlSha256: sha(raw), decodedSamlBytes: raw.length });
+      }
       if (url.pathname.endsWith('/campaigns')) return json(response, { runId: RUN, cases, classifications: [], campaigns: [] });
       if (url.pathname.endsWith('/protocol-evidence')) return json(response, { eligibleCases: 0, readyCases: 0, cases: [] });
       if (url.pathname.endsWith('/interactions')) return json(response, []);
@@ -116,7 +129,7 @@ async function fixture({ delay = false, unrelated = false, passiveLogin = false 
   try {
     adapter = await playwrightAdapter(task, { launch: options => chromium.launch({ ...options, headless: true }) }, async () => {}, originals);
   } catch (error) { await close(suite); await close(target); throw error; }
-  return { task, adapter, counts, originals, records, entries, wire, beforeM0,
+  return { task, adapter, counts, originals, records, entries, wire, beforeM0, digestReads,
     record: async (name, value) => { records[name] = structuredClone(value); },
     release: () => { released = true; }, check: () => { if (fixtureFailure) throw fixtureFailure; },
     close: async () => { const closed = await adapter.close('explicit-synthetic-test-stop'); await close(suite); await close(target); return closed; } };
@@ -135,10 +148,41 @@ test('cold real-browser M0 establishes the primary session, then three same-cont
       assert.equal(f.counts.normalStartGets, 1); assert.equal(f.counts.testsStart, 1);
       assert.equal(f.originals.filter(row => row.record.operationKind === 'M0_NORMAL').length, 2);
       assert.equal(f.originals.filter(row => row.record.operationKind === 'M0_NORMAL').every(row => !('caseId' in row.record) && !('actionId' in row.record)), true);
-      const manifest = bindProtocolOriginals(f.task, f.originals, f.entries, f.records['m0-guard.json']);
+      const proofs = await collectNativeOriginalDigests(f.task, f.originals, f.entries, f.adapter.readOriginalDigest, f.records['m0-guard.json']);
+      const manifest = bindProtocolOriginals(f.task, f.originals, f.entries, f.records['m0-guard.json'], proofs);
       assert.equal(manifest.filter(row => row.operationKind === 'M0_NORMAL').every(row => row.bindingState === 'recorder-hash-and-normal-flow-bound'), true);
+      assert.equal(f.digestReads.length, f.originals.length); assert.equal(new Set(f.digestReads).size, f.originals.length);
+      assert.equal(f.entries.every(entry => entry.samlSummary.decodedSha256 === undefined), true);
       assert.equal(JSON.stringify({ records: f.records, manifest }).includes('owned-context=yes'), false);
       assert.equal(JSON.stringify(f.records).includes('private login sentinel'), false);
+      assert.equal(JSON.stringify(f.records).includes('ordinary-fixture-session'), false, 'Recorder cookie metadata must not be exported');
+    } finally { assert.equal((await f.close()).browserContextsClosed, true); }
+  });
+
+test('unavailable digest preserves completed Suite observations as unqualified supplemental originals',
+  { skip: !dependency, timeout: 60000 }, async () => {
+    const f = await fixture({ digestUnavailable: true });
+    try {
+      const collected = await collectSelected(f.task, f.adapter.api, f.adapter, f.record); f.check();
+      const before = structuredClone(f.entries), guard = f.records['m0-guard.json'];
+      const proofs = await collectNativeOriginalDigests(f.task, f.originals, f.entries, f.adapter.readOriginalDigest, guard);
+      const manifest = bindProtocolOriginals(f.task, f.originals, f.entries, guard, proofs);
+      assert.equal(collected.collectionState, 'COLLECTED');
+      assert.equal(manifest.every(row => row.transcriptReferences.length === 0), true);
+      assert.deepEqual(f.entries, before); assert.equal(f.counts.normalStartGets, 1); assert.equal(f.counts.testsStart, 1);
+      assert.equal(JSON.stringify([...proofs.values()]).includes('private unavailable sentinel'), false);
+      assert.equal(manifest.every(row => row.conformanceConclusionAssigned === false), true);
+    } finally { assert.equal((await f.close()).browserContextsClosed, true); }
+  });
+
+test('ordinary raw Cookie in Transcript fails before formal start or another target submission',
+  { skip: !dependency, timeout: 60000 }, async () => {
+    const f = await fixture({ rawCookie: true });
+    try {
+      await assert.rejects(collectSelected(f.task, f.adapter.api, f.adapter, f.record), /non-public Transcript omitted/);
+      f.check(); assert.equal(f.counts.normalStartGets, 1); assert.equal(f.counts.testsStart, 0);
+      assert.equal(f.wire.length, 1); assert.equal(f.records['m0-guard.json'], undefined);
+      assert.equal(JSON.stringify(f.records).includes('public-raw-negative-control'), false);
     } finally { assert.equal((await f.close()).browserContextsClosed, true); }
   });
 

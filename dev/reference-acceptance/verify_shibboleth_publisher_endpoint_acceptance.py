@@ -17,18 +17,76 @@ def generic():
  """Use shared placement/archive/readback operations in a fresh isolated module."""
  spec=importlib.util.spec_from_file_location('shib_publisher_shared_operations',pathlib.Path(__file__).with_name('verify_native_publisher_key_inventory_acceptance.py'));m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)
  m.HELPER=HELPER;m.PINS=PINS;m.QUALIFIED_DEPENDENCIES=QUALIFIED_DEPENDENCIES;m.verify_files=verify_files;m.replay=replay;return m
+HISTORICAL_CATALOG_COMMIT='064df1c2c49d8f4e2b718c056970f06562c40f4e'
+HISTORICAL_CATALOG_PINS={'cases_sha256':'431d9aa863d5d882d37266667a8fd20547d1fe6d037274b8d59ff66347f5ecd4','coverage_sha256':'2bee3db74c9be9908710bbe18935c73454f1ed4c5c0f06bdab1cf18deaef843c','specs_sha256':'acee5ce8c348fbc5e02f77bd2f5b8703a632dd69aea857b14b97812ff6cc39d9'}
+
+def same_publisher_case_semantics(old_cases,current_cases,old_coverage,current_coverage):
+ """Only exact unchanged selected cases and their owning/transitive obligations may reuse old scope."""
+ import yaml
+ case_maps=[{r['id']:r for r in yaml.safe_load(raw)['cases']} for raw in [old_cases,current_cases]]
+ coverage_maps=[{o['key']:(r,o) for r in yaml.safe_load(raw)['requirements'] for o in r['obligations']} for raw in [old_coverage,current_coverage]]
+ pending=[]
+ for case in [C1,C3]:
+  old=case_maps[0][case];new=case_maps[1][case];require(old==new,'Historical selected case semantics changed')
+  canonical={k:v for k,v in old.items() if k not in ['case_digest','review']}
+  require('sha256:'+sha(json.dumps(canonical,sort_keys=True,separators=(',',':'),ensure_ascii=False).encode())==old['case_digest'],'Historical case canonical digest differs')
+  pending.append(old['obligation'])
+ seen=set()
+ while pending:
+  key=pending.pop()
+  if key in seen:continue
+  seen.add(key);old_req,old=coverage_maps[0][key];new_req,new=coverage_maps[1][key]
+  require(old==new,'Historical owning or linked obligation semantics changed')
+  require({k:v for k,v in old_req.items() if k!='obligations'}=={k:v for k,v in new_req.items() if k!='obligations'},'Historical normative source section binding changed')
+  for link in old.get('linked_obligations',[]):
+   require(isinstance(link,dict) and link.get('obligation') in coverage_maps[0],'Unsupported historical obligation link')
+   pending.append(link['obligation'])
+ return case_maps[0][C1]
+
+def approved_publisher_source_context(planned):
+ import yaml
+ from preflight_observation_adoption import approved_case,strict_bytes
+ current,current_pins=approved_case(C1,REPO)
+ if planned['catalogDigests']==current_pins:return current,current_pins
+ require(planned['catalogDigests']==HISTORICAL_CATALOG_PINS,'Unrecognized historical catalog identity')
+ proof=subprocess.run(['git','verify-commit',HISTORICAL_CATALOG_COMMIT],cwd=REPO,capture_output=True)
+ require(proof.returncode==0,'Historical signed catalog authority verification failed')
+ originals={}
+ for name in ['cases','coverage','specs','predicates']:
+  raw=subprocess.run(['git','show',HISTORICAL_CATALOG_COMMIT+':tests/'+name+'.yaml'],cwd=REPO,capture_output=True,check=True).stdout
+  originals[name]=raw
+  if name!='predicates':require(sha(raw)==HISTORICAL_CATALOG_PINS[name+'_sha256'],'Historical catalog bytes changed')
+ current_bytes={name:strict_bytes(REPO/'tests'/ (name+'.yaml')) for name in originals}
+ require(originals['specs']==current_bytes['specs'] and originals['predicates']==current_bytes['predicates'],'Normative source/predicate semantics changed')
+ approved=same_publisher_case_semantics(originals['cases'],current_bytes['cases'],originals['coverage'],current_bytes['coverage'])
+ return approved,dict(HISTORICAL_CATALOG_PINS)
+
+def publisher_scope_preflight(planned, result_before):
+ from preflight_observation_adoption import scope_preflight
+ # Use the actual owning catalog bytes for the original preflight report, not
+ # current bytes or a rewritten specification_digests field.
+ if planned['catalogDigests']!=HISTORICAL_CATALOG_PINS:return scope_preflight(C1,result_before,repo=REPO)
+ approved_publisher_source_context(planned)
+ with tempfile.TemporaryDirectory(prefix='publisher-owning-catalog-',dir='/private/tmp') as temp:
+  root=pathlib.Path(temp);(root/'tests').mkdir()
+  for name in ['cases','coverage','specs']:
+   raw=subprocess.run(['git','show',HISTORICAL_CATALOG_COMMIT+':tests/'+name+'.yaml'],cwd=REPO,capture_output=True,check=True).stdout
+   require(sha(raw)==HISTORICAL_CATALOG_PINS[name+'_sha256'],'Owning preflight catalog changed')
+   (root/'tests'/ (name+'.yaml')).write_bytes(raw)
+  return scope_preflight(C1,result_before,repo=root)
+
 def verify_files(folder):
  receipt=folder/'receipt';m=load(receipt/'manifest.json');run=m['runId'];require(m['adapter']=='shibboleth-stock-publisher-endpoints-v1' and m['selectedPath']=='stock-current-role' and m['counterfactualCalibrationOnly'] is False,'Non-stock native evidence')
  created=load(folder/'created.json')['run'];plan=load(folder/'plan.json')
  for _ in range(3):
   if 'plan' in plan:plan=plan['plan']
  require(created['id']==run and created['planId']==m['planId']==plan['id'] and plan['profile']=='metadata_idp' and plan['target']['kind']=='IDP' and plan['target']['entityId']==m['entityId'],'Wrong original Run, Plan, profile or target')
- from preflight_observation_adoption import approved_case,scope_preflight
- approved,digests=approved_case(C1,REPO);planned=load(folder/'planned-scope.json');require(planned['runId']==run and planned['caseId']==C1 and planned['caseDigest']==approved['case_digest'] and planned['catalogDigests']==digests and planned['targetMetadataSha256']==m['targetMetadataSha256'],'Approved source scope differs')
+ from preflight_observation_adoption import scope_preflight
+ planned=load(folder/'planned-scope.json');approved,digests=approved_publisher_source_context(planned);require(planned['runId']==run and planned['caseId']==C1 and planned['caseDigest']==approved['case_digest'] and planned['catalogDigests']==digests and planned['targetMetadataSha256']==m['targetMetadataSha256'],'Approved source scope differs')
  require(sha((folder/'deployed-api.jar').read_bytes())==planned['deployedApiSha256'],'Creation API archive changed')
  with zipfile.ZipFile(folder/'deployed-api.jar') as z:require(z.read('profiles/metadata_idp.json')==(receipt/'planned-profile.json').read_bytes(),'Deployed creation profile differs')
  slots=[r for r in load(receipt/'planned-profile.json')['cases'] if r['id']==C1];require(len(slots)==1 and slots[0]['digest']==approved['case_digest'],'Approved publisher case missing from actual deployed profile')
- require(load(folder/'formal-slot-preflight.json')==scope_preflight(C1,folder/'result-before.json') and load(folder/'formal-slot-preflight.json')['scope_ready'],'Formal case/profile preflight differs')
+ require(load(folder/'formal-slot-preflight.json')==publisher_scope_preflight(planned,folder/'result-before.json') and load(folder/'formal-slot-preflight.json')['scope_ready'],'Formal case/profile preflight differs')
  files={str(p.relative_to(receipt)):sha(p.read_bytes()) for p in receipt.rglob('*') if p.is_file() and p.name!='manifest.json'};require(files==m['files'],'Public receipt changed')
  entries=load(folder/'transcript.json');by={e['id']:e for e in entries};require(len(by)==len(entries) and all(e['runId']==run for e in entries),'Foreign or duplicated original history')
  for row in load(folder/'decoded-manifest.json'):

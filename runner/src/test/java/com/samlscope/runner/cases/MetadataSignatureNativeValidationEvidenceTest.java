@@ -9,6 +9,8 @@ import static com.samlscope.runner.cases.MetadataSignatureVerificationTestSuppor
 import static com.samlscope.runner.cases.MetadataSignatureVerificationTestSupport.sha;
 import static com.samlscope.runner.cases.MetadataSignatureVerificationTestSupport.tx;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -67,6 +69,33 @@ class MetadataSignatureNativeValidationEvidenceTest {
                 .verify(context(evidence.entries()), TARGET, evidence.content(), CAMPAIGN_ID);
         assertEquals("simplesamlphp-runtime", proof.adapter());
         assertEquals(sha(OOB_DER), proof.anchorCertificateSha256());
+    }
+
+    @Test
+    void pretrustedOriginalIsAcceptedAfterNativeAlternateKeyControlAndExactRestoration() throws Exception {
+        var evidence = evidence(value -> {
+            value.put("originalConfiguration", configured("oob.pem"));
+            value.put("finalConfiguration", configured("oob.pem"));
+        });
+        var original = evidence.entries().stream().filter(entry -> entry.id().equals(tx(65))).findFirst().orElseThrow();
+        var positive = evidence.entries().stream().filter(entry -> entry.id().equals(tx(70))).findFirst().orElseThrow();
+        var alternate = evidence.entries().stream().filter(entry -> entry.id().equals(tx(73))).findFirst().orElseThrow();
+        var restored = evidence.entries().stream().filter(entry -> entry.id().equals(tx(160))).findFirst().orElseThrow();
+        assertArrayEquals(evidence.content().readDecodedSaml(original), evidence.content().readDecodedSaml(positive));
+        assertArrayEquals(evidence.content().readDecodedSaml(original), evidence.content().readDecodedSaml(restored));
+        assertFalse(java.util.Arrays.equals(evidence.content().readDecodedSaml(positive),
+                evidence.content().readDecodedSaml(alternate)));
+        var proof = new MetadataSignatureVerificationEvidenceFile(directory)
+                .verify(context(evidence.entries()), TARGET, evidence.content(), CAMPAIGN_ID);
+        assertEquals(sha(OOB_DER), proof.anchorCertificateSha256());
+    }
+
+    @Test
+    void pretrustedNativeConfigurationMustStillBeRestoredExactly() throws Exception {
+        rejected(evidence(value -> {
+            value.put("originalConfiguration", configured("oob.pem"));
+            value.put("finalConfiguration", configured("embedded.pem"));
+        }));
     }
 
     @Test
@@ -135,6 +164,8 @@ class MetadataSignatureNativeValidationEvidenceTest {
         state.put("positiveEffective", effective("oob.pem"));
         state.put("controlConfiguration", configured("embedded.pem"));
         state.put("controlEffective", effective("embedded.pem"));
+        state.put("originalConfiguration", new String(ORIGINAL_CONFIG, StandardCharsets.UTF_8));
+        state.put("finalConfiguration", new String(ORIGINAL_CONFIG, StandardCharsets.UTF_8));
         mutate.accept(state);
 
         var bytes = new HashMap<String, byte[]>();
@@ -143,14 +174,14 @@ class MetadataSignatureNativeValidationEvidenceTest {
         bytes.put("native-metaloader", utf8(state.path("sourceText").path("metaLoader").asText()));
         bytes.put("native-configuration", utf8(state.path("sourceText").path("configuration").asText()));
         bytes.put("native-adapter", utf8(state.path("sourceText").path("adapter").asText()));
-        bytes.put("actual-config-before", ORIGINAL_CONFIG);
+        bytes.put("actual-config-before", utf8(state.path("originalConfiguration").asText()));
         bytes.put("actual-config-positive", utf8(state.path("positiveConfiguration").asText()));
         bytes.put("effective-config-positive", utf8(state.path("positiveEffective").asText()));
         bytes.put("anchor-oob", OOB_PEM);
         bytes.put("actual-config-control", utf8(state.path("controlConfiguration").asText()));
         bytes.put("effective-config-control", utf8(state.path("controlEffective").asText()));
         bytes.put("anchor-embedded", EMBEDDED_PEM);
-        bytes.put("actual-config-final", ORIGINAL_CONFIG);
+        bytes.put("actual-config-final", utf8(state.path("finalConfiguration").asText()));
         bytes.put("fixture-" + FIXTURE, fixtureBytes(FIXTURE));
         bytes.put("fixture-bad-signature", fixtureBytes("bad-signature"));
 
@@ -167,7 +198,7 @@ class MetadataSignatureNativeValidationEvidenceTest {
         entries.add(entry(62, "native-metaloader", bytes.get("native-metaloader")));
         entries.add(entry(63, "native-configuration", bytes.get("native-configuration")));
         entries.add(entry(64, "native-adapter", bytes.get("native-adapter")));
-        entries.add(entry(65, "actual-config-before", ORIGINAL_CONFIG));
+        entries.add(entry(65, "actual-config-before", bytes.get("actual-config-before")));
         entries.add(entry(70, "actual-config-positive", bytes.get("actual-config-positive")));
         entries.add(entry(71, "effective-config-positive", bytes.get("effective-config-positive")));
         entries.add(entry(72, "anchor-oob", OOB_PEM));
@@ -179,7 +210,7 @@ class MetadataSignatureNativeValidationEvidenceTest {
         entries.add(entry(125, "native-invalid", bytes.get("native-invalid")));
         entries.add(entry(135, "native-embedded", bytes.get("native-embedded")));
         var finalSequence = state.path("earlyRestoration").asBoolean(false) ? 115 : 160;
-        entries.add(entry(finalSequence, "actual-config-final", ORIGINAL_CONFIG));
+        entries.add(entry(finalSequence, "actual-config-final", bytes.get("actual-config-final")));
 
         var receipt = (ObjectNode) JSON.readTree(MetadataSignatureVerificationTestSupport.receipt());
         receipt.put("schema", "samlscope-metadata-signature-verification-receipt-v4");
@@ -194,9 +225,9 @@ class MetadataSignatureNativeValidationEvidenceTest {
                 "actual-config-positive", "effective-config-positive", "anchor-oob", OOB_DER, "oob.pem", bytes);
         var restoration = receipt.putObject("restorationReadBack");
         restoration.put("originalReference", tx(65));
-        restoration.put("originalSha256", sha(ORIGINAL_CONFIG));
+        restoration.put("originalSha256", sha(bytes.get("actual-config-before")));
         restoration.put("finalReference", tx(finalSequence));
-        restoration.put("finalSha256", sha(ORIGINAL_CONFIG));
+        restoration.put("finalSha256", sha(bytes.get("actual-config-final")));
         var positive = (ObjectNode) receipt.path("positive");
         positive.put("embeddedKeyInfoCertificateSha256", sha(EMBEDDED_DER));
         positive.put("nativeValidationReference", tx(112));

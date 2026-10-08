@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
 import { createRequire } from 'node:module';
 import { createHash } from 'node:crypto';
-import { validateTask, playwrightAdapter, collectSelected, bindProtocolOriginals } from './generic_browser_campaign.mjs';
+import { validateTask, playwrightAdapter, collectSelected, bindProtocolOriginals, collectNativeOriginalDigests } from './generic_browser_campaign.mjs';
 
 const dependency = process.env.SAML_SCOPE_PLAYWRIGHT;
 const RUN = 'run_0123456789ABCDEFGHJKMNPQRS';
@@ -27,14 +27,18 @@ test('real browser preserves three authenticated operations and isolates passive
     let targetOrigin;
     let index = 0;
     const entries = [];
+    const nativeBytes = new Map(), digestReads = [];
     const wire = [];
     const record = {};
     let fixtureFailure;
     const current = () => index < 4 ? { state: 'READY', caseId: CASE, actionId: action(index), requiresFreshSession: index === 3,
       startUrl: `${suiteOrigin}/p/${PLAN}/probe/${action(index)}?run=${RUN}` } : { state: 'FINISHED' };
-    const add = (direction, actionId, raw) => entries.push({ id: `tx_${entries.length}`, runId: RUN, direction,
-      correlationId: direction === 'OUTBOUND' ? actionId : '_' + actionId,
-      decodedSamlBytes: raw.length, samlSummary: { scenario_case_id: CASE, decodedSha256: digest(raw) } });
+    const add = (direction, actionId, raw) => {
+      const id = `tx_${String(entries.length).padStart(26, '0')}`; nativeBytes.set(id, raw);
+      entries.push({ id, runId: RUN, direction, correlationId: direction === 'OUTBOUND' ? actionId : '_' + actionId,
+        decodedSamlRef: `transcripts/${RUN}/${id}.saml.xml`, decodedSamlBytes: raw.length,
+        samlSummary: { type: direction === 'OUTBOUND' ? 'AuthnRequest' : 'Response', scenario_case_id: CASE } });
+    };
     const suite = createServer(async (request, response) => {
       try {
         const url = new URL(request.url, suiteOrigin);
@@ -45,6 +49,12 @@ test('real browser preserves three authenticated operations and isolates passive
           { id: 'tx_m0_response', runId: RUN, direction: 'INBOUND', correlationId: '_m0', url: `${suiteOrigin}/p/${PLAN}/sp/acs/0`,
             samlSummary: { type: 'Response', normalFlowAccepted: true, statusCode: 'urn:oasis:names:tc:SAML:2.0:status:Success',
               issuer: targetOrigin + '/idp', destination: `${suiteOrigin}/p/${PLAN}/sp/acs/0`, inResponseTo: '_m0' } }, ...entries]);
+        const original = new RegExp(`^/api/runs/${RUN}/transcript/(tx_[0-9A-HJKMNP-TV-Z]{26})/original-digest$`).exec(url.pathname);
+        if (original && nativeBytes.has(original[1])) {
+          const raw = nativeBytes.get(original[1]); digestReads.push(original[1]);
+          return json(response, { schema: 'samlscope-transcript-original-digest-v1', runId: RUN, txId: original[1],
+            decodedSamlSha256: digest(raw), decodedSamlBytes: raw.length });
+        }
         if (url.pathname.endsWith('/result.json')) return json(response, { run: { id: RUN }, requirements: [{ cases: [{ id: CASE, outcome: 'NOT_VERIFIED' }] }] });
         if (url.pathname.endsWith('/active-probe')) return json(response, current());
         if (url.pathname.endsWith('/protocol-evidence/evaluate')) return json(response, { syntheticOnly: true, readyCases: 0 });
@@ -100,8 +110,12 @@ test('real browser preserves three authenticated operations and isolates passive
       assert.equal(collected.counts.conclusionAssignments, 0);
       assert.deepEqual(wire.map(row => row.cookiePresent), [false, true, true, false]);
       assert.equal(originals.length, 8);
-      const manifest = bindProtocolOriginals(task, originals, entries);
+      const proofs = await collectNativeOriginalDigests(task, originals, entries, adapter.readOriginalDigest);
+      await collectNativeOriginalDigests(task, originals, entries, adapter.readOriginalDigest, null, proofs);
+      const manifest = bindProtocolOriginals(task, originals, entries, null, proofs);
       assert.equal(manifest.every(row => row.bindingState === 'recorder-hash-and-action-bound'), true);
+      assert.equal(digestReads.length, 8); assert.equal(new Set(digestReads).size, 8);
+      assert.equal(entries.every(entry => entry.samlSummary.decodedSha256 === undefined), true);
       assert.equal(JSON.stringify(record).includes('fixture-authenticated=yes'), false);
       assert.equal(JSON.stringify(manifest).includes('fixture-authenticated=yes'), false);
       assert.equal(record['evaluation.json'].syntheticOnly, true);
