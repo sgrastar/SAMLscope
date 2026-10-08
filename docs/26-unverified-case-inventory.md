@@ -4,7 +4,7 @@ This inventory covers NOT_VERIFIED observations remaining after the previous fol
 
 | Before retesting | Conclusive (Success / Failed / Warning) | Currently unverified | Distinct unverified case IDs |
 |---:|---:|---:|---:|
-| 594 | 404 | 190 | 80 |
+| 594 | 405 | 189 | 79 |
 
 ## Breakdown
 
@@ -17,7 +17,7 @@ This inventory covers NOT_VERIFIED observations remaining after the previous fol
 | Additional metadata tests and observations are missing | 10 | Test-path investigation |
 | Additional browser and SLO observations are missing | 12 | Test-path investigation |
 | Old waiting results have expired by resume time | 0 | Retest in a new Run |
-| Executed without a conclusive result | 26 | Individual diagnosis |
+| Executed without a conclusive result | 25 | Individual diagnosis |
 
 Classification uses result reason codes, interaction types, and Suite implementation. "Test-path investigation" does not guarantee that execution is possible. Configuration and evidence paths also cannot guarantee results merely by enabling attestation.
 
@@ -107,6 +107,7 @@ Inspect reason codes and positive controls to distinguish Suite, configuration, 
 | `IIP-IDP06-b-idp-01` | Success | Success | Success |
 | `IIP-IDP08-a-idp-01` | Failed (Product) | Success | Not verified (outside this retest scope) |
 | `IIP-IDP09-a-idp-01` | Not verified (outside this retest scope) | Not verified (outside this retest scope) | Success |
+| `IIP-IDP10-d-idp-01` | Success | Not verified (outside this retest scope) | Not verified (outside this retest scope) |
 | `IIP-IDP11-a-idp-01` | Failed (Product) | Success | Not verified (outside this retest scope) |
 | `IIP-IDP12-b-idp-01` | Success | Success | Not verified (outside this retest scope) |
 | `IIP-IDP12-c-idp-01` | Failed (Product) | Success | Success |
@@ -251,7 +252,6 @@ Product columns list profiles with remaining unverified observations. Where a ca
 | `IIP-G01-a-idp-01` | browser_sso_idp、ecp_idp、metadata_idp、single_logout_idp | browser_sso_idp、ecp_idp、metadata_idp、single_logout_idp | browser_sso_idp、ecp_idp、metadata_idp、single_logout_idp | Only some test conditions are implemented |
 | `IIP-G02-c-idp-01` | browser_sso_idp | browser_sso_idp | browser_sso_idp | Attestation is disabled |
 | `IIP-IDP04-b-idp-01` | browser_sso_idp | — | — | Evidence verification and attestation after configuration |
-| `IIP-IDP10-d-idp-01` | browser_sso_idp | — | — | Executed without a conclusive result |
 | `IIP-IDP11-a-idp-01` | — | — | browser_sso_idp | Evidence verification and attestation after configuration |
 | `IIP-IDP12-d-idp-01` | — | browser_sso_idp | — | Executed without a conclusive result |
 | `IIP-IDP12-f-idp-01` | browser_sso_idp | browser_sso_idp | browser_sso_idp | Executed without a conclusive result |
@@ -329,7 +329,7 @@ This classification describes unverified reasons without changing Verdicts. feat
 |---|---:|---|---|
 | `suite-observation-gap` | 114 | The Suite observation or execution path is not connected | Not verified that can be resolved by implementing the Suite path |
 | `operator-attestation-available` | 62 | Can be verified through attestation or operator testimony | Can be verified through operator testimony, with one answer per case. Attestation is disabled in the current Plan |
-| `evidence-form-mismatch` | 10 | The product response does not match the evidence format required by the approved evaluation conditions | Not verified because the evidence format does not match the approved conditions; requirement interpretation needs review |
+| `evidence-form-mismatch` | 9 | The product response does not match the evidence format required by the approved evaluation conditions | Not verified because the evidence format does not match the approved conditions; requirement interpretation needs review |
 | `role-inapplicable` | 4 | A variant requests an artifact that the target does not consume in its role | The variant is not consumed in the IdP role and is outside the execution scope; inapplicability has been established |
 
 ### role-inapplicable
@@ -339,7 +339,7 @@ This classification describes unverified reasons without changing Verdicts. feat
 
 ### evidence-form-mismatch
 
-`IIP-IDP10-d-idp-01`, `IIP-IDP12-d-idp-01`, `IIP-IDP12-f-idp-01`, `IIP-IDP19-a-idp-01`, `IIP-IDP19-c-idp-01`, `IIP-SSO01-f-idp-01`
+`IIP-IDP12-d-idp-01`, `IIP-IDP12-f-idp-01`, `IIP-IDP19-a-idp-01`, `IIP-IDP19-c-idp-01`, `IIP-SSO01-f-idp-01`
 
 
 ### operator-attestation-available

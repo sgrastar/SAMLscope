@@ -30,7 +30,7 @@ Local verification on 2026-09-14, covering each product's IdP functionality. Thi
 | Shibboleth IdP 5.2.3 | `IIP-MD05-av` | Product: does not select omitted default and uses metadata with duplicate AssertionConsumerService indices | Submitted 4 evaluative fixtures and a control through product FilesystemMetadataProvider. control, explicit-first, and all-false reached the correct ACS, but omitted default after explicit-false reached ACS 0 instead of ACS 1, and the duplicate-index fixture also returned Success. Container image, startup time, runtime VERSION at campaign start/end, byte-identical configuration restoration, original fixtures, requests/responses, and Suite runtime JAR are bound to the same Run. Metadata Interoperability §2.4.1. |
 | SimpleSAMLphp 2.5.0 | `IIP-MD05-av` | Product: uses metadata with duplicate AssertionConsumerService indices under the same parent | Native MDQ sent 3 default-selection controls (explicit true, omission after explicit false, and all false) to the correct ACS, then fetched and used the duplicate-index control and returned Success. Container image, startup time, runtime VERSION at campaign start/end, and configuration restoration are bound to the same Run. Metadata Interoperability §2.4.1. |
 | Keycloak, SimpleSAMLphp | `IIP-IDP15-a` | Product/profile: SAML-EC GeneratedKey is absent | Even after PAOS registration correction, SOAP Success for the SessionKey test lacks GeneratedKey. Shibboleth passed both key-copy and encryption checks in the same test. This is distinct from failure of normal ECP as a whole. SAML-EC §5.3.1 and approved IIP-IDP15.a. |
-| Keycloak | `IIP-IDP10-d` [S1] | Suite: same-SP qualifier omission produces FAIL through string mismatch | Core §§8.3.7–8.3.8 define omission rules. Adopted Runs received a holding correction to NOT_VERIFIED. Source reconciliation, signed reapproval of variant `v-e2c03ed209`, and implementation permitting omission under limited conditions are complete on a dedicated branch. The table retains the hold because no actual Run under the new definition has been adopted. |
+| Keycloak | `IIP-IDP10-d` [S1] | Legacy Suite result: same-SP qualifier omission was judged through string mismatch | Core §§8.3.7–8.3.8 define omission rules. Legacy Runs retain the S1 hold under their original definition. The corrected `functional-case-v2-nameid` definition permits omission when the requested qualifier is the direct requesting SP. The matching owned Keycloak browser result is eligible only after independent replay of its original protocol evidence, controls, runtime, and restored configuration; its adoption does not rejudge legacy Runs. |
 | SimpleSAMLphp | `IIP-IDP06-a/b` [S2] | Suite: incorrect FAIL caused by timestamp precision differences | Even when authentication time advanced, second-precision AuthnInstant was treated as earlier than fractional IssueInstant. Ordering within reported precision remains NOT_VERIFIED, verified with second/millisecond regression controls. No Suite-specific allowed-clock-skew threshold was added. |
 | Keycloak | `IIP-IDP12-a` [C1] | Configuration: ACS index registration is incomplete | Input metadata contains index 1, but the native-imported client lacks its ACS URL. This is not evidence evaluating product index handling with complete registration, so the old FAIL is not a product failure. |
 | All products | Waiting continues after metadata campaigns | Suite: remains WAITING_BROWSER despite a correlated response | Corrected waiting-state release on a correlated metadata response; uncorrelated responses do not release it. Shibboleth replay verified COMPLETED and tests/start success without an additional baseline. |
@@ -102,7 +102,7 @@ Additional results adopted in the inventory are included in the comparison after
 
 ## Breakdown of Not verified observations
 
-The table adopts 191 case-result observations. Cases marked † adopt additional evidence from new Runs; other existing evidence is retained. These counts do not represent a single Run or a complete rerun of all tests. Earlier FAIL results reclassified as configuration gaps in the comparison are excluded from this NOT_VERIFIED total.
+The table adopts 190 case-result observations. Cases marked † adopt additional evidence from new Runs; other existing evidence is retained. These counts do not represent a single Run or a complete rerun of all tests. Earlier FAIL results reclassified as configuration gaps in the comparison are excluded from this NOT_VERIFIED total.
 
 | Reason | Keycloak | Shibboleth IdP | SimpleSAMLphp | Required follow-up |
 |---|---:|---:|---:|---|
@@ -117,7 +117,6 @@ The table adopts 191 case-result observations. Cases marked † adopt additional
 | `slo.redirect-response.not-observed` | 1 | 0 | 1 | Further inspect the case response, target configuration, and positive controls |
 | `audit.force-authn-mechanism-access-unproven` | 0 | 0 | 1 | Further inspect the case response, target configuration, and positive controls |
 | `audit.metadata-full-ui-controls-unproven` | 0 | 0 | 1 | Import correctly placed UIInfo and DiscoHints and verify values for every variant through the product UI or effective read-back |
-| `idp.nameid-policy.inconclusive` | 1 | 0 | 0 | Further inspect the case response, target configuration, and positive controls |
 | `slo.async.feedback.unrecognized` | 0 | 0 | 1 | Further inspect the case response, target configuration, and positive controls |
 | `slo.encrypted-id.key-unavailable` | 1 | 0 | 0 | Further inspect the case response, target configuration, and positive controls |
 | `slo.encrypted-id.multiple-keys.key-unavailable` | 1 | 0 | 0 | Further inspect the case response, target configuration, and positive controls |
@@ -173,7 +172,7 @@ Removing Chrome and approval blocks alone cannot resolve these observations. Mis
 | `IIP-IDP09-b-idp-01` | Warning | Warning | Warning |
 | `IIP-IDP10-a-idp-01` | Success | Success | Success |
 | `IIP-IDP10-b-idp-01` | **Failed (Product)** | Success | **Failed (Product)** |
-| `IIP-IDP10-d-idp-01` | Not verified (Suite) [S1] | Success | **Failed (Product)** |
+| `IIP-IDP10-d-idp-01` | Success † | Success | **Failed (Product)** |
 | `IIP-IDP11-a-idp-01` | **Failed (Product)** † | Success † | Not verified |
 | `IIP-IDP12-a-idp-01` | Not verified (Configuration) [C1] | Success | Success |
 | `IIP-IDP12-b-idp-01` | Success † | Success † | Success |
@@ -574,6 +573,7 @@ Removing Chrome and approval blocks alone cannot resolve these observations. Mis
 | browser_sso_idp († listed supplemental cases only) | keycloak | `run_F9VD5CSM4XV01J1Q2X1BPJ6DG2` | `build/acceptance/reference-20260918/keycloak-browser-chain-v73` |
 | browser_sso_idp († listed supplemental cases only) | keycloak | `run_8KJN2EHMVRDZVB4EM2CS1THHPG` | `build/acceptance/reference-20261004/keycloak-forceauthn-mechanism-r2` |
 | browser_sso_idp († listed supplemental cases only) | keycloak | `run_JQTKB2M3V6887FKT0DF49G38QZ` | `build/acceptance/reference-20260918/keycloak-browser-chain-v75` |
+| browser_sso_idp († listed supplemental cases only) | keycloak | `run_BPEHJD546WG5YJTCRD8F7JRQ1E` | `build/acceptance/reference-20261008/owned-keycloak-nameid-browser-r2` |
 | browser_sso_idp († listed supplemental cases only) | keycloak | `run_P57XA0ZDWHSVWX8PNW01MXSVT7` | `build/acceptance/reference-20260930/keycloak-nameid-omission-probe-v2` |
 | browser_sso_idp († listed supplemental cases only) | keycloak | `run_YT60WQ4FCYBC6ET6HGTDZQT3RE` | `build/acceptance/reference-20260930/keycloak-idp12e-v145/evaluation-v139` |
 | browser_sso_idp († listed supplemental cases only) | keycloak | `run_JZWZCDA4MJ6EZ617JXKRG383K8` | `build/acceptance/reference-20260930/idp12b-keycloak-v150` |
