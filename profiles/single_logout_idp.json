@@ -1,10 +1,10 @@
 {
   "schema_version": 1,
-  "version": "functional-case-v1",
+  "version": "functional-case-v2-nameid",
   "profile": "single_logout_idp",
   "source_digests": {
-    "tests/coverage.yaml": "sha256:2bee3db74c9be9908710bbe18935c73454f1ed4c5c0f06bdab1cf18deaef843c",
-    "tests/cases.yaml": "sha256:431d9aa863d5d882d37266667a8fd20547d1fe6d037274b8d59ff66347f5ecd4",
+    "tests/coverage.yaml": "sha256:b3dec82159dffa396d21068c0e5bbc82dedec31dc2510ee2a56ce8322c3bc271",
+    "tests/cases.yaml": "sha256:f82ae02a838d85a6ab99c0cb6852dc63ddd8e161eb3dbbe85c30531fdbe5d035",
     "tests/predicates.yaml": "sha256:ea0aec770d743d0c8315c706ae80fb5979a103021ebdc4fcf86187c052e90262"
   },
   "cases": [

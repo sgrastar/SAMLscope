@@ -1,10 +1,10 @@
 {
   "schema_version": 1,
-  "version": "functional-case-v1",
+  "version": "functional-case-v2-nameid",
   "profile": "browser_sso_idp",
   "source_digests": {
-    "tests/coverage.yaml": "sha256:2bee3db74c9be9908710bbe18935c73454f1ed4c5c0f06bdab1cf18deaef843c",
-    "tests/cases.yaml": "sha256:431d9aa863d5d882d37266667a8fd20547d1fe6d037274b8d59ff66347f5ecd4",
+    "tests/coverage.yaml": "sha256:b3dec82159dffa396d21068c0e5bbc82dedec31dc2510ee2a56ce8322c3bc271",
+    "tests/cases.yaml": "sha256:f82ae02a838d85a6ab99c0cb6852dc63ddd8e161eb3dbbe85c30531fdbe5d035",
     "tests/predicates.yaml": "sha256:ea0aec770d743d0c8315c706ae80fb5979a103021ebdc4fcf86187c052e90262"
   },
   "cases": [
@@ -802,7 +802,7 @@
     },
     {
       "id": "IIP-IDP10-d-idp-01",
-      "digest": "sha256:eac0ed91cf492475301d9a3ea651749ad9cf0228a240fb918497b170e6ba4fca"
+      "digest": "sha256:a02075559dff2bf93b50bcc17a601f9037093d5405a9ee93ff5f7f0e80fa346a"
     },
     {
       "id": "IIP-IDP11-a-idp-01",

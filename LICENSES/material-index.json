@@ -3,16 +3,16 @@
   "scope": "Source references of selected obligation definitions, tests and imported variants; this is attribution, not evaluation coverage or legal clearance.",
   "input_sha256": {
     "tests/specs.yaml": "acee5ce8c348fbc5e02f77bd2f5b8703a632dd69aea857b14b97812ff6cc39d9",
-    "tests/coverage.yaml": "2bee3db74c9be9908710bbe18935c73454f1ed4c5c0f06bdab1cf18deaef843c",
-    "tests/cases.yaml": "431d9aa863d5d882d37266667a8fd20547d1fe6d037274b8d59ff66347f5ecd4",
+    "tests/coverage.yaml": "b3dec82159dffa396d21068c0e5bbc82dedec31dc2510ee2a56ce8322c3bc271",
+    "tests/cases.yaml": "f82ae02a838d85a6ab99c0cb6852dc63ddd8e161eb3dbbe85c30531fdbe5d035",
     "tests/predicates.yaml": "ea0aec770d743d0c8315c706ae80fb5979a103021ebdc4fcf86187c052e90262",
-    "profiles/browser_sso_idp.json": "8841ab92288146c657efb5f3df5ded60970c890448459f0a80fd141eb7fd5c5f",
-    "profiles/browser_sso_sp.json": "159c8e15f6a3e06b434d2e2464c75d40829ed8f54b0de23e1b1f4d566aa3228b",
-    "profiles/ecp_idp.json": "f930459e44962ea682d00fc4b8efac5440682ddb550da4ac54c114d523281d5e",
-    "profiles/metadata_idp.json": "5b1e904ef9b19bc6267bca6d54f44e9ea06dcd76acb35dad39cb1b1a5f1198fd",
-    "profiles/metadata_sp.json": "3deeb97b95062dec6670aa5b5211a1c9b26406b28283047cf87788dba426dc93",
-    "profiles/single_logout_idp.json": "0158baceb4c032f36c8a9fdbeb89916163a3b61ae567e898b5cd6ed6df06f846",
-    "profiles/single_logout_sp.json": "4d8d77c4e0d22d69d6e44c2b896b4c4df45c46d2486311d4b519ae1ce9ebb92a"
+    "profiles/browser_sso_idp.json": "05558838bf997f81d5be63d423df254b547ffe7c0600683157b6dadd566b7448",
+    "profiles/browser_sso_sp.json": "30f7b61072a1900f979176b51c454fde6837f8f3ffe5217207a4b211322a11f4",
+    "profiles/ecp_idp.json": "5738bd4246db6d3b6f2638e1fee435b6670f7d1cbe002871b21847a13b379859",
+    "profiles/metadata_idp.json": "da78ab6921399a1c32f5f58a363459e9853ea377211d3279f5be789c4bc70d12",
+    "profiles/metadata_sp.json": "5be0c722b86150dd0a290c683d680c7067b7cad126cec5b13eff6078af7d971f",
+    "profiles/single_logout_idp.json": "c3798a27a9ddf8d7f55324cae9f48a162bed168491a4e3843acb9c727e1d3626",
+    "profiles/single_logout_sp.json": "6fd2443ee5c058c3cda6bf20391bea079d0327fd7e8c2635ce097392b936196a"
   },
   "case_sources": {
     "IIP-G01-a-idp-01": [

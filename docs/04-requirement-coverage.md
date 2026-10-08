@@ -7931,7 +7931,7 @@ Validation: `python3 tools/g1_validate.py` → `build/spec-reconcile-report.json
 - **Required variants**:
   - `v-e4467623ff` Request Format=persistent; returned NameID/@Format equals the requested value.
   - `v-898a349947` Request Format=transient; returned NameID/@Format equals the requested value.
-  - `v-e2c03ed209` Specify SPNameQualifier; returned NameID/@SPNameQualifier equals the specified value.
+  - `v-e2c03ed209` Specify SPNameQualifier; returned NameID/@SPNameQualifier equals the specified value, or persistent/transient NameID omits it when the message is intended only for direct consumption by that SP and the implicit value equals that SP identifier (Core 8.3.7-8.3.8).
   - `v-534e8baf05` Control: detect silent return of a Format different from the request—a successful response with the wrong Format.
   - `v-96ea6f9410` Control: this obligation does not apply when Format is omitted, unspecified, or encrypted; any identifier is permitted.
 - **Controls (negative controls)**:

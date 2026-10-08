@@ -251,11 +251,10 @@ public final class IdpNameIdPolicyScenarioTestCase
                 }
                 if (configuration.suiteIssuer().equals(expected.spNameQualifier())
                         && !nameId.hasAttribute("SPNameQualifier")) {
-                    // Core 8.3.7/8.3.8 permits implicit same-SP qualification. The approved
-                    // variant currently requires literal equality: do not issue a false
-                    // violation or silently approve that interpretation. Keep it unresolved
-                    // until the protected catalog is reconciled and independently approved.
-                    return FixtureObservation.NOT_VERIFIED;
+                    // Core 8.3.7/8.3.8 permits implicit qualification for a response
+                    // addressed directly and exclusively to the requesting SP.
+                    return implicitlyQualified(root, nameId)
+                            ? FixtureObservation.SATISFIED : FixtureObservation.NOT_VERIFIED;
                 }
                 if (expected.spNameQualifier() != null
                         && !expected.spNameQualifier().equals(nameId.getAttribute("SPNameQualifier"))) {
@@ -265,6 +264,38 @@ public final class IdpNameIdPolicyScenarioTestCase
             } catch (SamlException malformed) {
                 return FixtureObservation.NOT_VERIFIED;
             }
+        }
+
+        private boolean implicitlyQualified(Element response, Element nameId) {
+            var format = nameId.getAttribute("Format");
+            if (!List.of("urn:oasis:names:tc:SAML:2.0:nameid-format:persistent",
+                    "urn:oasis:names:tc:SAML:2.0:nameid-format:transient").contains(format)
+                    || !configuration.registeredAcs().toString().equals(response.getAttribute("Destination"))) {
+                return false;
+            }
+            var subject = nameId.getParentNode();
+            if (!(subject instanceof Element subjectElement)
+                    || !ASSERTION.equals(subjectElement.getNamespaceURI())
+                    || !"Subject".equals(subjectElement.getLocalName())
+                    || !(subject.getParentNode() instanceof Element assertion)
+                    || !ASSERTION.equals(assertion.getNamespaceURI())
+                    || !"Assertion".equals(assertion.getLocalName())) return false;
+            var observedAudience = false;
+            for (var node = assertion.getFirstChild(); node != null; node = node.getNextSibling()) {
+                if (!(node instanceof Element conditions) || !ASSERTION.equals(conditions.getNamespaceURI())
+                        || !"Conditions".equals(conditions.getLocalName())) continue;
+                for (var child = conditions.getFirstChild(); child != null; child = child.getNextSibling()) {
+                    if (!(child instanceof Element restriction) || !ASSERTION.equals(restriction.getNamespaceURI())
+                            || !"AudienceRestriction".equals(restriction.getLocalName())) continue;
+                    var audiences = restriction.getElementsByTagNameNS(ASSERTION, "Audience");
+                    if (audiences.getLength() == 0) return false;
+                    for (var i = 0; i < audiences.getLength(); i++) {
+                        if (!configuration.suiteIssuer().equals(audiences.item(i).getTextContent().strip())) return false;
+                        observedAudience = true;
+                    }
+                }
+            }
+            return observedAudience;
         }
 
         @Override public Duration timeout() { return configuration.responseTimeout(); }
