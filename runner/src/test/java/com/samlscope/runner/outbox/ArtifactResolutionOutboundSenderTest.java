@@ -81,9 +81,15 @@ class ArtifactResolutionOutboundSenderTest {
         var sender=ArtifactResolutionOutboundSender.create(recorder,Clock.fixed(NOW,ZoneOffset.UTC),run->Optional.of(suite));
         var wrongHost=URI.create("https://127.0.0.1:"+server.getAddress().getPort()+"/resolve");
         assertThrows(SSLHandshakeException.class,()->sender.send(RUN,action(wrongHost),null));
-        System.setProperty("javax.net.ssl.trustStore",folder.resolve("missing-trust-store").toString());
+        // An absent store can fall back to the JDK's cacerts with our fixture password.
+        // Use an explicit, readable store whose sole anchor cannot authenticate this server.
+        var unrelatedStore=folder.resolve("unrelated-trust-store.p12");
+        var unrelatedTrust=KeyStore.getInstance("PKCS12");unrelatedTrust.load(null,null);
+        unrelatedTrust.setCertificateEntry("unrelated-authority",suite.certificate());
+        try(var output=Files.newOutputStream(unrelatedStore)){unrelatedTrust.store(output,"fixture-password".toCharArray());}
+        System.setProperty("javax.net.ssl.trustStore",unrelatedStore.toString());
         var untrusted=ArtifactResolutionOutboundSender.create(recorder,Clock.fixed(NOW,ZoneOffset.UTC),run->Optional.of(suite));
-        assertThrows(Exception.class,()->untrusted.send(RUN,action(endpoint),null));
+        assertThrows(SSLHandshakeException.class,()->untrusted.send(RUN,action(endpoint),null));
         assertTrue(recorder.list(RUN).stream().noneMatch(e->e.samlSummary().containsKey("transport_authentication")));
     }
     @Test void artifactResolutionRemainsUnsafeAndRejectsCredentialsAndRedirectingClients() throws Exception {
