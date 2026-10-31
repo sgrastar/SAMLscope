@@ -154,6 +154,10 @@ export function RunManagement({ runId, csrfToken, focusCaseId }: {
     const data = new FormData(event.currentTarget)
     const value = String(data.get('value') ?? '')
     const note = String(data.get('note') ?? '')
+    if (interaction.kind === 'ATTESTATION' && value !== 'unable_to_verify' && !note.trim()) {
+      setError('Describe the evidence you observed (UI, log, trace) before submitting a self-attestation.')
+      return Promise.resolve()
+    }
     return act(interaction.caseId, async () => {
       if (interaction.kind === 'CONFIGURATION') {
         await api.configure(runId, interaction.caseId, value, value === 'confirmed' ? '' : note, csrfToken)
