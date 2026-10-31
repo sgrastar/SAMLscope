@@ -76,7 +76,7 @@ test('direct new-plan navigation asks for login when deployment policy requires 
     return json([])
   }))
   render(<App />)
-  expect(await screen.findByRole('heading', { name: 'Sign in to create a Test Plan' })).toBeTruthy()
+  expect(await screen.findByRole('heading', { name: 'Sign in to create a test' })).toBeTruthy()
   expect(screen.queryByRole('button', { name: 'Create plan' })).toBeNull()
 })
 

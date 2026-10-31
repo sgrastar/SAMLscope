@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, expect, test, vi } from 'vitest'
 import { ManagementBootstrap } from './ManagementBootstrap'
 import { api } from './api'
@@ -39,7 +39,7 @@ test('removes the fragment before exchanging it and keeps only the CSRF token in
 
   render(<ManagementBootstrap runId={runId} />)
 
-  expect(await screen.findByText('Run unlocked')).toBeTruthy()
+  await waitFor(() => expect(document.querySelector('main.run-page')).toBeTruthy())
   expect(replace).toHaveBeenCalledWith(null, '', `/manage/${runId}`)
   expect(window.sessionStorage.getItem(`samlscope.csrf.${runId}`)).toBe('c'.repeat(43))
   expect(document.body.textContent).not.toContain(token)
@@ -60,8 +60,8 @@ test('opens a self-hosted management page without a fragment secret', async () =
 
   render(<ManagementBootstrap runId={runId} />)
 
-  expect(await screen.findByText('Run unlocked')).toBeTruthy()
-  expect(await screen.findByText('No pending interactions.')).toBeTruthy()
+  await waitFor(() => expect(document.querySelector('main.run-page')).toBeTruthy())
+  expect(await screen.findByRole('button', { name: 'Check setup' })).toBeTruthy()
 })
 
 function json(value: unknown) {
@@ -78,8 +78,8 @@ test('resumes a hosted cookie session without the original fragment or tab stora
 
   render(<ManagementBootstrap runId={runId} />)
 
-  expect(await screen.findByText('Run unlocked')).toBeTruthy()
-  expect(await screen.findByText('No pending interactions.')).toBeTruthy()
+  await waitFor(() => expect(document.querySelector('main.run-page')).toBeTruthy())
+  expect(await screen.findByRole('button', { name: 'Check setup' })).toBeTruthy()
   expect(resume).toHaveBeenCalledWith(runId)
   expect(window.sessionStorage.getItem(`samlscope.csrf.${runId}`)).toBe('resumed-csrf')
   expect(screen.queryByRole('link', { name: 'Start IdP round trip' })).toBeNull()
@@ -96,7 +96,7 @@ test('does not unlock a hosted Run using stale tab storage when the server denie
 
     expect(await screen.findByText('Access denied')).toBeTruthy()
     expect(resume).not.toHaveBeenCalled()
-    expect(screen.queryByText('Run unlocked')).toBeNull()
+    expect(document.querySelector('main.run-page')).toBeNull()
 })
 
 test('keeps OIDC account access without requiring a legacy Run cookie', async () => {
@@ -111,8 +111,8 @@ test('keeps OIDC account access without requiring a legacy Run cookie', async ()
 
   render(<ManagementBootstrap runId={runId} />)
 
-  expect(await screen.findByText('Run unlocked')).toBeTruthy()
-  expect(await screen.findByText('No pending interactions.')).toBeTruthy()
+  await waitFor(() => expect(document.querySelector('main.run-page')).toBeTruthy())
+  expect(await screen.findByRole('button', { name: 'Check setup' })).toBeTruthy()
   expect(resume).not.toHaveBeenCalled()
 })
 

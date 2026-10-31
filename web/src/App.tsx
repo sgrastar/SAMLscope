@@ -1,18 +1,16 @@
 import { SourceNoticeLink } from './SourceNoticeLink'
 import { FormEvent, useEffect, useMemo, useRef, useState } from 'react'
 import { AppShell } from './AppShell'
-import { api, type AuthSession, type Plan, type PlanInput, type Profile, type Run, type TargetConnection } from './api'
+import { api, type AuthSession, type Plan, type PlanInput, type Profile, type Run, type RunCreated, type TargetConnection } from './api'
 import { ResultReport } from './ResultReport'
 import { ManagementBootstrap } from './ManagementBootstrap'
 import { RunManagement } from './RunManagement'
 import { formatDate, humanize } from './format'
-import { idpRoundTripReady, idpRoundTripUrl } from './peerUrls'
-import { PeerRegistration } from './PeerRegistration'
-import { RoundTripLink } from './RoundTripLink'
 import { profileCatalog, profileLabel, profileRole } from './profiles'
 import { Admin } from './Admin'
 import { Licenses } from './Licenses'
 
+/** Everything the form does not ask for is fixed here; users only configure the product. */
 const initialInput: PlanInput = {
   name: '',
   profile: 'browser_sso_idp',
@@ -20,11 +18,22 @@ const initialInput: PlanInput = {
   targetEntityId: '',
   metadataSourceKind: 'URL',
   metadataSourceLocation: '',
-  suiteMetadataDelivery: 'MANUAL',
+  suiteMetadataDelivery: 'HTTP_URL',
   declaredFeatures: {},
   parameters: { clockSkewToleranceSeconds: 180, metadataRefreshWaitSeconds: 300, testUserHint: '', requestSigningMode: 'OPTIONAL' },
-  interaction: { allowBrowserSteps: true, allowAttestation: false, preset: 'quick' },
+  interaction: { allowBrowserSteps: true, allowAttestation: false, preset: 'assisted' },
   authorizedTarget: false,
+}
+
+/** Seam so navigation can be observed in tests. */
+export const navigation = { go: (url: string) => window.location.assign(url) }
+
+const signingProfiles: Profile[] = ['browser_sso_idp', 'metadata_idp']
+
+function planName(entityId: string, profile: Profile): string {
+  let host = entityId
+  try { host = new URL(entityId).hostname } catch { /* keep the raw value */ }
+  return `${host} ${profileLabel(profile)}`
 }
 
 export function App() {
@@ -53,10 +62,8 @@ function PlanWorkspace() {
   const [installedProfiles, setInstalledProfiles] = useState<Profile[]>([])
   const [plans, setPlans] = useState<Plan[]>([])
   const [selectedId, setSelectedId] = useState<string | undefined>(initialLocation.planId)
-  const [runs, setRuns] = useState<Run[]>([])
   const [planRuns, setPlanRuns] = useState<Record<string, PlanRunHistory>>({})
   const [input, setInput] = useState(initialInput)
-  const [message, setMessage] = useState('')
   const [error, setError] = useState('')
   const [creating, setCreating] = useState(false)
   const errorRef = useRef<HTMLDivElement>(null)
@@ -67,6 +74,7 @@ function PlanWorkspace() {
   const [managementUrl, setManagementUrl] = useState<string>()
   const [view, setView] = useState<'list' | 'new' | 'detail'>(initialLocation.view)
   const selected = useMemo(() => plans.find(plan => plan.plan.id === selectedId), [plans, selectedId])
+  const history = selectedId ? planRuns[selectedId] : undefined
 
   const refreshPlans = async () => {
     const value = await api.plans()
@@ -118,14 +126,8 @@ function PlanWorkspace() {
   }, [])
 
   useEffect(() => {
-    if (!selectedId || view !== 'detail') return
-    const history = planRuns[selectedId]
-    if (history?.state === 'loaded') {
-      setRuns(history.runs)
-      return
-    }
+    if (!selectedId || view !== 'detail' || history?.state === 'loaded') return
     void api.runs(selectedId).then(value => {
-      setRuns(value)
       setPlanRuns(current => ({ ...current, [selectedId]: { state: 'loaded', runs: value } }))
     }).catch(cause => setError((cause as Error).message))
   }, [selectedId, view])
@@ -139,7 +141,7 @@ function PlanWorkspace() {
   const show = (next: 'list' | 'new' | 'detail', planId?: string) => {
     setView(next)
     if (next === 'new' && auth?.enabled && !auth.authenticated && auth.accessPolicy !== 'optional') {
-      window.location.assign('/auth/login')
+      navigation.go('/auth/login')
       return
     }
     setSelectedId(planId)
@@ -148,44 +150,47 @@ function PlanWorkspace() {
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
+  /** Go straight to the Run page; only a hosted one-time secret link needs a deliberate click. */
+  const openRun = (planId: string, created: RunCreated) => {
+    setPlanRuns(current => {
+      const known = current[planId]
+      return { ...current, [planId]: { state: 'loaded',
+        runs: [created.run, ...(known?.state === 'loaded' ? known.runs : [])] } }
+    })
+    const target = created.managementUrl ?? `/manage/${created.run.id}`
+    if (mode === 'selfhosted' || auth?.enabled || !created.managementUrl) navigation.go(target)
+    else setManagementUrl(created.managementUrl)
+  }
+
   const create = async (event: FormEvent) => {
     event.preventDefault()
     if (creating) return
     setError('')
     setCreating(true)
     try {
-      let planInput = input
+      const name = planName(input.targetEntityId, input.profile)
+      let planInput: PlanInput = { ...input, name }
       if (!input.targetConnectionId) {
         const target = await api.registerTarget({
-          name: input.name,
+          name,
           entityId: input.targetEntityId,
           metadataUrl: input.metadataSourceLocation,
           authorizedTarget: input.authorizedTarget,
           expectedRole: profileRole(input.profile),
         })
         setTargets(current => [target, ...current])
-        planInput = {
-          ...input,
-          targetConnectionId: target.id,
-          targetRevisionId: target.revisions[0].id,
-        }
+        planInput = { ...planInput, targetConnectionId: target.id, targetRevisionId: target.revisions[0].id }
       }
       const created = await api.createPlan(planInput)
-      if (auth?.userId) setAdminOwners(current => ({ ...current, [created.plan.plan.id]: auth.userId! }))
+      const planId = created.plan.plan.id
+      if (auth?.userId) setAdminOwners(current => ({ ...current, [planId]: auth.userId! }))
       setPlans(current => [created.plan, ...current])
-      setSelectedId(created.plan.plan.id)
-      setRuns(created.initialRun ? [created.initialRun.run] : [])
-      setPlanRuns(current => ({
-        ...current,
-        [created.plan.plan.id]: { state: 'loaded', runs: created.initialRun ? [created.initialRun.run] : [] },
-      }))
-      setManagementUrl(created.initialRun?.managementUrl ?? undefined)
+      setSelectedId(planId)
       setInput(initialInput)
+      const initial = created.initialRun ?? await api.createRun(planId)
       setView('detail')
-      window.history.pushState(null, '', `?plan=${encodeURIComponent(created.plan.plan.id)}`)
-      setMessage(!auth?.enabled && created.initialRun?.managementUrl
-        ? 'Test Plan and initial Run created. Save the protected management link below.'
-        : 'Test Plan created. Register the Test Peer metadata in the target before starting a Run.')
+      window.history.pushState(null, '', `?plan=${encodeURIComponent(planId)}`)
+      openRun(planId, initial)
     } catch (cause) { setError(planCreationError(cause, input.profile)) }
     finally { setCreating(false) }
   }
@@ -194,48 +199,29 @@ function PlanWorkspace() {
     if (!selected) return
     setError('')
     try {
-      const csrfToken = runs.map(run => window.sessionStorage.getItem(`samlscope.csrf.${run.id}`)).find(Boolean) ?? undefined
-      const created = await api.createRun(selected.plan.id, csrfToken)
-      setRuns(current => [created.run, ...current])
-      setPlanRuns(current => {
-        const history = current[selected.plan.id]
-        return {
-          ...current,
-          [selected.plan.id]: {
-            state: 'loaded',
-            runs: [created.run, ...(history?.state === 'loaded' ? history.runs : [])],
-          },
-        }
-      })
-      setManagementUrl(created.managementUrl ?? undefined)
-      if (created.managementUrl) setMessage(auth?.enabled ? 'Run created.' : 'Run created. Save the protected management link below.')
-      else {
-        await api.preflight(created.run.id)
-        setMessage('Run created and preflight completed.')
-        const refreshedRuns = await api.runs(selected.plan.id)
-        setRuns(refreshedRuns)
-        setPlanRuns(current => ({ ...current, [selected.plan.id]: { state: 'loaded', runs: refreshedRuns } }))
-      }
+      const known = planRuns[selected.plan.id]
+      const csrfToken = (known?.state === 'loaded' ? known.runs : [])
+        .map(run => window.sessionStorage.getItem(`samlscope.csrf.${run.id}`)).find(Boolean) ?? undefined
+      openRun(selected.plan.id, await api.createRun(selected.plan.id, csrfToken))
     } catch (cause) { setError((cause as Error).message) }
   }
 
   const mustSignIn = auth?.enabled && !auth.authenticated && auth.accessPolicy !== 'optional'
+  const canCreateRun = !!selected && (mode === 'selfhosted' || auth?.authenticated === true)
+    && (auth?.role !== 'ADMIN' || adminOwners[selected.plan.id] === auth.userId)
   return <AppShell current="plans" mode={mode}>
     <main className="shell page-main">
       {error && <div ref={errorRef} className="notice notice-error workspace-error" role="alert" tabIndex={-1}><strong>Unable to continue</strong>{error}</div>}
-      {message && <div className="notice notice-success" role="status">{message}</div>}
-      {managementUrl && (auth?.enabled
-        ? <a className="button" href={managementUrl}>Open Run workspace</a>
-        : <ManagementLink url={managementUrl} />)}
-      {loading ? <PlanSkeleton /> : view === 'new' && mustSignIn ? <section className="panel">
-        <h1>Sign in to create a Test Plan</h1>
-        <p>Your Plans and Runs will be available when you return.</p>
+      {managementUrl && <ManagementLink url={managementUrl} />}
+      {loading ? <PlanSkeleton /> : view === 'new' && mustSignIn ? <section className="card">
+        <h1>Sign in to create a test</h1>
+        <p>Your tests and runs will be available when you return.</p>
         <a className="button" href="/auth/login">Continue to sign in</a>
       </section> : view === 'new' ? <NewPlan input={input} setInput={setInput} create={create} cancel={() => show('list')}
         targets={targets} installedProfiles={installedProfiles} creating={creating} />
-        : view === 'detail' && selected ? <PlanDetail plan={selected} runs={runs} createRun={createRun} canCreateRun={(mode === 'selfhosted' || auth?.authenticated === true) && (auth?.role !== 'ADMIN' || adminOwners[selected.plan.id] === auth.userId)} back={() => show('list')} />
-          : <PlanList plans={plans} runs={planRuns} open={id => show('detail', id)} create={() => show('new')}
-            refresh={() => void refreshPlans().catch(cause => setError((cause as Error).message))} />}
+        : view === 'detail' && selected ? <PlanDetail plan={selected} history={history} createRun={createRun}
+          canCreateRun={canCreateRun} back={() => show('list')} />
+          : <PlanList plans={plans} runs={planRuns} open={id => show('detail', id)} create={() => show('new')} />}
       <footer className="legal">Operational quick checks remain separate from conformance results. Creating a Test Plan requires authorization to test the declared target.</footer>
     </main>
   </AppShell>
@@ -243,38 +229,29 @@ function PlanWorkspace() {
 
 type PlanRunHistory = { state: 'loaded'; runs: Run[] } | { state: 'error'; message: string }
 
-function PlanList({ plans, runs, open, create, refresh }: {
+function PlanList({ plans, runs, open, create }: {
   plans: Plan[]
   runs: Record<string, PlanRunHistory>
   open: (id: string) => void
   create: () => void
-  refresh: () => void
 }) {
   return <>
-    <header className="page-head plan-index-head">
-      <div><p className="eyebrow">SAML Conformance Test Suite</p><h1>Test Plans</h1>
-        <p>Run evidence-backed SAML interoperability checks, resolve incomplete evidence, and export a traceable result.</p></div>
-      <div className="row-actions"><button className="button-secondary" onClick={refresh}>Refresh</button>
-        <button onClick={create}>New Test Plan</button></div>
+    <header className="page-head">
+      <h1>Test Plans</h1>
+      <button onClick={create}>New test</button>
     </header>
-    {plans.length === 0 ? <section className="empty-state">
-      <h2>No Test Plans yet</h2><p>Register an IdP or SP to create its stable Test Peer metadata and first Run.</p>
-      <button onClick={create}>Register a target</button>
+    {plans.length === 0 ? <section className="card">
+      <h2>No tests yet</h2><p>Register an IdP or SP to start.</p>
     </section> : <section className="plan-list" aria-label="Test Plans">{plans.map(plan => {
       const history = runs[plan.plan.id]
-      const planHistory = history?.state === 'loaded' ? history.runs : undefined
-      const latest = planHistory?.[0]
+      const latest = history?.state === 'loaded' ? history.runs[0] : undefined
       return <button className="plan-row" key={plan.plan.id} onClick={() => open(plan.plan.id)}>
-        <span><strong>{plan.plan.name}</strong><small>{plan.plan.target.entityId}</small>
-          {profileRole(plan.plan.profile) === 'IDP' && <small>Request signing: {humanize(plan.plan.requestSigningMode ?? 'OPTIONAL')}</small>}</span>
-        <span className={`profile-badge profile-${plan.plan.profile.toLowerCase()}`}>{profileLabel(plan.plan.profile)}</span>
+        <span><strong>{plan.plan.name}</strong><small>{profileLabel(plan.plan.profile)}</small></span>
         <span className="plan-run-summary">
-          {history?.state === 'error' ? <><strong>Run history unavailable</strong><small>Refresh to retry</small></>
-            : planHistory ? <><strong>{planHistory.length} Run{planHistory.length === 1 ? '' : 's'}</strong>
-              <small>{latest ? `${humanize(latest.status)}${latest.updatedAt ? ` · ${formatDate(latest.updatedAt)}` : ''}` : 'Not started'}</small></>
-              : <><strong>Loading Run history</strong><small>Please wait</small></>}
+          {history?.state === 'error' ? <strong>Run history unavailable</strong>
+            : history ? <strong>{latest ? `${humanize(latest.status)}${latest.updatedAt ? ` · ${formatDate(latest.updatedAt)}` : ''}` : 'Not started'}</strong>
+              : <strong>Loading…</strong>}
         </span>
-        <span aria-hidden="true">View</span>
       </button>
     })}</section>}
   </>
@@ -312,7 +289,7 @@ function NewPlan({ input, setInput, create, cancel, targets, installedProfiles, 
       metadataSourceLocation: retainTarget ? input.metadataSourceLocation : '',
       parameters: {
         ...input.parameters,
-        requestSigningMode: nextRole === 'IDP' ? input.parameters.requestSigningMode : 'OPTIONAL',
+        requestSigningMode: signingProfiles.includes(profile) ? input.parameters.requestSigningMode : 'OPTIONAL',
       },
     })
   }
@@ -326,103 +303,82 @@ function NewPlan({ input, setInput, create, cancel, targets, installedProfiles, 
       targetRevisionId: revision?.id,
       targetEntityId: target?.entityId ?? '',
       metadataSourceLocation: '',
-      name: input.name || target?.name || '',
     })
   }
 
   return <section className="form-wrap">
     <button className="text-button back-link" onClick={cancel}>Back to Test Plans</button>
-    <header className="page-head compact"><p className="eyebrow">New Test Plan</p><h1>Create Test Plan</h1>
-      <p>Choose a functional profile and reuse registered metadata or add a target once.</p></header>
+    <h1>New test</h1>
     <form onSubmit={create}>
-      <fieldset className="field-group"><legend>Profile</legend><p>Choose the conformance profile for this Test Plan.</p>
+      <fieldset className="field-group"><legend>Profile</legend>
         {profiles.length === 0 ? <p role="status">No approved functional profile definitions are installed.</p> :
         <div className="profile-grid">{profiles.map(profile => <label className={`profile-option${input.profile === profile.id ? ' selected' : ''}`} key={profile.id}>
           <input type="radio" name="profile" value={profile.id} checked={input.profile === profile.id} onChange={() => chooseProfile(profile.id)} />
           <strong>{profile.title}</strong><span>{profile.description}</span>
         </label>)}</div>}
       </fieldset>
-      <fieldset className="field-group"><legend>Target</legend>
-        <label>Plan name<input required value={input.name} onChange={event => setInput({ ...input, name: event.target.value })} /></label>
+      <fieldset className="field-group"><legend>Your product</legend>
         {compatibleTargets.length > 0 && <label>Saved target<select value={input.targetConnectionId ?? ''} onChange={event => chooseTarget(event.target.value)}>
           <option value="">Register a new target</option>
           {compatibleTargets.map(target => <option key={target.id} value={target.id}>{target.name} — {target.entityId}</option>)}
         </select></label>}
-        {input.targetConnectionId ? <p>Using the saved metadata snapshot for <strong>{input.targetEntityId}</strong>. The same target can be reused by other compatible profiles.</p> : <>
+        {input.targetConnectionId ? <p>Using the saved metadata for <strong>{input.targetEntityId}</strong>.</p> : <>
         <label>Target SAML Entity ID<input required type="url" value={input.targetEntityId} onChange={event => setInput({ ...input, targetEntityId: event.target.value })} /></label>
         <label>Target metadata URL<input required type="url" value={input.metadataSourceLocation} onChange={event => setInput({ ...input, metadataSourceLocation: event.target.value })} /></label>
         </>}
+        {signingProfiles.includes(input.profile) && <label className="checkbox-row">
+          <input type="checkbox" checked={input.parameters.requestSigningMode === 'REQUIRED'}
+            onChange={event => setInput({ ...input, parameters: { ...input.parameters,
+              requestSigningMode: event.target.checked ? 'REQUIRED' : 'OPTIONAL' } })} />
+          My IdP requires signed requests
+        </label>}
       </fieldset>
-      <label>Execution assistance<select value={input.interaction.preset ?? 'quick'} onChange={event => {
-        const preset = event.target.value as NonNullable<PlanInput['interaction']['preset']>
-        setInput({ ...input, interaction: { ...input.interaction, preset, allowAttestation: preset === 'assisted_with_attestation' } })
-      }}>
-        <option value="quick">Quick</option>
-        <option value="assisted">Assisted</option>
-        <option value="assisted_with_attestation">Assisted + attestation</option>
-      </select><small>Checks without the selected evidence method remain not verified.</small></label>
-      {['browser_sso_idp', 'metadata_idp'].includes(input.profile) && <fieldset className="field-group"><legend>Request signing</legend>
-        <p>Keep the target's signature requirement fixed for this Plan. Use a separate Plan to test the other setting.</p>
-        <label>Target requires signed requests<select value={input.parameters.requestSigningMode ?? 'OPTIONAL'}
-          onChange={event => setInput({ ...input, parameters: { ...input.parameters,
-            requestSigningMode: event.target.value as 'REQUIRED' | 'OPTIONAL' } })}>
-          <option value="OPTIONAL">Optional — normal requests are unsigned</option>
-          <option value="REQUIRED">Required — normal requests are signed</option>
-        </select></label>
-        <p>Signature tests retain their intentionally invalid signatures in both settings.</p>
-      </fieldset>}
-      <fieldset className="field-group"><legend>Suite metadata delivery</legend>
-        <p>How the target retrieves SAMLscope's metadata. This never grants SAMLscope access to a vendor administration API.</p>
-        <div className="choice-grid">{(['MANUAL', 'HTTP_URL', 'MDQ'] as const).map(value => <label className={`choice-option${input.suiteMetadataDelivery === value ? ' selected' : ''}`} key={value}>
-          <input type="radio" name="delivery" value={value} checked={input.suiteMetadataDelivery === value} onChange={() => setInput({ ...input, suiteMetadataDelivery: value })} />
-          {humanize(value)}
-        </label>)}</div>
-      </fieldset>
-      <fieldset className="field-group"><legend>Authorization</legend><label className="checkbox-row">
+      <label className="checkbox-row">
         <input required type="checkbox" checked={input.authorizedTarget} onChange={event => setInput({ ...input, authorizedTarget: event.target.checked })} />
         I own or am authorized to test this target.
-      </label></fieldset>
-      <div className="form-actions"><button type="submit" disabled={profiles.length === 0 || creating} aria-busy={creating}>
+      </label>
+      <div className="actions"><button type="submit" disabled={profiles.length === 0 || creating} aria-busy={creating}>
         {creating ? 'Creating plan…' : 'Create plan'}
       </button><button className="button-secondary" type="button" onClick={cancel} disabled={creating}>Cancel</button></div>
     </form>
   </section>
 }
 
-function PlanDetail({ plan, runs, createRun, canCreateRun, back }: {
+function PlanDetail({ plan, history, createRun, canCreateRun, back }: {
   plan: Plan
-  runs: Run[]
+  history: PlanRunHistory | undefined
   createRun: () => void
   canCreateRun: boolean
   back: () => void
 }) {
+  const latest = history?.state === 'loaded' ? history.runs[0] : undefined
   return <>
     <button className="text-button back-link" onClick={back}>Back to Test Plans</button>
-    <header className="plan-detail-head"><div><p className="eyebrow">Test Plan / {profileLabel(plan.plan.profile)}</p><h1>{plan.plan.name}</h1><SourceNoticeLink kind="profile" id={plan.plan.profile} />{profileRole(plan.plan.profile) === 'IDP' && <p>Request signing: {humanize(plan.plan.requestSigningMode ?? 'OPTIONAL')} · fixed for this Plan</p>}</div>
-      <span className="authorization-state"><span className="semantic-dot status-live" />Authorized target</span></header>
-    <PeerRegistration plan={plan} />
-    {canCreateRun && <button onClick={createRun}>Create Run and preflight</button>}
-    <section className="runs-section"><div className="section-heading"><h2>Runs</h2><span>{runs.length} total</span></div>
-      {runs.length === 0 ? <div className="empty-state compact"><h3>No Runs yet</h3><p>Create the first Run after registering the Test Peer metadata.</p></div>
-        : <div className="run-list">{runs.map(run => <article className="run-row" key={run.id}>
-          <div><span className={`run-status status-${run.status.toLowerCase()}`}>{humanize(run.status)}</span><code>{run.id}</code></div>
-          <span>Suite to target reachability: {humanize(run.targetToSuiteReachability)}</span>
-          <div className="row-actions">
-            {profileRole(plan.plan.profile) === 'IDP' && run.status !== 'COMPLETED' && (idpRoundTripReady(run)
-              ? <RoundTripLink href={idpRoundTripUrl(plan, run.id)} />
-              : <span>Open Run workspace and run preflight before starting SAML.</span>)}
-            <a className="button button-secondary" href={`/manage/${run.id}`}>{run.status === 'COMPLETED' ? 'Manage evidence' : 'Open Run workspace'}</a>
-            {run.status === 'COMPLETED' && <a className="button" href={`/reports/${run.id}`}>Open result</a>}
-          </div>
-        </article>)}</div>}
+    <header className="page-head">
+      <div><h1>{plan.plan.name}</h1><p className="muted">{profileLabel(plan.plan.profile)}</p>
+        <SourceNoticeLink kind="profile" id={plan.plan.profile} /></div>
+      {canCreateRun && <button onClick={createRun}>New run</button>}
+    </header>
+    <section className="card" aria-label="Latest run">
+      {history?.state === 'error' ? <p>Run history unavailable.</p>
+        : !latest ? <p>{history ? 'No runs yet.' : 'Loading…'}</p>
+          : <>
+              <h2>Latest run</h2>
+              <p><strong>{humanize(latest.status)}</strong>{latest.updatedAt ? ` · ${formatDate(latest.updatedAt)}` : ''}</p>
+              <div className="actions">
+                <a className="button" href={`/manage/${latest.id}`}>Open</a>
+                {latest.status === 'COMPLETED' && <a className="button button-secondary" href={`/reports/${latest.id}`}>Results</a>}
+              </div>
+            </>}
     </section>
   </>
 }
 
 function ManagementLink({ url }: { url: string }) {
-  return <aside className="management-link notice notice-success" role="status"><strong>One-time management link. Save it now.</strong>
+  return <aside className="card notice notice-success" role="status"><strong>One-time management link. Save it now.</strong>
     <p>The secret fragment is removed from browser history when it is exchanged for a protected session.</p>
-    <code>{url.replace(/#t=.*/, '#t=••••••••••••••••')}</code><a className="button" href={url}>Open protected Run</a>
+    <code>{url.replace(/#t=.*/, '#t=••••••••••••••••')}</code>
+    <a className="button" href={url}>Open protected Run</a>
   </aside>
 }
 

@@ -60,8 +60,6 @@ export function ManagementBootstrap({ runId }: { runId: string }) {
       </section>
     </main>}
     {state === 'ready' && <main className="shell page-main run-page">
-      <div className="notice notice-success compact-notice" role="status"><strong>Run unlocked</strong>
-        Access is ready. Evidence inputs remain separate from Suite verdict calculation.</div>
       <RunManagement runId={runId} csrfToken={csrfToken} />
     </main>}
     {state === 'error' && <main className="shell gate-page"><section className="gate-card error-state">

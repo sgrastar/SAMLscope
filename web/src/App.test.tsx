@@ -1,6 +1,6 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, expect, test, vi } from 'vitest'
-import { App } from './App'
+import { App, navigation } from './App'
 import { applyPreferredTheme } from './AppShell'
 import { stubWorkspaceFetch } from './workspaceTestFixture'
 
@@ -45,8 +45,8 @@ test('does not offer local Run creation in hosted mode', async () => {
   render(<App />)
   fireEvent.click(await screen.findByRole('button', { name: /Hosted target/ }))
 
-  expect(await screen.findByRole('heading', { name: 'Register SAMLscope as an SP in your IdP' })).toBeTruthy()
-  expect(screen.queryByRole('button', { name: 'Create Run and preflight' })).toBeNull()
+  expect(await screen.findByRole('heading', { name: 'Hosted target' })).toBeTruthy()
+  expect(screen.queryByRole('button', { name: 'New run' })).toBeNull()
 })
 
 test('shows Run count and latest status in the Test Plan overview', async () => {
@@ -73,13 +73,12 @@ test('shows Run count and latest status in the Test Plan overview', async () => 
 
   render(<App />)
 
-  expect(await screen.findByText('2 Runs')).toBeTruthy()
-  expect(screen.getByText(/Running/)).toBeTruthy()
-  expect(screen.getByText(`Running · ${new Date('2026-09-07T03:03:36.704Z').toLocaleString()}`)).toBeTruthy()
+  expect(await screen.findByText(`Running · ${new Date('2026-09-07T03:03:36.704Z').toLocaleString()}`)).toBeTruthy()
+  expect(screen.queryByText('Request signing: Optional')).toBeNull()
   vi.stubGlobal('scrollTo', vi.fn())
   fireEvent.click(screen.getByRole('button', { name: /Production IdP/ }))
-  expect((await screen.findByRole('link', { name: 'Start IdP round trip' })).getAttribute('href'))
-    .toBe('https://suite.example/p/plan_0123456789ABCDEFGHJKMNPQRS/start/m0-roundtrip?run=run_1')
+  expect((await screen.findByRole('link', { name: 'Open' })).getAttribute('href')).toBe('/manage/run_1')
+  expect(screen.queryByRole('link', { name: 'Start IdP round trip' })).toBeNull()
 })
 
 test('does not misreport a failed Run history request as zero Runs', async () => {
@@ -105,7 +104,6 @@ test('does not misreport a failed Run history request as zero Runs', async () =>
   render(<App />)
 
   expect(await screen.findByText('Run history unavailable')).toBeTruthy()
-  expect(screen.getByText('Refresh to retry')).toBeTruthy()
   expect(screen.queryByText('0 Runs')).toBeNull()
   expect(screen.queryByText('Not started')).toBeNull()
 })
@@ -121,9 +119,9 @@ test('restores plan navigation when browser history changes', async () => {
   ), { status: 200, headers: { 'content-type': 'application/json' } })))
 
   render(<App />)
-  fireEvent.click(await screen.findByRole('button', { name: 'New Test Plan' }))
+  fireEvent.click(await screen.findByRole('button', { name: 'New test' }))
   expect(pushState).toHaveBeenCalledWith(null, '', '?new=1')
-  expect(screen.getByRole('heading', { name: 'Create Test Plan' })).toBeTruthy()
+  expect(screen.getByRole('heading', { name: 'New test' })).toBeTruthy()
 
   window.history.replaceState(null, '', '/')
   window.dispatchEvent(new PopStateEvent('popstate'))
@@ -161,15 +159,20 @@ test('reuses one saved metadata revision for a functional profile Plan', async (
         initialRun: null,
       }, 201)
     }
+    if (url.endsWith('/runs') && init?.method === 'POST') return json({
+      run: { id: 'run_0123456789ABCDEFGHJKMNPQRS', planId: 'plan_0123456789ABCDEFGHJKMNPQRS', status: 'CREATED',
+        targetToSuiteReachability: 'UNKNOWN', context: {} },
+      managementUrl: null,
+    }, 201)
     if (url.endsWith('/api/plans')) return json([])
     return json([])
   })
+  const go = vi.spyOn(navigation, 'go').mockImplementation(() => undefined)
   stubWorkspaceFetch(fetch)
 
   render(<App />)
   fireEvent.click(await screen.findByRole('radio', { name: /Metadata — IdP/ }))
   fireEvent.change(screen.getByLabelText('Saved target'), { target: { value: 'target_saved' } })
-  fireEvent.change(screen.getByLabelText('Plan name'), { target: { value: 'Metadata review' } })
   fireEvent.click(screen.getByLabelText('I own or am authorized to test this target.'))
   fireEvent.click(screen.getByRole('button', { name: 'Create plan' }))
 
@@ -179,7 +182,13 @@ test('reuses one saved metadata revision for a functional profile Plan', async (
     targetConnectionId: 'target_saved',
     targetRevisionId: 'metadata_saved',
     targetEntityId: 'https://idp.example',
+    name: 'idp.example Metadata — IdP',
+    suiteMetadataDelivery: 'HTTP_URL',
+    declaredFeatures: {},
+    interaction: { allowBrowserSteps: true, allowAttestation: false, preset: 'assisted' },
+    parameters: { clockSkewToleranceSeconds: 180, metadataRefreshWaitSeconds: 300, testUserHint: '', requestSigningMode: 'OPTIONAL' },
   })
+  await waitFor(() => expect(go).toHaveBeenCalledWith('/manage/run_0123456789ABCDEFGHJKMNPQRS'))
   expect(fetch.mock.calls.some(([url, init]) => String(url).endsWith('/api/targets') && init?.method === 'POST')).toBe(false)
 })
 
@@ -202,8 +211,7 @@ test('shows creation progress and moves focus to a returned error', async () => 
 
   try {
     render(<App />)
-    fireEvent.change(await screen.findByLabelText('Plan name'), { target: { value: 'MockIdP' } })
-    fireEvent.change(screen.getByLabelText('Target SAML Entity ID'), { target: { value: 'https://mockidp.dev/entityid' } })
+    fireEvent.change(await screen.findByLabelText('Target SAML Entity ID'), { target: { value: 'https://mockidp.dev/entityid' } })
     fireEvent.change(screen.getByLabelText('Target metadata URL'), { target: { value: 'https://mockidp.dev/api/saml/metadata' } })
     fireEvent.click(screen.getByLabelText('I own or am authorized to test this target.'))
     fireEvent.click(screen.getByRole('button', { name: 'Create plan' }))
@@ -248,7 +256,6 @@ test('explains how to fix metadata role and common metadata input errors', async
     render(<App />)
     const profile = await screen.findByRole('radio', { name: /Metadata — SP/ })
     await waitFor(() => expect((profile as HTMLInputElement).checked).toBe(true))
-    fireEvent.change(await screen.findByLabelText('Plan name'), { target: { value: 'MockIdP as SP' } })
     fireEvent.change(screen.getByLabelText('Target SAML Entity ID'), { target: { value: 'https://mockidp.dev/entityid' } })
     fireEvent.change(screen.getByLabelText('Target metadata URL'), { target: { value: 'https://mockidp.dev/api/saml/metadata' } })
     fireEvent.click(screen.getByLabelText('I own or am authorized to test this target.'))
@@ -266,7 +273,8 @@ test('explains how to fix metadata role and common metadata input errors', async
   }
 })
 
-test('keeps the created Run visible without an unauthorized history reload', async () => {
+test('keeps the one-time link visible without an unauthorized history reload or automatic navigation', async () => {
+  const go = vi.spyOn(navigation, 'go').mockImplementation(() => undefined)
   window.history.replaceState(null, '', '?new=1')
   vi.stubGlobal('scrollTo', vi.fn())
   const planId = 'plan_0123456789ABCDEFGHJKMNPQRS'
@@ -301,15 +309,13 @@ test('keeps the created Run visible without an unauthorized history reload', asy
   stubWorkspaceFetch(fetch)
 
   render(<App />)
-  fireEvent.change(await screen.findByLabelText('Plan name'), { target: { value: 'MockIdP' } })
-  fireEvent.change(screen.getByLabelText('Target SAML Entity ID'), { target: { value: 'https://mockidp.dev/entityid' } })
+  fireEvent.change(await screen.findByLabelText('Target SAML Entity ID'), { target: { value: 'https://mockidp.dev/entityid' } })
   fireEvent.change(screen.getByLabelText('Target metadata URL'), { target: { value: 'https://mockidp.dev/api/saml/metadata' } })
   fireEvent.click(screen.getByLabelText('I own or am authorized to test this target.'))
   fireEvent.click(screen.getByRole('button', { name: 'Create plan' }))
 
-  expect(await screen.findByRole('heading', { name: 'MockIdP' })).toBeTruthy()
-  expect(screen.getByText('1 total')).toBeTruthy()
-  expect(screen.getByRole('link', { name: 'Open protected Run' })).toBeTruthy()
+  expect(await screen.findByRole('link', { name: 'Open protected Run' })).toBeTruthy()
+  expect(go).not.toHaveBeenCalled()
   expect(screen.queryByRole('alert')).toBeNull()
   expect(fetch.mock.calls.some(([url]) => String(url).endsWith(`/api/plans/${planId}/runs`))).toBe(false)
 })
