@@ -1,5 +1,7 @@
 import { ReactNode, useEffect, useState } from 'react'
 import { api, type AuthSession } from './api'
+import { chooseLang, currentLang, t } from './i18n'
+import { japaneseName } from './ja'
 
 type CurrentSurface = 'plans' | 'run' | 'report' | 'access' | 'licenses' | 'admin'
 
@@ -24,31 +26,37 @@ export function AppShell({
 
   return <div className="app-frame">
     <header className="app-topbar">
-      <a className="wordmark" href="/">SAMLscope <small>SAML CONFORMANCE</small></a>
+      <a className="wordmark" href="/">SAMLscope <small>{t('SAML CONFORMANCE')}</small></a>
       <button
         className="topbar-nav-toggle"
         type="button"
-        aria-label="Toggle navigation"
+        aria-label={t('Toggle navigation')}
         aria-expanded={menuOpen}
         onClick={() => setMenuOpen(open => !open)}
-      >Menu</button>
-      <nav className={`app-nav${menuOpen ? ' open' : ''}`} aria-label="Primary navigation">
-        <a className={current === 'plans' ? 'current' : ''} href="/">Test Plans</a>
-        {runId && <a className={current === 'run' ? 'current' : ''} href={`/manage/${runId}`}>Run Workspace</a>}
-        {runId && <a className={current === 'report' ? 'current' : ''} href={`/reports/${runId}`}>Result Report</a>}
+      >{t('Menu')}</button>
+      <nav className={`app-nav${menuOpen ? ' open' : ''}`} aria-label={t('Primary navigation')}>
+        <a className={current === 'plans' ? 'current' : ''} href="/">{t('Test Plans')}</a>
+        {runId && <a className={current === 'run' ? 'current' : ''} href={`/manage/${runId}`}>{t('Run Workspace')}</a>}
+        {runId && <a className={current === 'report' ? 'current' : ''} href={`/reports/${runId}`}>{t('Result Report')}</a>}
       </nav>
       <div className="app-topbar-spacer" />
       <LoginStatus />
-      <span className="mode-chip"><span className="semantic-dot status-live" />{mode === 'hosted' ? 'Hosted' : 'Self-hosted'}</span>
+      <span className="mode-chip"><span className="semantic-dot status-live" />{mode === 'hosted' ? t('Hosted') : t('Self-hosted')}</span>
       <button
         className="theme-toggle"
         type="button"
         onClick={() => setTheme(value => value === 'dark' ? 'light' : 'dark')}
-        aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} theme`}
-      >{theme === 'dark' ? 'Light' : 'Dark'}</button>
+        aria-label={theme === 'dark' ? t('Switch to light theme') : t('Switch to dark theme')}
+      >{theme === 'dark' ? t('Light') : t('Dark')}</button>
+      <button
+        className="theme-toggle"
+        type="button"
+        lang={currentLang() === 'ja' ? 'en' : 'ja'}
+        onClick={() => chooseLang(currentLang() === 'ja' ? 'en' : 'ja')}
+      >{currentLang() === 'ja' ? 'English' : japaneseName}</button>
     </header>
     {children}
-    <footer className="shell legal"><a href="/licenses">Licenses and sources</a></footer>
+    <footer className="shell legal"><a href="/licenses">{t('Licenses and sources')}</a></footer>
   </div>
 }
 
@@ -83,16 +91,16 @@ function LoginStatus() {
       }
       window.location.assign('/')
     } catch {
-      setError('Sign out failed. Please try again.')
+      setError(t('Sign out failed. Please try again.'))
       setBusy(false)
     }
   }
   return <div className="login-status">
     {session.authenticated ? <>
-      {session.role === 'ADMIN' && <a href="/admin">Admin</a>}
+      {session.role === 'ADMIN' && <a href="/admin">{t('Admin')}</a>}
       <span className="login-name" title={session.displayName ?? undefined}>{session.displayName}</span>
-      <button className="button-secondary" onClick={() => void logout()} disabled={busy}>Sign out</button>
-    </> : <a className="button button-secondary" href="/auth/login">Sign in</a>}
+      <button className="button-secondary" onClick={() => void logout()} disabled={busy}>{t('Sign out')}</button>
+    </> : <a className="button button-secondary" href="/auth/login">{t('Sign in')}</a>}
     {error && <span role="alert">{error}</span>}
   </div>
 }

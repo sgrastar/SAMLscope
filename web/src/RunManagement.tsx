@@ -1,3 +1,5 @@
+import { tx } from './i18nNodes'
+import { t } from './i18n'
 import { FormEvent, ReactNode, useEffect, useRef, useState } from 'react'
 import {
   api, type ActiveProbeStatus, type CampaignReport, type MetadataLab, type PendingInteraction, type Plan,
@@ -5,6 +7,7 @@ import {
   type DefinitionAvailability, type StoredHistoricalState,
 } from './api'
 import { humanize } from './format'
+import { profileLabel } from './profiles'
 import { InteractionCard, resolvePrompt } from './InteractionCards'
 import { MetadataCampaign, metadataCampaignOpen } from './MetadataCampaign'
 import { idpRoundTripReady, idpRoundTripUrl } from './peerUrls'
@@ -140,7 +143,7 @@ export function RunManagement({ runId, csrfToken, focusCaseId }: {
   const startTests = () => act('start-tests', async () => {
     const result = await api.startTests(runId, csrfToken)
     setStarted(true)
-    setNotice(result.ecpProbesRequired ? 'Next: run the sign-in check below.' : '')
+    setNotice(result.ecpProbesRequired ? t('Next: run the sign-in check below.') : '')
     await refresh()
   })
 
@@ -155,7 +158,7 @@ export function RunManagement({ runId, csrfToken, focusCaseId }: {
     const value = String(data.get('value') ?? '')
     const note = String(data.get('note') ?? '')
     if (interaction.kind === 'ATTESTATION' && value !== 'unable_to_verify' && !note.trim()) {
-      setError('Describe the evidence you observed (UI, log, trace) before submitting a self-attestation.')
+      setError(t('Describe the evidence you observed (UI, log, trace) before submitting a self-attestation.'))
       return Promise.resolve()
     }
     return act(interaction.caseId, async () => {
@@ -190,7 +193,7 @@ export function RunManagement({ runId, csrfToken, focusCaseId }: {
     return act('ecp-probe', async () => {
       const probes = await api.ecpProbe(runId, String(data.get('username') ?? ''), String(data.get('password') ?? ''), csrfToken)
       setEcpDelivery(probes.map(probe => probe.outboxStatus === 'UNKNOWN_DELIVERY'
-        ? 'Delivery unknown (not counted as a product failure)' : humanize(probe.outboxStatus)))
+        ? t('Delivery unknown (not counted as a product failure)') : humanize(probe.outboxStatus)))
       form.reset()
       await api.startTests(runId, csrfToken)
       await refresh()
@@ -209,34 +212,33 @@ export function RunManagement({ runId, csrfToken, focusCaseId }: {
 
   const publish = () => act('publish', async () => {
     const result = await api.publish(runId, csrfToken)
-    setNotice(`Published at ${result.publicUrl}`)
+    setNotice(t('Published at {url}', { url: result.publicUrl }))
   })
 
   if (!loaded) return error
     ? <section className="page-state" role="alert">
-        <h1>Run unavailable</h1>
+        <h1>{t('Run unavailable')}</h1>
         <p>{error}</p>
         <button type="button" onClick={() => {
           setError('')
           void refresh().then(() => setLoaded(true)).catch(cause => setError((cause as Error).message))
-        }}>Retry</button>
+        }}>{t('Retry')}</button>
       </section>
-    : <section className="page-state" aria-busy="true"><p>Loading…</p></section>
+    : <section className="page-state" aria-busy="true"><p>{t('Loading…')}</p></section>
 
   const encodedRun = encodeURIComponent(runId)
   if (availability?.readOnlyStored || availability?.definitionAvailable === false
     || availability?.liveEvaluationAvailable === false) {
     return <section className="run-page">
-      <h1>{plan?.plan.name ?? 'Saved run'}</h1>
-      <p className="lead">This run was saved with an earlier test definition and is read-only.
-        {' '}No new determination has been made. Start a new test to run again.</p>
+      <h1>{plan?.plan.name ?? t('Saved run')}</h1>
+      <p className="lead">{t('This run was saved with an earlier test definition and is read-only. No new determination has been made. Start a new test to run again.')}</p>
       <div className="actions">
-        <a className="button" href={`/reports/${encodedRun}`}>Open saved result</a>
-        <a className="button button-secondary" href="/">New test</a>
+        <a className="button" href={`/reports/${encodedRun}`}>{t('Open saved result')}</a>
+        <a className="button button-secondary" href="/">{t('New test')}</a>
       </div>
       {error && <p className="notice notice-error" role="alert">{error}</p>}
-      {stored && stored.slots.length > 0 && <details><summary>{stored.slots.length} saved records</summary>
-        <table><thead><tr><th>Case</th><th>Outcome</th></tr></thead>
+      {stored && stored.slots.length > 0 && <details><summary>{t('{n} saved records', { n: stored.slots.length })}</summary>
+        <table><thead><tr><th>{t('Case')}</th><th>{t('Outcome')}</th></tr></thead>
           <tbody>{stored.slots.map(slot => <tr key={slot.caseId}>
             <td><code>{slot.caseId}</code></td>
             <td>{slot.storedOutcome ? humanize(slot.storedOutcome) : humanize(slot.status)}</td>
@@ -279,48 +281,48 @@ export function RunManagement({ runId, csrfToken, focusCaseId }: {
   const showMetadata = !!protocolEvidence && (protocolEvidence.eligibleCases > 0 || capability.length > 0)
   const nothingToAsk = !firstStep && !probeReady && !probeWaiting
   const ranBefore = started || classifications.some(value => value.resolved)
-  const resultsLink = <a href={`/reports/${encodedRun}`}>See why</a>
+  const resultsLink = <a href={`/reports/${encodedRun}`}>{t('See why')}</a>
 
   // Exactly one step is promoted to the primary card.
   let primary: ReactNode
   if (focusCaseId && shown.length === 0) {
     primary = <>
-      <h2>No action needed for this case</h2>
-      <p><a href={`/manage/${encodedRun}`}>Back to the run</a></p>
+      <h2>{t('No action needed for this case')}</h2>
+      <p><a href={`/manage/${encodedRun}`}>{t('Back to the run')}</a></p>
     </>
   } else if (!setupReady && !completed) {
     primary = <>
-      <h2>1. Connect your product</h2>
-      <p>Register SAMLscope in your {isIdp ? 'IdP' : 'SP'} using the values below, then check the setup.</p>
+      <h2>{t('1. Connect your product')}</h2>
+      <p>{isIdp ? t('Register SAMLscope in your IdP using the values below, then check the setup.') : t('Register SAMLscope in your SP using the values below, then check the setup.')}</p>
       <button disabled={busy !== ''} aria-busy={busy === 'preflight'} onClick={() => void checkSetup()}>
-        {busy === 'preflight' ? 'Checking…' : 'Check setup'}
+        {busy === 'preflight' ? t('Checking…') : t('Check setup')}
       </button>
     </>
   } else if (!completed) {
     primary = isIdp && plan
       ? <>
-          <h2>2. Sign in once</h2>
-          <p>Open your IdP, sign in with the test user, then come back to this page.</p>
+          <h2>{t('2. Sign in once')}</h2>
+          <p>{t('Open your IdP, sign in with the test user, then come back to this page.')}</p>
           <RoundTripLink href={idpRoundTripUrl(plan, runId)} />
         </>
       : <>
-          <h2>2. Sign in once</h2>
-          <p>Start a login at your SP. This page updates when the response is recorded.</p>
+          <h2>{t('2. Sign in once')}</h2>
+          <p>{t('Start a login at your SP. This page updates when the response is recorded.')}</p>
         </>
   } else if (probeReady) {
     primary = <>
-      <h2>Open the browser check</h2>
+      <h2>{t('Open the browser check')}</h2>
       <p>{activeProbe?.instructionsEn}</p>
-      {activeProbe?.requiresFreshSession && <p>Use a private window with no active session at your product.</p>}
-      <a className="button" href={activeProbe?.startUrl ?? undefined} target="_blank" rel="noreferrer">Open browser check</a>
+      {activeProbe?.requiresFreshSession && <p>{t('Use a private window with no active session at your product.')}</p>}
+      <a className="button" href={activeProbe?.startUrl ?? undefined} target="_blank" rel="noreferrer">{t('Open browser check')}</a>
     </>
   } else if (probeWaiting) {
     primary = <>
-      <h2>Finish in the other tab</h2>
-      <p>Complete the sign-in there only if it asks for it. This page continues automatically.</p>
+      <h2>{t('Finish in the other tab')}</h2>
+      <p>{t('Complete the sign-in there only if it asks for it. This page continues automatically.')}</p>
       <div className="actions">
-        <button className="button-secondary" disabled={busy !== ''} onClick={() => void probeAction('retry')}>Open again</button>
-        <button className="button-secondary" disabled={busy !== ''} onClick={() => void probeAction('abort')}>Nothing came back</button>
+        <button className="button-secondary" disabled={busy !== ''} onClick={() => void probeAction('retry')}>{t('Open again')}</button>
+        <button className="button-secondary" disabled={busy !== ''} onClick={() => void probeAction('abort')}>{t('Nothing came back')}</button>
       </div>
     </>
   } else if (firstStep) {
@@ -328,27 +330,27 @@ export function RunManagement({ runId, csrfToken, focusCaseId }: {
       onComplete={complete} onAnswer={answer} lead />
   } else if (campaigns && classifications.length > 0 && ranBefore && unresolved === 0) {
     primary = <>
-      <h2>All tests finished</h2>
-      <p>Every test has a recorded result. Open the results page for the details.</p>
-      <a className="button" href={`/reports/${encodedRun}`}>Results</a>
+      <h2>{t('All tests finished')}</h2>
+      <p>{t('Every test has a recorded result. Open the results page for the details.')}</p>
+      <a className="button" href={`/reports/${encodedRun}`}>{t('Results')}</a>
     </>
   } else if (campaigns && classifications.length > 0 && ranBefore && metadataOpen) {
     primary = <>
-      <h2>Metadata refresh tests</h2>
-      <p>Start them in the card below. They resolve more tests.</p>
+      <h2>{t('Metadata refresh tests')}</h2>
+      <p>{t('Start them in the card below. They resolve more tests.')}</p>
     </>
   } else if (campaigns && classifications.length > 0 && ranBefore) {
     primary = <>
-      <h2>Nothing more to ask</h2>
-      <p>{unresolved} could not be verified automatically (they stay not verified and count in the total).</p>
-      <a className="button" href={`/reports/${encodedRun}`}>Open results</a>
+      <h2>{t('Nothing more to ask')}</h2>
+      <p>{t('{n} could not be verified automatically (they stay not verified and count in the total).', { n: unresolved })}</p>
+      <a className="button" href={`/reports/${encodedRun}`}>{t('Open results')}</a>
     </>
   } else {
     primary = <>
-      <h2>Run the tests</h2>
-      <p>Runs every test that can be checked automatically. You are only asked to act when needed.</p>
+      <h2>{t('Run the tests')}</h2>
+      <p>{t('Runs every test that can be checked automatically. You are only asked to act when needed.')}</p>
       <button disabled={busy !== ''} aria-busy={busy === 'start-tests'} onClick={() => void startTests()}>
-        {busy === 'start-tests' ? 'Running…' : 'Run tests'}
+        {busy === 'start-tests' ? t('Running…') : t('Run tests')}
       </button>
     </>
   }
@@ -362,24 +364,24 @@ export function RunManagement({ runId, csrfToken, focusCaseId }: {
   return <section className="run-page">
     <header className="run-head">
       <div>
-        <h1>{plan?.plan.name ?? 'Run'}</h1>
-        <p className="muted">{plan ? humanize(plan.plan.profile) : ''}</p>
+        <h1>{plan?.plan.name ?? t('Run')}</h1>
+        <p className="muted">{plan ? profileLabel(plan.plan.profile) : ''}</p>
       </div>
-      <a className="button button-secondary" href={`/reports/${encodedRun}`}>Results</a>
+      <a className="button button-secondary" href={`/reports/${encodedRun}`}>{t('Results')}</a>
     </header>
     {error && <p className="notice notice-error" role="alert">{error}</p>}
     {notice && <p className="notice notice-success" role="status">{notice}</p>}
-    <section className="next-step" aria-label="What to do now">{primary}</section>
+    <section className="next-step" aria-label={t('What to do now')}>{primary}</section>
     {hasSummary && <p className="summary-line" role="status">
-      Verified automatically {campaigns.externallyVerifiedCases} · Self-attested {campaigns.selfAttestedCases}
-      {' '}· Not verified {campaigns.notVerifiedCases} of {campaigns.cases} {resultsLink}
+      {t('Verified automatically {n}', { n: campaigns.externallyVerifiedCases })} · {t('Self-attested {n}', { n: campaigns.selfAttestedCases })}
+      {' '}· {t('Not verified {n} of {total}', { n: campaigns.notVerifiedCases, total: campaigns.cases })} {resultsLink}
     </p>}
     {completed && nothingToAsk && ranBefore && <div className="actions">
-      <button className="button-secondary" disabled={busy !== ''} onClick={() => void startTests()}>Continue tests</button>
-      <p className="muted">Press after you changed your product's settings.</p>
+      <button className="button-secondary" disabled={busy !== ''} onClick={() => void startTests()}>{t('Continue tests')}</button>
+      <p className="muted">{t("Press after you changed your product's settings.")}</p>
     </div>}
     {laterSteps.length > 0 && <details className="more-steps"><summary>
-      {laterSteps.length} more step{laterSteps.length === 1 ? '' : 's'} after this
+      {laterSteps.length === 1 ? t('{n} more step after this', { n: laterSteps.length }) : t('{n} more steps after this', { n: laterSteps.length })}
     </summary>
       <div className="interaction-list">{laterSteps.map(value =>
         <InteractionCard key={value.caseId} {...cardProps(value)} />)}</div>
@@ -388,41 +390,41 @@ export function RunManagement({ runId, csrfToken, focusCaseId }: {
       status={protocolEvidence} lab={lab} setLab={setLab} capability={capability} busy={busy} act={act}
       refresh={refresh} setNotice={setNotice} onAnswer={answer} forceOpen={opened} />}
     {optionalSettings > 0 && <details className="more-steps" open={opened}>
-      <summary>Tests that need a product setting change ({optionalSettings}, optional)</summary>
+      <summary>{t('Tests that need a product setting change ({n}, optional)', { n: optionalSettings })}</summary>
       <div className="interaction-list">
         {sharedActions.map(({ campaign, action, cases }) => <article className="card" key={action.id}>
           <h3>{campaign.title}</h3>
           {cases[0].promptEn && <p className="prompt">{resolvePrompt(cases[0].promptEn, planId, runId)}</p>}
-          <p className="muted">{cases.length} tests: {cases.map(value => value.caseId).join(', ')}</p>
-          <button disabled={busy !== ''} onClick={() => void completeShared(campaign.id, action.id)}>I made this setting change</button>
-          <p className="muted">This only records that you did it; without recorded traffic the cases stay not verified.</p>
+          <p className="muted">{t('{n} tests: {ids}', { n: cases.length, ids: cases.map(value => value.caseId).join(', ') })}</p>
+          <button disabled={busy !== ''} onClick={() => void completeShared(campaign.id, action.id)}>{t('I made this setting change')}</button>
+          <p className="muted">{t('This only records that you did it; without recorded traffic the cases stay not verified.')}</p>
         </article>)}
         {individualSettings.map(value => <InteractionCard key={value.caseId} {...cardProps(value)} />)}
       </div>
     </details>}
     {completed && profile === 'ecp_idp' && <form className="card" onSubmit={event => void ecpProbe(event)}>
       <fieldset disabled={busy !== ''}>
-        <legend>Sign-in check for ECP</legend>
-        <p>Enter your test account. It is kept in memory for this check only and is never stored.</p>
-        <label>Username<input required name="username" autoComplete="username" /></label>
-        <label>Password<input required name="password" type="password" autoComplete="current-password" /></label>
-        <button type="submit">Run check</button>
+        <legend>{t('Sign-in check for ECP')}</legend>
+        <p>{t('Enter your test account. It is kept in memory for this check only and is never stored.')}</p>
+        <label>{t('Username')}<input required name="username" autoComplete="username" /></label>
+        <label>{t('Password')}<input required name="password" type="password" autoComplete="current-password" /></label>
+        <button type="submit">{t('Run check')}</button>
         {ecpDelivery.length > 0 && <p role="status">{ecpDelivery.join(' · ')}</p>}
       </fieldset>
     </form>}
     {completed && profile === 'browser_sso_idp' && <div className="card">
-      <h3>IdP-initiated sign-in</h3>
+      <h3>{t('IdP-initiated sign-in')}</h3>
       {targetInitiated
-        ? <p>Waiting for one IdP-initiated sign-in. Use this RelayState: <code>{targetInitiated.runId}</code></p>
-        : <><p>Optional check. Prepare it, then start sign-in from your IdP.</p>
-            <button className="button-secondary" disabled={busy !== ''} onClick={() => void prepareTargetInitiated('UNSOLICITED_SSO')}>Prepare</button></>}
+        ? <p>{tx('Waiting for one IdP-initiated sign-in. Use this RelayState: {relayState}', { relayState: <code>{targetInitiated.runId}</code> })}</p>
+        : <><p>{t('Optional check. Prepare it, then start sign-in from your IdP.')}</p>
+            <button className="button-secondary" disabled={busy !== ''} onClick={() => void prepareTargetInitiated('UNSOLICITED_SSO')}>{t('Prepare')}</button></>}
     </div>}
     {completed && profile === 'single_logout_idp' && <div className="card">
-      <h3>Logout from your product</h3>
+      <h3>{t('Logout from your product')}</h3>
       {targetInitiated
-        ? <p>Waiting for one logout request. Sign out at your product in the same session.</p>
-        : <><p>Optional check. Prepare it, then sign out at your product.</p>
-            <button className="button-secondary" disabled={busy !== ''} onClick={() => void prepareTargetInitiated('TARGET_LOGOUT')}>Prepare</button></>}
+        ? <p>{t('Waiting for one logout request. Sign out at your product in the same session.')}</p>
+        : <><p>{t('Optional check. Prepare it, then sign out at your product.')}</p>
+            <button className="button-secondary" disabled={busy !== ''} onClick={() => void prepareTargetInitiated('TARGET_LOGOUT')}>{t('Prepare')}</button></>}
     </div>}
     {supplementalKeys
       ? <SupplementalDecryptionKeyPanel status={supplementalKeys} busy={busy === 'supplemental-keys'}
@@ -432,16 +434,16 @@ export function RunManagement({ runId, csrfToken, focusCaseId }: {
     <PreflightSummary roundTripComplete={completed}
       report={preflightReport ?? run?.context?.preflight as Record<string, unknown> | undefined} />
     {plan && <details className="setup-details" open={!setupReady && !completed}>
-      <summary>Connection details</summary>
+      <summary>{t('Connection details')}</summary>
       <PeerRegistration plan={plan} />
     </details>}
     {attestations.length > 0 && <details className="more-steps" open={opened}>
-      <summary>Self-attestation ({attestations.length}, optional)</summary>
+      <summary>{t('Self-attestation ({n}, optional)', { n: attestations.length })}</summary>
       <div className="interaction-list">{attestations.map(value =>
         <InteractionCard key={value.caseId} {...cardProps(value)} />)}</div>
     </details>}
     {mode === 'hosted' && <div className="actions">
-      <button className="button-secondary" disabled={busy === 'publish'} onClick={() => void publish()}>Publish result</button>
+      <button className="button-secondary" disabled={busy === 'publish'} onClick={() => void publish()}>{t('Publish result')}</button>
     </div>}
   </section>
 }
