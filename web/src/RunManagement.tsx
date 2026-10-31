@@ -42,14 +42,18 @@ export function RunManagement({ runId, csrfToken, focusCaseId }: {
   const [busy, setBusy] = useState('')
   const [loaded, setLoaded] = useState(false)
   const evaluatedState = useRef('')
+  const refreshSeq = useRef(0)
+  const actSeq = useRef(0)
 
   const profile = plan?.plan.profile ?? ''
   const isIdp = profile.endsWith('_idp')
 
   const refresh = async () => {
+    const seq = ++refreshSeq.current
     const [workspace, nextRun, plans, health] = await Promise.all([
       api.workspaceEvidence(runId), api.run(runId), api.plans(), api.health(),
     ])
+    if (seq !== refreshSeq.current) return // a newer refresh started; do not overwrite it with stale data
     const readOnly = workspace.definitionAvailability?.readOnlyStored === true
       || workspace.definitionAvailability?.definitionAvailable === false
       || workspace.definitionAvailability?.liveEvaluationAvailable === false
@@ -106,9 +110,12 @@ export function RunManagement({ runId, csrfToken, focusCaseId }: {
   }, [waitingForTraffic, runId])
 
   const act = async (key: string, work: () => Promise<void>) => {
+    const seq = ++actSeq.current
     setBusy(key)
     setError('')
-    try { await work() } catch (cause) { setError((cause as Error).message) } finally { setBusy('') }
+    try { await work() } catch (cause) { setError((cause as Error).message) } finally {
+      if (seq === actSeq.current) setBusy('')
+    }
   }
 
   // Evaluate recorded metadata evidence once per distinct state; never in a loop.
@@ -242,21 +249,23 @@ export function RunManagement({ runId, csrfToken, focusCaseId }: {
 
   // Only login/logout-style browser steps may be the primary card. Capability answers and
   // attestations can change or soften a determination, so they stay in collapsed sections.
-  const browserSteps = shown.filter(value => value.kind === 'BROWSER')
+  const probeCaseId = activeProbe?.state === 'READY' || activeProbe?.state === 'AWAITING_RESPONSE' ? activeProbe.caseId : null
+  const browserSteps = shown.filter(value => value.kind === 'BROWSER' && value.caseId !== probeCaseId)
   const capability = shown.filter(value => value.kind === 'CONFIGURATION' && value.completionMode === 'TRANSCRIPT_OR_OPERATOR')
   const operatorSettings = shown.filter(value => value.kind === 'CONFIGURATION' && value.completionMode !== 'TRANSCRIPT_OR_OPERATOR')
   const attestations = shown.filter(value => value.kind === 'ATTESTATION')
   const [firstStep, ...laterSteps] = browserSteps
 
   const claimed = new Set<string>()
-  const sharedActions = (campaigns?.campaigns ?? []).filter(value => value.actionKind === 'CONFIGURATION')
-    .flatMap(campaign => campaign.actions.filter(action => action.remainingCaseIds.length > 1).map(action => {
+  const sharedActions: Array<{ campaign: CampaignReport['campaigns'][number]; action: CampaignReport['campaigns'][number]['actions'][number]; cases: PendingInteraction[] }> = []
+  for (const campaign of (campaigns?.campaigns ?? []).filter(value => value.actionKind === 'CONFIGURATION')) {
+    for (const action of campaign.actions.filter(value => value.remainingCaseIds.length > 1)) {
       const cases = operatorSettings.filter(value => action.remainingCaseIds.includes(value.caseId) && !claimed.has(value.caseId))
-      return { campaign, action, cases }
-    })).filter(group => group.cases.length >= 2).map(group => {
-      group.cases.forEach(value => claimed.add(value.caseId))
-      return group
-    })
+      if (cases.length < 2) continue
+      cases.forEach(value => claimed.add(value.caseId))
+      sharedActions.push({ campaign, action, cases })
+    }
+  }
   const individualSettings = operatorSettings.filter(value => !claimed.has(value.caseId))
 
   const classifications = campaigns?.classifications ?? []
