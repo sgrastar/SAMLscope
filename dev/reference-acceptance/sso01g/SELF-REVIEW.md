@@ -1,92 +1,92 @@
-# 自己点検
+# Self-review
 
-> 追記（2026-10-31）：以下は当初のオフライン準備の記録。後続のユーザー承認に基づくKeycloak管理API調査とlive設定driverは[SELF-REVIEW-KC.md](SELF-REVIEW-KC.md)に記録した。SAML campaign全体と全4ケースの採用は引き続き保留。
+> Addendum (2026-10-31): The following is the record of the initial offline preparation. The Keycloak management API investigation and the live configuration driver, based on later user approval, are recorded in [SELF-REVIEW-KC.md](SELF-REVIEW-KC.md). The SAML campaign as a whole and the adoption of all four cases remain on hold.
 
-2026-10-31。オフライン準備の記録。正式判定・台帳更新は行っていない。
+2026-10-31. A record of offline preparation. No official determination or ledger update was made.
 
-## 作成物と到達点
+## Deliverables and what was reached
 
-- `PLAN.md`: case定義、全variant、正負対照、Shibbolethとの差分、保存製品コードに基づく設定仮説、未確定事項。
-- `campaign.py`: 要求行列の再利用、Run/digest/前提の事前確認、元状態捕捉、normal/maximum群の適用、条件通信前後の製品read-back、finally復元、元状態照合、個別カウンター。
-- `keycloak_campaign.py`: dry-run CLI、公開native設定のGET/compare/write/GETと復元を実装するbatch。書込みの応答喪失でも製品read-backで既知の変更か確認し、外部編集を上書きしない。
-- `simplesamlphp_campaign.py`: dry-run CLI、既存ConfigurationBatchを使う公開設定fragmentのhost書込み・復元。inodeを維持し、Docker fallbackは禁止する。
-- `test_campaign.py`: メモリdriver、公開fixtureファイル、CLIの単体テスト。
-- `dry-run-keycloak/plan.json`、`dry-run-simplesamlphp/plan.json`: 条件、停止理由、条件付き回数見積。実施済み操作の記録ではない。
+- `PLAN.md`: case definitions, all variants, positive/negative controls, differences from Shibboleth, configuration hypotheses based on stored product code, and undetermined items.
+- `campaign.py`: reuse of the request matrix, advance confirmation of Run/digest/preconditions, original state capture, application of the normal/maximum groups, product read-back before and after condition communication, finally restoration, original state reconciliation, and individual counters.
+- `keycloak_campaign.py`: dry-run CLI, and a batch implementing GET/compare/write/GET of public native configuration and restoration. Even if a write response is lost, it confirms via product read-back whether the change is a known one, and does not overwrite external edits.
+- `simplesamlphp_campaign.py`: dry-run CLI, and host write and restoration of public configuration fragments using the existing ConfigurationBatch. It preserves the inode and prohibits a Docker fallback.
+- `test_campaign.py`: unit tests of the memory driver, public fixture files, and CLI.
+- `dry-run-keycloak/plan.json`, `dry-run-simplesamlphp/plan.json`: conditions, stop reasons, and conditional count estimates. They are not records of operations that were carried out.
 
-**ライブ用製品driverと製品別の独立receipt readerは未実装。実機で確定できる状態にはまだ達していない。**
-保存資料が示す未実装・未確認機能を、推測による設定や独自の比較コードで補わなかった。
-CLIは`--dry-run`必須で、実機実行フラグ・HTTP client・Docker呼出し・任意shell hookを持たない。
-ライフサイクルは将来の信頼済みdriverの接続点とし、今回はメモリdriverでのみ検証した。
-各driverのboolean前提や`product-runtime`ラベルは、その収集実装が独立に検証された場合だけ意味を持つ。
-ラベルを含む任意JSONやオペレーターの自己申告を証明として受理するAPIは設けていない。
+**The live product driver and the product-specific independent receipt reader are unimplemented. We have not yet reached a state where conclusions can be confirmed on a real machine.**
+Features that the stored materials indicate as unimplemented or unconfirmed were not filled in with speculative configuration or custom comparison code.
+The CLI requires `--dry-run` and has no real-machine execution flag, HTTP client, Docker invocation, or arbitrary shell hook.
+The lifecycle is the connection point for a future trusted driver, and this time was verified only with the memory driver.
+Each driver's boolean preconditions and `product-runtime` labels have meaning only if that collection implementation is independently verified.
+No API was provided that accepts arbitrary JSON containing labels, or an operator's self-report, as proof.
 
-## 誤判定リスク
+## Misjudgment risks
 
-|点検項目|今回の対策 / 残る検証|
+|Checklist item|Measures this time / remaining verification|
 |---|---|
-|全errorをg系成功扱い|reportは常にsupplemental-unadopted。case outcomeもVerdictも出さない。全error envelopeのテストでもconformance成功にならない。将来は既存AuthnContextComparisonの各kind成功選択対照を必須にする。|
-|達成不能要求のerror対照|ga/gb/gcそれぞれClassRef/DeclRefのunachievableを要求行列に残す。原本の相関・署名・実際のSAML error検証は独立readerに必要。HTTP errorで代用しない。|
-|maximumの弱すぎる選択|low/mediumのEXACT成功を同じmaximum設定で収集。high不達と利用可能集合の網羅性もnative前提。low返却を上限以下という理由で適合にしない。|
-|先頭優先の検出力|low/high独立EXACT対照とforward/reverseの両方を各kindで予定。errorだけや片方の順序だけでは採用不可。|
-|Suite独自の強度|ShibbolethのURNを計画テンプレートとして再利用するだけ。製品のmap/flow/sourceが実際に定めた順序でなければ送信前に保留。認証手段の一般的な強弱を仮定しない。|
-|DeclRef未対応|ClassRefだけの部分実験を全caseの成功へ拡張しない。両製品とも現在は事前条件未成立。|
-|沈黙/HTTP500/設定未適用|timeout、HTTP error、UNKNOWN_DELIVERY、native read-back不一致でincompleteに止まるテストを実施。製品FAILには変換しない。|
-|直接HTTP送信|スクリプトは送信機能を持たない。将来driverは既存Runの永続outboxだけを消費する。preloaded-recorder-only receiptを拒否するテストあり。既存CONFIG gケースはaction keysが空なので経路整備前は保留。|
-|重複送信/擬似成功|requestId/actionId/request/response参照の重複を拒否。同一mode/conditionを一度ずつ処理し、例外後の再試行はしない。実ブラウザ側の二重click防止は未検証。|
-|別Run原本の付け替え|Run/hash/condition/modeの一致を確認。foreign Runは収集停止。保存Runのcase追加やTranscript書換え機能はない。IDP19.b専用bindingを流用しない。|
-|証拠検証の過大主張|envelope照合は暗号検証ではない。署名・復号・metadata・宛先・issuer・request fingerprint・session/operationを検証する独立readerは別途必要。未検証receiptは正式evidenceに昇格しない。|
-|正負対照の省略|caseとmutantのID・triggerをPLANへ記録。今回は製品の正負対照を実行していない。単体テスト成功をcontrol VERIFIEDへ書き換えない。|
-|host書込みと製品適用の混同|host成功、native write成功、製品read-backで確認した群適用、復元試行/成功を別集計。既存ConfigurationBatch.applied_countはnative適用数として使わない。|
-|復元失敗|最初のapply前にdirtyにし、途中例外でもfinally復元。元状態の実効fingerprintと一致しなければincomplete。外部編集は上書きせず手動確認対象。|
-|プロセス停止/電源断|finallyだけでは対処できない。元公開状態は現在メモリ内のみ。将来ライブdriverには秘密を含まない復旧snapshot、write前journal、再開時のnative照合と重複action防止が必要。現コードをそのままライブ公開しない。|
-|資格情報|今回は資格情報、鍵、.env、privateを読まない。ログに任意driverデータや例外本文を出さず、許可した公開envelopeだけを出す。将来driverの秘密除去は別に検証が必要。|
-|case側Verdict|case実装は変更していない。準備コードもoutcome/Verdictを生成しない。既存caseはoutcomeのみ、Evaluatorが正式levelに従って変換する。|
+|Treating all-error as g-series success|The report is always supplemental-unadopted. It emits neither a case outcome nor a Verdict. Even a test with an all-error envelope does not yield conformance success. In future, the successful-selection control for each kind of the existing AuthnContextComparison is mandatory.|
+|Error control for unachievable requests|The unachievable ClassRef/DeclRef for each of ga/gb/gc remain in the request matrix. Correlation, signature, and verification of the actual SAML error in the original require an independent reader. HTTP error is not substituted.|
+|Maximum selection that is too weak|EXACT success for low/medium is collected under the same maximum configuration. Unreachability of high and the completeness of the available set are also native preconditions. Returning low is not made conforming on the grounds of being at or below the upper bound.|
+|Detection power of first precedence|Independent low/high EXACT controls and both forward/reverse are planned for each kind. Error alone or only one order cannot be adopted.|
+|Suite-specific strength|Shibboleth's URNs are only reused as a planning template. If the order is not what the product's map/flow/source actually defined, hold before sending. No general strength ranking of authentication methods is assumed.|
+|DeclRef unsupported|A partial experiment with ClassRef only is not extended to success for all cases. For both products, the preconditions are currently not met.|
+|Silence/HTTP 500/configuration not applied|Tests were run confirming that timeout, HTTP error, UNKNOWN_DELIVERY, and native read-back mismatch stop at incomplete. They are not converted to product FAIL.|
+|Direct HTTP sending|The script has no sending function. A future driver consumes only the persisted outbox of the existing Run. There is a test that rejects a preloaded-recorder-only receipt. Existing CONFIG g cases have empty action keys, so they are on hold until the path is prepared.|
+|Duplicate sending/apparent success|Duplicates of requestId/actionId/request/response references are rejected. The same mode/condition is processed exactly once, with no retry after an exception. Double-click prevention on the real browser side is unverified.|
+|Reattaching originals from another Run|Match of Run/hash/condition/mode is confirmed. A foreign Run stops collection. There is no function to add a case to a stored Run or rewrite a Transcript. The IDP19.b-specific binding is not repurposed.|
+|Overclaiming evidence verification|Envelope matching is not cryptographic verification. An independent reader that verifies signature, decryption, metadata, destination, issuer, request fingerprint, and session/operation is needed separately. An unverified receipt is not promoted to official evidence.|
+|Omitting positive/negative controls|The IDs and triggers of the cases and mutants are recorded in PLAN. The product's positive/negative controls were not run this time. Unit test success is not rewritten as control VERIFIED.|
+|Confusing host write with product application|Host success, native write success, group application confirmed by product read-back, and restoration attempts/successes are tallied separately. The existing ConfigurationBatch.applied_count is not used as the native application count.|
+|Restoration failure|Marked dirty before the first apply, and restored in finally even on a mid-way exception. If it does not match the effective fingerprint of the original state, it is incomplete. External edits are not overwritten and become subject to manual confirmation.|
+|Process stop/power loss|finally alone cannot handle this. The original public state is currently only in memory. A future live driver needs a recovery snapshot without secrets, a pre-write journal, native reconciliation on resume, and duplicate-action prevention. The current code is not to be exposed live as is.|
+|Credentials|This time, credentials, keys, .env, and private files were not read. Arbitrary driver data and exception bodies are not output to logs; only permitted public envelopes are output. Secret removal by a future driver needs separate verification.|
+|Verdict on the case side|The case implementations were not changed. The preparation code also does not generate outcome/Verdict. Existing cases return only outcome, and the Evaluator converts according to the official level.|
 
-## 実機前に確認するもの
+## To confirm before the real machine
 
-1. 許可された環境で署名定義とG1/G2境界、profile・実Runのcase membership/digest、推移的linked variantsを検証する。保持定義の古いRunを新定義で再開しない。
-2. native機能調査をログインより先に実施する。Keycloakの稼働版・SAML step-up feature・実際のURI/LoA属性名・flow/execution/config/mapperとDeclRef対応を確認する。
-3. SimpleSAMLphpの稼働版標準selectorがminimum/better/maximumとDeclRefを扱えるか確認する。保存版の未実装を解消できなければNOT_VERIFIEDを維持する。独自PHPで製品動作を作らない。
-4. 専用client/flowまたは公開selector fragmentの隔離範囲、元状態、依存、復元権限、保存可能な公開値を確定する。既存authsources全体や秘密を含むrealm exportは証拠にしない。
-5. 製品自身が解釈した稼働設定のread-back方法を実装する。管理GETの設定値だけではflow実行を証明できない。PHP opcache・bind mount等の不反映はログイン前に診断する。
-6. 比較全条件を既存Runnerの永続outbox actionと結び付ける実装・独立検証を用意する。CONFIGへのcase選択だけ、preloadedへのURL組立てだけでは要件を満たさない。
-7. 現在のRun・metadata・ログイン入力を固定し、low/highとmaximum low/mediumの実成功、high不達、達成不能errorを原本で確認する。変わった設定間で可用性を流用しない。
-8. visible browserで利用者が入力する。fresh/reuseをSuite指示どおりにし、passiveで入力しない。認証ヘッダー、Cookie、生のlogin HTML、storage、画面を保存しない。
-9. Recorder decoded原本digest、元request/responseとactionの一意相関、署名・復号・issuer/ACS/Audience/SubjectConfirmation/RelayState、固定request fingerprintを独立readerで検証する。
-10. caseごとの正負対照を再実行し、欠落・重複・foreign Run・不一致response・未検証controlの変異がNOT_VERIFIEDになることを検証する。
-11. 復元後の製品read-backと同じRunの通常SSO対照を確認する。採用は独立検証後だけとし、comparison/inventoryは既存generatorで更新する。
+1. In a permitted environment, verify the signed definitions and the G1/G2 boundary, the case membership/digest of the profile and real Run, and transitive linked variants. Do not resume a Run with stale retained definitions using new definitions.
+2. Investigate native functionality before login. Confirm Keycloak's running version, the SAML step-up feature, the actual URI/LoA attribute names, flow/execution/config/mapper, and DeclRef support.
+3. Confirm whether SimpleSAMLphp's standard selector in the running version handles minimum/better/maximum and DeclRef. If the unimplemented state of the stored version cannot be resolved, keep NOT_VERIFIED. Do not create product behavior with custom PHP.
+4. Determine the isolation scope of the dedicated client/flow or public selector fragment, the original state, dependencies, restoration privileges, and storable public values. Neither the whole existing authsources nor a realm export containing secrets is used as evidence.
+5. Implement a read-back method for the running configuration as interpreted by the product itself. The configuration values from a management GET alone do not prove flow execution. Diagnose non-reflection such as PHP opcache or bind mounts before login.
+6. Prepare an implementation and independent verification that ties all comparison conditions to persisted outbox actions of the existing Runner. Merely selecting the case in CONFIG, or merely assembling a URL for preloaded, does not satisfy the requirement.
+7. Fix the current Run, metadata, and login input, and confirm in the original the real success of low/high and of maximum low/medium, unreachability of high, and unachievable error. Availability is not carried over between changed configurations.
+8. The user enters input in a visible browser. Follow the Suite's instructions for fresh/reuse, and do not enter input passively. Do not save authentication headers, Cookies, raw login HTML, storage, or screens.
+9. Verify with an independent reader the Recorder decoded original digest, the unique correlation of the original request/response with the action, signature, decryption, issuer/ACS/Audience/SubjectConfirmation/RelayState, and the fixed request fingerprint.
+10. Rerun the positive/negative controls for each case, and verify that mutations of missing, duplicate, foreign Run, mismatched response, and unverified control become NOT_VERIFIED.
+11. Confirm the product read-back after restoration and the normal-SSO control of the same Run. Adoption only after independent verification, and update comparison/inventory with the existing generators.
 
-必要な実機側のものは、隔離した製品、公開設定読取/変更/復元権限、対象caseを含む現行Run、互換な署名Suite、outbox対応経路、製品別read-back driver/独立reader、利用者のvisible browserである。
-今回の資料から両製品の全機能成立を約束することはできない。
+What is needed on the real-machine side is an isolated product, permissions to read/change/restore public configuration, a current Run containing the target cases, a compatible signed Suite, an outbox-capable path, a product-specific read-back driver/independent reader, and the user's visible browser.
+From the present materials, we cannot promise that all functionality will hold for both products.
 
-## 操作回数
+## Operation counts
 
-|項目|今回の実測|全前提成立後・1製品・再試行なしの計画|
+|Item|Measured this time|Plan after all preconditions are met, 1 product, no retries|
 |---|---|---|
-|製品設定書込試行/host成功/native成功/実効適用/復元|すべて0|2設定群＋復元1群。各群の実write数は依存オブジェクト数で増えるため未確定。1群1writeなら最低3試行。Keycloak管理API方式のhost設定writeは該当なし0。|
-|条件通信|0|24。承認評価条件16、maximum可用性対照4、先頭候補可用性対照4。|
-|通常SSO|0|復元後1、初期対照が未完了ならさらに1。計25〜26往復。|
-|ログイン投入|0|全操作がfreshなら最大26を基準とする。MFA、re-auth、追加管理ログインが必要なら増える。実測値は未測定。|
-|明示ログアウト|0|0予定。context破棄とlogoutは別。必要になれば追加計上。|
-|利用者click/同意/管理画面操作|0|未測定。認証1回で最低1回の送信操作を想定する場合でも、画面遷移やMFA分が増えるため上限は確定しない。|
-|製品実効read-back|0|共通エンジンの最低53呼出し。各呼出しの内部API/PHP読取数は依存ごとに別集計する。|
+|Product configuration write attempts / host success / native success / effective application / restoration|All 0|2 configuration groups plus 1 restoration group. The real write count of each group increases with the number of dependent objects, so it is undetermined. If 1 group = 1 write, at least 3 attempts. Host configuration writes for the Keycloak management API approach: not applicable, 0.|
+|Condition communication|0|24. 16 approved evaluation conditions, 4 maximum availability controls, 4 first-candidate availability controls.|
+|Normal SSO|0|1 after restoration, and 1 more if the initial control is incomplete. 25 to 26 round trips in total.|
+|Login submissions|0|If every operation is fresh, at most 26 is the baseline. Increases if MFA, re-auth, or additional admin login is needed. Measured value is unmeasured.|
+|Explicit logout|0|Planned 0. Context disposal and logout are distinct. Add to the count if it becomes necessary.|
+|User clicks/consent/admin screen operations|0|Unmeasured. Even assuming at least 1 submit operation per authentication, screen transitions and MFA add to it, so the upper bound is not fixed.|
+|Product effective read-back|0|At least 53 calls in the common engine. The internal API/PHP read counts of each call are tallied separately per dependency.|
 
-2製品では条件通信48、通常SSO込み50〜52を見積もる。現段階は前提が不成立なので、実機実行予定は0のまま。
-dry-runとメモリfixtureのwrite数を製品設定変更数として数えていない。
+For 2 products, 48 condition communications are estimated, and 50 to 52 including normal SSO. At this stage the preconditions are not met, so planned real-machine execution remains 0.
+The write counts of the dry-run and memory fixtures are not counted as product configuration changes.
 
-## 検証結果と未実施チェック
+## Verification results and unrun checks
 
-追加25件と既存`dev/simplesamlphp/test_configuration_batch.py`6件、計31件が成功。
-4つのPythonファイルのAST構文検査も成功。両CLIのdry-runで計画JSONを生成した。
-テストの再実行ではPython audit hookでsocket/外部プロセス起動、禁止ファイル読取り、指定先外のwriteを拒否した。
-既存テストのDocker呼出しはmockであり、実際のDockerプロセスは起動していない。
+25 additional tests plus 6 existing tests in `dev/simplesamlphp/test_configuration_batch.py`, 31 in total, passed.
+AST syntax checks of the 4 Python files also passed. Plan JSON was generated by dry-run of both CLIs.
+In the re-run of the tests, a Python audit hook rejected sockets/external process launches, reads of prohibited files, and writes outside the designated destination.
+The Docker invocations in existing tests are mocks, and no actual Docker process was started.
 
-ログは指定jobディレクトリの`unit-tests.log`と`test-results.json`。外部操作audit付き実行で31 tests / 0 failures / 0 errors。
-反映遅延、native機能、実HTTP、Chromeのsession動作、正負対照の暗号検証、署名承認の再検証はこのテストの対象外。
+Logs are `unit-tests.log` and `test-results.json` in the designated job directory. In the run with external-operation audit: 31 tests / 0 failures / 0 errors.
+Reflection delay, native functionality, real HTTP, Chrome session behavior, cryptographic verification of positive/negative controls, and re-verification of signed approvals are outside the scope of this test.
 
-AGENTS.mdの通常チェック`g1_docgen.py --check`と`g1_validate.py --structural-only`は、今回明示的に読み取り禁止されたcoverage/specs/predicates/approvalsを読むため実行していない。
-Gradle、ブラウザ統合、G1全比較、G2実行も、指定先外への出力・禁止入力・ネットワーク等を避けるため実行していない。
-したがって構造チェック合格・release readiness・独立承認を主張しない。
+AGENTS.md's usual checks `g1_docgen.py --check` and `g1_validate.py --structural-only` were not run, because they read coverage/specs/predicates/approvals, which were explicitly prohibited from reading this time.
+Gradle, browser integration, the full G1 comparison, and G2 execution were also not run, in order to avoid output outside the designated destination, prohibited inputs, the network, and so on.
+Therefore we do not claim a passed structural check, release readiness, or independent approval.
 
-既存ファイルは変更していない。作業開始時に`git status --short --untracked-files=no`で表示された既存AGENTS.mdの変更は触らず、その差分も読んでいない。
-成果物のwrite先は指定sso01gとjobの子のみ。commit、push、Docker、ネットワーク、台帳更新は行っていない。
+No existing files were changed. The existing AGENTS.md change shown by `git status --short --untracked-files=no` at the start of work was not touched, and its diff was not read either.
+Write destinations of deliverables are only the designated sso01g and children of the job directory. No commit, push, Docker, network, or ledger update was done.

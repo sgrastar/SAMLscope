@@ -1,42 +1,42 @@
-# オフラインSLO readerの自己レビュー
+# Self-review of the offline SLO reader
 
-対象は台帳の未検証14観測。今回の新規確定は0件であり、readerのテスト成功を製品の適合性・採用可能性として扱わない。
+The target is the 14 unverified observations in the ledger. There are 0 new confirmed conclusions this time, and a passing reader test must not be treated as product conformance or adoptability.
 
-## 実装の境界
+## Implementation boundaries
 
-- `ReadSloStoredEvidence`はoffline専用の診断reader。DB、API、sender、Evaluator、Verdict、設定変更、Run更新の経路を持たない。保存outcomeと診断assessmentを分離し、assessmentは必ずNOT_VERIFIED。
-- 有効なJSON/XMLが読めることやInResponseToの一致は、当該XMLの構造上の対応を示すだけ。暗号学的検証や送達・製品消費を示さない。出力の`wireBindingProven`と`nativeConsumptionProven`はfalseを維持する。
-- `declaredBinding`はRecorder summaryのラベル。実際のmethod、rawQuery、HTTP Location、製品受信ログと照合したbindingの証明ではない。HTTP-Redirect queryを再構成しない。
-- case membershipとresult hash・Runを照合。別Runの証拠の再ラベル、保存ケースの追加、source-Run bindingの新設は行わない。未対応native receiptを推測して採用しない。
-- 重複JSON key、末尾JSON、重複tx/message ID、foreign Run、参照逃避、symlink、decoded hash/size不一致、DTD、曖昧SOAP Bodyを拒否。原本bundleの問題はNOT_VERIFIEDのgapとして保持し、製品VIOLATEDにしない。
-- SOAPは全envelopeのbytesをhashしたまま、Bodyの唯一の要素をDOM参照する。再直列化・原本の差し替えは行わない。
+- `ReadSloStoredEvidence` is an offline-only diagnostic reader. It has no path to the DB, API, sender, Evaluator, Verdict, configuration changes, or Run updates. It separates the stored outcome from the diagnostic assessment, and the assessment is always NOT_VERIFIED.
+- Being able to read valid JSON/XML, or an InResponseTo match, shows only a structural correspondence within that XML. It does not show cryptographic verification, delivery, or consumption by the product. The output's `wireBindingProven` and `nativeConsumptionProven` stay false.
+- `declaredBinding` is a label in the Recorder summary. It is not proof of the binding checked against the actual method, rawQuery, HTTP Location, or the product's receipt log. The HTTP-Redirect query is not reconstructed.
+- Case membership is checked against the result hash and the Run. Evidence from a different Run is not relabeled, no stored case is added, and no new source-Run binding is created. Unsupported native receipts are not guessed at and adopted.
+- Rejected: duplicate JSON keys, trailing JSON, duplicate tx/message IDs, foreign Runs, reference escapes, symlinks, decoded hash/size mismatches, DTDs, and ambiguous SOAP Bodies. Problems in an original bundle are kept as NOT_VERIFIED gaps and are not turned into a product VIOLATED.
+- For SOAP, the bytes of the whole envelope stay hashed while the Body's single element is referenced through the DOM. No re-serialization or replacement of the original is performed.
 
-## 誤判定しやすい原本
+## Originals that are easy to misjudge
 
-1. Keycloakの保存session終了はPOST交換に伴うもの。Redirect応答を受理した証明にしない。ローカルsessionの終了が応答到着前に起きる可能性も排除できていない。
-2. Shibbolethの既存nativeResult=SuccessはPOST、別campaignはSOAP。Redirectへ読み替えない。古いRedirectラベル付き応答には不正な送付先があり、origin終了時刻も消費の因果関係を証明しない。
-3. SimpleSAMLphpのContinue後のPartialLogoutから、当該参加者応答の受理を推測しない。参加者要求と失敗の同時到着は「失敗を知った後の続行」ではない。二重開始した旧campaignを対照に使わない。
-4. SimpleSAMLphp v131iのorigin原本にはasyncと不正Destinationがある。既存採用17-sの再監査は今回範囲外だが、新しい正常同期campaignの代用にしない。
-5. Keycloakの旧18-c/d VIOLATEDはそのまま採用しない。POSTも許容された設定でのPOST発行や、Suiteが選んだPOST応答はRedirect能力の反例にならない。
-6. 17-b2のKeycloak/Shibboleth旧SATISFIEDは台帳で撤回済み。400、不正Destination、Suite到着ページをIdP自身のsession終了失敗feedbackに置き換えない。
-7. SSP19-cの限定反例から19-a第1鍵の原本を作らない。Keycloakのmetadataに鍵が取得できない状態を製品の復号不能としない。
-8. 沈黙、HTTPエラー、UNKNOWN_DELIVERY、session状態不明は製品違反の根拠にしない。今回のreaderには製品違反を生成する経路そのものがない。
+1. The Keycloak stored session termination comes with the POST exchange. It is not proof that the Redirect response was accepted. The possibility that the local session ended before the response arrived has also not been ruled out.
+2. The existing Shibboleth nativeResult=Success is for POST, and a separate campaign is for SOAP. Do not reinterpret them as Redirect. The old response labeled Redirect has an invalid destination, and the origin's termination time does not prove a causal link to consumption either.
+3. Do not infer acceptance of that participant's response from the SimpleSAMLphp PartialLogout after Continue. A participant request and a failure arriving at the same time is not "continuing after learning of the failure." Do not use the old campaign that was started twice as a control.
+4. The SimpleSAMLphp v131i origin original contains async and an invalid Destination. Re-auditing the existing adoption 17-s is outside this scope, but it must not be substituted for a new, correct, synchronous campaign.
+5. Do not adopt the old Keycloak 18-c/d VIOLATED as is. Issuing POST in a configuration where POST was also permitted, or a POST response chosen by the Suite, is not a counterexample to Redirect capability.
+6. The old SATISFIED for Keycloak/Shibboleth 17-b2 has been withdrawn in the ledger. Do not substitute a 400, an invalid Destination, or a page reached by the Suite for the IdP's own session-termination failure feedback.
+7. Do not build an original for the first key of 19-a from the limited counterexample of SSP19-c. Do not treat the state where Keycloak's metadata yields no key as the product being unable to decrypt.
+8. Silence, HTTP errors, UNKNOWN_DELIVERY, and unknown session state are not grounds for a product violation. This reader has no path at all that generates a product violation.
 
-## 検査結果と残る制限
+## Check results and remaining limitations
 
-JUnitは14/14成功。hash破損、Run取り違え、JSON重複、原本不在、DTD、symlink、曖昧SOAP、保存SATの誤採用、実保存bundleを検査した。製品controlは実行していない。承認済みmutantへの検出力を証明したテストではない。
+JUnit passed 14/14. It checked hash corruption, Run mix-ups, JSON duplicates, missing originals, DTDs, symlinks, ambiguous SOAP, wrongly adopting a stored SAT, and the actual stored bundles. No product controls were run. These tests do not prove detection power against the approved mutants.
 
-19回の保存証拠再生では公開原本のbytes不変を照合した。Java readerは全messageの署名・issuer・destination・同一session・完全な参加者集合を証明しないので、相関したgraphだけで正式結論に利用してはいけない。receiptの真正性・独立性やsource definitionの互換性も別途必要。
+In the 19 stored-evidence replays, the bytes of the public originals were verified to be unchanged. The Java reader does not prove the signatures, issuer, destination, same session, or the complete set of participants for all messages, so a correlated graph alone must not be used for a formal conclusion. The authenticity and independence of receipts and the compatibility of source definitions are also required separately.
 
-Gradleのofflineテストはローカルsocket権限で起動失敗した。同じJUnitテストをローカルjarだけでコンパイル・実行し、Gradle成功とは報告していない。Gradle独立buildはリポジトリ本体のsettings/build/sourceを変更しない。
+The Gradle offline test failed to start because of local socket permissions. The same JUnit tests were compiled and run with only local jars, and this is not reported as a Gradle success. The independent Gradle build does not change the repository's own settings/build/source.
 
-G1 docgen --check成功。G1 structuralとG2のblockingは既存Git設定が参照する`/tmp/samlier-g1-allowed-signers`の欠落による署名検証失敗。検証対象・validatorロジックは変更せず、書込先制約のためreportの出力先だけを変更した。チェック通過を主張せず、信頼鍵の追加やチェック回避も行わない。今回成果物は本体・採用・コミットへ組み込まない診断用の試作として残す。
+G1 docgen --check succeeded. The G1 structural and G2 blocking failures are signature verification failures caused by the missing `/tmp/samlier-g1-allowed-signers` that the existing Git configuration references. The validation targets and validator logic were not changed, and only the report output destination was changed because of the write-location restriction. No claim is made that the checks passed, and no trusted key is added and the checks are not bypassed. The deliverable from this work remains a diagnostic prototype that is not incorporated into the main code, adoption, or commits.
 
-`tests/`、本体ソース、既存reader、docs、正式台帳・保存Runは未変更。元から存在したAGENTS.md変更とsso01g/作業には触れていない。private/、.env、秘密鍵・鍵ストアを読まず、ネットワーク・Docker・実機・コミット・プッシュを使用していない。
+`tests/`, the main source, the existing readers, docs, the formal ledger, and the stored Runs are unchanged. The AGENTS.md change that already existed and the sso01g/ work were not touched. private/, .env, private keys, and keystores were not read, and no network, Docker, physical device, commit, or push was used.
 
-## 再実行
+## Re-running
 
-リポジトリルートで実行。すべての出力は`build/acceptance/reference-20261031/slo/`へ置く。
+Run from the repository root. All outputs are placed in `build/acceptance/reference-20261031/slo/`.
 
 ```sh
 .venv/bin/python dev/reference-acceptance/slo/inspect_saved_slo.py
@@ -45,9 +45,9 @@ python3 dev/reference-acceptance/slo/replay_saved_slo.py
 .venv/bin/python -I -B dev/reference-acceptance/slo/run_repository_checks.py
 ```
 
-`run_offline_checks.py`はJDK21とローカルに既存のJackson/core/JUnit jarを使用する。依存hashを毎回記録し、replay時に再照合する。依存ファイルを取得しない。保存原本を読むだけで、成果物を台帳へ登録するコマンドは存在しない。
+`run_offline_checks.py` uses JDK21 and the Jackson/core/JUnit jars that already exist locally. It records the dependency hashes each time and re-verifies them at replay. It does not fetch dependency files. It only reads the stored originals, and there is no command that registers the deliverable in the ledger.
 
-Gradle用入口は`dev/reference-acceptance/slo/build.gradle`。ローカルに既存のGradleを使い、user-home/project-cacheも指定出力先に置く。
+The Gradle entry point is `dev/reference-acceptance/slo/build.gradle`. It uses the locally existing Gradle and also places user-home/project-cache in the specified output location.
 
 ```sh
 JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk-21.jdk/Contents/Home \
@@ -58,4 +58,4 @@ JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk-21.jdk/Contents/Home \
   -p dev/reference-acceptance/slo test
 ```
 
-単独readerの入口は`offline result.json sha256 Run Case [transcript.json decoded-manifest.json]`。候補原本から出る情報は診断であり、受理を証明するreceiptとして渡してはいけない。
+The standalone reader's entry point is `offline result.json sha256 Run Case [transcript.json decoded-manifest.json]`. Information that comes out of a candidate original is diagnostic and must not be passed in as a receipt proving acceptance.
