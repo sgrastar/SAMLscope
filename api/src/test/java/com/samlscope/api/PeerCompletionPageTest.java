@@ -8,7 +8,7 @@ import org.junit.jupiter.api.Test;
 class PeerCompletionPageTest {
     @Test
     void providesWorkspaceReturnWithoutCallingReceiptAConformanceVerdict() {
-        var html = PeerCompletionPage.render(URI.create("https://app.example/manage/run_test"),
+        var html = PeerCompletionPage.render(PageText.ENGLISH, URI.create("https://app.example/manage/run_test"),
                 "/p/plan_test/ui/completion.css", Map.of("issuer", "<script>alert('x')</script>"));
         assertTrue(html.contains("href=\"https://app.example/manage/run_test\""));
         assertTrue(html.contains("Return to Run workspace"));

@@ -777,7 +777,7 @@ public final class SamlScopeApplication {
                 ctx.header("Cache-Control", "no-store")
                         .header("Content-Security-Policy", "default-src 'none'; frame-ancestors 'none'; base-uri 'none'")
                         .status(202).contentType("text/html; charset=utf-8")
-                        .result(metadataFetchWaitingPage(next));
+                        .result(metadataFetchWaitingPage(PageText.from(ctx), next));
                 return;
             }
             // requireAutomaticStartFlow records the attempted index in the Run context. Reload so
@@ -831,7 +831,7 @@ public final class SamlScopeApplication {
                             + "'; form-action " + origin(destination)
                             + "; frame-ancestors 'none'; base-uri 'none'; object-src 'none'");
             ctx.header("Cache-Control", "no-store").contentType("text/html; charset=utf-8")
-                    .result(HtmlPostPage.renderRequest(
+                    .result(HtmlPostPage.renderRequest(PageText.from(ctx), 
                             destination, Base64.getEncoder().encodeToString(requestXml), relayState, nonce));
         });
         javalin.routes.post("/p/{plan}/continue/metadata-polling/{index}", ctx -> {
@@ -848,11 +848,11 @@ public final class SamlScopeApplication {
                 return;
             }
             ctx.header("Cache-Control", "no-store").contentType("text/html; charset=utf-8")
-                    .result("<!doctype html><html lang=\"en\"><body>"
+                    .result(PageText.from(ctx).localize("<!doctype html><html lang=\"en\"><body>"
                             + "<h1>Automatic metadata campaign completed</h1>"
                             + "<p>The Target fetched the final fixture but did not return a correlated "
                             + "SAML response. SAMLscope recorded no target outcome from this continuation.</p>"
-                            + "</body></html>");
+                            + "</body></html>"));
         });
         javalin.routes.get("/p/{plan}/start/metadata-preloaded/{index}", ctx -> {
             var plan = requirePlan(plans, ctx.pathParam("plan"));
@@ -917,7 +917,7 @@ public final class SamlScopeApplication {
                             + "'; form-action " + origin(destination)
                             + "; frame-ancestors 'none'; base-uri 'none'; object-src 'none'");
             ctx.header("Cache-Control", "no-store").contentType("text/html; charset=utf-8")
-                    .result(HtmlPostPage.renderRequest(
+                    .result(HtmlPostPage.renderRequest(PageText.from(ctx), 
                             destination, Base64.getEncoder().encodeToString(requestXml), relayState, nonce));
         });
         javalin.routes.get("/p/{plan}/probe/{action}", ctx -> {
@@ -928,7 +928,7 @@ public final class SamlScopeApplication {
             ctx.header("Content-Security-Policy", "default-src 'none'; style-src 'self'; form-action 'self'; "
                     + "frame-ancestors 'none'; base-uri 'none'; object-src 'none'");
             ctx.contentType("text/html; charset=utf-8").result(ActiveProbePage.start(
-                    status, "/p/" + ctx.pathParam("plan") + "/ui/completion.css"));
+                    PageText.from(ctx), status, "/p/" + ctx.pathParam("plan") + "/ui/completion.css"));
         });
         javalin.routes.post("/p/{plan}/probe/{action}", ctx -> {
             var runId = requiredQuery(ctx, "run");
@@ -1047,7 +1047,7 @@ public final class SamlScopeApplication {
                         + "'; form-action " + origin(probe.destination())
                         + "; frame-ancestors 'none'; base-uri 'none'; object-src 'none'");
         ctx.header("Cache-Control", "no-store").contentType("text/html; charset=utf-8")
-                .result(HtmlPostPage.renderRequest(
+                .result(HtmlPostPage.renderRequest(PageText.from(ctx), 
                         probe.destination(), probe.samlRequest(), probe.relayState(), nonce));
     }
 
@@ -1078,8 +1078,9 @@ public final class SamlScopeApplication {
             }
             if ("invalid".equals(consumed.summary().get("metadataSignatureControl"))) {
                 ctx.header("Cache-Control", "no-store").contentType("text/html; charset=utf-8")
-                        .result("<!doctype html><html lang=\"en\"><body><h1>Signature control response recorded</h1>"
-                                + "<p>The fixture remains selected for its normal signed request.</p></body></html>");
+                        .result(PageText.from(ctx).localize("<!doctype html><html lang=\"en\"><body>"
+                                + "<h1>Signature control response recorded</h1>"
+                                + "<p>The fixture remains selected for its normal signed request.</p></body></html>"));
                 return;
             }
             // Advance only after both the stable metadata fetch and the signed browser response
@@ -1096,24 +1097,25 @@ public final class SamlScopeApplication {
                     : null;
             if (successful && next != null) {
                 ctx.header("Cache-Control", "no-store").contentType("text/html; charset=utf-8")
-                        .result(metadataPollingTransitionPage(next, flow.pollingDelaySeconds()));
+                        .result(metadataPollingTransitionPage(PageText.from(ctx), next, flow.pollingDelaySeconds()));
                 return;
             }
             if (!successful && next != null) {
                 ctx.header("Cache-Control", "no-store").contentType("text/html; charset=utf-8")
-                        .result("<!doctype html><html lang=\"en\"><body>"
+                        .result(PageText.from(ctx).localize("<!doctype html><html lang=\"en\"><body>"
                                 + "<h1>This polling fixture did not produce a correlated Success response</h1>"
                                 + "<p>The metadata fetch and response were recorded. SAMLscope does not "
                                 + "convert the missing Success response into a target violation.</p>"
-                                + "<p><a href=\"" + htmlEscape(next)
-                                + "\">Continue with the next polling fixture</a></p></body></html>");
+                                + "<p><a href=\"") + htmlEscape(next)
+                                + PageText.from(ctx).localize(
+                                        "\">Continue with the next polling fixture</a></p></body></html>"));
                 return;
             }
             ctx.header("Cache-Control", "no-store").contentType("text/html; charset=utf-8")
-                    .result("<!doctype html><html lang=\"en\"><body>"
+                    .result(PageText.from(ctx).localize("<!doctype html><html lang=\"en\"><body>"
                             + "<h1>Automatic metadata campaign completed</h1>"
                             + "<p>Return to the Run page to evaluate the recorded evidence. Only "
-                            + "correlated Success responses count as metadata-use evidence.</p></body></html>");
+                            + "correlated Success responses count as metadata-use evidence.</p></body></html>"));
             return;
         }
         if (consumed.metadataProbe() && consumed.relayState() != null
@@ -1142,23 +1144,24 @@ public final class SamlScopeApplication {
             }
             if (!successful && next != null) {
                 ctx.header("Cache-Control", "no-store").contentType("text/html; charset=utf-8")
-                        .result("<!doctype html><html lang=\"en\"><body>"
+                        .result(PageText.from(ctx).localize("<!doctype html><html lang=\"en\"><body>"
                                 + "<h1>This fixture did not produce a correlated Success response</h1>"
                                 + "<p>SAMLscope recorded the response without turning it into a target "
                                 + "violation. Continue only after reviewing the target's result.</p>"
-                                + "<p><a href=\"" + htmlEscape(next)
-                                + "\">Continue with the next imported fixture</a></p></body></html>");
+                                + "<p><a href=\"") + htmlEscape(next)
+                                + PageText.from(ctx).localize(
+                                        "\">Continue with the next imported fixture</a></p></body></html>"));
                 return;
             }
             ctx.header("Cache-Control", "no-store").contentType("text/html; charset=utf-8")
-                    .result("<!doctype html><html lang=\"en\"><body>"
+                    .result(PageText.from(ctx).localize("<!doctype html><html lang=\"en\"><body>"
                             + "<h1>Preloaded metadata campaign attempts completed</h1>"
                             + "<p>Return to the Run page to evaluate the recorded evidence. Only "
-                            + "correlated Success responses count as metadata-use evidence.</p></body></html>");
+                            + "correlated Success responses count as metadata-use evidence.</p></body></html>"));
             return;
         }
         ctx.header("Cache-Control", "no-store").contentType("text/html; charset=utf-8")
-                .result(PeerCompletionPage.render(
+                .result(PeerCompletionPage.render(PageText.from(ctx), 
                         m1.workspaceUrl(consumed.runId() == null ? consumed.relayState() : consumed.runId()),
                         "/p/" + ctx.pathParam("plan") + "/ui/completion.css", consumed.summary()));
     }
@@ -1172,7 +1175,7 @@ public final class SamlScopeApplication {
                 + "'; style-src 'self'; frame-ancestors 'none'; base-uri 'none'; object-src 'none'");
         ctx.header("Cache-Control", "no-store").contentType("text/html; charset=utf-8")
                 .result(ActiveProbePage.recorded(
-                        "/p/" + ctx.pathParam("plan") + "/ui/completion.css",
+                        PageText.from(ctx), "/p/" + ctx.pathParam("plan") + "/ui/completion.css",
                         status, summary, nonce));
     }
 
@@ -1202,7 +1205,7 @@ public final class SamlScopeApplication {
         ctx.header("Content-Security-Policy", sloPostContentSecurityPolicy(
                 result.response().destination(), nonce));
         ctx.header("Cache-Control", "no-store").contentType("text/html; charset=utf-8")
-                .result(HtmlPostPage.render(
+                .result(HtmlPostPage.render(PageText.from(ctx), 
                         result.response().destination(), result.response().base64(),
                         result.response().relayState(), nonce).replace("SAMLResponse", "SAMLResponse"));
     }
@@ -1227,7 +1230,7 @@ public final class SamlScopeApplication {
                         + "'; form-action " + destinationOrigin
                         + "; frame-ancestors 'none'; base-uri 'none'; object-src 'none'");
         ctx.header("Cache-Control", "no-store").contentType("text/html; charset=utf-8")
-                .result(HtmlPostPage.render(response.destination(), response.base64(), response.relayState(), nonce));
+                .result(HtmlPostPage.render(PageText.from(ctx), response.destination(), response.base64(), response.relayState(), nonce));
     }
 
     private static void confirmReachabilityProbe(String runId, String planId, RunRepository runs, RunService runService) {
@@ -1438,29 +1441,29 @@ public final class SamlScopeApplication {
         return value.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
     }
 
-    static String metadataPollingTransitionPage(String next, int delaySeconds) {
+    static String metadataPollingTransitionPage(PageText text, String next, int delaySeconds) {
         var delay = Math.max(0, delaySeconds);
         var escaped = htmlEscape(next);
-        return "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\">"
+        return text.localize("<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\">")
                 + "<meta http-equiv=\"refresh\" content=\"" + delay + ";url=" + escaped + "\">"
-                + "<title>Waiting for the target metadata refresh window</title></head><body>"
+                + text.localize("<title>Waiting for the target metadata refresh window</title></head><body>"
                 + "<h1>Fixture accepted</h1><p>SAMLscope recorded the correlated metadata fetch and "
-                + "Success response.</p><p>The next signed request starts automatically in " + delay
-                + " seconds. This pacing lets a target's standard metadata-key refresh window "
-                + "elapse; it does not affect the conformance outcome.</p><p><a href=\"" + escaped
-                + "\">Continue now</a></p></body></html>";
+                + "Success response.</p><p>The next signed request starts automatically in ") + delay
+                + text.localize(" seconds. This pacing lets a target's standard metadata-key refresh window "
+                + "elapse; it does not affect the conformance outcome.</p><p><a href=\"") + escaped
+                + text.localize("\">Continue now</a></p></body></html>");
     }
 
-    static String metadataFetchWaitingPage(String next) {
+    static String metadataFetchWaitingPage(PageText text, String next) {
         var escaped = htmlEscape(next).replace("\"", "&quot;").replace("'", "&#39;");
-        return "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\">"
+        return text.localize("<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\">")
                 + "<meta http-equiv=\"refresh\" content=\"2;url=" + escaped + "\">"
-                + "<title>Waiting for metadata retrieval</title></head><body>"
+                + text.localize("<title>Waiting for metadata retrieval</title></head><body>"
                 + "<h1>Waiting for metadata retrieval</h1>"
                 + "<p>The next fixture is ready. The authentication request will start automatically "
                 + "after the target retrieves it. Keep this page open.</p>"
-                + "<p>This wait does not determine the test result.</p><p><a href=\"" + escaped
-                + "\">Check again</a></p></body></html>";
+                + "<p>This wait does not determine the test result.</p><p><a href=\"") + escaped
+                + text.localize("\">Check again</a></p></body></html>");
     }
 
     private static final class MisdirectedRequest extends RuntimeException {

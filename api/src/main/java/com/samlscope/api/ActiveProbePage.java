@@ -7,8 +7,8 @@ import java.util.Map;
 final class ActiveProbePage {
     private ActiveProbePage() {}
 
-    static String start(ActiveProbeCoordinator.Status status, String stylesheet) {
-        var freshSession = status.requiresFreshSession()
+    static String start(PageText text, ActiveProbeCoordinator.Status status, String stylesheet) {
+        var freshSession = text.localize(status.requiresFreshSession()
                 ? """
                   <section class="session-check" aria-labelledby="session-heading">
                     <p class="eyebrow">PRIVATE SESSION REQUIRED</p>
@@ -23,8 +23,8 @@ final class ActiveProbePage {
                   <section class="session-note">
                     <p><strong>Keep the current IdP session.</strong> Sign in only if the target asks during a normal control. SAMLscope does not intentionally clear the session between checks.</p>
                   </section>
-                  """;
-        return """
+                  """);
+        return text.localize("""
                 <!doctype html><html lang="en"><head><meta charset="utf-8">
                 <meta name="viewport" content="width=device-width,initial-scale=1">
                 <meta name="referrer" content="no-referrer">
@@ -40,19 +40,20 @@ final class ActiveProbePage {
                   <button type="submit">Continue with this request</button>
                   <p class="form-note">Quick is one browser campaign containing multiple protocol checks. It does not mean one SAML request or repeated forced sign-ins.</p>
                 </form></main></body></html>
-                """.formatted(escape(stylesheet), escape(status.caseId()),
+                """).formatted(escape(stylesheet), escape(status.caseId()),
                 escape(status.instructionsEn()), freshSession);
     }
 
     static String recorded(
+            PageText text,
             String stylesheet,
             ActiveProbeCoordinator.Status next,
             Map<String, Object> summary,
             String nonce) {
-        var nextStep = next.state() == ActiveProbeCoordinator.State.READY
+        var nextStep = text.localize(next.state() == ActiveProbeCoordinator.State.READY
                 ? "The next browser check is ready. Start it from the workspace when you are ready."
-                : "This browser campaign has no immediately ready check.";
-        return """
+                : "This browser campaign has no immediately ready check.");
+        return text.localize("""
                 <!doctype html><html lang="en"><head><meta charset="utf-8">
                 <meta name="viewport" content="width=device-width,initial-scale=1">
                 <meta name="referrer" content="no-referrer">
@@ -67,7 +68,7 @@ final class ActiveProbePage {
                 <details><summary>Technical response details</summary><pre>%s</pre></details>
                 <script nonce="%s">var closeHelp=document.getElementById('close-help');function returnToWorkspace(){window.close();setTimeout(function(){closeHelp.textContent='Your browser kept this tab open. Close it manually to return to the existing workspace.'},200)}document.getElementById('return-workspace').addEventListener('click',returnToWorkspace);setTimeout(returnToWorkspace,900)</script>
                 </main></body></html>
-                """.formatted(escape(stylesheet), escape(nextStep), escape(summary.toString()), escape(nonce));
+                """).formatted(escape(stylesheet), escape(nextStep), escape(summary.toString()), escape(nonce));
     }
 
     private static String escape(String value) {

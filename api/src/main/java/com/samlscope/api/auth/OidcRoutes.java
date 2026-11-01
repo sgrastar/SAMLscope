@@ -84,9 +84,10 @@ public final class OidcRoutes {
             } catch (Exception failure) {
                 // Never echo provider error_description, authorization codes, or token parse errors.
                 ctx.status(400).contentType("text/html; charset=utf-8")
-                        .result("<!doctype html><html lang=\"en\"><meta charset=\"utf-8\"><title>Login failed</title>"
+                        .result(com.samlscope.api.PageText.from(ctx).localize(
+                                "<!doctype html><html lang=\"en\"><meta charset=\"utf-8\"><title>Login failed</title>"
                                 + "<h1>Login could not be completed</h1><p>The request expired or was rejected.</p>"
-                                + "<a href=\"/auth/login\">Try signing in again</a></html>");
+                                + "<a href=\"/auth/login\">Try signing in again</a></html>"));
             }
         });
         javalin.routes.post("/auth/logout", ctx -> {

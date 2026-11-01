@@ -5,17 +5,18 @@ import java.net.URI;
 final class HtmlPostPage {
     private HtmlPostPage() {}
 
-    static String render(URI destination, String samlResponse, String relayState, String nonce) {
-        return render(destination, "SAMLResponse", samlResponse, relayState, nonce,
+    static String render(PageText text, URI destination, String samlResponse, String relayState, String nonce) {
+        return render(text, destination, "SAMLResponse", samlResponse, relayState, nonce,
                 "Continue SAML sign-in", "Continuing to the service provider…");
     }
 
-    static String renderRequest(URI destination, String samlRequest, String relayState, String nonce) {
-        return render(destination, "SAMLRequest", samlRequest, relayState, nonce,
+    static String renderRequest(PageText text, URI destination, String samlRequest, String relayState, String nonce) {
+        return render(text, destination, "SAMLRequest", samlRequest, relayState, nonce,
                 "Run active SAML probe", "Sending the next active probe to the identity provider…");
     }
 
     private static String render(
+            PageText text,
             URI destination,
             String parameter,
             String samlMessage,
@@ -23,7 +24,7 @@ final class HtmlPostPage {
             String nonce,
             String title,
             String message) {
-        return """
+        return text.localize("""
                 <!doctype html>
                 <html lang="en"><head><meta charset="utf-8">
                 <meta name="referrer" content="no-referrer">
@@ -35,7 +36,7 @@ final class HtmlPostPage {
                   <noscript><button type="submit">Continue</button></noscript>
                 </form>
                 <script nonce="%s">document.forms[0].submit()</script></body></html>
-                """.formatted(escape(title), escape(message), escape(destination.toString()),
+                """).formatted(escape(text.localize(title)), escape(text.localize(message)), escape(destination.toString()),
                 escape(parameter), escape(samlMessage),
                 relayState == null ? "" : "<input type=\"hidden\" name=\"RelayState\" value=\""
                         + escape(relayState) + "\">", escape(nonce));

@@ -15,7 +15,7 @@ class ActiveProbePageTest {
                 URI.create("https://peer.example/probe"), true, null,
                 "<script>case</script>", "Check <unsafe> instructions", false);
 
-        var html = ActiveProbePage.start(status, "/p/plan_test/ui/completion.css");
+        var html = ActiveProbePage.start(PageText.ENGLISH, status, "/p/plan_test/ui/completion.css");
 
         assertTrue(html.contains("Run one SAML check"));
         assertTrue(html.contains("PRIVATE SESSION REQUIRED"));
@@ -33,7 +33,7 @@ class ActiveProbePageTest {
                 "IIP-IDP05-a-idp-01", "next", false);
 
         var html = ActiveProbePage.recorded(
-                "/p/plan_test/ui/completion.css", next, Map.of("status", "recorded"), "nonce_test");
+                PageText.ENGLISH, "/p/plan_test/ui/completion.css", next, Map.of("status", "recorded"), "nonce_test");
 
         assertTrue(html.contains("The next request was not sent automatically"));
         assertTrue(html.contains("Close this tab and return to workspace"));
