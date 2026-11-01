@@ -5,8 +5,8 @@ import java.util.Map;
 
 /** Receipt acknowledgement only; never a conformance verdict or a management credential. */
 final class PeerCompletionPage {
-    static String render(PageText text, URI workspace, String stylesheet, Map<String, Object> summary) {
-        return text.localize("""
+    static String render(URI workspace, String stylesheet, Map<String, Object> summary) {
+        return """
                 <!doctype html><html lang="en"><head><meta charset="utf-8">
                 <meta name="viewport" content="width=device-width,initial-scale=1">
                 <title>Response recorded | SAMLscope</title><link rel="stylesheet" href="%s"></head>
@@ -18,7 +18,7 @@ final class PeerCompletionPage {
                 <p>Next: run the initial checks (M1), then follow the pending interactions.</p>
                 <details><summary>Technical response details</summary><pre>%s</pre></details>
                 </main></body></html>
-                """).formatted(escape(stylesheet), escape(workspace.toString()), escape(summary.toString()));
+                """.formatted(escape(stylesheet), escape(workspace.toString()), escape(summary.toString()));
     }
 
     private static String escape(String value) {

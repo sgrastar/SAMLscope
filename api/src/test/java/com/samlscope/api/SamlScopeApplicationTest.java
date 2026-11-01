@@ -366,7 +366,7 @@ class SamlScopeApplicationTest {
     @Test
     void automaticMetadataTransitionWaitsWithoutChangingTheOutcome() {
         var page = SamlScopeApplication.metadataPollingTransitionPage(
-                PageText.ENGLISH, "/p/plan/start/metadata-polling/1?run=run&poll=token", 17);
+                "/p/plan/start/metadata-polling/1?run=run&poll=token", 17);
         assertTrue(page.contains("content=\"17;url="), page);
         assertTrue(page.contains("run=run&amp;poll=token"), page);
         assertTrue(page.contains("does not affect the conformance outcome"), page);
@@ -396,7 +396,7 @@ class SamlScopeApplicationTest {
 
     @Test
     void postPageUsesNonceAndEscapesUntrustedValues() {
-        var page = HtmlPostPage.render(PageText.ENGLISH, URI.create("https://sp.example/acs?x=1&y=2"),
+        var page = HtmlPostPage.render(URI.create("https://sp.example/acs?x=1&y=2"),
                 "<response>", "\"relay\"", "nonce-value");
         assertTrue(page.contains("nonce=\"nonce-value\""));
         assertTrue(page.contains("action=\"https://sp.example/acs?x=1&amp;y=2\""));
@@ -405,7 +405,7 @@ class SamlScopeApplicationTest {
         assertFalse(page.contains("<response>"));
 
         var requestPage = HtmlPostPage.renderRequest(
-                PageText.ENGLISH, URI.create("https://idp.example/sso"), "request+base64", "sp1:run:action", "probe-nonce");
+                URI.create("https://idp.example/sso"), "request+base64", "sp1:run:action", "probe-nonce");
         assertTrue(requestPage.contains("name=\"SAMLRequest\""));
         assertTrue(requestPage.contains("value=\"request+base64\""));
         assertTrue(requestPage.contains("sp1:run:action"));

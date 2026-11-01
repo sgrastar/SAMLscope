@@ -47,6 +47,9 @@ public final class OidcRoutes {
         }
     }
     public void register(JavalinConfig javalin) {
+        // Registered here because this is the one unprotected hook that sees every route set;
+        // it localizes the peer pages and the login-failure page.
+        com.samlscope.api.PageText.register(javalin);
         javalin.routes.get("/auth/session", ctx -> {
             ctx.header("Cache-Control", "no-store");
             var current = session(ctx);
@@ -84,10 +87,9 @@ public final class OidcRoutes {
             } catch (Exception failure) {
                 // Never echo provider error_description, authorization codes, or token parse errors.
                 ctx.status(400).contentType("text/html; charset=utf-8")
-                        .result(com.samlscope.api.PageText.from(ctx).localize(
-                                "<!doctype html><html lang=\"en\"><meta charset=\"utf-8\"><title>Login failed</title>"
+                        .result("<!doctype html><html lang=\"en\"><meta charset=\"utf-8\"><title>Login failed</title>"
                                 + "<h1>Login could not be completed</h1><p>The request expired or was rejected.</p>"
-                                + "<a href=\"/auth/login\">Try signing in again</a></html>"));
+                                + "<a href=\"/auth/login\">Try signing in again</a></html>");
             }
         });
         javalin.routes.post("/auth/logout", ctx -> {
