@@ -2,3 +2,5 @@
 # test Japanese-language handling. There are no such fixtures during G1e migration.
 # The web UI Japanese localization dictionary is product content, not G1 data.
 web/src/ja.ts
+api/src/main/java/com/samlscope/api/PageTextJa.java
+api/src/test/java/com/samlscope/api/PageTextTest.java
