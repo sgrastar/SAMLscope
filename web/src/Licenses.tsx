@@ -1,3 +1,4 @@
+import { t } from './i18n'
 import { useEffect, useState } from 'react'
 import { AppShell } from './AppShell'
 import { softwareLicense, licensingScope, contentLicense } from 'virtual:samlscope-license'
@@ -9,41 +10,41 @@ export function Licenses() {
   useEffect(() => {
     const controller = new AbortController()
     void fetch('/licenses/browser-dependencies.json', { signal: controller.signal }).then(async response => {
-      if (!response.ok) throw new Error('The bundled dependency notices could not be loaded.')
+      if (!response.ok) throw new Error(t('The bundled dependency notices could not be loaded.'))
       const value = await response.json()
-      if (!Array.isArray(value.packages)) throw new Error('The bundled dependency notices are unavailable.')
+      if (!Array.isArray(value.packages)) throw new Error(t('The bundled dependency notices are unavailable.'))
       setDependencies(value.packages)
     }).catch(cause => { if (!controller.signal.aborted) setError((cause as Error).message) })
     return () => controller.abort()
   }, [])
   return <AppShell current="licenses"><main className="shell page-main">
-    <header className="page-head"><h1>Licenses and sources</h1>
-      <p>Software, specification content and measured results have different licensing scopes.</p></header>
-    <section><h2>Original software</h2><p>SAMLscope’s original software is licensed under Apache-2.0.</p>
+    <header className="page-head"><h1>{t('Licenses and sources')}</h1>
+      <p>{t('Software, specification content and measured results have different licensing scopes.')}</p></header>
+    <section><h2>{t('Original software')}</h2><p>{t('SAMLscope’s original software is licensed under Apache-2.0.')}</p>
       <details><summary>Apache License, Version 2.0</summary><pre className="license-text">{softwareLicense}</pre></details>
-      <details><summary>Licensing scope and review status</summary><pre className="license-text">{licensingScope}</pre></details>
+      <details><summary>{t('Licensing scope and review status')}</summary><pre className="license-text">{licensingScope}</pre></details>
     </section>
-    <section><h2>Browser dependencies</h2><p>These are the notices retained from packages included in this build’s browser JavaScript.</p>
+    <section><h2>{t('Browser dependencies')}</h2><p>{t('These are the notices retained from packages included in this build’s browser JavaScript.')}</p>
       {error && <p role="alert">{error}</p>}
-      {!error && !dependencies && <p>Loading notices…</p>}
+      {!error && !dependencies && <p>{t('Loading notices…')}</p>}
       {dependencies?.map(pkg => <details key={`${pkg.name}@${pkg.version}`}>
         <summary>{pkg.name} {pkg.version} — {pkg.license}</summary>
         {pkg.notices.map(notice => <pre className="license-text" key={notice.file}>{notice.text}</pre>)}
       </details>)}
-      <p><a href="/licenses/browser-dependencies.json" download>Download browser dependency notices</a></p>
+      <p><a href="/licenses/browser-dependencies.json" download>{t('Download browser dependency notices')}</a></p>
     </section>
-    <section><h2>Java runtime dependencies</h2>
-      <p>The application distribution also includes Java libraries. Their original package and resource notices are preserved. Source code for EPL components is available under EPL-2.0 through the version-specific links in the inventory.</p>
+    <section><h2>{t('Java runtime dependencies')}</h2>
+      <p>{t('The application distribution also includes Java libraries. Their original package and resource notices are preserved. Source code for EPL components is available under EPL-2.0 through the version-specific links in the inventory.')}</p>
       <JavaNotices />
-      <p><a href="/licenses/java-dependencies.json" download>Download Java dependency notices and resource inventory</a></p>
+      <p><a href="/licenses/java-dependencies.json" download>{t('Download Java dependency notices and resource inventory')}</a></p>
     </section>
-    <section><h2>Specification content</h2>
-      <p>Requirement summaries, test instructions and profile mappings use external specifications. Their original terms apply to incorporated material. Source notices and modification credits are retained in browser and standalone outputs. Specification references are distinguished from copied material.</p>
+    <section><h2>{t('Specification content')}</h2>
+      <p>{t('Requirement summaries, test instructions and profile mappings use external specifications. Their original terms apply to incorporated material. Source notices and modification credits are retained in browser and standalone outputs. Specification references are distinguished from copied material.')}</p>
       <p><a href="https://kantarainitiative.github.io/SAMLprofiles/fedinterop.html">Kantara SAML Implementation Profile</a> · <a href="https://docs.oasis-open.org/security/saml/v2.0/">OASIS SAML 2.0 specifications</a></p>
-      <p>SAMLscope-owned original explanations and definitions are licensed under CC BY-SA 4.0; incorporated source material retains its original terms. Attribute original contributions to SAMLscope contributors and identify your changes.</p>
-      <details><summary>CC BY-SA 4.0 — original content only</summary><pre className="license-text">{contentLicense}</pre></details>
+      <p>{t('SAMLscope-owned original explanations and definitions are licensed under CC BY-SA 4.0; incorporated source material retains its original terms. Attribute original contributions to SAMLscope contributors and identify your changes.')}</p>
+      <details><summary>{t('CC BY-SA 4.0 — original content only')}</summary><pre className="license-text">{contentLicense}</pre></details>
       <SpecificationNotices />
-      <p>Results do not imply certification, approval or endorsement by Kantara or OASIS.</p>
+      <p>{t('Results do not imply certification, approval or endorsement by Kantara or OASIS.')}</p>
     </section>
   </main></AppShell>
 }
@@ -61,12 +62,12 @@ function SpecificationNotices() {
     if (!context) return
     const controller = new AbortController()
     void fetch('/licenses/source-membership.json', { signal: controller.signal }).then(async response => {
-      if (!response.ok) throw new Error('Source membership could not be loaded.')
+      if (!response.ok) throw new Error(t('Source membership could not be loaded.'))
       const index = await response.json() as Record<string, Record<string, string[]>>
       const values = context === 'requirement'
         ? Object.entries(index.obligation_sources).filter(([key]) => key.startsWith(contextId + '.')).flatMap(([, ids]) => ids)
         : index[context + '_sources']?.[contextId]
-      if (!values?.length) throw new Error('No source membership is available for this catalog item. View all specification notices below.')
+      if (!values?.length) throw new Error(t('No source membership is available for this catalog item. View all specification notices below.'))
       setSelected([...new Set(values)])
     }).catch(cause => { if (!controller.signal.aborted) setSelectionError((cause as Error).message) })
     return () => controller.abort()
@@ -77,9 +78,9 @@ function SpecificationNotices() {
   useEffect(() => {
     const controller = new AbortController()
     void fetch('/licenses/source-notices.json', { signal: controller.signal }).then(async response => {
-      if (!response.ok) throw new Error('The retained specification notices could not be loaded.')
+      if (!response.ok) throw new Error(t('The retained specification notices could not be loaded.'))
       const value = await response.json()
-      if (!Array.isArray(value.sources)) throw new Error('The retained specification notices are unavailable.')
+      if (!Array.isArray(value.sources)) throw new Error(t('The retained specification notices are unavailable.'))
       setSources(value.sources)
       setPending(value.unresolved_sources ?? [])
     }).catch(cause => { if (!controller.signal.aborted) setError((cause as Error).message) })
@@ -96,19 +97,19 @@ function SpecificationNotices() {
   }, [sources])
   return <>
     {error && <p role="alert">{error}</p>}
-    {context && <p>Sources for {contextId}. <a href="/licenses">View all license notices</a></p>}
+    {context && <p>{t('Sources for {id}.', { id: contextId })} <a href="/licenses">{t('View all license notices')}</a></p>}
     {selectionError && <p role="alert">{selectionError}</p>}
-    {context && !selected && !selectionError && <p>Loading source membership…</p>}
+    {context && !selected && !selectionError && <p>{t('Loading source membership…')}</p>}
     {sources?.filter(source => !context || !!selectionError || selected?.includes(source.id)).map(source => <details key={source.id} id={`source-${source.id}`}>
       <summary>{source.title} — {source.edition}, {source.date}</summary>
-      <p><a href={source.source_url}>Original document</a> · {source.notice_location ?? `Notice page ${source.notice_page}`}</p>
-      {source.license_url && <p><a href={source.license_url}>Original license terms</a></p>}
-      {source.catalog_correction_pending && <p>The stored document’s edition or date differs from the catalog entry. The catalog correction is pending review.</p>}
-      {source.terms_review_status?.startsWith("PENDING") && <p>Supplemental historical permission terms remain under review.</p>}
+      <p><a href={source.source_url}>{t('Original document')}</a> · {source.notice_location ?? t('Notice page {page}', { page: source.notice_page ?? '' })}</p>
+      {source.license_url && <p><a href={source.license_url}>{t('Original license terms')}</a></p>}
+      {source.catalog_correction_pending && <p>{t('The stored document’s edition or date differs from the catalog entry. The catalog correction is pending review.')}</p>}
+      {source.terms_review_status?.startsWith("PENDING") && <p>{t('Supplemental historical permission terms remain under review.')}</p>}
       {source.notice_text && <pre className="license-text">{source.notice_text}</pre>}
     </details>)}
-    {pending.length > 0 && <section><h3>Source notices still under review</h3><ul>{pending.filter(id => !context || !!selectionError || selected?.includes(id)).map(id => <li key={id} id={`source-${id}`}>{id} — notice review pending</li>)}</ul></section>}
-    <p><a href="/licenses/source-notices.json" download>Download retained specification notices and source references</a></p>
+    {pending.length > 0 && <section><h3>{t('Source notices still under review')}</h3><ul>{pending.filter(id => !context || !!selectionError || selected?.includes(id)).map(id => <li key={id} id={`source-${id}`}>{t('{id} — notice review pending', { id })}</li>)}</ul></section>}
+    <p><a href="/licenses/source-notices.json" download>{t('Download retained specification notices and source references')}</a></p>
   </>
 }
 
@@ -122,20 +123,20 @@ function JavaNotices() {
     if (!open || packages) return
     try {
       const response = await fetch('/licenses/java-dependencies.json')
-      if (!response.ok) throw new Error('Java notices could not be loaded.')
+      if (!response.ok) throw new Error(t('Java notices could not be loaded.'))
       const data = await response.json()
-      if (!Array.isArray(data.packages)) throw new Error('Java notices are unavailable.')
+      if (!Array.isArray(data.packages)) throw new Error(t('Java notices are unavailable.'))
       setError('')
       setPackages(data.packages)
     } catch (cause) { setError((cause as Error).message) }
   }
   return <details onToggle={event => void load(event.currentTarget.open)}>
-    <summary>Java copyright notices, license texts and source availability</summary>
+    <summary>{t('Java copyright notices, license texts and source availability')}</summary>
     {error && <p role="alert">{error}</p>}
     {packages?.map(pkg => <details key={pkg.file}>
       <summary>{pkg.file}</summary>
       {pkg.notices?.map(notice => <pre className="license-text" key={notice.file}>{notice.text}</pre>)}
-      {pkg.permission?.source_availability && <p>{pkg.permission.source_availability.statement} <a href={pkg.permission.source_availability.url}>Upstream source code</a></p>}
+      {pkg.permission?.source_availability && <p>{pkg.permission.source_availability.statement} <a href={pkg.permission.source_availability.url}>{t('Upstream source code')}</a></p>}
       {pkg.permission?.supplemental_notices.map((notice, index) => <pre className="license-text" key={index}>{notice.text}</pre>)}
     </details>)}
   </details>

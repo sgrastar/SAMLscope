@@ -1,2 +1,4 @@
 # One tracked-path glob per line. Keep this list limited to fixtures that explicitly
 # test Japanese-language handling. There are no such fixtures during G1e migration.
+# The web UI Japanese localization dictionary is product content, not G1 data.
+web/src/ja.ts

@@ -1,3 +1,4 @@
+import { t } from './i18n'
 import { useEffect, useState } from 'react'
 import { api } from './api'
 import { AppShell } from './AppShell'
@@ -54,17 +55,17 @@ export function ManagementBootstrap({ runId }: { runId: string }) {
   return <AppShell current={state === 'ready' ? 'run' : 'access'} mode={mode} runId={state === 'ready' ? runId : undefined}>
     {state === 'exchanging' && <main className="shell gate-page">
       <section className="gate-card" aria-live="polite"><div className="activity-ring" aria-hidden="true" />
-        <p className="eyebrow">Protected Run access</p><h1>Opening Run</h1>
-        <p>Exchanging the one-time link for a protected browser session.</p>
-        <ol className="gate-steps"><li>Consume the secret from the URL fragment.</li><li>Remove it from browser history before network access.</li><li>Exchange it once for a management cookie and CSRF token.</li></ol>
+        <p className="eyebrow">{t('Protected Run access')}</p><h1>{t('Opening Run')}</h1>
+        <p>{t('Exchanging the one-time link for a protected browser session.')}</p>
+        <ol className="gate-steps"><li>{t('Consume the secret from the URL fragment.')}</li><li>{t('Remove it from browser history before network access.')}</li><li>{t('Exchange it once for a management cookie and CSRF token.')}</li></ol>
       </section>
     </main>}
     {state === 'ready' && <main className="shell page-main run-page">
       <RunManagement runId={runId} csrfToken={csrfToken} />
     </main>}
     {state === 'error' && <main className="shell gate-page"><section className="gate-card error-state">
-      <p className="eyebrow">Protected Run access</p><h1>Access denied</h1><div className="notice notice-error" role="alert">{message}</div>
-      <a className="button button-secondary" href="/">Return to Test Plans</a>
+      <p className="eyebrow">{t('Protected Run access')}</p><h1>{t('Access denied')}</h1><div className="notice notice-error" role="alert">{message}</div>
+      <a className="button button-secondary" href="/">{t('Return to Test Plans')}</a>
     </section></main>}
   </AppShell>
 }
