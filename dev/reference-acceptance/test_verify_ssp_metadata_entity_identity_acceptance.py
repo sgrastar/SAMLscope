@@ -239,5 +239,16 @@ class ReceiptTests(unittest.TestCase):
                 adopter.verify_receipt(root, digest)
 
 
+class DatabaseBindingTests(unittest.TestCase):
+    def test_archived_stored_outcome_must_match_the_database(self):
+        archived = {'runId': 'run_X', 'cases': {'c': {'outcome': {'outcome': 'VIOLATED'}, 'revision': 3}}}
+        tampered = {'runId': 'run_X', 'cases': {'c': {'outcome': {'outcome': 'SATISFIED'}, 'revision': 3}}}
+        with patch.object(adopter, 'java', return_value=json.dumps(archived).encode()):
+            adopter.bind_stored_to_database(Path('.'), '0'*64, Path('.'), 'run_X', 'c', archived)
+        with patch.object(adopter, 'java', return_value=json.dumps(tampered).encode()):
+            with self.assertRaises(Exception):
+                adopter.bind_stored_to_database(Path('.'), '0'*64, Path('.'), 'run_X', 'c', archived)
+
+
 if __name__ == '__main__':
     unittest.main()

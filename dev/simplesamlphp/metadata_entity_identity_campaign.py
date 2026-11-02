@@ -155,7 +155,10 @@ def overlay(root):
 
 def load_helpers(repo):
     # Imports are deliberately deferred until after the dry-run branch.
-    sys.path[:0] = [str(repo/'dev/simplesamlphp'), str(repo/'dev/keycloak'), str(repo/'dev/reference-acceptance')]
+    # The Keycloak helper directory must precede the SimpleSAMLphp one: both define import_metadata_batch,
+    # and the SimpleSAMLphp module itself imports the Keycloak one by that name.
+    sys.path[:0] = [str(repo/'dev/keycloak'), str(repo/'dev/reference-acceptance')]
+    sys.path.append(str(repo/'dev/simplesamlphp'))
     from configuration_batch import ConfigurationBatch
     from reference_flow import Client
     from capture_run_originals import capture

@@ -174,7 +174,13 @@ def verify_replay(observed, manifest, conclusive):
                 and result['notVerifiedReason'] == 'duplicate-conflict-unqualified', 'Native conclusion unqualified')
 
 
-def verify_formal(folder, runtime, pins_sha256, observed, manifest):
+def bind_stored_to_database(runtime, pins_sha256, data, run, identity, archived):
+    """Require the archived stored outcome to equal the case row now held by the Suite database."""
+    current = json.loads(java(runtime, pins_sha256, STORED, ['capture', data, run, identity]))
+    require(current == archived, 'Archived stored outcome differs from the Suite database')
+
+
+def verify_formal(folder, runtime, pins_sha256, observed, manifest, data=None):
     folder = Path(folder)
     evaluation = folder/'evaluation'
     require(load(safe(evaluation, 'transcript-before.json')) == load(safe(evaluation, 'transcript.json'))
@@ -189,6 +195,8 @@ def verify_formal(folder, runtime, pins_sha256, observed, manifest):
         after_path = safe(evaluation, 'stored-after-'+identity+'.json')
         before_doc = json.loads(java(runtime, pins_sha256, STORED, ['offline', before_path]))
         after_doc = json.loads(java(runtime, pins_sha256, STORED, ['offline', after_path]))
+        if data is not None:
+            bind_stored_to_database(runtime, pins_sha256, data, manifest['runId'], identity, after_doc)
         require(before_doc['runId'] == after_doc['runId'] == manifest['runId'] and set(before_doc['cases']) == set(after_doc['cases']) == {identity}, 'Foreign stored conclusion')
         before = before_doc['cases'][identity]
         after = after_doc['cases'][identity]
@@ -218,7 +226,7 @@ def verify(folder, runtime, data, pins_sha256, receipt_sha256, diagnostic=False)
     require(observed == recorded, 'Archived actual reader replay differs')
     verify_replay(observed, manifest, not diagnostic)
     if not diagnostic:
-        verify_formal(folder, runtime, pins_sha256, observed, manifest)
+        verify_formal(folder, runtime, pins_sha256, observed, manifest, data)
     return observed
 
 

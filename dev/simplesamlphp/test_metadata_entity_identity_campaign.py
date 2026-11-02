@@ -235,6 +235,15 @@ class CampaignTests(unittest.TestCase):
         counts, _ = self.exercise('restoration-failed')
         self.assertFalse(counts['restored'])
 
+    def test_real_helper_imports_resolve_in_a_fresh_interpreter(self):
+        # load_helpers is replaced in the other tests; import the real helpers the way a live run does.
+        code = ("import sys, pathlib; repo = pathlib.Path(sys.argv[1]); "
+                "sys.path.insert(0, str(repo/'dev/simplesamlphp')); "
+                "import metadata_entity_identity_campaign as m; "
+                "helpers = m.load_helpers(repo); assert len(helpers) == 5")
+        done = subprocess.run([sys.executable, '-B', '-c', code, str(REPO)], capture_output=True, text=True, timeout=60)
+        self.assertEqual(done.returncode, 0, done.stderr[-800:])
+
 
 if __name__ == '__main__':
     unittest.main()
