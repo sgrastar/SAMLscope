@@ -36,7 +36,8 @@ class NativeConfigurationRegistryTest {
         assertEquals(Milestone.M2, definitions.require(id).milestone());
         var registry = ApprovedConfigCaseRegistry.create(definitions, Milestone.M2,
                 run -> new byte[0], content, run -> Optional.empty());
-        var observed = assertInstanceOf(MetadataEntityIdentityConfigurationTestCase.class, registry.require(id));
+        // The SimpleSAMLphp observer wraps the Keycloak/Shibboleth one and delegates its prompt and campaign keys.
+        var observed = assertInstanceOf(SimpleSamlPhpMetadataEntityIdentityConfigurationTestCase.class, registry.require(id));
         assertTrue(observed.instructionEn().contains("duplicate-entity-ids"));
         assertTrue(observed.evidenceActionKeys().contains("control"));
         assertTrue(observed.evidenceActionKeys().contains("duplicate-entity-ids"));
