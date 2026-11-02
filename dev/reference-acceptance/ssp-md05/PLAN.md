@@ -48,3 +48,14 @@ Product configuration writes: about 2 per campaign (overlay + restoration) for a
 - Start the SimpleSAMLphp reference container and write its metadata configuration (restored afterwards).
 - Create the new campaign script and adopter (code change) and run tests.
 - Whether to proceed with e7 at all, given the risk above.
+
+## Offline Java checks
+
+`dev/reference-acceptance/SspMetadataEntityIdentityOfflineTest.java` is a standalone checker with its own `main`, not a JUnit test. It needs BouncyCastle and the `VerifySsp...`/`ReadSsp...` helpers from this directory, which are not on the Gradle test classpath, so it is compiled and run by hand against locally built jars:
+
+```sh
+CP="$(ls runner/build/libs/*.jar core/build/libs/*.jar saml/build/libs/*.jar store/build/libs/*.jar | grep -v sources | tr '\n' ':')$(find ~/.gradle/caches/modules-2/files-2.1 -name '*.jar' | tr '\n' ':')"
+javac -sourcepath '' -cp "$CP" -d /tmp/ssp-md05-classes \
+  runner/src/main/java/com/samlscope/runner/cases/SimpleSamlPhp*.java dev/reference-acceptance/*Ssp*.java
+java -cp "/tmp/ssp-md05-classes:$CP" com.samlscope.runner.cases.SspMetadataEntityIdentityOfflineTest
+```
