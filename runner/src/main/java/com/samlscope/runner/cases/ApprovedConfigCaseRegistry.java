@@ -239,8 +239,11 @@ public final class ApprovedConfigCaseRegistry {
             }
             if (targetMetadata != null && transcriptContent != null && decryptionKeys != null
                     && MetadataEntityIdentityConfigurationTestCase.IDS.contains(definition.id())) {
-                return new MetadataEntityIdentityConfigurationTestCase(prepared,
+                prepared = new MetadataEntityIdentityConfigurationTestCase(prepared,
                         SuiteRunProfileLookup.configuredDataDirectory().resolve("keycloak-metadata-entity-identity-evidence"),
+                        transcriptContent, targetMetadata, decryptionKeys);
+                return new SimpleSamlPhpMetadataEntityIdentityConfigurationTestCase(prepared,
+                        SuiteRunProfileLookup.configuredDataDirectory().resolve("ssp-metadata-entity-identity-evidence"),
                         transcriptContent, targetMetadata, decryptionKeys);
             }
             return prepared;
