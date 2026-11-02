@@ -340,21 +340,40 @@ async function authSession(): Promise<AuthSession> {
   return session
 }
 
+// The server rejects (before doing any work) while another evidence operation holds its lock,
+// so repeating the identical request after Retry-After is safe, including for POST.
+const BUSY_CODES = new Set(['evidence_work_busy', 'generation_busy'])
+const BUSY_MAX_ATTEMPTS = 4
+const BUSY_MAX_DELAY_MS = 5000
+
+function busyDelayMs(response: Response): number {
+  const seconds = Number(response.headers.get('Retry-After'))
+  const base = Number.isFinite(seconds) && seconds > 0 ? seconds * 1000 : 1000
+  return Math.min(base, BUSY_MAX_DELAY_MS) + Math.floor(Math.random() * 500)
+}
+
 async function request<T>(url: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(url, {
-    ...init,
-    headers: {
-      'content-type': 'application/json',
-      ...(oidcCsrfToken && init?.method && !['GET', 'HEAD'].includes(init.method)
-        ? { 'X-OIDC-CSRF-Token': oidcCsrfToken } : {}),
-      ...(init?.headers ?? {}),
-    },
-  })
-  if (!response.ok) {
-    const body = await response.json().catch(() => ({ message: response.statusText }))
-    throw new Error(body.message ?? `HTTP ${response.status}`)
+  for (let attempt = 1; ; attempt++) {
+    const response = await fetch(url, {
+      ...init,
+      headers: {
+        'content-type': 'application/json',
+        ...(oidcCsrfToken && init?.method && !['GET', 'HEAD'].includes(init.method)
+          ? { 'X-OIDC-CSRF-Token': oidcCsrfToken } : {}),
+        ...(init?.headers ?? {}),
+      },
+    })
+    if (!response.ok) {
+      const body = await response.json().catch(() => ({ message: response.statusText }))
+      if (response.status === 503 && BUSY_CODES.has(body.error) && attempt < BUSY_MAX_ATTEMPTS
+        && !init?.signal?.aborted) {
+        await new Promise(resolve => setTimeout(resolve, busyDelayMs(response)))
+        continue
+      }
+      throw new Error(body.message ?? `HTTP ${response.status}`)
+    }
+    return response.status === 204 ? (undefined as T) : response.json()
   }
-  return response.status === 204 ? (undefined as T) : response.json()
 }
 
 function camelize(value: unknown): unknown {

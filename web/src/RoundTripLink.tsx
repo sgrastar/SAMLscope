@@ -1,3 +1,4 @@
+import { t } from './i18n'
 import { useEffect, useState } from 'react'
 
 export function RoundTripLink({ href }: { href: string }) {
@@ -19,6 +20,6 @@ export function RoundTripLink({ href }: { href: string }) {
       setOpening(true)
     }}>
     {opening && <span className="button-spinner" aria-hidden="true" />}
-    {opening ? 'Opening IdP…' : 'Start IdP round trip'}
+    {opening ? t('Opening IdP…') : t('Start IdP round trip')}
   </a>
 }

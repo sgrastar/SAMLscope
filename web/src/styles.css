@@ -154,6 +154,8 @@ button.plan-row:hover:not(:disabled) { background: var(--surface-strong); border
 .app-nav a.current { color: var(--ink); }
 .app-nav a.current::after { content: ''; position: absolute; inset: auto 14px -1px; height: 3px; background: var(--brand); }
 .app-topbar-spacer { flex: 1; }
+@media (max-width: 1180px) { .wordmark small { display: none; } }
+.wordmark, .app-nav a, .mode-chip, .theme-toggle, .login-status > * { white-space: nowrap; }
 .mode-chip { display: inline-flex; align-items: center; gap: 8px; color: var(--ink-muted); font-size: .8rem; font-weight: 650; }
 .semantic-dot { width: 9px; height: 9px; flex: none; border-radius: 50%; background: var(--ink-faint); }
 .status-live, .evidence-observed { background: var(--brand); }

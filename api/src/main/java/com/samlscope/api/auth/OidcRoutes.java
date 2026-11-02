@@ -47,6 +47,9 @@ public final class OidcRoutes {
         }
     }
     public void register(JavalinConfig javalin) {
+        // Registered here because this is the one unprotected hook that sees every route set;
+        // it localizes the peer pages and the login-failure page.
+        com.samlscope.api.PageText.register(javalin);
         javalin.routes.get("/auth/session", ctx -> {
             ctx.header("Cache-Control", "no-store");
             var current = session(ctx);
