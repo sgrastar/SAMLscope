@@ -1,0 +1,30 @@
+plugins { id 'java' }
+
+// File dependencies only; no repositories, plugins or dependencies can be downloaded.
+def repo = file('../../..').canonicalFile
+def evidence = new File(repo, 'build/acceptance/reference-20261031/slo')
+layout.buildDirectory = new File(evidence, 'java-build')
+java { sourceCompatibility = JavaVersion.VERSION_21; targetCompatibility = JavaVersion.VERSION_21 }
+sourceSets {
+    main.java { srcDirs = ['.']; include 'ReadSloStoredEvidence.java' }
+    test.java { srcDirs = ['test'] }
+}
+dependencies {
+    implementation files(new File(repo, 'api/build/install/samlscope/lib/core-0.1.0.jar'))
+    implementation fileTree(new File(repo, 'api/build/install/samlscope/lib')) {
+        include 'jackson-core-*.jar', 'jackson-databind-*.jar', 'jackson-annotations-*.jar'
+    }
+    def cache = new File(System.getProperty('user.home'), '.gradle/caches/modules-2/files-2.1')
+    ['org.junit.jupiter/junit-jupiter-api/6.1.3', 'org.junit.jupiter/junit-jupiter-engine/6.1.3',
+     'org.junit.platform/junit-platform-launcher/6.1.3', 'org.junit.platform/junit-platform-engine/6.1.3',
+     'org.junit.platform/junit-platform-commons/6.1.3', 'org.opentest4j/opentest4j/1.3.0',
+     'org.apiguardian/apiguardian-api/1.1.2'].each { name ->
+        testImplementation fileTree(new File(cache, name)) { include '*/*.jar' }
+    }
+}
+test {
+    useJUnitPlatform()
+    systemProperty 'slo.repo', repo.absolutePath
+    systemProperty 'java.io.tmpdir', new File(evidence, 'test-tmp').absolutePath
+    doFirst { new File(evidence, 'test-tmp').mkdirs() }
+}

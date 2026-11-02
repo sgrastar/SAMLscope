@@ -1,0 +1,271 @@
+{
+  "schema": "samlscope-sso01g-offline-plan-v1",
+  "product": "keycloak",
+  "profile": "browser_sso_idp",
+  "caseDigests": {
+    "IIP-SSO01-ga-idp-01": "sha256:765d35ba28060794b59849437e24158b120872a6c4206ecf58688f9edfc897e8",
+    "IIP-SSO01-gb-idp-01": "sha256:1bd2950222633a51bd756b9ac18629c82fb654b2821afc407d3fff84615d8c19",
+    "IIP-SSO01-gc-idp-01": "sha256:2907382964c0928d342d883bc76dd3331922dea687a1dcd64c8f363fa25a325c",
+    "IIP-SSO01-gj-idp-01": "sha256:87b0066aa931850eb730d22136df8bf53253518c4b662a01ea60bec9e87dba15"
+  },
+  "conditions": [
+    {
+      "id": "ga-class-selection",
+      "kind": "CLASS",
+      "comparison": "MINIMUM",
+      "references": [
+        "urn:samlscope:reference:authn:class:low"
+      ],
+      "mode": "normal"
+    },
+    {
+      "id": "ga-class-unachievable",
+      "kind": "CLASS",
+      "comparison": "MINIMUM",
+      "references": [
+        "urn:samlscope:reference:authn:class:unavailable"
+      ],
+      "mode": "normal"
+    },
+    {
+      "id": "ga-declaration-selection",
+      "kind": "DECLARATION",
+      "comparison": "MINIMUM",
+      "references": [
+        "urn:samlscope:reference:authn:declaration:low"
+      ],
+      "mode": "normal"
+    },
+    {
+      "id": "ga-declaration-unachievable",
+      "kind": "DECLARATION",
+      "comparison": "MINIMUM",
+      "references": [
+        "urn:samlscope:reference:authn:declaration:unavailable"
+      ],
+      "mode": "normal"
+    },
+    {
+      "id": "gb-class-selection",
+      "kind": "CLASS",
+      "comparison": "BETTER",
+      "references": [
+        "urn:samlscope:reference:authn:class:low"
+      ],
+      "mode": "normal"
+    },
+    {
+      "id": "gb-class-unachievable",
+      "kind": "CLASS",
+      "comparison": "BETTER",
+      "references": [
+        "urn:samlscope:reference:authn:class:unavailable"
+      ],
+      "mode": "normal"
+    },
+    {
+      "id": "gb-declaration-selection",
+      "kind": "DECLARATION",
+      "comparison": "BETTER",
+      "references": [
+        "urn:samlscope:reference:authn:declaration:low"
+      ],
+      "mode": "normal"
+    },
+    {
+      "id": "gb-declaration-unachievable",
+      "kind": "DECLARATION",
+      "comparison": "BETTER",
+      "references": [
+        "urn:samlscope:reference:authn:declaration:unavailable"
+      ],
+      "mode": "normal"
+    },
+    {
+      "id": "gc-class-selection",
+      "kind": "CLASS",
+      "comparison": "MAXIMUM",
+      "references": [
+        "urn:samlscope:reference:authn:class:high"
+      ],
+      "mode": "maximum"
+    },
+    {
+      "id": "gc-class-unachievable",
+      "kind": "CLASS",
+      "comparison": "MAXIMUM",
+      "references": [
+        "urn:samlscope:reference:authn:class:unavailable"
+      ],
+      "mode": "maximum"
+    },
+    {
+      "id": "gc-declaration-selection",
+      "kind": "DECLARATION",
+      "comparison": "MAXIMUM",
+      "references": [
+        "urn:samlscope:reference:authn:declaration:high"
+      ],
+      "mode": "maximum"
+    },
+    {
+      "id": "gc-declaration-unachievable",
+      "kind": "DECLARATION",
+      "comparison": "MAXIMUM",
+      "references": [
+        "urn:samlscope:reference:authn:declaration:unavailable"
+      ],
+      "mode": "maximum"
+    },
+    {
+      "id": "gj-class-forward",
+      "kind": "CLASS",
+      "comparison": "EXACT",
+      "references": [
+        "urn:samlscope:reference:authn:class:low",
+        "urn:samlscope:reference:authn:class:high"
+      ],
+      "mode": "normal"
+    },
+    {
+      "id": "gj-class-reverse",
+      "kind": "CLASS",
+      "comparison": "EXACT",
+      "references": [
+        "urn:samlscope:reference:authn:class:high",
+        "urn:samlscope:reference:authn:class:low"
+      ],
+      "mode": "normal"
+    },
+    {
+      "id": "gj-declaration-forward",
+      "kind": "DECLARATION",
+      "comparison": "EXACT",
+      "references": [
+        "urn:samlscope:reference:authn:declaration:low",
+        "urn:samlscope:reference:authn:declaration:high"
+      ],
+      "mode": "normal"
+    },
+    {
+      "id": "gj-declaration-reverse",
+      "kind": "DECLARATION",
+      "comparison": "EXACT",
+      "references": [
+        "urn:samlscope:reference:authn:declaration:high",
+        "urn:samlscope:reference:authn:declaration:low"
+      ],
+      "mode": "normal"
+    },
+    {
+      "id": "control-class-low",
+      "kind": "CLASS",
+      "comparison": "EXACT",
+      "references": [
+        "urn:samlscope:reference:authn:class:low"
+      ],
+      "mode": "maximum"
+    },
+    {
+      "id": "control-class-medium",
+      "kind": "CLASS",
+      "comparison": "EXACT",
+      "references": [
+        "urn:samlscope:reference:authn:class:medium"
+      ],
+      "mode": "maximum"
+    },
+    {
+      "id": "control-declaration-low",
+      "kind": "DECLARATION",
+      "comparison": "EXACT",
+      "references": [
+        "urn:samlscope:reference:authn:declaration:low"
+      ],
+      "mode": "maximum"
+    },
+    {
+      "id": "control-declaration-medium",
+      "kind": "DECLARATION",
+      "comparison": "EXACT",
+      "references": [
+        "urn:samlscope:reference:authn:declaration:medium"
+      ],
+      "mode": "maximum"
+    },
+    {
+      "id": "control-class-low",
+      "kind": "CLASS",
+      "mode": "normal",
+      "comparison": "EXACT",
+      "references": [
+        "urn:samlscope:reference:authn:class:low"
+      ]
+    },
+    {
+      "id": "control-class-high",
+      "kind": "CLASS",
+      "mode": "normal",
+      "comparison": "EXACT",
+      "references": [
+        "urn:samlscope:reference:authn:class:high"
+      ]
+    },
+    {
+      "id": "control-declaration-low",
+      "kind": "DECLARATION",
+      "mode": "normal",
+      "comparison": "EXACT",
+      "references": [
+        "urn:samlscope:reference:authn:declaration:low"
+      ]
+    },
+    {
+      "id": "control-declaration-high",
+      "kind": "DECLARATION",
+      "mode": "normal",
+      "comparison": "EXACT",
+      "references": [
+        "urn:samlscope:reference:authn:declaration:high"
+      ]
+    }
+  ],
+  "modeGroups": [
+    "normal",
+    "maximum",
+    "restore"
+  ],
+  "blockers": [
+    "Native DeclRef selection/output unqualified",
+    "CONFIG cases expose no browser action keys; all conditions need existing persisted outbox binding",
+    "Live native driver and product-specific independent receipt reader not included",
+    "SAML step-up feature, URI/LoA map, comparisons and exhaustive availability unqualified"
+  ],
+  "liveExecutionAvailable": false,
+  "ledgerChanged": false,
+  "plannedExternalOperationsNow": 0,
+  "conditionalEstimates": {
+    "conditionExchanges": 24,
+    "initialNormalExchanges": "0..1",
+    "restoredNormalExchanges": 1,
+    "loginSubmissions": "0..26; actual unmeasured",
+    "explicitLogouts": 0,
+    "humanClicks": "unmeasured",
+    "minimumSettingWriteAttempts": 3,
+    "actualSettingWrites": "dependency count unqualified",
+    "minimumHostWriteSuccesses": 0,
+    "hostWritesApplicable": false,
+    "effectiveModeApplications": 2,
+    "effectiveRestorations": 1,
+    "effectiveReadbacks": 53
+  },
+  "lifecycle": [
+    "preflight actual Run/profile/cases/native proofs/outbox",
+    "capture original public native state and effective product read-back",
+    "apply normal; native read-back; each condition before/after native read-back",
+    "apply maximum; native read-back; each condition before/after native read-back",
+    "finally restore even on partial failure; compare original native effective state",
+    "existing-outbox restored normal SSO; independent original-backed controls/reader"
+  ],
+  "evidenceStatus": "supplemental-unadopted"
+}
